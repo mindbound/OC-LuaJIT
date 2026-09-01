@@ -45,3 +45,5 @@ layout.json
 /prototype/watchdog/harness_*
 /prototype/framewalk/framewalk
 /prototype/framewalk/framewalk.exe
+/serializer/erislj_test
+/serializer/erislj_test.exe
