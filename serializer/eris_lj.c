@@ -20,12 +20,24 @@
  * (identical on DUALNUM and non-DUALNUM builds), everything else
  * (incl. -0, NaN, inf) as 8 little-endian IEEE-754 bytes.
  *
- * Hostile input is assumed. Every read is bounds-checked, every wire byte
- * that indexes anything is range-checked, and recursion is bounded on both
- * sides — a malformed or crafted blob must raise a catchable Lua error,
- * never crash. Depth costs ~128 bytes of C stack per level on the read
- * side at -O2, so ERIS_LJ_MAXREC_MAX is set to stay under 40% of a 1 MB
- * thread stack (the JVM per-thread default an OC computer runs on).
+ * Structural robustness: every read is bounds-checked, every wire byte that
+ * indexes anything is range-checked, and recursion is bounded on both sides,
+ * so a malformed blob raises a catchable Lua error rather than crashing.
+ * Depth costs ~160 bytes of C stack per level on the read side at -O2 (one
+ * unpersist() frame; u_table and u_function both inline into it), plus about
+ * 19 KB of fixed frames, so ERIS_LJ_MAXREC_MAX stays under 40% of a 1 MB
+ * thread stack — the JVM per-thread default an OC computer runs on.
+ *
+ * TRUST BOUNDARY (from M2 on): blobs contain LuaJIT bytecode, which the VM
+ * does NOT verify, and the spkey protocol *calls* restored closures on load.
+ * A tampered blob is therefore equivalent to arbitrary code execution in the
+ * host process — the CRC32 detects corruption, not tampering (it is a
+ * checksum, not a MAC, and any blob can be re-sealed). Upstream Eris and
+ * Pluto share this property. Persisted blobs must come from storage at least
+ * as trusted as the host itself; for OpenComputers that is the server's world
+ * save directory, which only an operator can write. If blobs ever cross a
+ * weaker boundary, add a keyed MAC over the body and verify it before the
+ * first byte is parsed.
  *
  * Longjmp discipline: the write buffer is a __gc-owned userdata whose
  * storage comes from the host's own lua_Alloc (so it is inside the host's
@@ -42,6 +54,12 @@
 #include "lauxlib.h"
 #include "luajit.h"
 
+/* The public lua_dump() hardcodes its flags, so it can neither drop debug
+ * info nor ask for a deterministic dump. We ship a pinned LuaJIT, so calling
+ * lj_bcwrite directly is safe (and is what the sidecar design sanctions). */
+#include "lj_obj.h"
+#include "lj_bcdump.h"
+
 #include "eris_lj.h"
 
 /* ---------------------------------------------------------------- limits */
@@ -53,8 +71,9 @@
 #ifndef ERIS_LJ_MAXREC_MAX
 /* Hard ceiling on the effective recursion limit, whatever a host asks for:
  * enter() must always raise its catchable error before the native stack is
- * exhausted. ~3000 levels is ~384 KB on the read side at -O2. */
-#define ERIS_LJ_MAXREC_MAX 3000
+ * exhausted. At the ~160 B/level measured for M2 records, 2000 levels is
+ * ~320 KB plus fixed frames — about a third of a 1 MB thread stack. */
+#define ERIS_LJ_MAXREC_MAX 2000
 #endif
 
 /* Largest reference id we can hand to lua_rawseti/lua_rawgeti. */
@@ -67,6 +86,14 @@
 #define REFTIDX 2  /* reference table: obj->id persisting, id->obj restoring */
 #define BUFIDX  3  /* write buffer userdata (persist) / input string anchor */
 #define SPKIDX  4  /* the spkey string, kept alive here */
+/* Upvalues live in their own id space: they are not first-class Lua values,
+ * so they can never appear in a value slot, and keeping them separate makes
+ * it impossible for a crafted blob to resolve a value reference to one.
+ * Persisting: UPVIDX maps lightuserdata(upvalue id) -> id. Restoring: an
+ * upvalue is identified by an owning closure plus a slot number, so UPVIDX
+ * maps id -> owner closure and UPVNIDX maps id -> slot. */
+#define UPVIDX  5
+#define UPVNIDX 6
 
 /* ------------------------------------------------------------------ tags */
 
@@ -80,9 +107,11 @@ enum {
   TAG_TABLE = 6,      /* u8 flag (0 = literal), pairs, nil, metatable */
   TAG_PERMANENT = 7,  /* u8 original type + the perms key as a value */
   TAG_REF = 8,        /* ULEB128 reference id */
-  /* Reserved for later milestones so adding them needs no version bump:
-   * 9 = function, 10 = proto, 11 = upvalue, 12 = thread, 13 = userdata. */
-  TAG_MAX_M1 = TAG_REF
+  TAG_FUNC = 9,       /* u32le dump length, dump, ULEB128 nuv, uv records, fenv */
+  TAG_UPVAL = 10,     /* upvalue slots only: a fresh upvalue, value follows */
+  TAG_UPVALREF = 11,  /* upvalue slots only: ULEB128 upvalue id to join with */
+  /* Reserved: 12 = thread, 13 = userdata (M3). */
+  TAG_MAX_M2 = TAG_UPVALREF
 };
 
 /* Table record flags (byte after TAG_TABLE). */
@@ -91,13 +120,27 @@ enum {
 
 /* ------------------------------------------------------------------ info */
 
+/* Ids reserved by a special-persistence record that is still being written.
+ * A reference back into one of these means the __persist closure captured the
+ * very object it is meant to reconstruct, which can never be loaded — worth
+ * naming precisely instead of failing later as a dangling reference. Linked
+ * through the C stack, so a longjmp discards it with the frames that own it. */
+typedef struct PendingRef {
+  lua_Integer id;
+  struct PendingRef *prev;
+} PendingRef;
+
 typedef struct {
   lua_State *L;
   size_t len;                 /* bytes written (persist) */
   const unsigned char *in;    /* input (unpersist) */
   size_t inlen, pos;
   lua_Integer refcount;
+  lua_Integer upvcount;       /* separate id space, see UPVIDX */
+  lua_Integer curid;          /* persist: id persist_keyed just reserved */
+  PendingRef *pending;
   int level, maxrec;
+  int wdebug;                 /* keep debug info in dumps ('debug' setting) */
 } Info;
 
 /* ----------------------------------------------------------------- crc32 */
@@ -138,14 +181,22 @@ static void *wbuf_realloc(lua_State *L, void *p, size_t osz, size_t nsz)
   return af(ud, p, osz, nsz);
 }
 
-static int wbuf_gc(lua_State *L)
+/* Idempotent, so it can be called eagerly on the normal return path and the
+ * finalizer then becomes a no-op. Freeing at once keeps peak memory down:
+ * otherwise the block lingers until the next GC cycle, and OC stops the GC
+ * around persist entirely. */
+static void wbuf_free(lua_State *L, WBuf *w)
 {
-  WBuf *w = (WBuf *)lua_touserdata(L, 1);
   if (w && w->p) {
     wbuf_realloc(L, w->p, w->cap, 0);
     w->p = NULL;
     w->cap = 0;
   }
+}
+
+static int wbuf_gc(lua_State *L)
+{
+  wbuf_free(L, (WBuf *)lua_touserdata(L, 1));
   return 0;
 }
 
@@ -165,31 +216,33 @@ static void wbuf_new(lua_State *L, size_t cap)  /* pushes the userdata */
   w->cap = cap;
 }
 
-static void w_need(Info *I, size_t n)
+/* Non-erroring append: returns non-zero instead of raising. lua_dump's
+ * writer callback must use this — a longjmp out of lj_bcwrite would abandon
+ * its internal buffer state. */
+static int w_try(Info *I, const void *p, size_t n)
 {
   WBuf *w = (WBuf *)lua_touserdata(I->L, BUFIDX);
   if (I->len + n > w->cap) {
     size_t ncap = w->cap ? w->cap : 256;
     void *np;
     while (ncap < I->len + n) {
-      if (ncap > ((size_t)-1) / 2)
-        luaL_error(I->L, "eris-lj: buffer would exceed addressable memory");
+      if (ncap > ((size_t)-1) / 2) return 1;
       ncap *= 2;
     }
     np = wbuf_realloc(I->L, w->p, w->cap, ncap);
-    if (!np) luaL_error(I->L, "eris-lj: out of memory growing buffer");
+    if (!np) return 1;
     w->p = (unsigned char *)np;
     w->cap = ncap;
   }
+  memcpy(w->p + I->len, p, n);
+  I->len += n;
+  return 0;
 }
 
 static void w_raw(Info *I, const void *p, size_t n)
 {
-  WBuf *w;
-  w_need(I, n);
-  w = (WBuf *)lua_touserdata(I->L, BUFIDX);
-  memcpy(w->p + I->len, p, n);
-  I->len += n;
+  if (w_try(I, p, n))
+    luaL_error(I->L, "eris-lj: out of memory writing %d bytes", (int)n);
 }
 
 static void w_byte(Info *I, unsigned char b) { w_raw(I, &b, 1); }
@@ -213,6 +266,23 @@ static void w_u64le(Info *I, uint64_t v)
   int i;
   for (i = 0; i < 8; i++) b[i] = (unsigned char)((v >> (8 * i)) & 0xff);
   w_raw(I, b, 8);
+}
+
+static void w_u32le(Info *I, uint32_t v)
+{
+  unsigned char b[4];
+  int i;
+  for (i = 0; i < 4; i++) b[i] = (unsigned char)((v >> (8 * i)) & 0xff);
+  w_raw(I, b, 4);
+}
+
+/* Overwrite an already-written u32le (used to backpatch a dump's length,
+ * which is only known once lua_dump has finished). */
+static void w_patch_u32le(Info *I, size_t ofs, uint32_t v)
+{
+  WBuf *w = (WBuf *)lua_touserdata(I->L, BUFIDX);
+  int i;
+  for (i = 0; i < 4; i++) w->p[ofs + i] = (unsigned char)((v >> (8 * i)) & 0xff);
 }
 
 /* -------------------------------------------------------------- read side */
@@ -252,6 +322,14 @@ static uint64_t r_uleb(Info *I)
     shift += 7;
   }
   return v;
+}
+
+static uint32_t r_u32le(Info *I)
+{
+  unsigned char b[4];
+  r_raw(I, b, 4);
+  return (uint32_t)b[0] | ((uint32_t)b[1] << 8) |
+         ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
 }
 
 static uint64_t r_u64le(Info *I)
@@ -321,6 +399,7 @@ static void leave(Info *I) { --I->level; }
 /* ------------------------------------------------------------ persisting */
 
 static void persist(Info *I);
+static void unpersist(Info *I);
 
 static void p_string(Info *I)  /* ... str */
 {
@@ -357,34 +436,140 @@ static void p_literaltable(Info *I)  /* ... tbl */
   p_metatable(I);
 }
 
+/* lua_dump writer: must not raise, so it uses w_try and reports failure
+ * through the context instead. */
+typedef struct { Info *I; int failed; } DumpCtx;
+
+static int dump_writer(lua_State *L, const void *p, size_t sz, void *ud)
+{
+  DumpCtx *c = (DumpCtx *)ud;
+  (void)L;
+  if (c->failed) return 1;
+  if (w_try(c->I, p, sz)) { c->failed = 1; return 1; }
+  return 0;
+}
+
+/* lua_dump() with the two flags it does not expose: DETERMINISTIC (so the
+ * same closure always dumps to the same bytes — LuaJIT otherwise emits
+ * template-table constants in hash order, which its per-process hash seed
+ * randomises) and STRIP (so eris.settings("debug", false) can actually drop
+ * debug info, which dominates the size of a typical blob). */
+static int elj_dump(lua_State *L, lua_Writer w, void *ud, int keepdebug)
+{
+  cTValue *o = L->top - 1;
+  uint32_t flags = LJ_FR2 * BCDUMP_F_FR2 | BCDUMP_F_DETERMINISTIC;
+  if (!keepdebug) flags |= BCDUMP_F_STRIP;
+  if (tvisfunc(o) && isluafunc(funcV(o)))
+    return lj_bcwrite(L, funcproto(funcV(o)), w, ud, flags);
+  return 1;
+}
+
+static void p_function(Info *I)  /* ... f */
+{
+  lua_State *L = I->L;
+  DumpCtx ctx;
+  size_t lenofs, dumplen;
+  int fidx, nuv, i;
+
+  luaL_checkstack(L, 6, "eris-lj func");
+  fidx = lua_gettop(L);                 /* f must be on top for lua_dump */
+
+  w_byte(I, TAG_FUNC);
+  lenofs = I->len;
+  w_u32le(I, 0);                        /* placeholder, backpatched below */
+
+  ctx.I = I;
+  ctx.failed = 0;
+  if (elj_dump(L, dump_writer, &ctx, I->wdebug) != 0 || ctx.failed)
+    luaL_error(L, "eris-lj: cannot dump function%s",
+               ctx.failed ? " (out of memory)" : "");
+  dumplen = I->len - lenofs - 4;
+  if (dumplen > 0xffffffffu)
+    luaL_error(L, "eris-lj: function dump too large");
+  w_patch_u32le(I, lenofs, (uint32_t)dumplen);
+
+  /* Upvalues. Identity — not just value — has to survive: closures sharing
+   * a variable must still share it after a restore, so each distinct
+   * upvalue is written once (keyed by lua_upvalueid) and later users write
+   * a reference to join with. */
+  nuv = 0;
+  while (lua_getupvalue(L, fidx, nuv + 1)) { lua_pop(L, 1); nuv++; }
+  w_uleb(I, (uint64_t)nuv);
+  for (i = 1; i <= nuv; i++) {
+    void *uvid = lua_upvalueid(L, fidx, i);
+    lua_pushlightuserdata(L, uvid);     /* uvid */
+    lua_rawget(L, UPVIDX);              /* id? */
+    if (!lua_isnil(L, -1)) {
+      w_byte(I, TAG_UPVALREF);
+      w_uleb(I, (uint64_t)lua_tointeger(L, -1));
+      lua_pop(L, 1);
+    } else {
+      lua_pop(L, 1);
+      if (I->upvcount >= ERIS_LJ_MAXREF)
+        luaL_error(L, "eris-lj: too many distinct upvalues");
+      ++I->upvcount;
+      lua_pushlightuserdata(L, uvid);
+      lua_pushinteger(L, I->upvcount);
+      lua_rawset(L, UPVIDX);
+      w_byte(I, TAG_UPVAL);
+      lua_getupvalue(L, fidx, i);       /* value */
+      persist(I);
+      lua_pop(L, 1);
+    }
+  }
+
+  /* LuaJIT is Lua 5.1: closures carry a function environment separate from
+   * their upvalues, and OC's sandbox is installed exactly that way (via
+   * load()'s env argument), so it has to round-trip too. */
+  lua_getfenv(L, fidx);
+  persist(I);
+  lua_pop(L, 1);
+}
+
 static void p_table(Info *I)  /* ... tbl */
 {
   lua_State *L = I->L;
-  int literal = 1;
-  luaL_checkstack(L, 3, "eris-lj spkey");
+  int special = 0;
+  luaL_checkstack(L, 4, "eris-lj spkey");
   if (lua_getmetatable(L, -1)) {        /* tbl mt */
     lua_pushvalue(L, SPKIDX);           /* tbl mt spkey */
     lua_rawget(L, -2);                  /* tbl mt sp? */
-    if (!lua_isnil(L, -1)) {
-      if (lua_isboolean(L, -1)) {
-        if (!lua_toboolean(L, -1))
-          luaL_error(L, "eris-lj: attempt to persist forbidden table");
-        /* true: persist literally, exactly as Eris does. */
-      } else if (lua_isfunction(L, -1)) {
-        literal = 0;
-      } else {
-        luaL_error(L, "eris-lj: invalid '%s' metafield (%s)",
-                   lua_tostring(L, SPKIDX), luaL_typename(L, -1));
-      }
+    if (lua_isnil(L, -1)) {
+      lua_pop(L, 2);                    /* tbl */
+    } else if (lua_isboolean(L, -1)) {
+      if (!lua_toboolean(L, -1))
+        luaL_error(L, "eris-lj: attempt to persist forbidden table");
+      lua_pop(L, 2);                    /* tbl: true means persist literally */
+    } else if (lua_isfunction(L, -1)) {
+      lua_remove(L, -2);                /* tbl sp */
+      special = 1;
+    } else {
+      luaL_error(L, "eris-lj: invalid '%s' metafield (%s)",
+                 lua_tostring(L, SPKIDX), luaL_typename(L, -1));
     }
-    lua_pop(L, 2);                      /* tbl */
   }
-  if (!literal)
-    luaL_error(L, "eris-lj: spkey functions need closure support (M2); "
-                  "this build is M1 (data only)");
   w_byte(I, TAG_TABLE);
-  w_byte(I, TABLE_LITERAL);
-  p_literaltable(I);
+  if (special) {                        /* tbl sp */
+    PendingRef pr;
+    w_byte(I, TABLE_SPECIAL);
+    lua_pushvalue(L, -2);               /* tbl sp tbl */
+    /* The callback is user code running mid-traversal of any enclosing
+     * table: it must not add or remove keys of a table currently being
+     * persisted (Lua leaves `next` undefined after such a mutation). */
+    lua_call(L, 1, 1);                  /* tbl closure */
+    if (!lua_isfunction(L, -1))
+      luaL_error(L, "eris-lj: the '%s' function must return a function, got %s",
+                 lua_tostring(L, SPKIDX), luaL_typename(L, -1));
+    pr.id = I->curid;                   /* this table's own reference id */
+    pr.prev = I->pending;
+    I->pending = &pr;
+    persist(I);                         /* tbl closure */
+    I->pending = pr.prev;
+    lua_pop(L, 1);                      /* tbl */
+  } else {
+    w_byte(I, TABLE_LITERAL);
+    p_literaltable(I);
+  }
 }
 
 static void persist_typed(Info *I, int type)  /* ... obj */
@@ -397,8 +582,10 @@ static void persist_typed(Info *I, int type)  /* ... obj */
                        "(process-local pointer); put it in the perms table");
       break;
     case LUA_TFUNCTION:
-      luaL_error(I->L, "eris-lj: cannot persist functions yet (M2); "
-                       "put C functions in the perms table");
+      if (lua_iscfunction(I->L, -1))
+        luaL_error(I->L, "eris-lj: cannot persist a C function by value; "
+                         "put it in the perms table");
+      p_function(I);
       break;
     case LUA_TUSERDATA:
       luaL_error(I->L, "eris-lj: cannot persist userdata yet (M3)");
@@ -420,8 +607,15 @@ static void persist_keyed(Info *I, int type)
   lua_pushvalue(L, -1);                 /* obj refkey refkey */
   lua_rawget(L, REFTIDX);               /* obj refkey ref? */
   if (!lua_isnil(L, -1)) {
+    lua_Integer id = lua_tointeger(L, -1);
+    PendingRef *p;
+    for (p = I->pending; p; p = p->prev)
+      if (p->id == id)
+        luaL_error(L, "eris-lj: the '%s' function captured the object it "
+                      "reconstructs; such a cycle can never be loaded back",
+                   lua_tostring(L, SPKIDX));
     w_byte(I, TAG_REF);
-    w_uleb(I, (uint64_t)lua_tointeger(L, -1));
+    w_uleb(I, (uint64_t)id);
     lua_pop(L, 2);                      /* obj */
     return;
   }
@@ -430,7 +624,8 @@ static void persist_keyed(Info *I, int type)
   /* Register BEFORE descending, so a cycle back to this object emits a
    * reference instead of recursing forever. */
   lua_pushvalue(L, -1);                 /* obj refkey refkey */
-  lua_pushinteger(L, newref(I));        /* obj refkey refkey id */
+  I->curid = newref(I);
+  lua_pushinteger(L, I->curid);         /* obj refkey refkey id */
   lua_rawset(L, REFTIDX);               /* obj refkey */
 
   /* Give the permanents table its chance (lua_gettable: __index applies).
@@ -490,14 +685,127 @@ static void u_string(Info *I)
   registerobject(I);
 }
 
+/* Reader for lua_loadx: hands the dump over in one go. The bytes live in the
+ * input string, which is anchored at BUFIDX for the whole parse. */
+typedef struct { const char *s; size_t sz; int done; } SReader;
+
+static const char *sreader(lua_State *L, void *ud, size_t *size)
+{
+  SReader *r = (SReader *)ud;
+  (void)L;
+  if (r->done) { *size = 0; return NULL; }
+  r->done = 1;
+  *size = r->sz;
+  return r->s;
+}
+
+static void u_function(Info *I)
+{
+  lua_State *L = I->L;
+  SReader r;
+  uint32_t dumplen = r_u32le(I);
+  int fidx, nuv, claimed, i;
+
+  r_need(I, (size_t)dumplen);
+  r.s = (const char *)(I->in + I->pos);
+  r.sz = (size_t)dumplen;
+  r.done = 0;
+  I->pos += (size_t)dumplen;
+
+  luaL_checkstack(L, 6, "eris-lj func");
+  /* Mode "b": bytecode only. See the trust-boundary note at the top of this
+   * file — LuaJIT does not verify bytecode. */
+  if (lua_loadx(L, sreader, &r, "=eris-lj", "b") != 0)
+    luaL_error(L, "eris-lj: cannot load function (%s)",
+               lua_tostring(L, -1) ? lua_tostring(L, -1) : "?");
+  if (!lua_isfunction(L, -1) || lua_iscfunction(L, -1))
+    luaL_error(L, "eris-lj: loaded chunk is not a Lua function");
+  fidx = lua_gettop(L);
+  /* Register before the upvalues, so a closure that refers to itself
+   * through one of them resolves to a reference instead of recursing. */
+  registerobject(I);
+
+  claimed = (int)r_uleb(I);
+  nuv = 0;
+  while (lua_getupvalue(L, fidx, nuv + 1)) { lua_pop(L, 1); nuv++; }
+  if (claimed != nuv)
+    luaL_error(L, "eris-lj: upvalue count mismatch (blob says %d, proto has %d)",
+               claimed, nuv);
+
+  for (i = 1; i <= nuv; i++) {
+    unsigned char t = r_byte(I);
+    if (t == TAG_UPVAL) {
+      lua_Integer id;
+      if (I->upvcount >= ERIS_LJ_MAXREF)
+        luaL_error(L, "eris-lj: too many distinct upvalues");
+      id = ++I->upvcount;
+      /* Publish the owner BEFORE reading the value, mirroring p_function,
+       * which registers the upvalue id before walking into it. The value can
+       * transitively reach another closure sharing this very upvalue (the
+       * ordinary module pattern: two members capturing one local and the
+       * module table), and that closure's join has to resolve while we are
+       * still inside the value. lua_loadx has already allocated a distinct
+       * upvalue for every slot, so joining only needs the slot to exist —
+       * the lua_setupvalue below then writes into the now-shared upvalue. */
+      lua_pushvalue(L, fidx);
+      lua_rawseti(L, UPVIDX, (int)id);  /* id -> owning closure */
+      lua_pushinteger(L, i);
+      lua_rawseti(L, UPVNIDX, (int)id); /* id -> slot */
+      unpersist(I);                     /* value */
+      if (!lua_setupvalue(L, fidx, i))  /* pops it */
+        luaL_error(L, "eris-lj: cannot set upvalue %d", i);
+    } else if (t == TAG_UPVALREF) {
+      uint64_t id = r_uleb(I);
+      int owner_n;
+      if (id == 0 || id > (uint64_t)I->upvcount)
+        luaL_error(L, "eris-lj: upvalue reference %d out of range (%d known)",
+                   (int)id, (int)I->upvcount);
+      lua_rawgeti(L, UPVIDX, (int)id);  /* owner */
+      lua_rawgeti(L, UPVNIDX, (int)id); /* owner slot */
+      if (!lua_isfunction(L, -2) || lua_iscfunction(L, -2) ||
+          !lua_isnumber(L, -1))
+        luaL_error(L, "eris-lj: corrupt upvalue reference %d", (int)id);
+      owner_n = (int)lua_tointeger(L, -1);
+      lua_pop(L, 1);                    /* owner */
+      lua_upvaluejoin(L, fidx, i, lua_gettop(L), owner_n);
+      lua_pop(L, 1);
+    } else {
+      luaL_error(L, "eris-lj: expected an upvalue record, got tag 0x%02x",
+                 (int)t);
+    }
+  }
+
+  unpersist(I);                         /* fenv */
+  if (!lua_istable(L, -1))
+    luaL_error(L, "eris-lj: function environment is a %s, expected a table",
+               luaL_typename(L, -1));
+  if (!lua_setfenv(L, fidx))
+    luaL_error(L, "eris-lj: cannot set the function environment");
+}
+
 static void u_table(Info *I)
 {
   lua_State *L = I->L;
   unsigned char flag = r_byte(I);
-  if (flag != TABLE_LITERAL)
-    luaL_error(L, "eris-lj: table flag %d unsupported in this build (M1)",
-               (int)flag);
   luaL_checkstack(L, 4, "eris-lj table");
+  if (flag == TABLE_SPECIAL) {
+    /* Reserve the id before reading the closure, mirroring persist_keyed;
+     * the table itself only exists once the closure has been called. */
+    lua_Integer ref = newref(I);
+    unpersist(I);                       /* closure */
+    if (!lua_isfunction(L, -1))
+      luaL_error(L, "eris-lj: special-persist record is a %s, expected a "
+                    "function", luaL_typename(L, -1));
+    lua_call(L, 0, 1);                  /* result */
+    if (!lua_istable(L, -1))
+      luaL_error(L, "eris-lj: special-persist function returned a %s, "
+                    "expected a table", luaL_typename(L, -1));
+    lua_pushvalue(L, -1);
+    lua_rawseti(L, REFTIDX, (int)ref);
+    return;
+  }
+  if (flag != TABLE_LITERAL)
+    luaL_error(L, "eris-lj: unknown table flag %d", (int)flag);
   lua_newtable(L);                      /* tbl */
   registerobject(I);                    /* preregister: cycles resolve */
   for (;;) {
@@ -569,7 +877,14 @@ static void unpersist(Info *I)
     }
     case TAG_STR: u_string(I); break;
     case TAG_TABLE: u_table(I); break;
+    case TAG_FUNC: u_function(I); break;
     case TAG_PERMANENT: u_permanent(I); break;
+    case TAG_UPVAL:
+    case TAG_UPVALREF:
+      /* Only ever valid inside a function's upvalue list, where u_function
+       * reads them directly; seeing one in a value slot is malformed. */
+      luaL_error(L, "eris-lj: upvalue record outside a function");
+      break;
     case TAG_REF: {
       uint64_t id = r_uleb(I);
       /* Compare unsigned: a signed cast would let ids >= 2^63 through. */
@@ -675,6 +990,9 @@ static void load_settings(lua_State *L, Info *I)
    * whatever ended up stored. */
   if (I->maxrec > ERIS_LJ_MAXREC_MAX) I->maxrec = ERIS_LJ_MAXREC_MAX;
   lua_pop(L, 1);
+  lua_getfield(L, -1, "debug");
+  I->wdebug = lua_toboolean(L, -1);
+  lua_pop(L, 1);
   lua_getfield(L, -1, "spkey");         /* ... settings spkey */
   lua_remove(L, -2);                    /* ... spkey */
 }
@@ -700,13 +1018,18 @@ static int l_persist(lua_State *L)
   memset(&I, 0, sizeof(I));
   I.L = L;
 
-  /* Lay out the fixed slots: perms reftbl buf spkey value */
+  /* Lay out the fixed slots: perms reftbl buf spkey upv upvn value */
+  luaL_checkstack(L, 8, "eris-lj setup");
   lua_newtable(L);                      /* perms value reftbl */
   lua_insert(L, 2);                     /* perms reftbl value */
   wbuf_new(L, 256);                     /* perms reftbl value buf */
   lua_insert(L, 3);                     /* perms reftbl buf value */
   load_settings(L, &I);                 /* perms reftbl buf value spkey */
   lua_insert(L, 4);                     /* perms reftbl buf spkey value */
+  lua_newtable(L);
+  lua_insert(L, UPVIDX);                /* ... upv value */
+  lua_newtable(L);
+  lua_insert(L, UPVNIDX);               /* ... upv upvn value */
 
   if (fplen > 255)
     return luaL_error(L, "eris-lj: fingerprint too long");
@@ -729,6 +1052,9 @@ static int l_persist(lua_State *L)
   }
   w = (WBuf *)lua_touserdata(L, BUFIDX);  /* w_raw may have reallocated */
   lua_pushlstring(L, (const char *)w->p, I.len);
+  /* The string owns a copy now; release the buffer immediately rather than
+   * waiting for a GC cycle that the host has very likely stopped. */
+  wbuf_free(L, w);
   return 1;
 }
 
@@ -751,6 +1077,7 @@ static int l_unpersist(lua_State *L)
   memset(&I, 0, sizeof(I));
   I.L = L;
 
+  luaL_checkstack(L, 8, "eris-lj setup");
   lua_newtable(L);                      /* uperms str reftbl */
   lua_insert(L, 2);                     /* uperms reftbl str */
   /* Slot 3 anchors the input string for the whole parse; nothing replaces
@@ -759,6 +1086,10 @@ static int l_unpersist(lua_State *L)
   I.in = in;
   I.inlen = inlen;
   load_settings(L, &I);                 /* uperms reftbl str spkey */
+  lua_newtable(L);
+  lua_insert(L, UPVIDX);
+  lua_newtable(L);
+  lua_insert(L, UPVNIDX);
 
   if (inlen < sizeof(MAGIC) + 2 + 4)
     return luaL_error(L, "eris-lj: data too short to be a valid blob");

@@ -1,8 +1,14 @@
 /*
  * eris_lj.h — Eris-API-compatible serializer for the pinned LuaJIT build.
- * Track P, milestone M1: data graphs (nil/bool/number/string/table with
- * metatables, cycles, shared references), permanents substitution, spkey
- * literal semantics. Functions/threads/userdata arrive in M2/M3.
+ * Track P, milestone M2: data graphs (nil/bool/number/string/table with
+ * metatables, cycles, shared references), permanents substitution, the full
+ * spkey protocol, and Lua closures — prototypes, upvalue identity (sharing
+ * survives a round trip) and function environments. Threads and userdata
+ * arrive in M3.
+ *
+ * NOTE: from M2 a blob carries LuaJIT bytecode and the spkey protocol calls
+ * restored closures, so blobs must come from trusted storage. See the
+ * trust-boundary comment in eris_lj.c.
  *
  * Lua-visible API (mirrors fnuecke/eris):
  *   eris.persist([perms,] value)  -> binary string
@@ -17,7 +23,7 @@
 
 #include "lua.h"
 
-#define ERIS_LJ_VERSION "eris-lj 0.1 (M1)"
+#define ERIS_LJ_VERSION "eris-lj 0.2 (M2)"
 
 /* Format version written into every blob header. Bump on ANY change. */
 #define ERIS_LJ_FORMAT 1

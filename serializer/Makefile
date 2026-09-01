@@ -36,6 +36,7 @@ $(LJLIB):
 
 test: $(BIN)
 	./$(BIN) tests/m1.lua
+	./$(BIN) tests/m2.lua
 
 clean:
 	rm -f $(BIN)

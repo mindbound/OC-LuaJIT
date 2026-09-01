@@ -208,11 +208,7 @@ end
 --------------------------------------------------------------- metatables
 
 print("-- metatables")
-do
-  local mt = { __index = function() return "dynamic" end }
-  local ok_, err = pcall(roundtrip, setmetatable({}, mt))
-  ok(not ok_ and tostring(err):find("function"), "metatable with a function errors cleanly (M2)", err)
-end
+-- (a metatable holding closures is exercised in tests/m2.lua)
 do
   local mt = { greeting = "hi" }
   local g = roundtrip(setmetatable({}, mt))
@@ -315,9 +311,10 @@ end
 ------------------------------------------------------- unsupported types
 
 print("-- unsupported types error cleanly")
-do
-  local ok_, err = pcall(eris.persist, {}, function() end)
-  ok(not ok_ and tostring(err):find("M2"), "Lua function errors with a milestone hint", err)
+do -- Lua closures are M2's subject; here we only check the C-function rule
+  local ok_, err = pcall(eris.persist, {}, print)
+  ok(not ok_ and tostring(err):find("perms"),
+     "C function without a perms entry errors", err)
 end
 do
   local ok_, err = pcall(eris.persist, {}, coroutine.create(function() end))
@@ -466,7 +463,7 @@ do -- HIGH: maxrec had no upper clamp, so a deep crafted blob could exhaust
    -- the native C stack (uncatchable crash) instead of erroring.
   eris.settings("maxrec", 1e9)
   local enforced = eris.settings("maxrec")
-  ok(enforced <= 3000, "maxrec is clamped to a stack-safe ceiling", enforced)
+  ok(enforced <= 2000, "maxrec is clamped to a stack-safe ceiling", enforced)
   local deep = seal(HDR .. string.rep(string.char(6, 0), 20000) .. string.char(0))
   local ok_, err = pcall(eris.unpersist, {}, deep)
   ok(not ok_ and tostring(err):find("too complex"),
@@ -487,7 +484,7 @@ do -- MEDIUM: the maxrec getter must report the limit actually enforced.
   eris.settings("maxrec", 50)
   ok(eris.settings("maxrec") == 50, "maxrec getter reflects the set value")
   eris.settings("maxrec", 999999)
-  ok(eris.settings("maxrec") == 3000, "out-of-range maxrec is normalised on set")
+  ok(eris.settings("maxrec") == 2000, "out-of-range maxrec is normalised on set")
   eris.settings("maxrec", nil)
 end
 
