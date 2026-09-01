@@ -1,0 +1,21 @@
+{
+	"modListVersion": 2,
+	"modList": [{
+		"modid": "${modId}",
+		"name": "${modName}",
+		"description": "A LuaJIT-based CPU architecture for OpenComputers: high-performance, non-persistent computers. Shift+right-click a CPU to select it.",
+		"version": "${modVersion}",
+		"mcversion": "${minecraftVersion}",
+		"url": "",
+		"updateUrl": "",
+		"authorList": ["astronfo"],
+		"credits": "Built on the GTNH ExampleMod1.7.10 template. Informed by CCLuaJIT, OC-Wasm and OpenPython.",
+		"logoFile": "",
+		"screenshots": [],
+		"parent": "",
+		"requiredMods": ["OpenComputers"],
+		"dependencies": ["OpenComputers"],
+		"dependants": [],
+		"useDependencyInformation": true
+	}]
+}

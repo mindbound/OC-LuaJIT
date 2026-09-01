@@ -1,0 +1,69 @@
+framewalk: LuaJIT frame-shape validation (M0)
+build: GC64=1 FR2=1
+
+== scenario 1: plain yield in loop
+  thread 000001de5ec7a668 [plain yield in loop]
+    status=1 cframe=0000000000000000 base_ofs=7 top_ofs=7 stacksize=48
+    [ 0] slot=  6 type=LUA    func=C:ffid=35 ret_pc=(caller+8 of 10)
+    [ 1] slot=  3 type=CP     delta=16 (bottom resume frame)
+
+== scenario 2: yield under pcall + xpcall
+  thread 000001de5ec7a780 [yield under pcall + xpcall]
+    status=1 cframe=0000000000000000 base_ofs=15 top_ofs=15 stacksize=48
+    [ 0] slot= 14 type=LUA    func=C:ffid=35 ret_pc=(caller+5 of 6)
+    [ 1] slot= 12 type=PCALL  delta=24
+    [ 2] slot=  9 type=LUA    func=C:ffid=22 ret_pc=(caller+5 of 6)
+    [ 3] slot=  7 type=PCALL  delta=16
+    [ 4] slot=  5 type=LUA    func=C:ffid=21 ret_pc=(caller+4 of 5)
+    [ 5] slot=  3 type=CP     delta=16 (bottom resume frame)
+
+== scenario 3: yield inside __index metamethod (CONT frame)
+  thread 000001de5ec7c820 [yield inside __index metamethod (CONT frame)]
+    status=1 cframe=0000000000000000 base_ofs=13 top_ofs=13 stacksize=48
+    [ 0] slot= 12 type=LUA    func=C:ffid=35 ret_pc=(caller+5 of 6)
+    [ 1] slot=  8 type=CONT   func=Lua:yield inside __index metamethod (CONT fr:1 delta=40 cont=ra
+    [ 2] slot=  3 type=CP     delta=16 (bottom resume frame)
+
+== scenario 4: yield inside __concat metamethod (cont_cat)
+  thread 000001de5ec7d3c0 [yield inside __concat metamethod (cont_cat)]
+    status=1 cframe=0000000000000000 base_ofs=12 top_ofs=12 stacksize=48
+    [ 0] slot= 11 type=LUA    func=C:ffid=35 ret_pc=(caller+5 of 7)
+    [ 1] slot=  7 type=CONT   func=Lua:yield inside __concat metamethod (cont_c:1 delta=32 cont=cat
+    [ 2] slot=  3 type=CP     delta=16 (bottom resume frame)
+
+== scenario 5: yield in vararg function, deep call chain, open upvalues
+  thread 000001de5ec7dc10 [yield in vararg function, deep call chain, open upvalues]
+    status=1 cframe=0000000000000000 base_ofs=27 top_ofs=27 stacksize=48
+    [ 0] slot= 26 type=LUA    func=C:ffid=35 ret_pc=(caller+9 of 10)
+    [ 1] slot= 23 type=VARG   delta=40
+    [ 2] slot= 18 type=LUA    func=Lua:yield in vararg function, deep call chai:3 ret_pc=(caller+4 of 5)
+    [ 3] slot= 16 type=VARG   delta=40
+    [ 4] slot= 11 type=LUA    func=Lua:yield in vararg function, deep call chai:7 ret_pc=(caller+6 of 7)
+    [ 5] slot=  9 type=LUA    func=Lua:yield in vararg function, deep call chai:8 ret_pc=(caller+7 of 9)
+    [ 6] slot=  3 type=CP     delta=16 (bottom resume frame)
+    openupval[0] slot=6 immutable=1
+    openupval[1] slot=5 immutable=1
+    openupval[2] slot=4 immutable=0
+
+== scenario 6: nested coroutine suspended inside another
+  thread 000001de5ec7eaf8 [nested coroutine suspended inside another]
+    status=1 cframe=0000000000000000 base_ofs=6 top_ofs=6 stacksize=48
+    [ 0] slot=  5 type=LUA    func=C:ffid=35 ret_pc=(caller+14 of 15)
+    [ 1] slot=  3 type=CP     delta=16 (bottom resume frame)
+    -- inner thread:
+  thread 000001de5ec7e7b8 [inner coroutine]
+    status=1 cframe=0000000000000000 base_ofs=7 top_ofs=7 stacksize=48
+    [ 0] slot=  6 type=LUA    func=C:ffid=35 ret_pc=(caller+6 of 8)
+    [ 1] slot=  3 type=CP     delta=16 (bottom resume frame)
+    openupval[0] slot=4 immutable=1
+
+== scenario 7: yield from JIT-hot loop (stitch expected)
+  thread 000001de5ec7f5c0 [yield from JIT-hot loop (stitch expected)]
+    status=1 cframe=0000000000000000 base_ofs=14 top_ofs=14 stacksize=48
+    [ 0] slot= 13 type=CONT   func=C:ffid=35 delta=80 cont=stitch
+      stitch: saved-trace slot=9 itype=0xfffffff6 raw=0xfffb01de5ec80430
+    [ 1] slot=  3 type=CP     delta=16 (bottom resume frame)
+    TRACE-TAGGED slot=9 raw=0xfffb01de5ec80430 (full-stack scan)
+
+
+RESULT: ALL INVARIANTS HOLD (0 failures)
