@@ -37,6 +37,9 @@ $(LJLIB):
 test: $(BIN)
 	./$(BIN) tests/m1.lua
 	./$(BIN) tests/m2.lua
+	./$(BIN) tests/m3.lua
+	sh tests/run-forin.sh
 
 clean:
 	rm -f $(BIN)
+	rm -rf .forin

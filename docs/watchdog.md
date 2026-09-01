@@ -78,6 +78,60 @@ The full attack matrix ran on both builds (`make test`), JIT confirmed ON via `j
 
 **Conclusion: the design is validated end-to-end** — async injection interrupts JIT-compiled hostile code in microseconds, the stock build provably cannot, every anti-swallow and memory-cap behavior works as researched, and the safety tax is negligible on real workloads.
 
+## Cross-component invariant: the hook must raise, never yield
+
+Established while verifying M3 (2026-09-01). This watchdog installs a **native
+C hook**, and LuaJIT's `lua_yield` has a hook branch that builds a
+`cont_hook` continuation frame — a frame whose auxiliary slot is a raw
+`MULTRES` count and whose "function" slot holds the thread rather than a
+function. Such a frame cannot be serialized, so a coroutine suspended inside
+one can never be persisted.
+
+We are safe only because `watchdog_hook` calls `lua_error` and never
+`lua_yield`. That is not incidental: it is a constraint on this design and on
+any future variant that would rather "yield to the host on deadline" than
+raise. The moment such a hook yields, every snapshot taken while a coroutine
+is suspended in it becomes unpersistable.
+
+(Stock OC is safe for a different reason: its hook is a *Lua* function, and
+`lib_debug.c`'s trampoline runs it through `lua_call`, which pushes a frame
+without `CFRAME_RESUME`, so `cframe_canyield` is false and yielding from it
+fails outright. That reasoning does **not** transfer to a native hook.)
+
+## Disarming is load-bearing, not hygiene
+
+Measured 2026-09-01. A **still-armed `count=1` hook poisons every subsequent
+host-driven Lua call on that state**: the first fire can be caught by a `pcall`,
+and the second fire — two instructions later — killed the process outright. The
+state machine above already says "always clear the hook before the next resume";
+this note is here because that line reads like tidiness and is not. The watchdog
+must disarm on *every* exit path from a resume, including the ones where the
+resume returned normally and the deadline had not yet expired.
+
+Two related findings from the same investigation, both reassuring:
+
+- **A hook cannot fire inside the serializer's own C code.** It can only fire
+  inside the two places persistence calls back into Lua — a `__persist`
+  callback on save, and a reconstruction closure on load — and an error raised
+  there unwinds cleanly and leaves the state fully usable. So a deadline
+  expiring during a save cannot corrupt anything; at worst it fails the persist,
+  which OC turns into its sanctioned reboot-on-load.
+- **There is no genuine overlap window with OC's save path.** `Machine.run`
+  (which calls `runThreaded`) and `Machine.save`/`load` are each
+  `Machine.this.synchronized` for their whole bodies, so they are mutually
+  exclusive by monitor rather than merely by the `isExecuting` check. The only
+  residual risk is a watchdog arming microseconds *after* a resume returned —
+  which is precisely what the disarm discipline above prevents.
+
+## `jit.flush` and persist ordering
+
+Also settled: `jit.flush` before a persist is **neither required nor harmful**
+for the bytecode path. `lj_bcwrite` un-patches J-variant opcodes from live
+traces, and `lj_trace_flushall` un-patches every root trace before nulling the
+trace table, so both orders are safe. Earlier project documents gave two
+contradictory orders; neither was wrong, and the requirement should be stated as
+"either order is safe" rather than as a rule.
+
 ## Open items
 - Decide `SHORT_STRING` threshold (route all pattern ops through the Lua matcher?).
 - Stress-test cross-thread injection on a weak-memory host (ARM) or under TSan before shipping non-x86 natives.

@@ -23,10 +23,11 @@
 
 #include "lua.h"
 
-#define ERIS_LJ_VERSION "eris-lj 0.2 (M2)"
+#define ERIS_LJ_VERSION "eris-lj 0.3 (M3)"
 
-/* Format version written into every blob header. Bump on ANY change. */
-#define ERIS_LJ_FORMAT 1
+/* Format version written into every blob header. Bump on ANY change.
+ * 2: threads, and generic for-in loops rewritten into replay form. */
+#define ERIS_LJ_FORMAT 2
 
 /* Build fingerprint: refuse blobs from a different natives build.
  * ERIS_LJ_COMMIT is injected by the build (-DERIS_LJ_COMMIT=...). */

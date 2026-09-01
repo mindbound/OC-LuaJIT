@@ -39,6 +39,25 @@ local function build_perms()
       end
     end
   end
+  -- Some iterators are hidden singletons that no name in _G reaches: an
+  -- `ipairs` loop leaves its aux function on the stack, and that function is
+  -- only obtainable as an upvalue of `ipairs` itself. Sweeping the
+  -- function-valued upvalues of every named builtin picks them all up (on
+  -- this build exactly two: `next` and the ipairs aux), which is what lets a
+  -- coroutine suspended mid-`ipairs` be persisted at all. A real host wants
+  -- this same arm in its perms flattener.
+  local named = {}
+  for v, n in pairs(perms) do if type(v) == "function" then named[#named + 1] = { v, n } end end
+  for _, e in ipairs(named) do
+    local f, n = e[1], e[2]
+    local i = 1
+    while true do
+      local uvn, uvv = debug.getupvalue(f, i)
+      if uvn == nil then break end
+      if type(uvv) == "function" then add(uvv, n .. "#uv" .. i) end
+      i = i + 1
+    end
+  end
   return perms, uperms
 end
 local BASEP, BASEU = build_perms()

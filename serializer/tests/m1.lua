@@ -316,10 +316,7 @@ do -- Lua closures are M2's subject; here we only check the C-function rule
   ok(not ok_ and tostring(err):find("perms"),
      "C function without a perms entry errors", err)
 end
-do
-  local ok_, err = pcall(eris.persist, {}, coroutine.create(function() end))
-  ok(not ok_ and tostring(err):find("M3"), "thread errors with a milestone hint", err)
-end
+-- (coroutines are M3's subject; see tests/m3.lua)
 do
   local ok_, err = pcall(eris.persist, {}, { nested = print })
   ok(not ok_, "unsupported value nested in a table still errors", err)
