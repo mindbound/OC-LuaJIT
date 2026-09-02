@@ -288,15 +288,17 @@ value instead, since there is no frame on the other side to alias.
     host's JIT nor fails from inside a `__gc` finalizer.
   - Keys **added** during a traversal are not visited. Lua already leaves that
     undefined.
-  - One residual gap is left open deliberately, because it is not soundly
-    closeable: a loop whose iterator is a **Lua closure wrapping `next`**
-    rather than `next` itself. Its `ffid` is not `FF_next_N`, so the scan
-    cannot see it, yet its control slot carries the same layout dependence.
-    That shape is indistinguishable from a legitimate custom iterator with its
-    own ordering, and rewriting the latter would silently change its
-    semantics. `pairs(t)` returns the raw `next`, so ordinary code is
-    unaffected — but **a sandbox whose `__pairs` returns a wrapper would be**,
-    which is a constraint on the OC integration: return the raw `next`.
+  - One residual gap is open: a loop whose iterator is a **Lua closure
+    wrapping `next`** rather than `next` itself. Its `ffid` is not
+    `FF_next_N`, so the scan cannot see it, yet its control slot carries the
+    same layout dependence. It is not closeable **by inference** — that shape
+    is indistinguishable from a legitimate custom iterator with its own
+    ordering, and rewriting the latter would silently change its semantics.
+    It *is* closeable with information the host already has, and there is a
+    plan: see [../docs/forin-iterator-gap.md](../docs/forin-iterator-gap.md).
+    `pairs(t)` returns the raw `next`, so ordinary code is unaffected — but
+    **a sandbox whose `__pairs` returns a wrapper would not be**, which makes
+    this a live question for the OC integration rather than a footnote.
   - One shape is refused rather than guessed at: a frame whose bytecode
     position cannot be recovered *and* which holds an unmarked `next`-shaped
     triple. Without the position, three ordinary locals holding

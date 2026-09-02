@@ -18,7 +18,7 @@ set -u
 BIN=${BIN:-./erislj_test.exe}
 DIR=${DIR:-./.forin}
 PADS=${PADS:-"0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19"}
-CASES=${CASES:-"strings mixed array big falsevals nested sequential delcurrent nextlocal nextdel despec foreach jitwarm deep perms permsfn control_naive"}
+CASES=${CASES:-"strings mixed array big falsevals nested sequential delcurrent nextlocal nextdel despec foreach oclist_fixed jitwarm deep perms permsfn control_naive oclist"}
 # Cases that additionally go through a middle process which loads and re-saves,
 # so the third process restores a loop that is ALREADY in replay form. Without
 # this the suite round-trips once and cannot see a defect that only appears on
@@ -64,7 +64,7 @@ for case in $CASES; do
   done
 
   total=$((ok + bad))
-  if [ "$case" = "control_naive" ]; then
+  if [ "$case" = "control_naive" ] || [ "$case" = "oclist" ]; then
     # NEGATIVE CONTROL: this case deliberately does NOT go through the replay
     # path -- it resumes `next` from a saved key, which is what the code did
     # before A'. If it passes every pad, the harness cannot see the defect it

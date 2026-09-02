@@ -38,6 +38,7 @@ test: $(BIN)
 	./$(BIN) tests/m1.lua
 	./$(BIN) tests/m2.lua
 	./$(BIN) tests/m3.lua
+	./$(BIN) tests/contract.lua
 	sh tests/run-forin.sh
 
 clean:

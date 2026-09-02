@@ -25,30 +25,43 @@ local pad  = tonumber(os.getenv("ELJ_PAD") or "0")
 
 local function build_perms()
   local perms, uperms = {}, {}
-  local function add(v, name)
-    if perms[v] == nil then perms[v] = name; uperms[name] = v end
-  end
-  add(_G, "_G")
+  -- Collect every (object, name) candidate first, then assign in NAME order.
+  -- An object reachable under two names -- unpack and table.unpack are the
+  -- same function, and a bare _G has three such aliases -- would otherwise
+  -- take whichever name pairs() reached first, and pairs() order differs
+  -- BETWEEN PROCESSES. That made the perms table itself process-dependent: a
+  -- blob written under one naming failed to load under the other with
+  -- "unknown permanent" in 5 of 10 fresh-process loads, which is write-only
+  -- save data. Real OC sorts for exactly this reason (PersistenceAPI.scala).
+  local cand = {}
+  local function offer(v, name) cand[#cand + 1] = { v, name } end
+  offer(_G, "_G")
   for k, v in pairs(_G) do
     local t = type(v)
     if t == "function" or t == "table" then
-      add(v, "_G." .. tostring(k))
+      offer(v, "_G." .. tostring(k))
       if t == "table" and v ~= _G then
         for k2, v2 in pairs(v) do
           local t2 = type(v2)
           if t2 == "function" or t2 == "table" then
-            add(v2, "_G." .. tostring(k) .. "." .. tostring(k2))
+            offer(v2, "_G." .. tostring(k) .. "." .. tostring(k2))
           end
         end
       end
     end
   end
+  table.sort(cand, function(a, b) return a[2] < b[2] end)
+  local function add(v, name)
+    if perms[v] == nil then perms[v] = name; uperms[name] = v end
+  end
+  for _, e in ipairs(cand) do add(e[1], e[2]) end
   -- `next` and the ipairs aux are only reachable as upvalues of the builtins
   -- that use them, and a suspended for-in loop holds one in a hidden slot.
   local named = {}
   for v, n in pairs(perms) do
     if type(v) == "function" then named[#named + 1] = { v, n } end
   end
+  table.sort(named, function(a, b) return a[2] < b[2] end)  -- same reason
   for _, e in ipairs(named) do
     local f, n = e[1], e[2]
     local i = 1
@@ -198,6 +211,35 @@ end
 BODIES.foreach = function(t)
   return function()                                  -- a build-time ITERN loop
     table.foreach(t, function(k) coroutine.yield(k) end)
+    return "DONE"
+  end
+end
+
+-- machine.lua's component.list(): a __call table whose closure keeps its
+-- traversal position in an UPVALUE, not in the loop's control slot. That is a
+-- DIFFERENT mechanism from the ctl-slot gap the replay iterator closes -- the
+-- key round-trips perfectly, and the meaning still changes, because the key's
+-- POSITION in the rebuilt table differs. No serializer change can reach it.
+BODIES.oclist = function(t)
+  local function mklist(tbl)
+    local key = nil
+    return setmetatable({}, { __call = function()
+      key = next(tbl, key)
+      if key ~= nil then return key, tbl[key] end
+    end })
+  end
+  return function()
+    for k in mklist(t) do coroutine.yield(k) end
+    return "DONE"
+  end
+end
+
+-- The one-line fix: hand back the raw triple, so the position lives in the
+-- control slot where the replay iterator can rewrite it.
+BODIES.oclist_fixed = function(t)
+  local function mklist(tbl) return next, tbl, nil end
+  return function()
+    for k in mklist(t) do coroutine.yield(k) end
     return "DONE"
   end
 end

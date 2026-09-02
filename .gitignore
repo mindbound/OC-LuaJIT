@@ -54,3 +54,13 @@ layout.json
 /prototype/coclone/probe3
 /prototype/coclone/probe3.exe
 /serializer/.forin/
+
+# stray natives extracted by ocelot-brain probes at runtime
+/Ocelot-*.dll
+/Ocelot-*.so
+/Ocelot-*.dylib
+
+# native shim build outputs (the DLL is a release asset, not a source)
+/build/
+/native/build/
+/test/native/build/

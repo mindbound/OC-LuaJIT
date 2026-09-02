@@ -13,11 +13,15 @@ import li.cil.oc.api.machine.Machine;
 /**
  * LuaJIT-backed OpenComputers architecture.
  *
- * Non-persistent by design: a LuaJIT VM cannot be serialized (Eris works only on
- * PUC Lua internals), so this architecture uses the same contract as OC's shipped
- * LuaJ fallback — save() writes nothing, load() reboots a machine that was running.
- * See docs/feasibility.md for the full rationale and docs/watchdog.md for the
- * timeout-enforcement design.
+ * PERSISTENT. The original premise of this class — that a LuaJIT VM cannot be
+ * serialized because Eris works only on PUC Lua internals — turned out to be
+ * false, and Track P disproved it: serializer/eris_lj.c persists and restores a
+ * full LuaJIT state, including suspended coroutines and live for-in loops, with
+ * an Eris-compatible API. See serializer/README.md for the contract and what it
+ * still refuses, docs/roadmap.md for where the integration stands, and
+ * docs/watchdog.md for timeout enforcement.
+ *
+ * NOTE: this class is still a stub. Nothing below is wired to a VM yet.
  */
 @Architecture.Name("LuaJIT")
 public class LuaJITArchitecture implements Architecture {
