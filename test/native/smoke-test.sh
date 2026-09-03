@@ -25,7 +25,23 @@
 #   OCLJ_WORK     scratch dir for classes/conf/logs   [default $TMPDIR/ocljit-smoke]
 #   OCLJ_SRC      OcljSmoke.scala                               [default: next to this script]
 #   OCLJ_TIMEOUT  seconds before the run is killed              [default 300]
-#   OCLJ_JITOFF   set to 1 to run with the JIT disabled (diagnostic only)
+#   OCLJ_KERNEL   watchdog (default) | stock.  "watchdog" derives the OC-LuaJIT
+#                 kernel from ocelot-brain's machine.lua with
+#                 native/kernel/patch-machine-lua.lua and puts it FIRST on the
+#                 classpath, where it shadows OC's.  ocelot-brain is untouched.
+#                 "stock" runs OC's own machine.lua with its standing deadline
+#                 hook: the CONTROL, and the "before" picture in
+#                 docs/research/hook-vs-jit.md.  The k2/k3 milestones only run
+#                 under the watchdog kernel with the JIT on.
+#   OCLJ_LUAJIT_EXE  the luajit.exe that runs the patcher
+#                 [default: $OCLJ_LIBDIR/../luajit/src/luajit.exe, i.e. the
+#                  one build-native.sh built]
+#   OCLJ_JIT      on (default) | off.  "off" makes the harness call
+#                 jit.off()+jit.flush() on the machine's state right before
+#                 OpenOS boots -- the control for the JIT PROBE line.  (This
+#                 replaces OCLJ_JITOFF, which exported an env var the shim
+#                 deliberately never reads; it had been dead since the shim
+#                 lost its getenv() hatches.)
 #
 # USAGE
 #   OCLJ_LIBDIR=.../build/native/libdir OCLJ_BRAIN=~/src/ocelot-brain \
@@ -64,6 +80,37 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_BRAIN:=}"
 : "${OCLJ_BRAIN_CP:=}"
 : "${OCLJ_ALLOW_BYTECODE:=false}"
+# Extra HOCON lines appended to the generated config, one per line.  This is
+# how a milestone gets run in its other polarity without forking the harness:
+# the memory milestones below, for instance, are calibration-sensitive, and
+# "does it still boot with a different ramScaleFor64Bit" is a question the
+# suite must be able to ask rather than assume.
+# THE MACHINE'S RAM SCALE, pinned deliberately rather than inherited.
+#
+# ramScaleFor64Bit is how many real bytes OC charges per apparent byte of
+# installed RAM; it exists because objects are bigger on a 64-bit VM than on
+# the 32-bit one the module sizes were written for.  OC ships 1.8, calibrated
+# for 64-bit PUC Lua.  LuaJIT GC64 needs more, and now that the RAM cap is
+# actually ENFORCED that is no longer a detail: measured on this harness, a
+# 1024K machine booting OpenOS 1.8.9 --
+#
+#     ramScale 1.8 (OC's default)   1 pass  in 6
+#     ramScale 2.5                  6 passes in 6
+#     ramScale 3.0                  5 passes in 5
+#
+# -- so at OC's own default the machine runs out of RAM during boot most of the
+# time.  That is a real finding about the architecture, recorded in
+# docs/research/memory-accounting.md and on the roadmap; it is NOT something
+# this harness should rediscover flakily on every run, because a suite that
+# fails at random tells you nothing about the change under test.  So the scale
+# is pinned here, above the break-even point, and printed.  Set OCLJ_RAM_SCALE
+# to reproduce the finding (OCLJ_RAM_SCALE=1.8), or OCLJ_CONF_EXTRA to override
+# anything at all -- it is appended last and HOCON lets the later assignment
+# win.
+: "${OCLJ_RAM_SCALE:=3.0}"
+: "${OCLJ_KERNEL:=watchdog}"
+: "${OCLJ_LUAJIT_EXE:=}"
+: "${OCLJ_CONF_EXTRA:=}"
 # Scratch dir. Deliberately NOT $PWD-relative: this script is often invoked
 # from a source checkout, and a default that lands classes, jars, a 78 KB
 # generated config and a log inside the repository is a trap.
@@ -189,23 +236,50 @@ LIBDIR_ABS=$(wm "$(CDPATH= cd -- "$OCLJ_LIBDIR" && pwd)")
   # loudly, renames the milestone, and changes the final verdict line so a
   # negative-control run can never be mistaken for a security pass.
   echo "opencomputers.computer.lua.allowBytecode = $OCLJ_ALLOW_BYTECODE"
+  echo "opencomputers.computer.lua.ramScaleFor64Bit = $OCLJ_RAM_SCALE"
+  if [ -n "$OCLJ_CONF_EXTRA" ]; then
+    echo "# ---- OCLJ_CONF_EXTRA ----"
+    printf '%s
+' "$OCLJ_CONF_EXTRA"
+  fi
 } >> "$CONF"
+[ -n "$OCLJ_CONF_EXTRA" ] && say "    EXTRA   = $OCLJ_CONF_EXTRA"
 say "    conf    = $CONF"
 say "    libdir  = $LIBDIR_ABS"
+case $OCLJ_KERNEL in stock|watchdog) ;; *) fail "OCLJ_KERNEL must be stock or watchdog, not '$OCLJ_KERNEL'";; esac
+if [ "$OCLJ_KERNEL" = "watchdog" ]; then
+  # The patched kernel goes where the harness's own classes live -- the FIRST
+  # classpath entry -- so NativeLuaArchitecture's
+  #   getResourceAsStream("/assets/opencomputers/lua/machine.lua")
+  # finds ours before ocelot-brain's.  Nothing in ocelot-brain changes.
+  [ -n "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE="$OCLJ_LIBDIR/../luajit/src/luajit.exe"
+  [ -x "$OCLJ_LUAJIT_EXE" ] || fail "OCLJ_KERNEL=watchdog needs luajit.exe to run the kernel patcher; none at $OCLJ_LUAJIT_EXE (set OCLJ_LUAJIT_EXE)"
+  KDIR="$OCLJ_WORK/classes/assets/opencomputers/lua"
+  mkdir -p "$KDIR" || fail "cannot create $KDIR"
+  "$OCLJ_LUAJIT_EXE" "$SELF_DIR/../../native/kernel/patch-machine-lua.lua" \
+    "$BRAIN_RES/assets/opencomputers/lua/machine.lua" "$KDIR/machine.lua" \
+    || fail "the kernel patcher refused ocelot-brain's machine.lua (an anchor no longer matches)"
+  say "    kernel  = WATCHDOG variant at $KDIR/machine.lua (shadows OC's on the classpath)"
+else
+  # Make sure a stale patched kernel from a previous watchdog run cannot
+  # linger in the shared classes dir and silently turn a stock run into one.
+  rm -f "$OCLJ_WORK/classes/assets/opencomputers/lua/machine.lua"
+  say "    kernel  = stock (OC's own machine.lua, standing deadline hook)"
+fi
+say "    ramScale= $OCLJ_RAM_SCALE   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)"
 
 # --------------------------------------------------------------- 4
 say "=============== 4. boot OpenOS ==============="
 LOG="$OCLJ_WORK/smoke.log"
 RUNCP="$(w "$OCLJ_WORK/classes")$SEP$CP"
-if [ "${OCLJ_JITOFF:-0}" = "1" ]; then
-  say "    OCLJ_JITOFF=1 -- the shim will disable the JIT (diagnostic run)"
-  export OCLJ_JITOFF
-fi
+: "${OCLJ_JIT:=on}"
+case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT'";; esac
+[ "$OCLJ_JIT" = "off" ] && say "    OCLJ_JIT=off -- the harness will jit.off() the machine's state (JIT PROBE control run)"
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
-  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
 else
-  "$JAVA" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
 fi
 RC=$?
 cat "$LOG"
@@ -216,7 +290,14 @@ say "=============== 5. verdict ==============="
 # with a status that means nothing.
 OK=1
 [ $RC -eq 0 ] || { echo "  java exit=$RC (124 = timed out)"; OK=0; }
-grep -q "^SMOKE| VERDICT: PASS" "$LOG" || { echo "  no 'VERDICT: PASS' line"; OK=0; }
+# The diagnostic deliberately does NOT contain the string it is reporting the
+# absence of.  It used to read "no 'VERDICT: PASS' line", which meant a caller
+# scoring a batch of runs with `grep -q 'VERDICT: PASS'` scored every FAILURE
+# as a pass.  That is not hypothetical: it produced a confident "3/3 at
+# ramScale 1.8" here that a second measurement contradicted, and the truth was
+# 2/10.  Anything scanning these logs should match the harness's own line,
+# anchored: grep -qx 'SMOKE| VERDICT: PASS'.
+grep -q "^SMOKE| VERDICT: PASS" "$LOG" || { echo "  the harness did not report a passing verdict"; OK=0; }
 grep -q "GUARD VM FINGERPRINT: native=luajit/" "$LOG" || {
   echo "  no LuaJIT fingerprint: the run did not prove which VM it used --"
   echo "  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ"

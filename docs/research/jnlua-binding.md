@@ -179,3 +179,48 @@ guaranteed to round-trip within one build lineage; and `luaL_requiref`
 implements Lua 5.3 semantics (short-circuit on `_LOADED`) rather than 5.2's
 unconditional call -- benign today only because the skipped `luaopen_coroutine`
 is a no-op.
+
+---
+
+# C4 and the allocator STOPGAP: both closed
+
+Added after the memory-accounting change landed. Full account in
+[memory-accounting.md](memory-accounting.md); recorded here because C4 above
+and the allocator section of the original note both now say the wrong thing.
+
+**The stopgap is gone.** OC's per-machine RAM cap is enforced. The original
+note's prescription -- cache the jobject, read the fields with plain JNI, and
+drop the neutralising macro -- was right in outline, and the shipped design
+follows it, with three differences worth naming:
+
+* it does **not** cache the jobject at newstate. It cannot: `controlled_newstate`
+  installs the cap *before* `newstate_protected` binds the Java LuaState. The
+  binding is instead observed as it happens, by intercepting the one
+  `lua_setfield(L, LUA_REGISTRYINDEX, JNLUA_JAVASTATE)` that performs it;
+* it does not do JNI field access "of our own" either. It borrows jnlua's
+  `getluamemory`/`setluamemory`/`getthreadenv` through the `lua_setallocf`
+  macro, which expands inside `jnlua.c` where those statics are in scope --
+  so the cached `jfieldID`s and the JNIVERSION handling are jnlua's, and a
+  rename upstream is a compile error rather than a runtime surprise;
+* the "trampoline" of step 3 turned out to be unnecessary. The original note
+  treated jnlua's twice-per-allocation `lua_setallocf` as part of the hazard.
+  It is not: on LuaJIT that call is two stores into `global_State`
+  (`lj_api.c:1297`). The single unsafe act was `getjavastate` re-entering the
+  VM from inside the allocator.
+
+**C4 is answered, but not the way C4 asked for.** C4 objected that the shipped
+memo was LAZY and so the *cannot-fail* property was undelivered. The eager
+warm-up it asked for **cannot be written** -- the 38 `*_protected` targets are
+file-static in `jnlua.c`, and the macro that could name them expands at the
+push sites rather than at newstate. The property is delivered instead by
+running `lj52_pushcfunction`'s whole body with allocation refusal suspended,
+which is bounded by a compile-time constant (38 distinct statics, 48 bytes
+each, and sandbox Lua cannot reach the function). `test/native/mem_test.c`
+asserts both halves at one instant: the memo push survives an exhausted cap
+while a raw `lua_pushcclosure` at the same moment is refused.
+
+**One claim in the original note was wrong in a way worth flagging.** It
+described `lua_checkstack` as a companion hazard. On LuaJIT it is not: it grows
+the stack through the *protected* `lj_state_cpgrowstack` and returns 0 on
+failure rather than throwing. `lua_pushcfunction` really was the only
+bare-frame `LUA_ERRMEM` source.

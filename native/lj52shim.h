@@ -146,60 +146,104 @@ typedef unsigned int lua_Unsigned;
  * corruption at close time. */
 #define luaL_newstate() lj52_newstate()
 
-/* =====================================================================
- * STOPGAP -- READ BEFORE SHIPPING. This is a known, deliberate defect.
- * ---------------------------------------------------------------------
- * WHAT IT DOES
- *   Makes lua_setallocf a no-op, so the libc allocator installed by
- *   lj52_newstate() stays in place for the whole life of the state and every
- *   allocator swap jnlua.c attempts is discarded. jnlua.c calls lua_setallocf
- *   in three places: controlled_newstate (to install l_alloc_checked for a
- *   memory-capped state), TWICE PER ALLOCATION inside l_alloc_checked itself,
- *   and unconditionally just before lua_close.
+/* ------------------------------------------------------------------ *
+ * memory accounting -- OC's per-machine RAM cap, actually enforced
+ * ------------------------------------------------------------------ */
+
+/* WHAT THIS REPLACES.  Until this landed, lua_setallocf was a no-op macro and
+ * OC's RAM cap was REPORTED but never ENFORCED: computer.freeMemory() returned
+ * the full module size forever and NativeLuaArchitecture's
+ *     kernelMemory = math.max(getTotalMemory - getFreeMemory, 1)
+ * bottomed out at its literal floor of 1 on every run.  A program could not
+ * run out of RAM; a runaway allocation ate the SERVER's heap instead of
+ * failing inside the sandbox.
  *
- * WHY IT IS HERE
- *   The middle case is fatal on LuaJIT. l_alloc_checked re-enters the Lua API
- *   (getjavastate -> lua_getfield) from inside a lua_Alloc callback, i.e. from
- *   inside the allocator, while the VM is in an inconsistent state. With the
- *   faithful (non-neutralised) build and disableMemoryLimit:false, the machine
- *   dies silently immediately after state creation -- measured: the last log
- *   line is "architecture pinned to NativeLua52Architecture" and nothing
- *   follows. Neutralising the swap is what flipped that run into a full OpenOS
- *   1.8.9 boot plus a persist/restore round trip.
+ * WHY THE OBVIOUS FIX KILLS THE JVM.  Simply letting jnlua's own
+ * lua_setallocf calls through -- so that l_alloc_checked becomes the state's
+ * allocator -- dies immediately after state creation with `java exit=127`, no
+ * hs_err file and no Java exception.  Measured, twice, on ocelot-brain: the
+ * last line of the run is "architecture pinned to NativeLua52Architecture".
+ * The cause is NOT the allocator swapping (see below); it is that
+ * l_alloc_checked calls getjavastate(L), which calls lua_getfield on the
+ * registry -- RE-ENTERING THE VM from inside a lua_Alloc callback, with
+ * g->gc.total not yet updated for the allocation in flight and possibly a
+ * GCtab mid-resize.  PUC Lua tolerates that; LuaJIT does not.
  *
- * WHAT IT COSTS -- and this is the part that must not be forgotten
- *   OC's per-machine RAM cap is REPORTED but never ENFORCED. Measured against
- *   a 1 MB machine with disableMemoryLimit:false: the OpenOS banner correctly
- *   says "1024k RAM", and computer.freeMemory() returns exactly 1048576
- *   forever -- across a full boot, a table-building workload, and a
- *   persist/restore cycle. `used` never increments. A program cannot run out
- *   of RAM; a runaway allocation consumes the SERVER's heap instead of failing
- *   inside the sandbox. That makes this unsuitable for a shared or multiplayer
- *   server as it stands. It is the same class of defect as the dropped
- *   lua_load mode this file just fixed, and it is left in only because
- *   removing it without the real fix below reintroduces a hard crash.
+ * WHAT IS *NOT* THE PROBLEM, contrary to this file's earlier comment.  jnlua
+ * swaps the allocator twice per allocation, and that reads alarming, but on
+ * LuaJIT lua_setallocf is literally two stores into global_State
+ * (lj_api.c:1297) -- it cannot fail, allocate, or re-enter.  The swap is free.
  *
- * THE REAL FIX (~45 lines, in jnlua's own idiom, still no jnlua.c edits)
- *   The re-entrancy exists only because l_alloc_checked needs the JNI jobject
- *   for the state and looks it up THROUGH THE LUA API on every allocation.
- *   Cache it instead:
- *     1. at newstate, cache the state's jobject (a JNI global ref) keyed by
- *        lua_State*, filled in once when jnlua binds the state to its Java
- *        LuaState;
- *     2. make the checked allocator read the cap/used fields off that cached
- *        jobject with plain JNI field access (GetLongField/SetLongField) --
- *        no getjavastate, no lua_getfield, no re-entry into LuaJIT;
- *     3. drop this macro so jnlua's own lua_setallocf calls take effect, and
- *        remove the two per-allocation swaps by holding {real_alloc, ud} in a
- *        per-state struct behind a permanent trampoline, so a "swap" becomes
- *        two field stores.
- *   build/src/ljcompat.c in the spike scratchpad prototypes step 3 (the
- *   trampoline) but was never demonstrated end to end. Landing the real fix
- *   REQUIRES a run with disableMemoryLimit:false showing computer.freeMemory()
- *   actually DECREASING and an out-of-memory error raised at the cap. Until
- *   such a run exists, do not claim the cap is enforced.
- * ===================================================================== */
-#define lua_setallocf(L, f, ud) ((void)(L), (void)(f), (void)(ud))
+ * HOW IT WORKS NOW.  lj52_newstate installs ONE allocator, lj52_alloc, with a
+ * per-state record as its ud, and that pairing is never changed again for the
+ * life of the state.  Two consequences, both load-bearing:
+ *   - lua_getallocf(L, &ud) hands the record back from ANY thread of the
+ *     state, because allocf/allocd live in the shared global_State.  That is
+ *     the whole reason this needs no lookup table and no locking, which a
+ *     server running many machines on many threads would otherwise need.
+ *   - jnlua's lua_setallocf calls no longer install anything.  They are
+ *     intercepted below and only flip flags on the record.
+ * lj52_alloc then performs EXACTLY jnlua's accounting arithmetic, using
+ * jnlua's OWN JNI accessors, handed to us at the call site by the macro below.
+ * It never touches the Lua API.  That is the entire fix.
+ *
+ * WHY THE MACRO PASSES jnlua'S STATIC FUNCTIONS.  getluamemory, setluamemory
+ * and getthreadenv are file-static in jnlua.c, so lj52shim.c cannot name them
+ * -- but this macro EXPANDS INSIDE jnlua.c, where they are all in scope (they
+ * are forward-declared at jnlua.c:84-88, far above every lua_setallocf call
+ * site).  Borrowing them rather than reimplementing them means we reuse
+ * jnlua's cached jfieldIDs and its JNIVERSION handling, and we never need a
+ * JavaVM, a jclass or a GetFieldID of our own.  JNLUA_JAVASTATE comes along
+ * the same way, so the registry key this file matches on is jnlua's own
+ * spelling rather than a copy that could silently drift.
+ * If OC-JNLua ever renames or retypes any of the four, this fails to COMPILE,
+ * which is the failure mode we want.
+ *
+ * WHAT SANDBOX LUA SEES.  Identical to real PUC-Lua OpenComputers: a refused
+ * allocation makes LuaJIT raise LUA_ERRMEM, jnlua turns that into
+ * LuaMemoryAllocationException, and NativeLuaArchitecture.runThreaded maps it
+ * to ExecutionResult.Error("not enough memory").
+ *
+ * MIGRATION HAZARD, deliberately recorded here.  OC persists kernelMemory into
+ * the save (NativeLuaArchitecture.save/load).  A world written by a build with
+ * accounting DEAD carries kernelMemory == 1; loading it under this build
+ * recomputes totalMemory as 1 + ram, charging the real ~200 KB kernel against
+ * the player's RAM and starving the machine.  Nothing has run in Minecraft
+ * yet, so no such save exists -- but do not ship this to an existing world
+ * without a migration that discards a kernelMemory of 1. */
+
+#include <jni.h>
+
+/* Signatures pinned to jnlua.c's, so a mismatch is a compile error rather than
+ * a call through an incompatible function pointer. */
+typedef void (*lj52_getmemfn)(JNIEnv *env, jobject obj, jint *total, jint *used);
+typedef void (*lj52_setmemfn)(JNIEnv *env, jobject obj, jint used);
+typedef JNIEnv *(*lj52_envfn)(void);
+
+void lj52_setallocf(lua_State *L, lua_Alloc f, void *ud,
+                    lj52_envfn envfn, lj52_getmemfn getmem,
+                    lj52_setmemfn setmem, const char *jskey);
+
+/* jnlua encodes its own intent in `ud`: l_alloc_checked is always installed
+ * with ud == L, l_alloc_unchecked always with ud == NULL.  That is the signal
+ * we honour -- accounting on iff ud != NULL -- so the close path
+ * (lua_setallocf(L, l_alloc_unchecked, NULL) immediately before lua_close)
+ * correctly stops us writing to a weak global ref the JVM is about to drop. */
+#define lua_setallocf(L, f, ud)                                              \
+  lj52_setallocf((L), (f), (ud), (lj52_envfn)getthreadenv,                   \
+                 getluamemory, setluamemory, JNLUA_JAVASTATE)
+
+/* The record is heap-allocated and outlives lua_close, so free it after. */
+void lj52_close(lua_State *L);
+#define lua_close(L) lj52_close(L)
+
+/* The one write we have to watch: newstate_protected binds the Java LuaState
+ * into registry[JNLUA_JAVASTATE] as a full userdata holding a weak global ref,
+ * and close_protected sets that key to nil.  Caching the userdata's address
+ * here is what lets the allocator find the jobject without lua_getfield --
+ * i.e. without the VM re-entry that kills the JVM. */
+void lj52_setfield(lua_State *L, int idx, const char *k);
+#define lua_setfield(L, idx, k) lj52_setfield((L), (idx), (k))
 
 /* ------------------------------------------------------------------ *
  * lua_pushcfunction
@@ -218,12 +262,29 @@ typedef unsigned int lua_Unsigned;
  *
  * lj52_pushcfunction memoises one GCfunc per (state, C function) in a
  * registry-held table, so a warm push allocates nothing -- and, as a bonus, it
- * restores 5.2's push-identity. The LUA_ERRMEM path is unreachable while the
- * allocator stopgap above is in force, but becomes reachable the moment the
- * cap is genuinely enforced, which is exactly why it is fixed now rather than
- * later. There is no build flag to turn this off. */
+ * restores 5.2's push-identity.
+ *
+ * The memo alone is NOT enough, and that is why this and the accounting above
+ * are one change rather than two. A memo still has to allocate the first time
+ * it sees each function, and the cap can refuse that first push just as
+ * readily. So lj52_pushcfunction additionally runs its whole body with
+ * refusal SUSPENDED -- charged, but never refused -- which is safe only
+ * because the set of functions jnlua ever pushes is fixed at compile time:
+ * 38 sites, 38 distinct named statics, one apiece. The reasoning, and the two
+ * measurements that pin it, are at lj52_pushcfunction in lj52shim.c.
+ * There is no build flag to turn any of this off. */
 #define LJ52_CF_RIDX 3
 void lj52_pushcfunction(lua_State *L, lua_CFunction f);
+
+/* ------------------------------------------------------------------ *
+ * the deadline watchdog (implementation and rationale in lj52shim.c)
+ * ------------------------------------------------------------------ */
+
+/* Nested arms the watchdog can hold.  PUC Lua allows ~200 nested resumes
+ * (LUAI_MAXCCALLS); OC programs that recurse through coroutine.wrap must not
+ * hit a limit here first.  Beyond it arm() degrades to "inherit the enclosing
+ * deadline" rather than erroring.  Part of the contract, hence here. */
+#define LJ52_WD_MAXDEPTH 256
 #undef lua_pushcfunction
 #define lua_pushcfunction(L, f) lj52_pushcfunction((L), (f))
 

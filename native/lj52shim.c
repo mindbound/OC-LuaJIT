@@ -37,6 +37,9 @@
 #undef lua_resume
 #undef luaL_newstate
 #undef lua_pushcfunction
+#undef lua_setallocf
+#undef lua_setfield
+#undef lua_close
 
 #include "eris_lj.h"
 
@@ -118,7 +121,11 @@ static void lj52_gethelper(lua_State *L, const char *name) {
  * the union spelling keeps -Wall -Wpedantic quiet. */
 typedef union { lua_CFunction f; void *p; } lj52_cfkey;
 
-void lj52_pushcfunction(lua_State *L, lua_CFunction f) {
+/* An address in this DLL's image, used only for its address -- see the
+ * pre-intern in lj52_newstate. */
+static const char LJ52_LIGHTUD_SEED = 0;
+
+static void lj52_pushcfunction_raw(lua_State *L, lua_CFunction f) {
   lj52_cfkey k;
   k.p = NULL;
   k.f = f;
@@ -146,17 +153,629 @@ void lj52_pushcfunction(lua_State *L, lua_CFunction f) {
 }
 
 /* ================================================================== *
- * state creation
+ * memory accounting
  * ================================================================== */
 
-/* The libc allocator the state is born on. See the "allocator ownership"
- * comment in lj52shim.h for why the state cannot use LuaJIT's own lj_alloc. */
-static void *lj52_defalloc(void *ud, void *ptr, size_t osize, size_t nsize) {
-  (void)ud;
-  (void)osize;
+/* Read the long comment in lj52shim.h first; it explains why jnlua's own
+ * l_alloc_checked cannot run on LuaJIT and why this reimplements its
+ * arithmetic instead of wrapping it.
+ *
+ * One record per lua_State, reachable from every thread of that state through
+ * lua_getallocf, because allocf/allocd live in the shared global_State.  No
+ * table keyed by lua_State*, and therefore no lock: a server running twenty
+ * machines on twenty threads touches twenty disjoint records. */
+typedef struct lj52_mem {
+  lj52_envfn    envfn;      /* jnlua's getthreadenv                          */
+  lj52_getmemfn getmem;     /* jnlua's getluamemory                          */
+  lj52_setmemfn setmem;     /* jnlua's setluamemory                          */
+  const char   *jskey;      /* jnlua's JNLUA_JAVASTATE, not a copy of it     */
+  jobject      *javaref;    /* &(the weak global ref) inside jnlua's userdata */
+  int           accounting; /* jnlua asked for a capped state (ud != NULL)   */
+  int           norefuse;   /* >0: charge, but never refuse -- see below     */
+  long long     pending;    /* bytes moved while nobody could be told yet    */
+  /* -- the deadline watchdog; see its section below -- */
+  lua_State    *L;          /* main thread: what the timer callback hooks    */
+  void         *wd_timer;   /* pending Win32 timer-queue timer, or NULL      */
+  int           wd_depth;   /* nested arms                                   */
+  double        wd_stack[LJ52_WD_MAXDEPTH]; /* absolute deadlines, ms      */
+  lua_State    *wd_for[LJ52_WD_MAXDEPTH];   /* the thread each arm protects */
+  lua_State    *wd_by[LJ52_WD_MAXDEPTH];    /* the thread that armed each   */
+  /* Diagnostics, written by the timer thread and the hook, read by stats().
+   * Plain ints on purpose: they are counters for a human, not for logic. */
+  volatile int  wd_fired;    /* the current timer has fired at least once   */
+  volatile long wd_fires;    /* first fires, ever                            */
+  volatile long wd_refires;  /* periodic re-fires, ever                      */
+  volatile long wd_filtered; /* hook invocations ignored by the thread filter */
+} lj52_mem;
+
+static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
+
+/* The record for L, or NULL for a state this shim did not create. */
+static lj52_mem *lj52_memof(lua_State *L) {
+  void *ud = NULL;
+  if (L == NULL) return NULL;
+  return lua_getallocf(L, &ud) == lj52_alloc ? (lj52_mem *)ud : NULL;
+}
+
+/* Plain libc, the allocator every one of our states is born on.  jnlua's
+ * l_alloc_unchecked is realloc/free too, and so was lj52_defalloc before this,
+ * so blocks stay interchangeable across every path including lua_close. */
+static void *lj52_libc(void *ptr, size_t nsize) {
   if (nsize == 0) { free(ptr); return NULL; }
   return realloc(ptr, nsize);
 }
+
+/* THE ALLOCATOR.  Reproduces l_alloc_checked's arithmetic exactly -- charge
+ * nsize for a fresh block, nsize-osize for a resize, credit osize on free, and
+ * treat total <= 0 or a shrink as always permitted -- with two differences,
+ * both deliberate:
+ *
+ *   1. It never calls the Lua API.  jnlua reaches the Java object through
+ *      getjavastate() -> lua_getfield() on every single allocation; we read it
+ *      from a pointer cached when jnlua bound it (lj52_setfield).  This is the
+ *      whole fix: re-entering the VM from inside a lua_Alloc callback is what
+ *      takes the JVM down on LuaJIT.
+ *
+ *   2. It charges only what it actually got.  jnlua writes used+delta before
+ *      knowing whether realloc succeeded, so a failed resize permanently
+ *      inflates the machine's usage.  Ours charges after the fact.
+ *
+ * norefuse is the other half of this change; see lj52_pushcfunction. */
+/* The Java side stores used/total as jint, so that is what crosses the JNI
+ * boundary -- but the arithmetic in between is done in long long and saturated
+ * on the way out.  jnlua does it all in int, computing `int delta` from a
+ * size_t expression (jnlua.c:268) and `used - osize` by promote-and-truncate
+ * (jnlua.c:265); both are accidentally correct only while every quantity fits
+ * in 32 bits.  Being right costs nothing here.  Note the clamp is to the jint
+ * RANGE, not to zero: a `used` that has gone negative is a bug worth seeing
+ * (see the pending accumulator below), and mem_test's M4b asserts on it, so
+ * silently flooring it at zero would hide exactly what we want reported. */
+static jint lj52_clampi(long long v) {
+  if (v > 2147483647LL) return 2147483647;
+  if (v < -2147483647LL - 1) return -2147483647 - 1;
+  return (jint)v;
+}
+
+static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  lj52_mem *M = (lj52_mem *)ud;
+  JNIEnv *env;
+  jobject obj;
+  jint jtotal = 0, jused = 0;
+  long long total, used, delta;
+  void *p;
+
+  /* jnlua's delta: the whole block when it is new, the difference when it is
+   * resized, and a credit of the old size when it is freed. */
+  delta = nsize == 0 ? -(long long)osize
+                     : (ptr == NULL ? (long long)nsize
+                                    : (long long)nsize - (long long)osize);
+
+  if (M == NULL) return lj52_libc(ptr, nsize);
+
+  /* Ordered so the JNI call is the LAST thing tried, not the first: this runs
+   * on every allocation, and during lua_close -- where jnlua disarms us and
+   * then frees the entire heap -- getthreadenv() would otherwise be called
+   * once per block for nothing. */
+  obj = M->accounting && M->javaref != NULL ? *M->javaref : NULL;
+  env = obj != NULL && M->envfn != NULL ? M->envfn() : NULL;
+  if (obj == NULL || env == NULL) {
+    /* Not chargeable YET, or no longer.  There is a real window here:
+     * controlled_newstate installs the cap before newstate_protected has bound
+     * the Java LuaState, so the state's own creation is allocated before
+     * anyone can be told about it -- and jnlua clears the binding again at
+     * close.  Bank the bytes rather than dropping them.  Dropping them is not
+     * merely imprecise, it makes `used` go NEGATIVE the moment those blocks
+     * are freed under a live binding, and a negative `used` reads back through
+     * NativeLuaArchitecture as a machine with MORE memory than its cap, or as
+     * a nonsense total.  Measured, before this was banked: used fell to
+     * -387188 across an ordinary allocate-then-collect cycle. */
+    p = lj52_libc(ptr, nsize);
+    if (p != NULL || nsize == 0) M->pending += delta;
+    return p;
+  }
+
+  M->getmem(env, obj, &jtotal, &jused);
+  total = jtotal;
+  used = jused;
+  if (M->pending != 0) {                /* first chargeable call: settle up */
+    used += M->pending;
+    M->pending = 0;
+    M->setmem(env, obj, lj52_clampi(used));
+  }
+  if (nsize == 0) {
+    free(ptr);
+    M->setmem(env, obj, lj52_clampi(used + delta));
+    return NULL;
+  }
+  if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse))
+    return NULL;                        /* -> lj_err_mem -> LUA_ERRMEM */
+  p = realloc(ptr, nsize);
+  if (p != NULL) M->setmem(env, obj, lj52_clampi(used + delta));
+  return p;
+}
+
+/* jnlua's three lua_setallocf sites, intercepted.  We install nothing: the
+ * (lj52_alloc, record) pairing set at newstate must survive, because it is how
+ * lj52_memof finds the record.  All that changes is a flag. */
+void lj52_setallocf(lua_State *L, lua_Alloc f, void *ud,
+                    lj52_envfn envfn, lj52_getmemfn getmem,
+                    lj52_setmemfn setmem, const char *jskey) {
+  lj52_mem *M = lj52_memof(L);
+  (void)f;
+  if (M == NULL) return;
+  M->envfn = envfn;
+  M->getmem = getmem;
+  M->setmem = setmem;
+  M->jskey = jskey;
+  M->accounting = ud != NULL;
+}
+
+/* Cache the Java LuaState as jnlua binds it, so the allocator never has to ask
+ * the VM for it.  Everything else forwards untouched; the guard is an integer
+ * compare, and the strcmp only runs for registry writes, of which jnlua does a
+ * handful in a state's lifetime.
+ *
+ * The value stored is a FULL userdata holding a weak global ref, and we keep
+ * its ADDRESS rather than the ref, so we follow jnlua if it ever rewrites the
+ * ref in place.  The userdata is kept alive by the registry entry itself, and
+ * close_protected clears that entry by storing nil -- which lands here and
+ * clears the cache in the same breath. */
+void lj52_setfield(lua_State *L, int idx, const char *k) {
+  if (idx == LUA_REGISTRYINDEX && k != NULL) {
+    lj52_mem *M = lj52_memof(L);
+    if (M != NULL && M->jskey != NULL && strcmp(k, M->jskey) == 0)
+      M->javaref = lua_type(L, -1) == LUA_TUSERDATA
+                     ? (jobject *)lua_touserdata(L, -1) : NULL;
+  }
+  lua_setfield(L, idx, k);
+}
+
+/* ================================================================== *
+ * the deadline watchdog
+ * ================================================================== */
+
+/* WHY THIS EXISTS.  OpenComputers enforces its per-resume timeout with a
+ * COUNT HOOK: machine.lua arms debug.sethook(co, checkDeadline, "", N)
+ * before every resume of the sandbox and inside every sandbox
+ * coroutine.resume, and never clears the outer one.  On PUC Lua that is
+ * cheap.  On LuaJIT it is ruinous, for two reasons that compose:
+ *   - hooks are GLOBAL to the state, not per-thread (lj_dispatch.c:337-348),
+ *     and an armed count hook forces instruction dispatch for the whole VM
+ *     (lj_dispatch.c:121) and aborts any trace being recorded (:345);
+ *   - the CHECKHOOK patch we need in order to boot at all makes every compiled
+ *     trace exit to the interpreter on entry while a hook is set.
+ * Measured inside a real machine (docs/research/hook-vs-jit.md section 6): the
+ * same loop in the sandbox is 18.8x SLOWER with the JIT on than off, OpenOS
+ * boots 40% slower, and ~2700 traces are compiled and thrown away per boot.
+ * CHECKHOOK's own comment says it is "only useful if hooks are NOT set most
+ * of the time" -- it was written for an asynchronous interrupt, which is what
+ * this is.
+ *
+ * WHAT IT IS.  arm(seconds, fn) programs a one-shot OS timer and touches no
+ * hook at all.  When the timer expires, its callback -- on a thread that is
+ * not the Lua thread -- calls lua_sethook(L, hook, LUA_MASKCOUNT, 1).  The
+ * next trace-entry guard fails, the trace exits, the interpreter fires the
+ * hook on the very next instruction, and the hook calls fn.  fn is
+ * machine.lua's own checkDeadline, UNCHANGED: the tooLongWithoutYielding
+ * sentinel, the +0.5s grace, the count=1 re-arm that keeps a pcall-swallowing
+ * loop from escaping -- all of it stays exactly as OC wrote it.  What changes
+ * is only who arms the hook and when: never, until the deadline has actually
+ * passed.  Between deadlines g->hookmask is zero and traces run.
+ *
+ * disarm() cancels the timer -- BLOCKING until a callback already in flight
+ * has finished -- and clears whatever hook is set, including checkDeadline's
+ * own re-arm.  It must be called when the resume returns, or a deadline that
+ * expires while the machine is idle between ticks would set a count=1 hook
+ * that fires on the first instruction of the NEXT resume as a spurious
+ * timeout.
+ *
+ * ARMS NEST.  The kernel arms around the sandbox resume, the sandbox's
+ * coroutine.resume wrapper arms around each user coroutine, and the
+ * synchronous-__gc path arms around a finaliser -- one inside the other.  So
+ * arm pushes an absolute deadline and the timer always runs for the top of
+ * the stack.  This is BETTER than what OC's machine.lua does on LuaJIT today:
+ * its inner debug.sethook(co) clears the one global hook, and the outer
+ * resume then runs with no deadline at all until it yields -- a per-thread-
+ * hooks assumption that holds on PUC and not here.
+ *
+ * ... AND A STACK CAN LEAK, so it is built to heal.  After a deadline fires,
+ * checkDeadline's count=1 re-arm is GLOBAL (hooks are, on LuaJIT), so it also
+ * fires on the kernel's own instructions between the resume returning and
+ * disarm() being called.  Inside the grace that is harmless; past it,
+ * checkDeadline errors THERE, disarm() is never reached -- and if the error is
+ * then caught by a sandbox pcall (OpenOS's event loop catches callback
+ * errors), the machine lives on with one stale entry left on the stack.  A
+ * naive pop-one disarm would deepen the stack by one per such leak and, worse,
+ * re-program the stale, already-expired deadline the moment a legitimate one
+ * popped above it: a spurious "too long without yielding" on the very next
+ * instruction.  (Found in adversarial review, not in testing.)  So:
+ *   - arm() RETURNS its depth, and disarm(token) restores the stack TO that
+ *     level rather than popping one entry -- whatever leaked inside is gone;
+ *   - the kernel's main-loop arm passes outermost=true and RESETS the stack
+ *     first, so every resume starts clean no matter what the previous one
+ *     left behind.  OC's stock kernel has the same self-healing property by
+ *     accident: its arm simply overwrites the one global hook.
+ * depth() exists for the tests and for diagnostics; the sandbox cannot reach
+ * any of these.
+ *
+ * WHO MAY CALL IT.  The table is a raw global (_OCLJ_WATCHDOG), captured by
+ * the kernel as an upvalue before it builds the sandbox; the sandbox's debug
+ * table exposes getinfo and traceback only (machine.lua:1001), so sandbox
+ * code can neither arm a standing hook nor clear ours.  Being reachable from
+ * the raw _G also makes the table and its two C functions PERMANENTS for the
+ * serializer, which is what lets a kernel holding them as upvalues persist.
+ *
+ * THREADING, stated plainly.  lua_sethook from another thread is the case
+ * CHECKHOOK documents (lj_record.c:2963, "from a signal handler or another
+ * native thread") and what prototype/watchdog/ validated on hardware.  The
+ * callback does exactly one thing, lua_sethook, and nothing else; disarm
+ * cancels the timer BEFORE touching the hook itself, and arm creates the new
+ * timer only AFTER cancelling any old one, so the callback never runs
+ * concurrently with a lua_sethook on the Lua thread.  The one lua_sethook the
+ * kernel still makes itself, checkDeadline's count=1 re-arm, runs from inside
+ * the hook the callback installed -- i.e. after the callback has returned.
+ *
+ * ... WHICH IS NOT THE WHOLE STORY, and the adversarial review said so.
+ * g->hookmask is ONE byte holding both the event bits (LUA_MASKCOUNT and
+ * friends) and LuaJIT's own state bits: HOOK_ACTIVE while a hook is running,
+ * HOOK_GC inside a finaliser, HOOK_VMEVENT inside a VM event.  The Lua thread
+ * read-modify-writes that byte constantly and never through lua_sethook --
+ * hook_enter/hook_leave around EVERY hook call, hook_entergc/hook_restore
+ * around every finaliser, and the VM-event pair around every trace event --
+ * and lua_sethook itself is a plain RMW too (lj_dispatch.c:344).  Two threads
+ * doing plain RMWs on one byte lose updates in both directions:
+ *   - the Lua thread's restore lands last: the count bit the callback just set
+ *     is GONE.  With a one-shot timer that resume's deadline is never
+ *     enforced.  Hence the timer RE-FIRES every LJ52_WD_REFIRE_MS until
+ *     disarm() cancels it -- the escalation prototype/watchdog/ ran -- so a
+ *     lost update costs one interval, not the deadline;
+ *   - the callback's stale value lands last: a state bit the Lua thread had
+ *     just CLEARED is back.  A resurrected HOOK_ACTIVE is a hook that never
+ *     runs again -- callhook refuses while ACTIVE is set, every later
+ *     lua_sethook preserves the non-event bits, and the only clear is a
+ *     hook_leave that can no longer happen.  The machine is then silently
+ *     undefended for the rest of its life.  And the re-fire that fixes the
+ *     first direction multiplies exposure to this one: during the 0.5 s
+ *     grace after a fire, checkDeadline's count=1 re-arm has the Lua thread
+ *     in hook_enter/hook_leave on every instruction while the timer lands ten
+ *     more RMWs into that stream.
+ * So the timer thread does NOT call lua_sethook.  lj52_wd_inject stores
+ * hookf and hookcount (aligned words, atomic on x64), then ORs the single
+ * count bit into hookmask with an atomic fetch-or.  An OR cannot resurrect a
+ * cleared bit and cannot clear a set one, so the second direction cannot
+ * happen; the first still can (a plain store of a stale byte can still drop
+ * the ORed bit) and the re-fire still covers it, and the re-fire is now
+ * harmless to repeat.  This is the discipline LuaJIT's own profiler -- the one
+ * sanctioned cross-thread writer of hookmask -- gets from a mutex it wraps
+ * around both its RMW and the Lua thread's hook_enter/leave
+ * (lj_profile.c:98-131); we cannot have that mutex, so we use the operation
+ * that does not need one.  lj_trace_abort is deliberately not called: the
+ * CHECKHOOK guard makes a trace recorded across the fire exit on its next
+ * entry anyway.  lj_dispatch_update is still called, and still races the Lua
+ * thread's own dispatch updates on trace start/stop; that tear is bounded by
+ * the re-fire and by the recorder's next hot event, and is recorded.
+ *
+ * Only the Win32 timer-queue backend exists.  It is what this DLL is built
+ * for; a pthread backend is a roadmap item, and a build for any other
+ * platform refuses below rather than shipping an untested one. */
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#error "lj52 watchdog: only the Win32 timer-queue backend is implemented"
+#endif
+
+/* LuaJIT internals, for the one thing the timer thread must do without
+ * lua_sethook: see lj52_wd_inject. */
+#include "lj_obj.h"
+#include "lj_dispatch.h"
+
+#define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
+static const char LJ52_WD_KEY = 0;      /* registry slot for the armed fn */
+
+/* Monotonic milliseconds, QueryPerformanceCounter-backed like the prototype. */
+static double lj52_wd_now(void) {
+  static LARGE_INTEGER freq;
+  LARGE_INTEGER t;
+  if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+  QueryPerformanceCounter(&t);
+  return (double)t.QuadPart * 1000.0 / (double)freq.QuadPart;
+}
+
+/* The hook the timer installs.  Runs on the Lua thread, on the first
+ * instruction after the trace exit.  callhook() has already reserved
+ * 1+LUA_MINSTACK slots (lj_dispatch.c), so the push is safe, and an error
+ * raised by fn propagates out of the hook exactly as it does from a Lua hook
+ * installed by debug.sethook -- which is how "too long without yielding" has
+ * always been raised. */
+static void lj52_wd_hook(lua_State *L, lua_Debug *ar) {
+  lj52_mem *M = lj52_memof(L);
+  (void)ar;
+  /* THE THREAD FILTER.  The hook is global and the timer thread cannot know
+   * whether the sandbox is still running when it installs it.  If the fire
+   * lands in the microseconds between the sandbox coroutine yielding and the
+   * kernel reaching disarm(), the hook runs on the KERNEL's coroutine --
+   * checkDeadline sees realTime past the deadline, raises inside main(), and
+   * the machine crashes with "too long without yielding" although the sandbox
+   * yielded on time.  OC's design excludes that crash (PUC hooks are per-
+   * thread; the kernel thread has none).
+   *
+   * The predicate took three tries, and the two failures are worth keeping.
+   *   (a) "fire only on the thread the arm is FOR" leaves a hole for any
+   *       thread running sandbox code without an entry of its own -- a
+   *       coroutine nested past LJ52_WD_MAXDEPTH gets none, so its fires
+   *       matched nothing and it ran with no deadline at all.  Reproduced in
+   *       adversarial review: 1500 ms under a 300 ms deadline, checkDeadline
+   *       called zero times.
+   *   (b) "skip only the thread that ARMED" closes that hole but breaks the
+   *       case where the armer is itself what overruns -- which is every
+   *       wd_test case, and W2 hung on it.
+   * Both facts are needed, so both are recorded.  A fire is skipped only when
+   * the running thread is a PARENT WAITING ON A CHILD: it armed one of the
+   * live entries and is not the thread the top entry protects.  Then, and
+   * only then, is the fire spurious -- its child has already returned and
+   * disarm() is a few instructions away.  Everything else fires: the
+   * protected thread itself, and any thread that armed nothing (the deep
+   * nesting of (a)).  The count=1 hook stays set, harmless, until disarm()
+   * clears it. */
+  if (M != NULL && M->wd_depth > 0 && M->wd_for[M->wd_depth - 1] != L) {
+    int i, armer = 0;
+    for (i = 0; i < M->wd_depth; i++)
+      if (M->wd_by[i] == L) { armer = 1; break; }
+    if (armer) { M->wd_filtered++; return; }
+  }
+  lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  if (lua_isfunction(L, -1)) lua_call(L, 0, 0);
+  else lua_pop(L, 1);
+}
+
+/* Install the count=1 hook FROM ANOTHER THREAD, without lua_sethook.
+ * Order matters and x86-TSO keeps it: hookf and hookcount are in place
+ * before the interpreter can see the count bit.  See THREADING above. */
+static void lj52_wd_inject(lj52_mem *M) {
+  global_State *g = G(M->L);
+  g->hookf = lj52_wd_hook;
+  g->hookcount = g->hookcstart = 1;
+  __atomic_fetch_or(&g->hookmask, (uint8_t)LUA_MASKCOUNT, __ATOMIC_SEQ_CST);
+  lj_dispatch_update(g, 0);
+}
+
+/* Timer callback: the ONLY thing that ever runs off the Lua thread. */
+static VOID CALLBACK lj52_wd_fire(PVOID p, BOOLEAN timedOut) {
+  lj52_mem *M = (lj52_mem *)p;
+  (void)timedOut;
+  if (!M->wd_fired) { M->wd_fired = 1; M->wd_fires++; } else M->wd_refires++;
+  lj52_wd_inject(M);
+}
+
+/* Cancel the pending timer, waiting for an in-flight callback to finish. */
+static void lj52_wd_cancel(lj52_mem *M) {
+  if (M->wd_timer != NULL) {
+    DeleteTimerQueueTimer(NULL, (HANDLE)M->wd_timer, INVALID_HANDLE_VALUE);
+    M->wd_timer = NULL;
+  }
+}
+
+/* Program the timer for the deadline at the top of the stack -- or, if that
+ * deadline has already passed, install the hook right now, synchronously. */
+static void lj52_wd_program(lj52_mem *M) {
+  double remaining = M->wd_stack[M->wd_depth - 1] - lj52_wd_now();
+  HANDLE h = NULL;
+  M->wd_fired = 0;
+  if (remaining <= 0.0) {
+    lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1);
+    return;
+  }
+  /* OC's computer.timeout has no upper bound (Settings.scala: `max 0`), and
+   * an admin disabling the watchdog with a huge value would otherwise hand
+   * CreateTimerQueueTimer a (DWORD) of an out-of-range double -- undefined,
+   * and on x64 GCC typically 0: a timer that fires at once and leaves the
+   * whole tick running under a count=1 hook.  Past what a DWORD of
+   * milliseconds can express (~49 days) there is no deadline to enforce. */
+  if (remaining >= 4294967000.0) return;
+  /* +5 ms so that when checkDeadline reads computer.realTime() -- Java's
+   * wall clock, not this counter -- the deadline it compares against has
+   * genuinely passed.  If it had not, the count=1 hook would simply call
+   * checkDeadline again on the next instruction, which is correct but slow. */
+  /* Period LJ52_WD_REFIRE_MS, not WT_EXECUTEONLYONCE: the callback keeps
+   * re-asserting the hook until disarm() cancels it.  See THREADING above. */
+  if (!CreateTimerQueueTimer(&h, NULL, lj52_wd_fire, M,
+                             (DWORD)(remaining + 5.0), LJ52_WD_REFIRE_MS, 0)) {
+    /* No timer: fall back to the standing hook OC has always used.  The
+     * machine is then slow rather than undefended. */
+    lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000);
+    return;
+  }
+  M->wd_timer = (void *)h;
+}
+
+/* _OCLJ_WATCHDOG.arm(seconds, fn [, outermost [, protects]]) -> depth token.
+ * `protects` is the thread about to be resumed; it defaults to the caller,
+ * which is what a test (or any caller that arms for itself) wants. */
+static int lj52_wd_arm(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  double secs = luaL_checknumber(L, 1);
+  int outermost;
+  lua_State *co;
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  outermost = lua_toboolean(L, 3);
+  co = lua_isthread(L, 4) ? lua_tothread(L, 4) : L;
+  if (M == NULL) return luaL_error(L, "watchdog: not an lj52 state");
+  /* At the cap: push nothing, touch nothing, and hand back a token disarm()
+   * will treat as a no-op.  The enclosing deadline stays live, which is what
+   * a nested arm would have set anyway (the sandbox wrapper passes the same
+   * `deadline`).  The first version of this function cancelled the live
+   * timer and THEN raised -- so a sandbox nested past the cap whose pcall
+   * swallowed the error ran with no deadline at all.  Found in adversarial
+   * review.  Nothing here may fail after the cancel below. */
+  if (!outermost && M->wd_depth >= LJ52_WD_MAXDEPTH) {
+    lua_pushinteger(L, M->wd_depth + 1);
+    return 1;
+  }
+  lj52_wd_cancel(M);
+  if (outermost) {
+    /* Heal whatever the last resume leaked: the stack, AND the hook.  A
+     * skipped disarm leaves checkDeadline's count=1 re-arm in place, and a
+     * new resume that started under it would run one hook call per
+     * instruction until something cleared it.  OC's stock kernel is immune
+     * by accident -- its next arm simply overwrites the hook.  Only the
+     * OUTERMOST arm may do this: inside a nested arm that same re-arm is the
+     * escalation a pcall-swallowing loop must not be allowed to escape.
+     * (wd_test W8c, found the first time the healing was tested.) */
+    M->wd_depth = 0;
+    if (lua_gethook(L) != NULL) lua_sethook(L, NULL, 0, 0);
+  }
+  lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+  lua_pushvalue(L, 2);
+  lua_rawset(L, LUA_REGISTRYINDEX);
+  M->wd_stack[M->wd_depth] = lj52_wd_now() + secs * 1000.0;
+  M->wd_for[M->wd_depth] = co;
+  M->wd_by[M->wd_depth] = L;
+  M->wd_depth++;
+  lj52_wd_program(M);
+  lua_pushinteger(L, M->wd_depth);
+  return 1;
+}
+
+/* _OCLJ_WATCHDOG.disarm([token])  -- restore the stack to BELOW the level arm
+ * returned; with no token, pop one (the tests use that form). */
+static int lj52_wd_disarm(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  int to;
+  if (M == NULL) return 0;
+  to = lua_isnoneornil(L, 1) ? M->wd_depth - 1 : (int)luaL_checkinteger(L, 1) - 1;
+  if (to < 0) to = 0;
+  lj52_wd_cancel(M);
+  /* Clear ours AND checkDeadline's count=1 re-arm ("avoid gc issues", as the
+   * kernel's own comment at the coroutine.resume site puts it).  Guarded so
+   * the common case -- nothing armed, the resume simply yielded -- does not
+   * pay lj_trace_abort + lj_dispatch_update on every return. */
+  if (lua_gethook(L) != NULL) lua_sethook(L, NULL, 0, 0);
+  /* A token deeper than the current stack means an outermost arm already
+   * reset underneath us; there is nothing of ours left to remove. */
+  if (to < M->wd_depth) M->wd_depth = to;
+  if (M->wd_depth == 0) {
+    lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+    lua_pushnil(L);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+  } else {
+    lj52_wd_program(M);
+  }
+  return 0;
+}
+
+/* _OCLJ_WATCHDOG.depth() -- for the tests and for diagnostics. */
+static int lj52_wd_depth(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  lua_pushinteger(L, M ? M->wd_depth : -1);
+  return 1;
+}
+
+/* _OCLJ_WATCHDOG.stats() -> fires, refires, filtered, depth, hooked
+ * Read on the Lua thread at a quiet moment; the harness prints it after the
+ * timeout probe so "the watchdog fired" is an observation with a number. */
+static int lj52_wd_stats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  lua_pushinteger(L, M ? M->wd_fires : -1);
+  lua_pushinteger(L, M ? M->wd_refires : -1);
+  lua_pushinteger(L, M ? M->wd_filtered : -1);
+  lua_pushinteger(L, M ? M->wd_depth : -1);
+  lua_pushboolean(L, lua_gethook(L) != NULL);
+  return 5;
+}
+
+/* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
+static void lj52_wd_install(lua_State *L) {
+  lua_createtable(L, 0, 2);
+  lua_pushcclosure(L, lj52_wd_arm, 0);
+  lua_setfield(L, -2, "arm");
+  lua_pushcclosure(L, lj52_wd_disarm, 0);
+  lua_setfield(L, -2, "disarm");
+  lua_pushcclosure(L, lj52_wd_depth, 0);
+  lua_setfield(L, -2, "depth");
+  lua_pushcclosure(L, lj52_wd_stats, 0);
+  lua_setfield(L, -2, "stats");
+  lua_setglobal(L, "_OCLJ_WATCHDOG");
+}
+
+/* lua_close does not free the record, so we do -- after making sure no timer
+ * callback can still arrive and hook a state that no longer exists. */
+void lj52_close(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  if (M != NULL) lj52_wd_cancel(M);
+  lua_close(L);
+  free(M);
+}
+
+/* THE OTHER HALF OF THE MEMORY CHANGE, and it may not be separated from it.
+ *
+ * jnlua calls lua_pushcfunction(L, <something>_protected) at 38 sites, each of
+ * them in a BARE JNI frame, before the lua_pcall that protects the real work.
+ * On PUC 5.2 that pushes a light C function: a tagged pointer, no allocation,
+ * cannot fail.  On LuaJIT there is no such type, so it builds a GCfunc -- and
+ * the moment the cap above is genuinely enforced, that allocation can be
+ * REFUSED, which raises LUA_ERRMEM with no protected frame anywhere below it.
+ * On Win x64 (LJ_UNWIND_EXT) lj_err_throw then issues a RaiseException whose
+ * handler lives in LuaJIT's own generated VM assembler -- reachable only if a
+ * LuaJIT VM frame is on the machine stack, and in a bare JNI frame there is
+ * none.  The exception finds no handler, the OS terminates the process, and
+ * lua_atpanic is NEVER CALLED: the panic handler below cannot name this one on
+ * the way down, which is why the failure is completely silent.  Enforcing the
+ * cap without this is strictly worse than not enforcing it at all.
+ *
+ * The roadmap's plan was an EAGER warm-up: push all 38 once at newstate while
+ * memory is plentiful.  It cannot be written -- the 38 targets are file-static
+ * in jnlua.c, so lj52shim.c cannot name them, and the macro that could name
+ * them expands at the push sites rather than at newstate.
+ *
+ * So the guarantee is bought a different and, as it turns out, better way:
+ * inside this function the allocator CHARGES but never REFUSES.  Three
+ * properties make that safe rather than a hole:
+ *   - the overshoot is bounded by a compile-time constant.  The 38 sites push
+ *     38 DISTINCT named statics, one apiece, so a state memoises at most 38
+ *     GCfuncs (~1.5 KB with the memo table's growth).  Sandbox Lua cannot
+ *     reach lua_pushcfunction and cannot add a 39th;
+ *   - the bytes are still charged, so freeMemory stays honest and the machine
+ *     simply runs over budget by that bounded amount, which the very next
+ *     allocation refuses -- as a clean, catchable "not enough memory", at a
+ *     point where a protected frame exists;
+ *   - it covers the WHOLE body, not just the cold push, and that is load-
+ *     bearing rather than cautious.  On GC64 lua_pushlightuserdata INTERNS the
+ *     pointer's segment, and that path calls lj_mem_reallocvec
+ *     (lj_udata.c:38-58, lj_lightud_intern) -- so even the warm lookup, whose
+ *     whole point is that it allocates nothing, pushes a light userdata key
+ *     that can.  lua_rawset can grow the memo table, and every lua_push* ends
+ *     in incr_top.
+ *
+ * For the record, the one hazard that turned out NOT to exist: checkstack().
+ * jnlua guards all 38 sites with it, and LuaJIT's lua_checkstack grows the
+ * stack through lj_state_cpgrowstack -- a PROTECTED call -- and returns 0 on
+ * failure (lj_api.c) rather than throwing.  jnlua converts that to a Java
+ * IllegalStateException.  lua_pushcfunction is the only UNCONDITIONAL
+ * bare-frame LUA_ERRMEM source in
+ * jnlua.c.  lua_1load and lua_1setmetatable are the only other entry points
+ * touching the Lua API unprotected, and both are safe -- lua_load returns its
+ * status, lua_setmetatable does not allocate.  One conditional site remains,
+ * named here rather than rounded away: throw() (jnlua.c:2356-2368) calls
+ * lua_tostring in a bare frame when throw_protected itself failed, and
+ * stringifying a NON-string error value allocates.  It does not bite on the
+ * path that matters, because LuaJIT preallocates and GC-fixes the "not enough
+ * memory" message at state creation (lj_state.c:202), so lua_tostring on an
+ * ERRMEM object is a no-op; it could only bite on something like error(42)
+ * raised exactly at the wall.  Not covered by the window. */
+void lj52_pushcfunction(lua_State *L, lua_CFunction f) {
+  lj52_mem *M = lj52_memof(L);
+  if (M != NULL) M->norefuse++;
+  lj52_pushcfunction_raw(L, f);
+  if (M != NULL) M->norefuse--;
+}
+
+/* ================================================================== *
+ * state creation
+ * ================================================================== */
 
 /* An unprotected Lua error inside a JNI frame otherwise aborts the process
  * with no diagnostic at all; at least name it on the way down. */
@@ -170,8 +789,15 @@ static int lj52_panic(lua_State *L) {
 }
 
 lua_State *lj52_newstate(void) {
-  lua_State *L = lua_newstate(lj52_defalloc, NULL);
+  /* The state is born on OUR allocator, with a per-state accounting record as
+   * its ud, and that pairing is never changed again -- see the memory
+   * accounting section above, and the "allocator ownership" comment in
+   * lj52shim.h for why the state cannot use LuaJIT's own lj_alloc. */
+  lj52_mem *M = (lj52_mem *)calloc(1, sizeof(lj52_mem));
+  lua_State *L = M ? lua_newstate(lj52_alloc, M) : NULL;
   if (!L) {
+    free(M);
+    M = NULL;
     /* Non-GC64 LuaJIT refuses a foreign allocator on x64. build-native.sh
      * gates on this at stage 1b, so reaching here means someone linked a
      * different libluajit.a. Fall back so the failure shows up as a
@@ -179,6 +805,7 @@ lua_State *lj52_newstate(void) {
     L = luaL_newstate();
     if (!L) return NULL;
   }
+  if (M != NULL) M->L = L;               /* the watchdog hooks this thread */
   lua_atpanic(L, lj52_panic);
 
   /* --- 5.2 registry layout -------------------------------------------
@@ -199,9 +826,24 @@ lua_State *lj52_newstate(void) {
   lua_pushvalue(L, LUA_GLOBALSINDEX);
   lua_rawseti(L, LUA_REGISTRYINDEX, 2);
 
-  /* registry[3] = the lua_pushcfunction memo table (LJ52_CF_RIDX). */
-  lua_newtable(L);
+  /* registry[3] = the lua_pushcfunction memo table (LJ52_CF_RIDX).
+   * Sized for its final population up front -- jnlua pushes 38 distinct C
+   * functions and nothing can add a 39th -- so no cold push ever has to rehash
+   * the node array.  That matters because a cold push runs in a bare JNI
+   * frame: every allocation removed from that path is one fewer thing the
+   * no-refuse window in lj52_pushcfunction has to cover. */
+  lua_createtable(L, 0, 64);
   lua_rawseti(L, LUA_REGISTRYINDEX, LJ52_CF_RIDX);
+
+  /* Pre-intern a light userdata from this DLL's own address range, for the
+   * same reason.  On GC64 lua_pushlightuserdata does not just tag a pointer:
+   * lj_lightud_intern (lj_udata.c:38-58) looks the pointer's 512 GB segment up
+   * in a segment map and lj_mem_reallocvec's that map when it sees a new one.
+   * Every memo key is a C function pointer inside this image, so interning one
+   * address from the image here -- while memory is plentiful and no JNI frame
+   * is waiting -- means later pushes find the segment already present. */
+  lua_pushlightuserdata(L, (void *)&LJ52_LIGHTUD_SEED);
+  lua_pop(L, 1);
 
   /* The VM helper chunk used by lua_compare / lua_arith / lua_len. Built
    * eagerly so those three never have to compile anything on a hot path. */
@@ -245,6 +887,11 @@ lua_State *lj52_newstate(void) {
    * global out of the live state and refuse to report a pass without it. */
   lua_pushliteral(L, "luajit/" LUAJIT_VERSION);
   lua_setglobal(L, "_OCLJ_NATIVE");
+
+  /* _OCLJ_WATCHDOG -- the kernel's replacement for its standing count hook.
+   * A raw global like _OCLJ_NATIVE: the sandbox never sees it, and being
+   * reachable from _G makes it a permanent for the serializer. */
+  lj52_wd_install(L);
   return L;
 }
 

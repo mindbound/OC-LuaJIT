@@ -33,8 +33,15 @@
 # =====================================================================
 set -u
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-: "${OCLJ_SHIM:=$SELF_DIR/../native}"
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
+# OCLJ_SHIM is derived from the REPO root, not from $SELF_DIR/../native.
+# These tests used to live in tests/ at the top level, where ../native was
+# right; after the consolidation moved them to test/native/ the same string
+# resolves back to test/native/ and the build fails with
+#   fatal error: .../test/native/../native/lj52shim.h: No such file
+# -- but only when OCLJ_SHIM is not already set in the environment, which is
+# why it survived every run during development.
+: "${OCLJ_SHIM:=$OCLJ_REPO/native}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
 : "${CC:=gcc}"
 LJ=$OCLJ_BUILD/luajit/src
@@ -61,9 +68,9 @@ mkdir -p "$WORK" || fail "cannot create $WORK"
 build_variant() {
   v=$1
   d=$WORK/$v
-  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
-  "$CC" -O2 -I"$LJ" -I"$d" -include "$d/lj52shim.h" \
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -include "$d/lj52shim.h" \
     "$SELF_DIR/security_test.c" "$d/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
     "$LJ/libluajit.a" -lm -o "$d/security_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: security_test.c did not link"; }
@@ -235,7 +242,234 @@ build_variant le51
 expect le51 "5.1 __le semantics are caught" 1 LE1 LE2 LE3 LE4
 
 # =====================================================================
-# 4. and the build itself refuses the sabotaged sources.
+# 4. THE MEMORY HALF.  Same discipline, a different test binary: these
+#    sabotages are invisible to security_test.c and are caught only by
+#    mem_test.c, so they get their own builder and their own expectations.
+# =====================================================================
+build_variant_mem() {
+  v=$1
+  d=$WORK/$v
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+    || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -include "$d/lj52shim.h" \
+    "$SELF_DIR/mem_test.c" "$d/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
+    "$LJ/libluajit.a" -lm -o "$d/mem_test.exe" 2>"$d/test.err" \
+    || { sed -n '1,25p' "$d/test.err"; fail "$v: mem_test.c did not link"; }
+}
+
+expect_mem() {  # expect_mem <name> <label> <expected status> <expected FAIL ids...>
+  v=$1; label=$2; want_status=$3; shift 3
+  if [ $# -eq 0 ]; then want=""; else want=$(printf '%s\n' "$@" | sort | tr '\n' ' '); fi
+  d=$WORK/$v
+  ( cd "$d" && ./mem_test.exe ) >"$d/run.log" 2>&1
+  st=$?
+  got=$(grep '^  FAIL ' "$d/run.log" | awk '{print $2}' | sort | tr '\n' ' ')
+  echo
+  say "--- $v : $label"
+  say "    exit status  want=$want_status got=$st"
+  say "    failing ids  want=[$want]"
+  say "                 got =[$got]"
+  if [ "$st" = "$want_status" ] && [ "$got" = "$want" ]; then
+    verdict 0 "$label"
+  else
+    echo "  ---- test output ----"; sed -n '1,200p' "$d/run.log" | sed 's/^/  | /'
+    verdict 1 "$label"
+  fi
+}
+
+# The one control that cannot be expressed as a failing check id: the build
+# under test does not FAIL, it DIES.  That is the whole claim about the
+# pushcfunction window, so it is asserted directly rather than described.
+expect_death() {  # expect_death <name> <label>
+  v=$1; label=$2
+  d=$WORK/$v
+  ( cd "$d" && ./mem_test.exe ) >"$d/run.log" 2>&1
+  st=$?
+  summary=$(grep -c '^checks=' "$d/run.log" || true)
+  reached=$(grep -c '^  PASS  M5 ' "$d/run.log" || true)
+  echo
+  say "--- $v : $label"
+  say "    exit status      = $st  (want non-zero)"
+  say "    got as far as M5 = $reached  (want 1 -- so we know WHERE it died)"
+  say "    reached summary  = $summary  (want 0 -- it must not get that far)"
+  # Deliberately NO assertion on lua_atpanic firing.  Measured on Win x64: it
+  # does not.  With LJ_UNWIND_EXT the throw becomes a RaiseException nothing
+  # catches and the OS terminates the process, so the shim's panic handler --
+  # its "at least name it on the way down" -- is never reached.  That is
+  # exactly why the JVM death this window prevents had no diagnostic of any
+  # kind.  See docs/research/memory-accounting.md.
+  if [ "$st" != "0" ] && [ "$summary" = "0" ] && [ "$reached" = "1" ]; then
+    verdict 0 "$label"
+  else
+    echo "  ---- test output ----"; sed -n '1,60p' "$d/run.log" | sed 's/^/  | /'
+    verdict 1 "$label"
+  fi
+}
+
+# --- 4.0 positive control for the memory half ------------------------
+mkdir -p "$WORK/memcanon"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/memcanon/"
+build_variant_mem memcanon
+expect_mem memcanon "canonical shim passes every memory check" 0
+
+# --- 4.1 stopgap: the shipped-before behaviour, where the allocator swap
+#     was discarded and OC's RAM cap was reported but never enforced.
+#     The defect shipped as a no-op lua_setallocf MACRO; it is reintroduced
+#     here one layer lower, as lj52_setallocf refusing to arm, because that
+#     is a single line and behaviourally the same thing -- the state keeps
+#     an allocator that charges nobody.  Not a strawman: this is exactly
+#     what native/lj52shim.h carried until this change.  Note what still
+#     PASSES: the pushes all work.  That is why it went unnoticed for so
+#     long, and why M6 asserts both halves rather than just the one.
+mkdir -p "$WORK/stopgap"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/stopgap/"
+sed -i 's|^  M->accounting = ud != NULL;$|  M->accounting = 0;  /* sabotage: the swap is discarded */|'   "$WORK/stopgap/lj52shim.c"
+grep -q 'sabotage: the swap is discarded' "$WORK/stopgap/lj52shim.c"   || fail "stopgap: the sabotage patch did not apply -- lj52_setallocf has been reworded"
+build_variant_mem stopgap
+# M3   nothing is charged, so `used` never rises
+# M3b  and LuaJIT's own counter says so: we charge 0 where it counted +1.8 MB
+# M4   nothing is credited back either
+# M4c  same, against the counter, on the way down
+# M5   the cap never refuses
+# M6b  a RAW push is NOT refused -- which makes M6a vacuous, and saying so is
+#      the point of asserting both halves rather than one
+# M7   the push is not charged
+expect_mem stopgap "a discarded allocator swap is caught" 1 M3 M3b M4 M4c M5 M6b M7
+
+
+# --- 4.2 nopending: drop the pre-binding bytes instead of banking them
+mkdir -p "$WORK/nopending"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/nopending/"
+sed -i 's|^    if (p != NULL \|\| nsize == 0) M->pending += delta;$|    /* sabotage: the bytes are dropped */|' \
+  "$WORK/nopending/lj52shim.c"
+grep -q 'sabotage: the bytes are dropped' "$WORK/nopending/lj52shim.c" \
+  || fail "nopending: the sabotage patch did not apply"
+build_variant_mem nopending
+# M4b `used` crosses zero once the pre-binding blocks are freed under a live
+#     binding, and M5's cap -- derived from `used`, exactly as OC derives
+#     totalMemory from the kernelMemory it measures this way -- then goes
+#     negative, which our allocator and jnlua's both read as "unlimited".
+# M4b `used` crosses zero once the pre-binding blocks are freed under a live
+#     binding.
+# M5  and the cap derived from it -- exactly as OC derives totalMemory from the
+#     kernelMemory it measures this way -- goes NEGATIVE, which our allocator
+#     and jnlua's both read as "unlimited".  The allocation then runs away to a
+#     gigabyte.
+# M6b still PASSES, and that is worth reading twice: by then `used` is huge and
+#     positive again, so the cap taken from it is tight and the raw push really
+#     is refused.  A control that expected everything downstream to fail would
+#     be asserting noise rather than the defect.
+expect_mem nopending "dropping pre-binding bytes is caught" 1 M4b M5
+
+# --- 4.3 norefuse: remove the pushcfunction window.  MUST DIE. -------
+mkdir -p "$WORK/norefuse"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/norefuse/"
+sed -i 's|^  if (M != NULL) M->norefuse++;$|  (void)M;|; s|^  if (M != NULL) M->norefuse--;$||' \
+  "$WORK/norefuse/lj52shim.c"
+grep -q '^  (void)M;$' "$WORK/norefuse/lj52shim.c" \
+  || fail "norefuse: the sabotage patch did not apply"
+build_variant_mem norefuse
+expect_death norefuse "without the window, a bare-frame push KILLS THE PROCESS"
+
+# =====================================================================
+# 6. THE WATCHDOG.  Two sabotages, each the design's own "before" picture:
+#    one keeps OC's standing hook (the JIT thrashes), one removes the async
+#    injection (the deadline is never enforced).  wd_test.c carries a 10 s
+#    process alarm precisely so the second one terminates.
+# =====================================================================
+build_variant_wd() {
+  v=$1
+  d=$WORK/$v
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+    || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -include "$d/lj52shim.h" \
+    "$SELF_DIR/wd_test.c" "$d/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
+    "$LJ/libluajit.a" -lm -o "$d/wd_test.exe" 2>"$d/test.err" \
+    || { sed -n '1,25p' "$d/test.err"; fail "$v: wd_test.c did not link"; }
+}
+
+expect_wd() {  # expect_wd <name> <label> <expected status> <expected FAIL ids...>
+  v=$1; label=$2; want_status=$3; shift 3
+  if [ $# -eq 0 ]; then want=""; else want=$(printf '%s\n' "$@" | sort | tr '\n' ' '); fi
+  d=$WORK/$v
+  ( cd "$d" && ./wd_test.exe ) >"$d/run.log" 2>&1
+  st=$?
+  got=$(grep '^  FAIL ' "$d/run.log" | awk '{print $2}' | sort | tr '\n' ' ')
+  echo
+  say "--- $v : $label"
+  say "    exit status  want=$want_status got=$st"
+  say "    failing ids  want=[$want]"
+  say "                 got =[$got]"
+  if [ "$st" = "$want_status" ] && [ "$got" = "$want" ]; then
+    verdict 0 "$label"
+  else
+    echo "  ---- test output ----"; sed -n '1,200p' "$d/run.log" | sed 's/^/  | /'
+    verdict 1 "$label"
+  fi
+}
+
+expect_wd_alarm() {  # expect_wd_alarm <name> <label> -- the test's own alarm must end it
+  v=$1; label=$2
+  d=$WORK/$v
+  ( cd "$d" && ./wd_test.exe ) >"$d/run.log" 2>&1
+  st=$?
+  summary=$(grep -c '^checks=' "$d/run.log" || true)
+  alarm=$(grep -c '^  ALARM ' "$d/run.log" || true)
+  reached=$(grep -c '^  PASS  W1 ' "$d/run.log" || true)
+  echo
+  say "--- $v : $label"
+  say "    exit status      = $st  (want 99, the alarm's code)"
+  say "    got as far as W1 = $reached  (want 1)"
+  say "    ALARM line       = $alarm  (want 1)"
+  say "    reached summary  = $summary  (want 0)"
+  if [ "$st" = "99" ] && [ "$alarm" = "1" ] && [ "$summary" = "0" ] && [ "$reached" = "1" ]; then
+    verdict 0 "$label"
+  else
+    echo "  ---- test output ----"; sed -n '1,60p' "$d/run.log" | sed 's/^/  | /'
+    verdict 1 "$label"
+  fi
+}
+
+# --- 6.0 positive control ---------------------------------------------
+mkdir -p "$WORK/wdcanon"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/wdcanon/"
+build_variant_wd wdcanon
+expect_wd wdcanon "canonical shim passes every watchdog check" 0
+
+# --- 6.1 standinghook: arm() ALSO installs OC's standing count hook -------
+# This is the "before" this whole change exists to remove.  The deadline still
+# fires (the standing hook sees to that) and disarm still clears it, so every
+# check passes EXCEPT two: W6b, because the hot loop thrashes -- hundreds of
+# traces, hundreds of ms -- exactly as measured in a real machine with OC's
+# stock kernel; and W8c, because the outermost arm's promise is "no hook is
+# set when a resume starts" and a standing hook is, by construction, a hook
+# that is set; and W12, because the standing hook the sabotage installs is
+# exactly the immediate hook W12 says a huge timeout must NOT produce.  All
+# three are the sabotage doing what it says, nothing else.
+mkdir -p "$WORK/standinghook"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/standinghook/"
+sed -i 's|^  M->wd_stack\[M->wd_depth\] = lj52_wd_now() + secs \* 1000.0;$|&\n  lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000); /* sabotage: OC standing hook */|' \
+  "$WORK/standinghook/lj52shim.c"
+grep -q 'sabotage: OC standing hook' "$WORK/standinghook/lj52shim.c" \
+  || fail "standinghook: the sabotage patch did not apply -- lj52_wd_arm has been reworded"
+build_variant_wd standinghook
+expect_wd standinghook "a standing hook is caught by W6b, W8c and W12" 1 W6b W8c W12
+
+# --- 6.2 notimer: the timer callback never installs the hook -------------
+# Remove the asynchronous injection and nothing ever interrupts
+# `while true do end`: the deadline is simply not enforced.  The only thing
+# that ends W2 is wd_test's own 10 s alarm, and that is what is asserted.
+mkdir -p "$WORK/notimer"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/notimer/"
+sed -i 's|^  (void)timedOut;$|  (void)timedOut; (void)M; return; /* sabotage: the timer never hooks */|' \
+  "$WORK/notimer/lj52shim.c"
+grep -q 'sabotage: the timer never hooks' "$WORK/notimer/lj52shim.c" \
+  || fail "notimer: the sabotage patch did not apply -- lj52_wd_fire has been reworded"
+build_variant_wd notimer
+expect_wd_alarm notimer "without the async injection, the deadline is NEVER enforced (the test's alarm ends it)"
+
+# =====================================================================
+# 5. and the build itself refuses the sabotaged sources.
 #    A second, independent tooth.  Even if nobody ever ran the test,
 #    build-native.sh's preflight greps lj52shim.{c,h} for the escape hatches
 #    and asserts the shape of the lua_load macro, so it will not produce a
@@ -248,9 +482,14 @@ expect le51 "5.1 __le semantics are caught" 1 LE1 LE2 LE3 LE4
 # =====================================================================
 echo
 say "--- build-native.sh must refuse the sabotaged shims"
-BN=$SELF_DIR/../build-native.sh
+# The consolidation moved these apart: the tests live in test/native/ and the
+# build script in native/.  Keep the old location as a fallback so a checkout
+# that still has them side by side is not silently SKIPPED -- a skipped gate
+# reads like a passing one in a log.
+BN=$OCLJ_REPO/native/build-native.sh
+[ -f "$BN" ] || BN=$SELF_DIR/../build-native.sh
 if [ ! -f "$BN" ]; then
-  say "    SKIPPED: build-native.sh not found next to tests/"
+  say "    SKIPPED: no build-native.sh at $OCLJ_REPO/native/ or beside this script"
 elif [ -z "${OCLJ_JNLUA:-}" ] || [ ! -d "${OCLJ_JNLUA:-/nonexistent}" ] \
   || [ -z "${OCLJ_JNI:-}" ] || [ ! -f "${OCLJ_JNI:-/nonexistent}/jni.h" ]; then
   say "    SKIPPED: set OCLJ_JNLUA=<OC-JNLua checkout> and OCLJ_JNI=<jdk>/include"

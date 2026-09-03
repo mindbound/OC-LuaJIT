@@ -108,14 +108,21 @@ grep -q LUAJIT_ENABLE_CHECKHOOK "$OCLJ_LUAJIT/src/lj_record.c" \
 # per-machine RAM cap with an env var defaulting to unlimited.  Refuse to
 # build if any of them comes back.  Comment lines are excluded so the shim can
 # still NAME the hatches it removed.
+# The comment-stripping filter deliberately carries NO ^ anchor and no [^:]*
+# prefix.  With a Windows drive-letter path (C:/Users/...) such a character
+# class stops at the DRIVE colon, so no comment line is ever stripped and the
+# gate then fails on the shim's own prose DESCRIBING the escape hatches it
+# removed -- accusing the shim of exactly the regression it exists to prevent.
+# Measured: 3 false matches under C:/..., 0 under /c/....
+#
+# Keep the pipeline on physically ADJACENT lines.  A line-continuation
+# followed by comment lines and then a line beginning with '|' is a syntax
+# error, not a commented pipeline: the backslash-newline is spliced away
+# before tokenising, the '#' then comments to end of line, and the next line
+# starts with a bare '|'.  That shipped once and killed this script at
+# stage 0 -- every gate below it silently never ran.
 codegrep() {   # codegrep <pattern> -> prints only non-comment matches
   grep -n "$1" "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" 2>/dev/null \
-    # NOTE: no ^ anchor and no [^:]* prefix. With a Windows drive-letter path
-    # (C:/Users/...) the character class stops at the drive colon, no comment
-    # line is ever stripped, and this gate then fails on the shim's own prose
-    # DESCRIBING the escape hatches it removed -- accusing the shim of exactly
-    # the regression it exists to prevent. Measured: 3 false matches under
-    # C:/..., 0 under /c/....
     | grep -vE ':[0-9]+: *([*]|/[*]|//)'
 }
 for tok in OCLJ_NOMODECHECK LJ52_DROP_LOAD_MODE OCLJ_TRACE OCLJ_JITOFF OCLJ_JITOPT \
@@ -133,6 +140,32 @@ if codegrep getenv | grep -q .; then
          operator would ever see it."
 fi
 # The mode gate itself, asserted by shape rather than trusted.
+# THE ALLOCATOR CONVENTION, pinned.  lj52_setallocf decides whether accounting
+# is armed from jnlua's own encoding of intent: l_alloc_checked is always
+# installed with ud == L, l_alloc_unchecked always with ud == NULL.  A RENAME or
+# RETYPE of the four names the lua_setallocf macro borrows is a compile error,
+# which is the failure mode we want -- but a change to this CONVENTION would
+# compile silently and go one of two bad ways: enforcement never arms (the very
+# defect this change removes, quietly restored), or it stays armed through
+# lua_close, where a __gc metamethod can then OOM in a bare JNI frame.  So count
+# the sites rather than trusting them.
+JN=$OCLJ_JNLUA/native/src/jnlua.c
+N_CHK=$(grep -c 'lua_setallocf(L, l_alloc_checked, L)' "$JN" || true)
+N_UNC=$(grep -c 'lua_setallocf(L, l_alloc_unchecked, NULL)' "$JN" || true)
+N_ALL=$(grep -c 'lua_setallocf' "$JN" || true)
+say "    jnlua lua_setallocf: $N_CHK checked(ud==L)  $N_UNC unchecked(ud==NULL)  $N_ALL total"
+[ "$N_CHK" = "2" ] && [ "$N_UNC" = "3" ] && [ "$N_ALL" = "5" ] \
+  || fail "OC-JNLua's lua_setallocf convention has changed: expected 2 checked
+         (ud == L), 3 unchecked (ud == NULL), 5 total; got $N_CHK/$N_UNC/$N_ALL.
+         lj52_setallocf keys the memory cap on exactly that encoding.  Re-read
+         jnlua.c's allocator section and update lj52shim.c DELIBERATELY before
+         touching these numbers."
+grep -q 'define JNLUA_JAVASTATE' "$JN" \
+  || fail "OC-JNLua no longer defines JNLUA_JAVASTATE.  The shim caches the Java
+         LuaState by watching the lua_setfield that binds it under that key, and
+         takes the key from jnlua's own macro; without it the cap stops
+         enforcing silently."
+
 grep -q 'define lua_load(L, r, d, cn, mode) lua_loadx' "$OCLJ_SHIM/lj52shim.h" \
   || fail "lj52shim.h does not map lua_load onto lua_loadx.  The chunk-mode
          argument -- OC's computer.lua.allowBytecode gate -- would be dropped
@@ -241,7 +274,10 @@ say "    $PROBE"
 # --------------------------------------------------------------- 2
 say "=============== 2. lj52shim.c ==============="
 rm -f "$OCLJ_BUILD/obj/lj52shim.o"
+# -I the JDK headers: the shim includes <jni.h> so its allocator can use
+# jnlua's own getluamemory/setluamemory to publish the machine's RAM use.
 "$CC" -c -O2 -Wall -Wextra -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
+  -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" \
   "$OCLJ_SHIM/lj52shim.c" -o "$OCLJ_BUILD/obj/lj52shim.o" 2>"$OCLJ_BUILD/shim.err"
 [ -f "$OCLJ_BUILD/obj/lj52shim.o" ] || { cat "$OCLJ_BUILD/shim.err"; fail "shim did not compile"; }
 SW=$(grep -c 'warning:' "$OCLJ_BUILD/shim.err" || true)
@@ -349,7 +385,7 @@ SHA=$(sha256sum "$OCLJ_OUT/$DLL_NAME" 2>/dev/null | cut -c1-16)
 stamp "OK  $OCLJ_OUT/$DLL_NAME  ${SZ} bytes  sha256:${SHA}..."
 echo
 echo "NEXT: point ocelot-brain at it and boot OpenOS:"
-echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $SELF_DIR/smoke-test.sh"
+echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 
 # =====================================================================
 # PREREQUISITES -- how to obtain every external input, from nothing
