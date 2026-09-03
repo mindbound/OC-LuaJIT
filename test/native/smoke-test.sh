@@ -25,6 +25,15 @@
 #   OCLJ_WORK     scratch dir for classes/conf/logs   [default $TMPDIR/ocljit-smoke]
 #   OCLJ_SRC      OcljSmoke.scala                               [default: next to this script]
 #   OCLJ_TIMEOUT  seconds before the run is killed              [default 300]
+#   OCLJ_NATIVE   luajit (default) | stock.  "stock" does NOT point
+#                 forceNativeLibPathFirst at our DLL, so ocelot-brain loads
+#                 its own bundled PUC-Lua 5.2 native instead -- the VM a
+#                 player runs today, and the only honest baseline for "what
+#                 does the JIT buy".  It forces OCLJ_KERNEL=stock too, because
+#                 the patched kernel hard-errors without _OCLJ_WATCHDOG, which
+#                 the stock native does not provide.  The harness's guard
+#                 asserts the stock fingerprint with equal force in this mode,
+#                 so a mis-resolved DLL dies instead of printing a number.
 #   OCLJ_KERNEL   watchdog (default) | stock.  "watchdog" derives the OC-LuaJIT
 #                 kernel from ocelot-brain's machine.lua with
 #                 native/kernel/patch-machine-lua.lua and puts it FIRST on the
@@ -108,6 +117,12 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # anything at all -- it is appended last and HOCON lets the later assignment
 # win.
 : "${OCLJ_RAM_SCALE:=3.0}"
+: "${OCLJ_NATIVE:=luajit}"
+case $OCLJ_NATIVE in luajit|stock) ;; *) fail "OCLJ_NATIVE must be luajit or stock, not '$OCLJ_NATIVE'";; esac
+if [ "$OCLJ_NATIVE" = "stock" ]; then
+  OCLJ_KERNEL=stock
+  say "    OCLJ_NATIVE=stock -- ocelot-brain's own PUC-Lua 5.2 native (the baseline a player runs today); kernel forced to stock"
+fi
 : "${OCLJ_KERNEL:=watchdog}"
 : "${OCLJ_LUAJIT_EXE:=}"
 : "${OCLJ_CONF_EXTRA:=}"
@@ -229,7 +244,9 @@ LIBDIR_ABS=$(wm "$(CDPATH= cd -- "$OCLJ_LIBDIR" && pwd)")
   echo "# ---- appended by smoke-test.sh ----"
   # Make ocelot-brain load OUR libjnlua52 instead of the stock one bundled in
   # OC-JNLua-Natives.  This is the ONLY hook the whole thing needs.
-  echo "opencomputers.debug.forceNativeLibPathFirst = \"$LIBDIR_ABS\""
+  # In stock mode this line is OMITTED, which is the whole mechanism:
+  # LuaStateFactory then falls back to the bundled PUC-Lua 5.2 native.
+  [ "$OCLJ_NATIVE" = "luajit" ] && echo "opencomputers.debug.forceNativeLibPathFirst = \"$LIBDIR_ABS\""
   # The security setting whose enforcement we assert.  OCLJ_ALLOW_BYTECODE
   # exists ONLY so the d2 milestone can be run in its open polarity as a
   # negative control; it defaults to false and any other value is announced
@@ -277,9 +294,9 @@ case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT
 [ "$OCLJ_JIT" = "off" ] && say "    OCLJ_JIT=off -- the harness will jit.off() the machine's state (JIT PROBE control run)"
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
-  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
 else
-  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
 fi
 RC=$?
 cat "$LOG"

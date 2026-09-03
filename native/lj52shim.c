@@ -471,6 +471,7 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  * lua_sethook: see lj52_wd_inject. */
 #include "lj_obj.h"
 #include "lj_dispatch.h"
+#include "lj_jit.h"
 
 #define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
 static const char LJ52_WD_KEY = 0;      /* registry slot for the armed fn */
@@ -687,6 +688,43 @@ static int lj52_wd_stats(lua_State *L) {
   return 5;
 }
 
+/* ================================================================== *
+ * JIT accounting, for measurement only
+ * ================================================================== */
+
+/* _OCLJ_JITSTATS() -> mcode_bytes, maxmcode_bytes, traces_used, jit_on
+ *
+ * Two things this project needs to measure and cannot reach any other way.
+ *
+ * MCODE IS INVISIBLE TO THE RAM CAP.  Machine code is VirtualAlloc'd by
+ * lj_mcode.c and never passes g->allocf, so the per-machine cap the shim
+ * enforces cannot see a byte of it -- up to maxmcode (2048 KB by default,
+ * lj_jit.h) per state, which for a 1 MB machine exceeds its entire advertised
+ * RAM.  J->szallmcarea (lj_jit.h:510, accumulated at lj_mcode.c:369) is the
+ * running total, so this is the number that says what a machine ACTUALLY
+ * costs a server.
+ *
+ * AND IT IS THE TRACE-FLUSH SIGNATURE.  lj_trace_flushall zeroes szallmcarea
+ * (lj_mcode.c:378), so a reading of 0 after a persist is proof the serializer
+ * discarded every compiled trace in the VM.  eris_lj.c does that at two gated
+ * sites (:1209 persist, :2127 restore) whenever a for-in loop is involved --
+ * which was free while traces never ran and is not free now.  Sampling this
+ * around a save is how we find out whether a world save leaves the machine
+ * cold.
+ *
+ * A raw global like _OCLJ_NATIVE and _OCLJ_WATCHDOG: the sandbox never sees
+ * raw _G, and jit.util -- the usual way to ask these questions -- is
+ * deliberately kept out of it (docs/research/os-shape-census.md).  Read-only,
+ * and it allocates nothing. */
+static int lj52_jitstats(lua_State *L) {
+  jit_State *J = L2J(L);
+  lua_pushnumber(L, (lua_Number)J->szallmcarea);
+  lua_pushnumber(L, (lua_Number)(J->param[JIT_P_maxmcode] << 10));
+  lua_pushinteger(L, (lua_Integer)(J->freetrace ? J->freetrace - 1 : 0));
+  lua_pushboolean(L, (J->flags & JIT_F_ON) != 0);
+  return 4;
+}
+
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
 static void lj52_wd_install(lua_State *L) {
   lua_createtable(L, 0, 2);
@@ -699,6 +737,8 @@ static void lj52_wd_install(lua_State *L) {
   lua_pushcclosure(L, lj52_wd_stats, 0);
   lua_setfield(L, -2, "stats");
   lua_setglobal(L, "_OCLJ_WATCHDOG");
+  lua_pushcclosure(L, lj52_jitstats, 0);
+  lua_setglobal(L, "_OCLJ_JITSTATS");
 }
 
 /* lua_close does not free the record, so we do -- after making sure no timer

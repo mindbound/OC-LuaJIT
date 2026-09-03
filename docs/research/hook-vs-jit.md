@@ -196,7 +196,7 @@ it, but "the prototype worked" is not "it is correct under OC's scheduler".
 
 ### What this makes worse, deliberately listed
 
-Once traces actually run, two things §8 notes as *currently masked* stop being
+Once traces actually run, two things §9 notes as *currently masked* (now measured in §8) stop being
 masked: the RAM cap's blindness to JIT machine code, and allocation from inside
 a compiled trace. Both go on the list for immediately after Step 2. Neither is a
 reason to delay it.
@@ -516,7 +516,84 @@ than 0.5 s late cannot reach `disarm()` -- which, since the kernel sets
 `deadline = realTime + timeout` immediately before arming, is not a reachable
 state in practice. Recorded so nobody rediscovers it.
 
-## 8. Interaction with memory accounting
+## 8. Step 3, first results: what the working JIT actually costs
+
+Both of these were recorded as "currently masked because traces never run".
+They are no longer masked, and both now have numbers instead of arguments.
+Measured with `_OCLJ_JITSTATS()`, a raw-global accessor added for this --
+`J->szallmcarea` (`lj_jit.h:510`) plus the trace count -- because `jit.util`
+is deliberately kept out of the sandbox.
+
+### A world save throws away every compiled trace
+
+| | before the save | after |
+|---|---|---|
+| watchdog kernel, JIT on | 196 608 B mcode, 349 traces | **0 B, 0 traces** |
+| stock kernel, JIT on | 196 608 - 458 752 B, 101-776 traces | **0 B, 0 traces** |
+
+The flush is real and it fires on an ordinary OpenOS save. It is *not*
+unconditional: `eris_lj.c:1209` flushes only when the coroutine being
+persisted is suspended inside a generic-for loop, and `:2127` only when the
+restored slots hold a replay iterator. A booted OpenOS evidently satisfies the
+first, every time.
+
+**What it costs is still open, and the obvious measurement is a trap.**
+Watching an *idle* machine after the flush says nothing: an idle OpenOS has
+nothing hot to compile, so "no machine code three seconds later" means "had no
+work", not "stays interpreted". A first draft of this measurement asserted
+recovery and would have **rewarded the broken build** -- the stock kernel
+"recovered" 131 072 B in 250 ms only because thrashing recompiles wastefully,
+while the working kernel legitimately sat idle and failed. The harness now
+reports that line and asserts nothing. Real recovery has to be measured with a
+workload after the save, and belongs to the benchmark harness.
+
+### The RAM cap is blind to ~192 KB per machine
+
+A booted OpenOS on the watchdog kernel holds **196 608 B** of machine code
+(stable across six consecutive runs) against a `maxmcode` ceiling of
+2 097 152 B. None of it passes `g->allocf`, so the per-machine cap charges for
+none of it. For a machine advertising 1024 KB that is roughly a fifth of its
+stated RAM, uncharged and invisible to an operator sizing a server -- and the
+ceiling is 2 MB, twice the advertised size.
+
+Worth noting for its own sake: the *thrashing* stock kernel holds as much
+machine code and sometimes far more (up to 458 752 B with 776 traces, though
+it varies a lot run to run where the watchdog kernel does not). Thrashing does
+not stop the compiler; it stops traces being *entered*. The standing hook was
+paying for machine code it could never run.
+
+### Timer delivery degrades under load, measurably
+
+| condition | wall time | runs with `fires=0` |
+|---|---|---|
+| serial, nothing else on the machine | 20.2 s | **0 of 12** |
+| sharing the machine with builds and other JVMs | 54.6 s | 2 of ~6 |
+
+`fires=0` means the watchdog's timer-queue callback was never delivered inside
+the harness's 15 s window, so a runaway loop simply kept running. It is
+scheduling latency rather than a logic defect -- the correlation with a 2.7x
+wall-time inflation is unambiguous -- but a Minecraft server is a loaded
+machine, and OC's standing hook does not inherit a thread pool's latency where
+this does. This needs a deliberate load test before shipping, not a hope.
+
+### Step 3 Phase 0: the premise holds, and it is bimodal
+
+Full record: [../../bench/results-in-machine-2026-09-03.md](../../bench/results-in-machine-2026-09-03.md).
+Three cells, three runs each, inside a real machine:
+
+| | compute (mandelbrot) | component (fs.list walk) |
+|---|---:|---:|
+| PUC Lua 5.2 — what players run today | 1.820 s | 6.35 s |
+| ours, JIT off (watchdog kernel) | 0.707 s — 2.58x | 6.32 s — 1.00x |
+| ours, JIT on | **0.104 s — 17.5x** | **6.38 s — 1.00x** |
+
+The compiler is worth 6.8x on top of the interpreter, and the in-machine
+compiled time is within 7% of the same benchmark's standalone compiled time --
+so a trace inside an OpenComputers sandbox runs at essentially bare-VM speed.
+And component-bound work is flat across a VM change *and* a compiler, because
+an indirect component call costs a game tick regardless.
+
+## 9. Interaction with memory accounting
 
 Mild, and in our favour. Every design reviewed for the RAM cap flagged
 "allocation from inside a compiled trace" as an unmeasured hazard. If traces

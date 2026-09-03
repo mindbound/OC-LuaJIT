@@ -424,14 +424,25 @@ cap is armed). Safe, and it looked promising, but it does not rescue the stock
 scale -- 0/3 at 1.8 with pause 150 / stepmul 400 -- and it spends collector CPU
 to buy whatever margin it does give. Not shipped.
 
-### What the JIT fix will add to this list
+### The JIT fix landed, and the blind spot now has a number
 
-`docs/research/hook-vs-jit.md` §5 will make traces actually run. When it does,
-two things this note lists as currently masked stop being masked: the cap's
-blindness to JIT machine code (up to 2 MB per state, `VirtualAlloc`'d, never
-seen by `g->allocf`) and allocation from inside a compiled trace. Both belong
-on this plan the day that lands. Measure `J->szallmcarea` after a boot rather
-than assuming.
+`hook-vs-jit.md` §7 made traces actually run, so the cap's blindness to JIT
+machine code stopped being theoretical. Measured (`hook-vs-jit.md` §8, via the
+`_OCLJ_JITSTATS()` accessor added for it): a booted OpenOS holds **196 608 B**
+of machine code, stable across six consecutive runs, against a `maxmcode`
+ceiling of 2 097 152 B. The cap charges for **none** of it.
+
+So "the RAM cap is enforced" means "enforced for `allocf` traffic". A machine
+advertising 1024 KB actually costs a server roughly 20% more than it says, and
+its worst case is 2 MB over -- twice the advertised size. Two things follow,
+neither done:
+
+* an operator sizing a server needs the real figure, so `maxmcode` should
+  probably be scaled per machine (`jit.opt` takes it per state, and the
+  roadmap already carries that item) rather than left at a 2 MB default that
+  was chosen for desktop LuaJIT;
+* allocation from *inside* a compiled trace is the other half of what was
+  masked, and is still unmeasured.
 
 ## 12. Not fixed here
 

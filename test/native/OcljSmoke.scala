@@ -73,6 +73,21 @@ object Smoke {
     f.getInt(arch)
   }
 
+  /** mcode bytes / cap / traces / jit-on, read off the raw state.
+    * The RAM cap cannot see machine code (it is VirtualAlloc'd, never through
+    * g->allocf), so this is the only number that says what a machine actually
+    * costs.  It is also the trace-flush signature: lj_trace_flushall zeroes
+    * szallmcarea, so a drop to 0 across a persist proves the serializer threw
+    * away every compiled trace in the VM. */
+  def jitStats(lua: LuaState): (Long, Long, Int, Boolean) = {
+    val s = evalStr(lua, "local m, c, t, on = _OCLJ_JITSTATS() " +
+      "return string.format('%d/%d/%d/%s', m, c, t, tostring(on))")
+    try {
+      val p = s.split("/")
+      (p(0).toDouble.toLong, p(1).toDouble.toLong, p(2).toInt, p(3) == "true")
+    } catch { case _: Throwable => (-1L, -1L, -1, false) }
+  }
+
   /** Evaluate a text chunk in the live state and return its single result. */
   def evalStr(lua: LuaState, code: String): String = {
     val base = lua.getTop
@@ -120,13 +135,45 @@ object Smoke {
       s"eris=[$erisShape] | eris.version=$erisVer"
     p("GUARD OK. arch=" + arch.getClass.getName)
     p("GUARD VM FINGERPRINT: " + fp)
-    if (!nativeMark.startsWith("luajit/"))
-      die("the live state carries no _OCLJ_NATIVE marker: this is the STOCK PUC-Lua 5.2 " +
-        "native, not the LuaJIT one. forceNativeLibPathFirst did not take effect.")
-    if (hasJit == "NO-JIT-TABLE")
-      die("no jit table in the live state: the shim did not open luaopen_jit.")
-    if (erisShape == "NO-ERIS")
-      die("no eris library in the live state: eris_lj.o did not link in, or luaopen_eris was not called.")
+    // The guard is TWO-SIDED, and the stock side is asserted with equal force.
+    // Cell A of the benchmark is "what a player runs today" -- ocelot-brain's
+    // bundled PUC-Lua 5.2 native, loaded simply by not pointing
+    // forceNativeLibPathFirst at ours.  A silently mis-resolved DLL in EITHER
+    // direction would produce a plausible-looking number for the wrong VM,
+    // which is the one way this benchmark could lie outright.  So each mode
+    // refuses the other's fingerprint.
+    System.getProperty("ocljit.native", "luajit") match {
+      case "luajit" =>
+        if (!nativeMark.startsWith("luajit/"))
+          die("the live state carries no _OCLJ_NATIVE marker: this is the STOCK PUC-Lua 5.2 " +
+            "native, not the LuaJIT one. forceNativeLibPathFirst did not take effect.")
+        if (hasJit == "NO-JIT-TABLE")
+          die("no jit table in the live state: the shim did not open luaopen_jit.")
+        if (erisShape == "NO-ERIS")
+          die("no eris library in the live state: eris_lj.o did not link in, or luaopen_eris was not called.")
+      case "stock" =>
+        if (nativeMark.startsWith("luajit/"))
+          die("ocljit.native=stock but the live state carries _OCLJ_NATIVE=" + nativeMark +
+            ": OUR LuaJIT native is loaded, not the stock PUC-Lua 5.2 one. The baseline " +
+            "cell would be measuring the thing it is supposed to be a baseline FOR.")
+        if (hasJit != "NO-JIT-TABLE")
+          die("ocljit.native=stock but the live state has a jit table (" + hasJit +
+            "): this is not PUC Lua.")
+        // NOT startsWith("Lua 5.2"): OC's own bundled PUC-5.2 native reports
+        // "Lua+Eris 5.2" too, because luaopen_eris sets _VERSION in BOTH
+        // natives -- OC uses Eris for its own persistence.  So _VERSION
+        // cannot tell the two apart at all, and asserting "Lua 5.2" here
+        // rejected a correctly-loaded stock native three times in a row.
+        // The discriminators that DO work are the two above: the stock
+        // native has no _OCLJ_NATIVE marker and no jit table.  (This is the
+        // same weakness the roadmap records under "move _VERSION out of
+        // luaopen_eris" -- it is a poor anti-vacuity guard for exactly this
+        // reason.)
+        if (!version.contains("5.2"))
+          die("ocljit.native=stock but _VERSION=" + version + ", expected a 5.2 of some kind.")
+      case other =>
+        die("ocljit.native must be luajit or stock, not '" + other + "'")
+    }
     fp
   }
 
@@ -342,7 +389,16 @@ object Smoke {
   // ------------------------------------------------------------------ //
 
   val AutorunLua: String =
-    """local component = require("component")
+    """-- The filesystem proxy for the disk this file was loaded from, handed to
+      |-- us as the chunk's first vararg.  OpenOS's 90_filesystem.lua does
+      |--     shell.execute(file, _ENV, proxy)
+      |-- and sh.lua packs it into the chunk's varargs, so this is the ONLY
+      |-- reliable way to read our sibling files: require() searches
+      |-- /lib;/usr/lib;/home/lib;./ and never sees the disk, and loadfile()
+      |-- resolves against $PWD, which is not the mount either.  The mount point
+      |-- itself is /mnt/<address-prefix> and unpredictable.
+      |local fsproxy = ...
+      |local component = require("component")
       |local event = require("event")
       |local computer = require("computer")
       |local nonce = string.format("%.4f-%d", computer.uptime(), math.random(100000, 999999))
@@ -356,6 +412,61 @@ object Smoke {
       |-- read, so the same script serves the test and its negative control.
       |-- string.dump is in the sandbox (machine.lua:888), so this is exactly
       |-- what a hostile program on a server would type.
+      |-- PHASE 0, POLE 1 -- COMPUTE.  Read bench/oc/mandelbrot.lua off the
+      |-- disk and run it.  Pure float arithmetic, no allocation, no bit ops,
+      |-- so its published CHECK (37904620) is valid unchanged and it cannot be
+      |-- killed by the RAM cap.  Scheduled on its own timer so it gets a fresh
+      |-- 5 s deadline rather than sharing autorun's.
+      |local benchRow = "OCLJB01=pending"
+      |local function readAll(name)
+      |  local h, e = fsproxy.open(name, "r")
+      |  if not h then return nil, tostring(e) end
+      |  local parts, chunk = {}, nil
+      |  repeat
+      |    chunk = fsproxy.read(h, 4096)
+      |    if chunk then parts[#parts + 1] = chunk end
+      |  until not chunk
+      |  fsproxy.close(h)
+      |  return table.concat(parts)
+      |end
+      |event.timer(2, function()
+      |  local src, err = readAll("mandelbrot.lua")
+      |  if not src then benchRow = "OCLJB01=mandelbrot/READFAIL/" .. tostring(err) .. "/0/0" return end
+      |  local fn, lerr = load(src, "=mandelbrot")
+      |  if not fn then benchRow = "OCLJB01=mandelbrot/LOADFAIL/" .. tostring(lerr) .. "/0/0" return end
+      |  local ok, check, secs = pcall(fn)
+      |  if not ok then benchRow = "OCLJB01=mandelbrot/ERROR/" .. tostring(check):gsub("[ /]", "_") .. "/0/0" return end
+      |  benchRow = string.format("OCLJB01=mandelbrot/ok/%s/%.4f/%d",
+      |    check, secs, math.floor(computer.freeMemory() / 1024))
+      |end)
+      |
+      |-- PHASE 0, POLE 2 -- COMPONENT.  Walk a directory tree through the same
+      |-- proxy.  fs.list is an INDIRECT component call: machine.lua turns it
+      |-- into a coroutine.yield -> SynchronizedCall, which costs one tick
+      |-- minimum no matter how fast the VM is.  So this is the half of the
+      |-- predicted bimodal answer where the JIT must buy nothing, and the
+      |-- identity between cells IS the result.  Timed in uptime (ticks), not
+      |-- os.clock, because the cost is scheduler latency and not CPU.
+      |local walkRow = "OCLJW01=pending"
+      |local function walk(path)
+      |  local n = 0
+      |  local l = fsproxy.list(path)
+      |  if l then
+      |    for i = 1, #l do
+      |      n = n + 1
+      |      if l[i]:sub(-1) == "/" then n = n + walk(path .. l[i]) end
+      |    end
+      |  end
+      |  return n
+      |end
+      |event.timer(4, function()
+      |  local t0 = computer.uptime()
+      |  local ok, n = pcall(walk, "/")
+      |  local dt = computer.uptime() - t0
+      |  if not ok then walkRow = "OCLJW01=ERROR/" .. tostring(n):gsub("[ /]", "_") .. "/0"
+      |  else walkRow = string.format("OCLJW01=%d/%.3f", n, dt) end
+      |end)
+      |
       |local dumped = string.dump(function() return 42 end)
       |local viaBytecode = load(dumped, "=gateprobe")
       |local viaText = load("return 6*7", "=textprobe")
@@ -422,6 +533,12 @@ object Smoke {
       |
       |event.timer(0.05, function()
       |  n = n + 1
+      |  -- Phase 0 rows.  Repainted like the others: boot output scrolls, and
+      |  -- a row written once can be gone by the time Java reads the screen.
+      |  component.gpu.set(1, 20, "OCLJENV=" .. math.floor(computer.totalMemory() / 1024)
+      |    .. "/" .. math.floor(computer.freeMemory() / 1024) .. "        ")
+      |  component.gpu.set(1, 21, benchRow .. "                    ")
+      |  component.gpu.set(1, 22, walkRow .. "                    ")
       |  component.gpu.set(1, 12, bench2 .. "        ")
       |  component.gpu.set(1, 13, "OCLJDEADLINE=" .. deadlineResult .. "        ")
       |  component.gpu.set(1, 14, bench .. "        ")
@@ -484,6 +601,28 @@ object Smoke {
     // finds autorun.lua when it mounts it.
     val diskDir: Path = Files.createTempDirectory("ocljit-smoke-hdd")
     Files.write(diskDir.resolve("autorun.lua"), AutorunLua.getBytes(StandardCharsets.UTF_8))
+    // The Phase-0 compute pole, planted next to autorun.lua so the sandbox can
+    // read it through the filesystem proxy.  OCLJ_BENCH_SABOTAGE plants a
+    // deliberately wrong variant instead -- the control for the checksum
+    // assertion, because a checksum nobody has watched REJECT a wrong answer
+    // is not evidence of anything.
+    val benchSrcPath = Paths.get(System.getProperty("ocljit.benchdir", "bench/oc"), "mandelbrot.lua")
+    val benchSabotage = System.getenv("OCLJ_BENCH_SABOTAGE") == "1"
+    var benchSrc = new String(Files.readAllBytes(benchSrcPath), StandardCharsets.UTF_8)
+    if (benchSabotage) {
+      benchSrc = benchSrc.replace("local W, H, MAXI = 1024, 1024, 128", "local W, H, MAXI = 1024, 1024, 13")
+      p("!! OCLJ_BENCH_SABOTAGE=1: mandelbrot planted with MAXI=13, so its CHECK")
+      p("!! must NOT match 37904620.  A run that still reports a pass here means")
+      p("!! the checksum assertion is not being enforced.")
+    }
+    Files.write(diskDir.resolve("mandelbrot.lua"), benchSrc.getBytes(StandardCharsets.UTF_8))
+    // 120 nested directories for the component pole.  Nested rather than flat
+    // so the walk makes 120 SEPARATE fs.list calls (one per level); a flat
+    // directory would be a single call and would measure nothing.
+    var wdir = diskDir
+    for (i <- 1 to 120) { wdir = wdir.resolve("d" + i); Files.createDirectories(wdir) }
+    p("planted mandelbrot.lua (" + benchSrc.length + " B" + (if (benchSabotage) ", SABOTAGED" else "") +
+      ") and a 120-deep directory tree")
     val hdd = new HDDManaged(Tier.One)
     hdd.customRealPath = Some(diskDir)
     computer.inventory(3) = hdd
@@ -491,7 +630,11 @@ object Smoke {
 
     computer.inventory(4) = Loot.LuaBiosEEPROM.create()
     computer.inventory(5) = Loot.OpenOsFloppy.create()
-    val screen = ws.add(new Screen(Tier.One))
+    // Tier.Three (160x50), not Tier.One (50x16).  Results come back by reading
+    // fixed screen rows, and a 64-hex sha256 digest does not fit on a 50-column
+    // row -- nor do nine benchmark rows plus the existing nonce/gate/deadline
+    // block fit in 16.  The GPU is already Tier.Three.
+    val screen = ws.add(new Screen(Tier.Three))
     computer.connect(screen)
 
     cpu.setArchitecture(classOf[NativeLua52Architecture])
@@ -570,6 +713,7 @@ object Smoke {
     // "kernel=watchdog" in the log would merely echo -Docljit.kernel, and a
     // classpath mishap that quietly loaded OC's kernel would go unnoticed.
     val kernelSeen = evalStr(mLua, "return tostring(_OCLJ_KERNEL)")
+    val nativeMode = System.getProperty("ocljit.native", "luajit")
     milestone("k0-kernel-observed", (kernelMode == "watchdog") == (kernelSeen == "watchdog"),
       "asked for " + kernelMode + ", raw _G._OCLJ_KERNEL=" + kernelSeen +
         (if ((kernelMode == "watchdog") == (kernelSeen == "watchdog")) ""
@@ -652,6 +796,13 @@ object Smoke {
         "traces completed during boot = " + stops + " (standing hook: ~2500; want < 300)")
       milestone("k3-sandbox-loop-is-compiled", benchS > 0 && benchS < 0.010,
         "sandbox loop best-of-3 = " + benchS + " s (interpreter: 0.017-0.026; standing hook: 0.47; want < 0.010)")
+    } else if (nativeMode == "stock") {
+      // PUC Lua 5.2 has no compiler, so "traces" and "mcode" are not merely
+      // zero, the accessors do not exist.  That absence is this cell's own
+      // control: it is how we know the baseline is a genuinely different VM
+      // and not our native with the JIT switched off.
+      milestone("k2-baseline-has-no-jit", stops == 0 && trRaw.startsWith("<") == false || stops == 0,
+        "PUC 5.2 baseline: traces=" + stops + " (a VM with no compiler cannot thrash)")
     } else if (kernelMode == "stock" && jitMode == "on") {
       milestone("k2-jit-not-thrashing-NEGATIVE-CONTROL", stops >= 300,
         "stock kernel: traces completed during boot = " + stops + " -- the thrash must be SEEN here (want >= 300)")
@@ -729,7 +880,11 @@ object Smoke {
     val wdStats = evalStr(mLua, "local f, r, x, dp, h = _OCLJ_WATCHDOG.stats() return f .. '/' .. r .. '/' .. x .. '/' .. dp .. '/' .. tostring(h)")
     val wdFires = try wdStats.split("/")(0).toInt catch { case _: Throwable => -1 }
     p("WATCHDOG STATS: fires/refires/filtered/depth/hooked = " + wdStats)
-    if (kernelMode == "watchdog")
+    if (nativeMode == "stock")
+      milestone("k5-baseline-has-no-watchdog", wdFires == -1,
+        "PUC 5.2 baseline: _OCLJ_WATCHDOG is absent (stats read " + wdStats + ")" +
+          (if (wdFires == -1) "" else "   <- our native is loaded; this is not a baseline"))
+    else if (kernelMode == "watchdog")
       milestone("k5-watchdog-fired", wdFires >= 1,
         "fires=" + wdFires + " after the timeout probe" + (if (wdFires >= 1) "" else "   <- the deadline was enforced by something other than the watchdog, or not at all"))
     else
@@ -772,6 +927,87 @@ object Smoke {
         "kernel=" + kernelMode + " jit=" + jitMode + ": loop after the timeout = " + b2 + " (must NOT be compiled-fast here)")
     }
 
+    // --- (p0) PHASE 0: the two poles -----------------------------------
+    // The whole point of the ordering: if the compute pole shows no win, the
+    // rest of the benchmark suite is cancelled rather than built.
+    var pw = 0
+    var benchRow = parse(nonEmptyScreen(screen), "OCLJB01")
+    var walkRow = parse(nonEmptyScreen(screen), "OCLJW01")
+    while (pw < 800 && computer.machine.isRunning &&
+           (benchRow == "pending" || benchRow == "<missing>" || walkRow == "pending" || walkRow == "<missing>")) {
+      ws.update(); Thread.sleep(25); pw += 1
+      if (pw % 8 == 0) {
+        val t = nonEmptyScreen(screen)
+        benchRow = parse(t, "OCLJB01"); walkRow = parse(t, "OCLJW01")
+      }
+    }
+    val envRow = parse(nonEmptyScreen(screen), "OCLJENV")
+    p("PHASE0 env=" + envRow + " (totalKB/freeKB)")
+    p("PHASE0 compute=" + benchRow)
+    p("PHASE0 component=" + walkRow)
+    val bParts = benchRow.split("/")
+    val bOk = bParts.length >= 4 && bParts(1) == "ok"
+    val bCheck = if (bParts.length >= 3) bParts(2) else "<none>"
+    val bSecs = try bParts(3).toDouble catch { case _: Throwable => -1.0 }
+    val wParts = walkRow.split("/")
+    val wDirs = try wParts(0).toInt catch { case _: Throwable => -1 }
+    val wSecs = try wParts(1).toDouble catch { case _: Throwable => -1.0 }
+
+    // The checksum is the whole defence against a fast wrong answer, and it is
+    // the PUBLISHED reference (bench/results-2026-09-01.md) because this file
+    // is byte-identical to bench/mandelbrot.lua but for its last two lines.
+    val benchSabotaged = System.getenv("OCLJ_BENCH_SABOTAGE") == "1"
+    val checkOk = bOk && bCheck == "37904620"
+    if (benchSabotaged)
+      milestone("p0-compute-checksum-NEGATIVE-CONTROL", !checkOk,
+        "sabotaged mandelbrot returned " + bCheck + "; the checksum MUST reject it" +
+          (if (!checkOk) "   (rejected, as it must be)"
+           else "   <- a wrong answer PASSED: the checksum is not being enforced"))
+    else
+      milestone("p0-compute-checksum", checkOk,
+        "mandelbrot CHECK=" + bCheck + " (published reference 37904620), " + bSecs + " s" +
+          (if (checkOk) "" else "   <- wrong or missing: this cell's time means nothing"))
+
+    milestone("p0-component-walk-ran", wDirs >= 120,
+      "walked " + wDirs + " entries via indirect fs.list calls in " + wSecs +
+        " s of uptime" + (if (wDirs >= 120) "" else "   <- the walk did not reach the planted depth"))
+    p("PHASE0 ROW: native=" + System.getProperty("ocljit.native", "luajit") +
+      " kernel=" + kernelMode + " jit=" + jitMode +
+      "  compute=" + bSecs + "s  component=" + wSecs + "s  env=" + envRow)
+
+    // --- (m1/m2) what the machine costs, and what a save destroys ------
+    // Sampled either side of the persist below.  Both numbers were masked
+    // until the watchdog landed: with traces thrashing there was almost no
+    // mcode to account for and nothing worth flushing.
+    var qm = 0
+    while (computer.machine.isExecuting && qm < 600) { Thread.sleep(10); qm += 1 }
+    val (mc0, mcCap, tr0, jitOn) = jitStats(mLua)
+    p("JIT MEMORY: mcode=" + mc0 + " B of a " + mcCap + " B cap, traces=" + tr0 +
+      ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
+    // The control for "mcode is real" is the JIT being OFF, not the stock
+    // kernel.  The first draft asserted the stock kernel holds ~no mcode and
+    // it FAILED, for a reason worth keeping: stock holds MORE (448 KB / 776
+    // traces against the watchdog's 192 KB / 349).  Thrashing does not stop
+    // the compiler, it stops traces being ENTERED -- so the standing hook was
+    // paying for machine code it could never run.  A wrong guess encoded as a
+    // milestone; the number replaced the guess.
+    if (nativeMode == "stock") {
+      milestone("m1-baseline-has-no-mcode", mc0 == -1,
+        "PUC 5.2 baseline: _OCLJ_JITSTATS is absent, so there is no machine code to " +
+          "be blind to -- the RAM cap sees everything this VM allocates" +
+          (if (mc0 == -1) "" else "   <- our native is loaded; this is not a baseline"))
+    } else if (jitMode == "off") {
+      milestone("m1-mcode-is-real-NEGATIVE-CONTROL", mc0 == 0,
+        "jit=off: mcode=" + mc0 + " B, traces=" + tr0 + " (must be exactly 0)")
+    } else {
+      // 64 KB is one mcode area; less than that means nothing was compiled
+      // and the flush measurement below would be vacuous.
+      milestone("m1-mcode-is-real", mc0 >= 65536,
+        "kernel=" + kernelMode + ": " + mc0 + " B of machine code the RAM cap does not charge for, " +
+          tr0 + " traces, cap " + mcCap + " B" +
+          (if (mc0 >= 65536) "" else "   <- too little compiled to measure a flush against"))
+    }
+
     // --- (f1) persist through OC's own PersistenceAPI ------------------
     p("--- persisting the workspace (eris.persist through OC's PersistenceAPI) ---")
     val nbt = new NBTTagCompound()
@@ -780,6 +1016,53 @@ object Smoke {
     val tPersist = System.currentTimeMillis()
     try ws.save(nbt) catch { case t: Throwable => persistOk = false; persistErr = t.toString }
     val persistMs = System.currentTimeMillis() - tPersist
+    val (mc1, _, tr1, _) = jitStats(mLua)
+    val flushed = mc0 > 0 && mc1 == 0
+    p("JIT MEMORY after persist: mcode=" + mc1 + " B, traces=" + tr1 +
+      (if (flushed) "   <- FLUSHED: the save discarded every compiled trace"
+       else if (mc0 > 0) "   (traces survived the save)" else ""))
+    if (nativeMode == "luajit" && kernelMode == "watchdog" && jitMode == "on")
+      // Not an assertion about WHICH way it goes -- both are legitimate, and
+      // the serializer flushes only when the coroutine is suspended inside a
+      // generic-for loop (eris_lj.c:1209).  What is asserted is that we can
+      // TELL, so the answer is recorded rather than assumed.
+      milestone("m2-persist-flush-observed", mc0 > 0 && mc1 >= 0,
+        "mcode " + mc0 + " -> " + mc1 + " B, traces " + tr0 + " -> " + tr1 +
+          (if (flushed) "  (a world save leaves the machine COLD; it must recompile)"
+           else "  (this save did not trigger the for-in flush)"))
+
+    // --- (m3) how cold is cold? ---------------------------------------
+    // A save flushes every trace, and the machine goes on running.  What it
+    // costs a player is not the flush but the RECOVERY: Minecraft saves every
+    // few minutes, so if a machine needs long to get back to compiled speed it
+    // spends much of its life interpreted.  Let it run and watch the machine
+    // code come back.
+    if (flushed) {
+      var mr = 0
+      var mcBack = 0L
+      var trBack = 0
+      while (mr < 120 && computer.machine.isRunning && mcBack == 0L) {
+        ws.update(); Thread.sleep(25); mr += 1
+        if (mr % 10 == 0) {
+          var qq = 0
+          while (computer.machine.isExecuting && qq < 200) { Thread.sleep(5); qq += 1 }
+          val s = jitStats(mLua); mcBack = s._1; trBack = s._3
+        }
+      }
+      // REPORTED, NOT ASSERTED, and the reason matters.  This watches an IDLE
+      // machine, and an idle OpenOS has nothing hot to compile -- so "no mcode
+      // three seconds after the flush" means "had no work", not "stays
+      // interpreted".  The first version of this asserted mcBack > 0 and the
+      // stock kernel passed it only because thrashing recompiles wastefully:
+      // the milestone would have rewarded the broken build and failed the
+      // working one.  Real recovery has to be measured with a WORKLOAD after
+      // the save, which belongs in the benchmark harness (Step 3), not here.
+      p("JIT MEMORY recovery (idle machine, informational only): mcode back to " +
+        mcBack + " B / " + trBack + " traces after " + mr + " ticks (~" + (mr * 25) +
+        " ms).  An idle machine has nothing to recompile; recovery under load is" +
+        " measured by the benchmark harness, not by this line.")
+    }
+
     val kernelKey = computer.machine.node.address + "_kernel"
     val blob = try findBlob(nbt, kernelKey) catch { case _: Throwable => null }
     milestone("f1-persist-blob", persistOk && blob != null && blob.length > 0,
