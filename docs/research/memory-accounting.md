@@ -457,6 +457,9 @@ units corrected so the workload was **admitted** rather than refused.
 | B — ours, JIT **off** | **not enough memory, 3 of 3** | one `ERROR/not_enough_memory` painted by the driver's own `pcall`, two machines lost |
 | C — ours, JIT **on** | **not enough memory, 3 of 3** | machines lost |
 
+All nine logs are committed at `bench/runs/2026-09-04-sieve-trio/`, because
+these claims rest on the runs individually rather than on an aggregate.
+
 Cell B is the load-bearing one: `JIT PROBE: jit.off() + jit.flush() ->
 jit.status()=false`, so **no trace memory is involved** and this is plain table
 churn against the cap. The kernel is a fresh 8192-entry `flags` table per
@@ -515,7 +518,8 @@ its own instrument.
 Found while auditing the matrix logs for this section, and written down here
 because nothing else in the repository mentions it.
 
-`matrix3/B-strings` — cell B, JIT **off**, so distinct from §8b's JIT-on death:
+`bench/runs/2026-09-04-matrix3-fresh-machine/B-strings.smoke.log` — cell B,
+JIT **off**, so distinct from §8b's JIT-on death:
 
 ```
 strings/ok/12582912-3852468224/1.1043/1.1043/936/1     <- the benchmark SUCCEEDED

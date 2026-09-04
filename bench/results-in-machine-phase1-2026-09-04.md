@@ -26,7 +26,8 @@ benchmark: nine benchmarks in one machine measures accumulated garbage, not the
 benchmarks.
 
 *That reason is real for cell A and does not explain cell B, which this
-document previously claimed it did.* Re-reading the logs: in `matrix/B1`, `B2`,
+document previously claimed it did.* Re-reading the logs: in
+`bench/runs/2026-09-04-matrix-shared-machine/` (`B1`, and `B2`,
 `B3`, `C2` and `C3` the machine died on **`sieve`, the second benchmark**,
 after `mandelbrot` alone, with **926–1003 KB free** — an essentially untouched
 machine. Those were not accumulation; they were `sieve` doing in one benchmark
@@ -152,6 +153,9 @@ machine, three replicates per cell.
 | B — ours, JIT **off** | **`not enough memory` 3 of 3** — one caught by the driver's `pcall`, two machines lost |
 | C — ours, JIT **on** | **`not enough memory` 3 of 3** — machines lost |
 
+All nine logs are committed at `bench/runs/2026-09-04-sieve-trio/`; the 78-run
+matrix above is at `bench/runs/2026-09-04-matrix-rerun-fixed-harness/`.
+
 Cell B is the one that carries the argument: `JIT PROBE: jit.off() +
 jit.flush() -> jit.status()=false`, so **no trace memory is involved at all**
 and this is plain table churn against the cap. The kernel allocates a fresh
@@ -188,8 +192,11 @@ there is nothing but `lj52shim.c:290` returning `NULL`.
 **The earlier "6 runs out of 6" cannot be sourced any more, and that is my
 fault.** Those six logs lived in the matrix output directory, which was cleared
 by an `rm -rf` when the re-run was launched. What survives on disk from before
-today's trio is five shared-machine failures (`matrix/B1,B2,B3,C2,C3`) and two
-fresh-machine ones (`matrix3/B-sieve`, `matrix3/C-sieve`). The trio above
+today's trio is five shared-machine failures (`B1,B2,B3,C2,C3` of
+`bench/runs/2026-09-04-matrix-shared-machine/`) and two fresh-machine ones
+(`B-sieve`, `C-sieve` of `bench/runs/2026-09-04-matrix3-fresh-machine/`). Both
+runs' logs for those cells are committed under `bench/runs/`, so this
+paragraph's evidence cannot evaporate the way the set it replaces did. The trio above
 replaces that evidence with something better — the guard admits the workload
 instead of refusing it — but the destroyed set should not have been destroyed.
 

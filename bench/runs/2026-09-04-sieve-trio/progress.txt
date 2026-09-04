@@ -1,0 +1,13 @@
+A-sieve-r1              58s meter=0.0324   fails=0  sieve/ok/4626000/2.7431/2.9187/719/3
+B-sieve-r1              35s meter=0.0178   fails=6  sieve/pending/-/-1.0000/-1.0000/0/0
+C-sieve-r1              31s meter=0.0052   fails=5  sieve/pending/-/-1.0000/-1.0000/0/0
+--- replicate 1 done 17:49:45 ---
+A-sieve-r2              58s meter=0.0322   fails=0  sieve/ok/4626000/2.6477/2.9022/676/3
+B-sieve-r2              38s meter=0.0165   fails=5  sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+C-sieve-r2              30s meter=0.0046   fails=5  sieve/pending/-/-1.0000/-1.0000/0/0
+--- replicate 2 done 17:51:53 ---
+A-sieve-r3              58s meter=0.0326   fails=0  sieve/ok/4626000/2.8419/3.0764/805/3
+B-sieve-r3              34s meter=0.0179   fails=6  sieve/pending/-/-1.0000/-1.0000/0/0
+C-sieve-r3              30s meter=0.0049   fails=5  sieve/pending/-/-1.0000/-1.0000/0/0
+--- replicate 3 done 17:53:58 ---
+TRIO COMPLETE 17:53:58

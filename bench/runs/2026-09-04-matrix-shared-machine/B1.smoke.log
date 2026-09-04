@@ -1,0 +1,131 @@
+SMOKE| ========================================================================
+SMOKE| OC-LuaJIT smoke test -- OpenOS on LuaJIT, persist, resume
+SMOKE| java=1.8.0_211 amd64  os=Windows 10
+SMOKE| conf=C:/Users/astro/AppData/Local/Temp/ocljit-B1/ocljit.conf
+SMOKE| LuaStateFactory.isAvailable  = true
+SMOKE| LuaStateFactory.include52    = true
+SMOKE| LuaStateFactory.includeLuaJ  = false
+SMOKE| forceNativeLibPathFirst      = 'C:/Users/astro/Downloads/OC-LuaJIT/build/native/libdir'
+SMOKE| computer.lua.allowBytecode   = false
+SMOKE| quarantined, not in the default suite: strings   (run one with OCLJ_BENCH_ONLY=<name>)
+SMOKE| planted 9 more .lua from bench\oc; suite = mandelbrot,sieve,binarytrees,trampoline,matmul,strings2,nqueens,sha256 x3 reps; encore = mandelbrot every 5 s
+SMOKE| planted mandelbrot.lua (1972 B) and a 120-deep directory tree
+SMOKE| hdd real path = C:\Users\astro\AppData\Local\Temp\ocljit-smoke-hdd5112936035059078314 (autorun.lua planted, 19545 bytes)
+SMOKE| architecture pinned to NativeLua52Architecture
+SMOKE| MILESTONE a-lua-state-opens: PASS -- LuaState created after 1 ticks
+SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=314833 after 2 ticks; running=true; lastError=null
+SMOKE| quiesced after 4 spins (isExecuting=false)
+SMOKE| GUARD OK. arch=totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING / fmt=2
+SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=314833  totalMemory=3460561  freeMemory=3115316  used=345245
+SMOKE| MILESTONE k0-kernel-observed: PASS -- asked for watchdog, raw _G._OCLJ_KERNEL=watchdog
+SMOKE| JIT PROBE: jit.off() + jit.flush() -> jit.status()=false
+SMOKE| JIT PROBE: mode=off  attach -> ok
+SMOKE| SCREEN AFTER BOOT (180 ticks, 7.0s, running=true):
+???????????????????????????????????????????????????????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (1024k RAM)                                                                                    ?
+? You can change the text size on screens by changing their resolution - run `resolution 40 16` in the shell. ?
+???????????????????????????????????????????????????????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+pending
+OCLJDEADLINE=pending
+OCLJBENCH=0.0185/2000000/3
+OCLJNONCE=7.5500-729216 OCLJCTR=28
+OCLJGATE=refused/refused/textok/50
+OCLJENV=1024/1002
+OCLJB01=pending
+OCLJW01=pending
+OCLJPDONE=pending OCLJPNOW=- OCLJPCOMPAT=unknown
+OCLJENCORE=pending
+SMOKE| lastError = null
+SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (16 non-empty lines)
+SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=7.5500-729216 counter 28 -> 52 over 60 ticks
+SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5263  sandbox-bench(min-s/iters/reps)=0.0185/2000000/3
+SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: PASS -- JIT off: sandbox loop = 0.0185 s -- interpreter speed, must be >= 0.010
+SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+SMOKE| MILESTONE d2-sandbox-bytecode-gate: PASS -- allowBytecode=false so want refused;  load(string.dump(f))=refused  load(dump, name, "bt")=refused  load(text)=textok  dump bytes=50
+SMOKE| MILESTONE k1-deadline-still-fires: PASS -- kernel=watchdog  pcall(while true do end) -> too_long_without_yielding after 310 ticks   (and the machine survived it: running=true)
+SMOKE| WATCHDOG STATS: fires/refires/filtered/depth/hooked = 1/0/0/0/false
+SMOKE| MILESTONE k5-watchdog-fired: PASS -- fires=1 after the timeout probe
+SMOKE| MILESTONE k4-still-compiled-after-timeout-NEGATIVE-CONTROL: PASS -- kernel=watchdog jit=off: loop after the timeout = 0.0229 (must NOT be compiled-fast here)
+SMOKE| PHASE0 env=1024/980 (totalKB/freeKB)
+SMOKE| PHASE0 compute=mandelbrot/ok/37904620/0.9709/989
+SMOKE| PHASE0 component=132/8.000
+SMOKE| MILESTONE p0-compute-checksum: PASS -- mandelbrot CHECK=37904620 (published reference 37904620), 0.9709 s
+SMOKE| MILESTONE p0-component-walk-ran: PASS -- walked 132 entries via indirect fs.list calls in 8.0 s of uptime
+SMOKE| PHASE0 ROW: native=luajit kernel=watchdog jit=off  compute=0.9709s  component=8.0s  env=1024/980
+SMOKE| PHASE1 .. -
+SMOKE| PHASE1 .. mandelbrot#1
+SMOKE| PHASE1 .. mandelbrot#2
+SMOKE| MILESTONE p1-suite-complete: FAIL -- driver reported OCLJPDONE=pending for 8 benchmarks   <- the suite did not finish; rows below are partial
+SMOKE| PHASE1 compat path in-sandbox: operators
+SMOKE| MILESTONE p1-compat-path-known: PASS -- sandbox bit-ops implementation = operators
+SMOKE| PHASE1 rows: name/status/CHECK/min/max/freeKB/reps
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  mandelbrot/ok/37904620/0.9044/0.9312/1003/3
+SMOKE| MILESTONE p1-mandelbrot: PASS -- mandelbrot CHECK=37904620 (reference 37904620), min 0.9044 s / max 0.9312 s over 3 reps, 1003 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  sieve/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-sieve: FAIL -- sieve CHECK=- (reference 4626000), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  binarytrees/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-binarytrees: FAIL -- binarytrees CHECK=- (reference 7038400), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  trampoline/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-trampoline: FAIL -- trampoline CHECK=- (reference 247388), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  matmul/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-matmul: FAIL -- matmul CHECK=- (reference 481.0000), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  strings2/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-strings2: FAIL -- strings2 CHECK=- (reference 12582912-3852468224), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  nqueens/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-nqueens: FAIL -- nqueens CHECK=- (reference 85200), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=off  sha256/pending/-/-1.0000/-1.0000/0/0
+SMOKE| MILESTONE p1-sha256: FAIL -- sha256 CHECK=- (reference 4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d), min -1.0000 s / max -1.0000 s over 0 reps, 0 KB free after   <- pending: -
+SMOKE| JIT MEMORY: mcode=0 B of a 2097152 B cap, traces=0, jit=false  (the RAM cap cannot see any of this)
+SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+SMOKE| ENCORE warm: <none>, best of -1 samples = -1.0 s
+SMOKE| --- persisting the workspace (eris.persist through OC's PersistenceAPI) ---
+SMOKE| JIT MEMORY after persist: mcode=0 B, traces=0
+SMOKE| MILESTONE f1-persist-blob: PASS -- persist ok=true err= key=9cdc03b2-c6f7-47cb-bfc2-b0b766c9b20b_kernel blobBytes=50 in 29ms
+SMOKE| --- restoring into a fresh workspace ---
+SMOKE| restored machine running=false lastError=not enough memory
+SMOKE| SCREEN AFTER RESTORE (0 ticks, 24.2s, running=false):
+???????????????????????????????????????????????????????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (1024k RAM)                                                                                    ?
+? You can change the text size on screens by changing their resolution - run `resolution 40 16` in the shell. ?
+???????????????????????????????????????????????????????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+OCLJBENCH2=0.0229
+OCLJDEADLINE=too_long_without_yielding
+OCLJBENCH=0.0185/2000000/3
+OCLJNONCE=7.5500-729216 OCLJCTR=97
+OCLJGATE=refused/refused/textok/50
+OCLJENV=1024/2
+OCLJB01=mandelbrot/ok/37904620/0.9709/989
+OCLJW01=132/8.000
+OCLJPDONE=pending OCLJPNOW=mandelbrot#3 OCLJPCOMPAT=operators
+OCLJP01=mandelbrot/ok/37904620/0.9044/0.9312/1003/3
+OCLJP02=sieve/pending/-/-1.0000/-1.0000/0/0
+OCLJP03=binarytrees/pending/-/-1.0000/-1.0000/0/0
+OCLJP04=trampoline/pending/-/-1.0000/-1.0000/0/0
+OCLJP05=matmul/pending/-/-1.0000/-1.0000/0/0
+OCLJP06=strings2/pending/-/-1.0000/-1.0000/0/0
+OCLJP07=nqueens/pending/-/-1.0000/-1.0000/0/0
+OCLJP08=sha256/pending/-/-1.0000/-1.0000/0/0
+OCLJENCORE=pending
+SMOKE| restored lastError = not enough memory
+SMOKE| MILESTONE f2-restore-same-vm: PASS -- boot nonce before=7.5500-729216 after=7.5500-729216 (identical=true) 
+SMOKE| MILESTONE f3-restore-counter-continues: FAIL -- counter at persist=97, after restore=97 (advanced=false); running=false
+SMOKE| MILESTONE f5-restore-memory-still-accounted: FAIL -- kernelMemory after restore = 0   <- restored kernelMemory is not a real measurement
+SMOKE| MILESTONE f4-restore-no-error: FAIL -- restored lastError=not enough memory
+SMOKE| --- allowBytecode gate (on a private LuaState) ---
+SMOKE| MILESTONE g1-bytecode-refused-with-mode-t: PASS -- mode="t" on a chunk starting 0x1B -> rejected: attempt to load chunk with wrong mode
+SMOKE| MILESTONE g1b-rejected-load-leaks-no-stack: PASS -- stack top before=0 after=0
+SMOKE| MILESTONE g2-text-still-loads-with-mode-t: PASS -- mode="t" on Lua source -> loaded and returned 2
+SMOKE| MILESTONE g3-eris-internal-bytecode-path-open: PASS -- eris.persist+unpersist of a cyclic table and a closure -> 144/true/42
+SMOKE| MILESTONE e1-accounting-live: PASS -- fresh private state: total=2147483647 free=2147440775 used=42872
+SMOKE| MILESTONE e2-freemem-falls: PASS -- after 20000 tables: used 42872 -> 2063966 (+2021094 bytes)
+SMOKE| MILESTONE e3-gc-credits-frees: PASS -- after dropping the reference and a full GC: used 2063966 -> 40690 (-2023276 of 2021094 reclaimed)
+SMOKE| MILESTONE e4-oom-at-the-cap: PASS -- cap 40690 -> 302834; unbounded allocation ended at used=302834; threw=LuaMemoryAllocationException: not enough memory   (process alive: the bare-frame ERRMEM did not escape)
+SMOKE| FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING / fmt=2
+SMOKE| CHECKS: 38   FAILURES: 11   WALL: 24.2s
+SMOKE| VERDICT: FAIL
+SMOKE| ========================================================================

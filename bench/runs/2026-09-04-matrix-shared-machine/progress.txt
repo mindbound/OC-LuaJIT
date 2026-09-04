@@ -1,0 +1,21 @@
+=== 23:49:22  START A1 ===
+=== 23:50:34  END   A1 rc=1 fails=1 ===
+=== 23:50:34  START B1 ===
+=== 23:51:11  END   B1 rc=1 fails=11 ===
+=== 23:51:11  START C1 ===
+=== 23:58:12  END   C1 rc=1 fails=12 ===
+=== 23:58:13  START A2 ===
+=== 23:59:56  END   A2 rc=1 fails=2 ===
+=== 23:59:56  START B2 ===
+=== 00:00:28  END   B2 rc=1 fails=11 ===
+=== 00:00:28  START C2 ===
+=== 00:01:03  END   C2 rc=1 fails=11 ===
+=== 00:01:03  START A3 ===
+=== 00:02:44  END   A3 rc=1 fails=2 ===
+=== 00:02:44  START B3 ===
+=== 00:03:24  END   B3 rc=1 fails=11 ===
+=== 00:03:24  START C3 ===
+=== 00:04:01  END   C3 rc=1 fails=11 ===
+=== 00:04:01  START STR ===
+=== 00:04:35  END   STR rc=1 fails=6 ===
+=== 00:04:35  MATRIX COMPLETE ===
