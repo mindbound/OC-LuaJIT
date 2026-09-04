@@ -118,6 +118,11 @@ object Smoke {
     println(nonEmptyScreen(screen))
   }
 
+  /** jitStats under the executor's monitor -- same reasoning as evalStrLocked. */
+  def jitStatsLocked(machine: totoro.ocelot.brain.entity.machine.Machine,
+                     lua: LuaState): (Long, Long, Int, Boolean) =
+    machine.synchronized { jitStats(lua) }
+
   def jitStats(lua: LuaState): (Long, Long, Int, Boolean) = {
     val s = evalStr(lua, "local m, c, t, on = _OCLJ_JITSTATS() " +
       "return string.format('%d/%d/%d/%s', m, c, t, tostring(on))")
@@ -128,6 +133,41 @@ object Smoke {
   }
 
   /** Evaluate a text chunk in the live state and return its single result. */
+  /**
+   * Read the raw LuaState under the SAME monitor ocelot-brain's executor takes.
+   *
+   * THE HARNESS WAS RACING THE MACHINE, and quiesced() did not stop it -- that
+   * helper checks isExecuting, but Machine.switchTo(Yielded) arms a thread-pool
+   * resume `executionDelay` ms out BEFORE the state leaves Running, so a false
+   * from isExecuting means "a resume is already scheduled", not "no resume can
+   * happen".  Measured: a deliberate 50 ms widening of the window inside
+   * evalStr, applied at the watchdog-stats read alone, took the wedge rate from
+   * 0.28 to 4 runs out of 4, and the machine's state was observed transitioning
+   * Yielded -> SynchronizedCall *during* the read.  Roughly one run in four was
+   * being lost to this across every measurement in the project.
+   *
+   * Machine.run() is `Machine.this.synchronized` -- ocelot-brain's own words
+   * are "a really high level lock that we only use for saving and loading" --
+   * and save/load take it too.  Taking it here serialises the harness against
+   * the executor instead of guessing when the executor is idle.
+   *
+   * Wrap only the individual read.  Holding this across a ws.update() loop
+   * would deadlock the machine it is trying to observe.
+   */
+  def evalStrLocked(machine: totoro.ocelot.brain.entity.machine.Machine,
+                    lua: LuaState, code: String): String =
+    machine.synchronized {
+      val before = try lua.getTop catch { case _: Throwable => -1 }
+      if (before != 1)
+        p("!! raw-state read on a dirty stack: getTop=" + before +
+          " (expected 1) -- something else is using this state")
+      val r = evalStr(lua, code)
+      val after = try lua.getTop catch { case _: Throwable => -1 }
+      if (after != before)
+        p("!! raw-state read left the stack at " + after + ", was " + before)
+      r
+    }
+
   def evalStr(lua: LuaState, code: String): String = {
     // getTop INSIDE the try.  It used to sit above it, and on a machine that
     // had already crashed it threw IllegalStateException("Lua state is
@@ -675,9 +715,29 @@ object Smoke {
       |  -- ones.  The 2x came from LuaJIT letting the heap reach twice the LIVE
       |  -- set before a cycle completes, which is a statement about the live
       |  -- set and not about a total that already includes the base.
-      |  local freeKB = math.floor(computer.freeMemory() / 1024)
+      |  -- UNITS.  manifest.peak is REAL KB (peak-inband.lua, standalone,
+      |  -- collectgarbage("count")); computer.freeMemory() is real free
+      |  -- DIVIDED by ramScaleFor64Bit -- see the comment where the manifest
+      |  -- is written.  Multiply back, or this compares 1155 against 977 and
+      |  -- skips a benchmark the machine had 2.5x the room for.
+      |  local scale = manifest.ramScale or 1
+      |  local freeKB = math.floor(computer.freeMemory() / 1024 * scale)
       |  local peak = (manifest.peak or {})[name] or 0
       |  local need = peak + 128
+      |  -- AND THE PEAK IS AN UNDERCOUNT, always, by construction.  Every
+      |  -- sampler is a GC safepoint, so the figure tracks the sample rate:
+      |  -- sieve reads 440.8 KB from a hook every 10000 instructions, 1143.6
+      |  -- from one sample per repetition, and UNSAMPLED its heap ON RETURN
+      |  -- at REPS=1500 is 1205.7 -- above the sampled "peak", which a peak
+      |  -- cannot be.  lj_gc.c:752-753 pins threshold = gc.total once the
+      |  -- collector is behind, so behind is where it stays and the heap
+      |  -- climbs until the cap stops it.  There is no peak to guard on.
+      |  --
+      |  -- So this is a BACKSTOP, not a predictor.  What actually protects the
+      |  -- suite from a machine-killer is the `!` quarantine in
+      |  -- references.txt, which records what has been OBSERVED to kill a
+      |  -- machine instead of trying to predict it from a number that does not
+      |  -- exist.  sieve and strings are both quarantined for that reason.
       |  -- manifest.guard is false for the PUC baseline; see the comment where
       |  -- the manifest is generated.  PUC collects and retries when an
       |  -- allocation is refused, so it does not need this, and its
@@ -1107,6 +1167,29 @@ object Smoke {
     // which is right on both counts: it does not need one, and the number it
     // would be handed is not a measure of what is available.
     mfst.append(",\n  guard = ").append(if (System.getProperty("ocljit.native", "luajit") == "stock") "false" else "true")
+    // THE GUARD'S TWO SIDES WERE IN DIFFERENT UNITS, and it took the direction
+    // that refuses.  manifest.peak is measured standalone by
+    // bench/oc/checks/peak-inband.lua through collectgarbage("count"), which
+    // counts REAL KB.  computer.freeMemory() does not: ocelot-brain's
+    // NativeLuaArchitecture charges real bytes against the cap
+    //
+    //     :145  setTotalMemory(kernelMemory + ceil(memoryBytes * ramScale))
+    //
+    // and then DIVIDES on the way back out to the sandbox
+    //
+    //     :161  freeMemory = ((getFreeMemory min (getTotalMemory - kernelMemory)) / ramScale)
+    //
+    // Once anything is allocated getFreeMemory is below memoryBytes*ramScale,
+    // so the min resolves to the real free figure and what the sandbox reads
+    // is exactly realFree / ramScale.  At the pinned 3.0 that made the guard
+    // test sieve's 1155 REAL KB against 977 SCALED KB -- a 3x error, and in
+    // the direction that skips a benchmark the machine had room for.
+    //
+    // Publish the scale so the guard can put both sides in real KB.  It is
+    // Settings.get.ramScaleFor64Bit that NativeLuaArchitecture:315 reads, and
+    // it applies only for a pointer width >= 8; our native is GC64, so always.
+    // Reached fully-qualified to match :978-987, which needs no import.
+      .append(",\n  ramScale = ").append(totoro.ocelot.brain.Settings.get.ramScaleFor64Bit)
       .append(",\n}\n")
     Files.write(diskDir.resolve("manifest.lua"), mfst.toString.getBytes(StandardCharsets.UTF_8))
     p("planted " + plantedN + " more .lua from " + benchDirPath + "; suite = " +
@@ -1207,7 +1290,7 @@ object Smoke {
     // raw _G as its first act; OC's does not.  Without this, every
     // "kernel=watchdog" in the log would merely echo -Docljit.kernel, and a
     // classpath mishap that quietly loaded OC's kernel would go unnoticed.
-    val kernelSeen = evalStr(mLua, "return tostring(_OCLJ_KERNEL)")
+    val kernelSeen = evalStrLocked(computer.machine, mLua, "return tostring(_OCLJ_KERNEL)")
     val nativeMode = System.getProperty("ocljit.native", "luajit")
     milestone("k0-kernel-observed", (kernelMode == "watchdog") == (kernelSeen == "watchdog"),
       "asked for " + kernelMode + ", raw _G._OCLJ_KERNEL=" + kernelSeen +
@@ -1217,8 +1300,8 @@ object Smoke {
     quiesced(computer.machine, "the JIT probe read-out")
     if (jitMode == "off")
       p("JIT PROBE: jit.off() + jit.flush() -> jit.status()=" +
-        evalStr(mLua, "jit.off() jit.flush() return tostring(jit.status())"))
-    p("JIT PROBE: mode=" + jitMode + "  attach -> " + evalStr(mLua,
+        evalStrLocked(computer.machine, mLua, "jit.off() jit.flush() return tostring(jit.status())"))
+    p("JIT PROBE: mode=" + jitMode + "  attach -> " + evalStrLocked(computer.machine, mLua,
       "__ocljTr = {start=0, stop=0, abort=0, flush=0} " +
       "__ocljTrFn = function(what) local t = __ocljTr t[what] = (t[what] or 0) + 1 end " +
       "jit.attach(__ocljTrFn, 'trace') return 'ok'"))
@@ -1261,9 +1344,9 @@ object Smoke {
     val bootMs = tBootShell - tBootStart
     var qk = 0
     quiesced(computer.machine, "the k-milestone read-out")
-    val trRaw = evalStr(mLua, "local t = __ocljTr return t.start .. '/' .. t.stop .. '/' .. t.abort .. '/' .. t.flush")
-    val jitStatus = evalStr(mLua, "return tostring(jit.status())")
-    evalStr(mLua, "jit.attach(__ocljTrFn) __ocljTr = nil __ocljTrFn = nil return 'ok'")
+    val trRaw = evalStrLocked(computer.machine, mLua, "local t = __ocljTr return t.start .. '/' .. t.stop .. '/' .. t.abort .. '/' .. t.flush")
+    val jitStatus = evalStrLocked(computer.machine, mLua, "return tostring(jit.status())")
+    evalStrLocked(computer.machine, mLua, "jit.attach(__ocljTrFn) __ocljTr = nil __ocljTrFn = nil return 'ok'")
     val bench = parse(txtA2, "OCLJBENCH")
     p("JIT PROBE: kernel=" + kernelMode + "  mode=" + jitMode + "  jit.status()=" + jitStatus +
       "  traces start/stop/abort/flush=" + trRaw +
@@ -1372,9 +1455,14 @@ object Smoke {
     // fire; in stock mode the kernel never arms, so all three must be zero.
     // If this one probes a running machine it does not merely misreport --
     // it corrupted the stack badly enough to break the persist that follows.
-    val wdStats =
-      if (!quiesced(computer.machine, "the watchdog stats read-out")) "<not-quiesced>"
-      else evalStr(mLua, "local f, r, x, dp, h = _OCLJ_WATCHDOG.stats() return f .. '/' .. r .. '/' .. x .. '/' .. dp .. '/' .. tostring(h)")
+    val wdStats = {
+      // quiesced() is kept as a DIAGNOSTIC only.  It reports whether the
+      // machine looked idle; it does not make the read safe, and believing it
+      // did cost about one run in four.  evalStrLocked is what makes it safe.
+      quiesced(computer.machine, "the watchdog stats read-out")
+      evalStrLocked(computer.machine, mLua,
+        "local f, r, x, dp, h = _OCLJ_WATCHDOG.stats() return f .. '/' .. r .. '/' .. x .. '/' .. dp .. '/' .. tostring(h)")
+    }
     val wdFires = try wdStats.split("/")(0).toInt catch { case _: Throwable => -1 }
     p("WATCHDOG STATS: fires/refires/filtered/depth/hooked = " + wdStats)
     if (nativeMode == "stock")
@@ -1552,11 +1640,41 @@ object Smoke {
       // row.  Reported naively that looks like every benchmark failing, which
       // is how two rows of the Phase 1 table were lost.
       //
-      // It is not our bug -- cell A runs OC's stock kernel, and this is the
-      // standing-hook pathology the watchdog exists to remove, in its
-      // post-timeout form.  Cells B and C cannot hit it.  So the run is
-      // declared VOID and its benchmark rows are not judged: a discarded run
-      // is honest, a run reported as eight benchmark failures is not.
+      // ROOT-CAUSED 2026-09-04, AND IT WAS THIS HARNESS.  Three explanations
+      // were tried and all three were wrong: a paint error killing the
+      // heartbeat (refuted, OCLJPERR=0:none), timers lost inside the deadline
+      // callback (refuted, the machine ran no timers at all), and OC's
+      // post-timeout count=1 hook never being cleared (refuted -- lj52_wd_disarm
+      // clears it, and a machine crawling under a per-instruction hook could
+      // not report isExecuting=false on the first poll, which every wedged run
+      // did).
+      //
+      // It was the harness reading the raw LuaState while ocelot-brain's
+      // executor was using it.  quiesced() does not prevent that: switchTo
+      // (Yielded) arms a thread-pool resume `executionDelay` ms out BEFORE the
+      // state leaves Running, so !isExecuting means "a resume is already
+      // scheduled".  Proven both ways -- widening the window inside evalStr by
+      // 50 ms took the wedge rate to 4 of 4, with the machine observed moving
+      // Yielded -> SynchronizedCall DURING the read; taking the executor's own
+      // monitor (evalStrLocked) took it to 0 of 20 with the marker rate
+      // unchanged.
+      //
+      // The detector below stays, because a machine can still fail to progress
+      // for reasons we have not met yet -- but it no longer names a cause.  A cell-C run
+      // (kernel=watchdog) hobbled with the same signature, and matrix3's
+      // C-matmul had burned 453 s the same way before that.  The reason is in
+      // native/kernel/patch-machine-lua.lua's own header: the patcher replaces
+      // the three ARM sites but deliberately leaves checkDeadline's post-expiry
+      // debug.sethook(co, checkDeadline, "", 1) alone, reasoning that it only
+      // runs after the deadline has passed and that disarm() clears it.  When
+      // that disarm loses the race, the count=1 hook stays armed and any cell
+      // crawls.  So this is OUR kernel too, and clearing that re-arm properly
+      // is a real fix available to us -- unlike the stock kernel, which we do
+      // not control.
+      //
+      // Either way the run is declared VOID and its rows are not judged: a
+      // discarded run is honest, a run reported as eight benchmark failures is
+      // not.
       //
       // The predictor is exact in the four runs that established it: every
       // hobbled run had k4's post-timeout loop time missing, every healthy one
@@ -1570,9 +1688,11 @@ object Smoke {
       if (hobbled) {
         p("PHASE1 VOID: the machine was hobbled, not the benchmark -- " +
           f"$tickRate%.2f" + " heartbeat ticks/s over " + f"$twall%.0f" + " s (healthy: 3-4/s) " +
-          "on a 0.05 s timer.  OC's stock kernel left its post-timeout count=1 hook armed; " +
-          "the run is DISCARDED, not failed.  Re-run it.")
-        milestone("p1-run-VOID-stock-kernel-hook-not-cleared", ok = false,
+          "on a 0.05 s timer.  The run is DISCARDED, not failed.  Re-run it.  " +
+          "The known cause of this -- the harness reading the raw Lua state " +
+          "while the executor thread was using it -- was fixed by evalStrLocked. " +
+          "If this fires again it is something new; capture the log.")
+        milestone("p1-run-VOID-machine-not-progressing", ok = false,
           "this run produced no usable benchmark data and its rows are not judged: the " +
             "machine ran at " + f"$tickRate%.2f" + " ticks/s.  Not a benchmark result; re-run.")
       } else
@@ -1630,7 +1750,7 @@ object Smoke {
     // until the watchdog landed: with traces thrashing there was almost no
     // mcode to account for and nothing worth flushing.
     val (mc0, mcCap, tr0, jitOn) =
-      if (quiesced(computer.machine, "the mcode read-out")) jitStats(mLua)
+      if (quiesced(computer.machine, "the mcode read-out")) jitStatsLocked(computer.machine, mLua)
       else (-1L, -1L, -1, false)
     p("JIT MEMORY: mcode=" + mc0 + " B of a " + mcCap + " B cap, traces=" + tr0 +
       ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
@@ -1692,7 +1812,7 @@ object Smoke {
     val tPersist = System.currentTimeMillis()
     try ws.save(nbt) catch { case t: Throwable => persistOk = false; persistErr = t.toString }
     val persistMs = System.currentTimeMillis() - tPersist
-    val (mc1, _, tr1, _) = jitStats(mLua)
+    val (mc1, _, tr1, _) = jitStatsLocked(computer.machine, mLua)
     val flushed = mc0 > 0 && mc1 == 0
     p("JIT MEMORY after persist: mcode=" + mc1 + " B, traces=" + tr1 +
       (if (flushed) "   <- FLUSHED: the save discarded every compiled trace"

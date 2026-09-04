@@ -302,9 +302,28 @@ if (newblock == NULL && nsize > 0) {
 ```
 
 LuaJIT's `lj_mem_realloc` throws immediately. Under a hard cap this is a real
-behavioural divergence: LuaJIT's collector lets the heap grow to ~2× the live
-set before finishing a cycle (`LUAI_GCPAUSE 200`), so a machine can be refused
-while holding a heap-full of garbage that a collection would have reclaimed.
+behavioural divergence: a machine can be refused while holding a heap-full of
+garbage that a collection would have reclaimed.
+
+**How much garbage was stated far too conservatively here, and it is worth
+correcting because the understatement is what made this look academic.** This
+paragraph used to say the heap grows "to ~2× the live set before finishing a
+cycle (`LUAI_GCPAUSE 200`)". Measured in a machine on `sieve` (the trio of
+2026-09-04, cell B, `jit.status()=false` after a `jit.flush()` so no traces are
+involved):
+
+| | |
+|---|---:|
+| program budget — `totalMemory 3467681` − `kernelMemory 321953` | 3072 real KB |
+| free at boot | 3042 real KB |
+| live set, collect-then-count, every REPS in every sampling mode | **52.4 KB** |
+
+The machine died of memory, so the heap reached roughly **58× its live set**,
+and the only thing that stopped it there was the cap. `LUAI_GCPAUSE` does not
+bound this, because `lj_gc.c:752-753` pins `threshold = gc.total` once the
+collector has fallen behind: behind is where it stays, and under sustained
+churn the heap climbs until something external stops it. A pause multiplier
+bounds a collector that is keeping up.
 
 Two things were tried:
 
@@ -425,6 +444,101 @@ is incremental, and one cycle is not a full sweep. The conclusion (the twin is
 not runnable in a 1 MB machine) survives; the mechanism behind it does not, and
 the difference matters, because churn is something an emergency GC fixes and
 pinned live state is not.
+
+### 8c. The sieve trio: PUC completes what we die on, 3 of 3 against 3 of 3
+
+`sieve` at the shipped `N, REPS = 8192, 4500`, one benchmark per freshly booted
+1 MB machine, three replicates per cell, run 2026-09-04 with the RAM guard's
+units corrected so the workload was **admitted** rather than refused.
+
+| cell | outcome | detail |
+|---|---|---|
+| A — PUC 5.2 | **completes, 3 of 3** | `4626000`, 2.65–2.84 s, 676–805 KB free |
+| B — ours, JIT **off** | **not enough memory, 3 of 3** | one `ERROR/not_enough_memory` painted by the driver's own `pcall`, two machines lost |
+| C — ours, JIT **on** | **not enough memory, 3 of 3** | machines lost |
+
+Cell B is the load-bearing one: `JIT PROBE: jit.off() + jit.flush() ->
+jit.status()=false`, so **no trace memory is involved** and this is plain table
+churn against the cap. The kernel is a fresh 8192-entry `flags` table per
+repetition — about 64 KB of garbage each, 4500 times, with exactly one of them
+live at any instant.
+
+**This is §8's divergence as a program rather than an argument.** PUC's
+`luaM_realloc_` calls `luaC_fullgc(L, 1)` and retries; at the wall it finds a
+heap that is over 98% dead and continues. `lj_mem_realloc` calls `lj_err_mem`
+on the first refusal — "emergency" appears nowhere in the LuaJIT tree — and the
+machine stops.
+
+**A player has no way to work around it.** `machine.lua` builds the sandbox
+global table at `:737` and **`collectgarbage` is not in it**. The only
+`collectgarbage` in that file is the kernel's own at `:1526`, a full collect
+every tenth resume, gated on `persistKey` and fired *between* resumes — and
+`sieve` finishes inside a single resume (2.7 s against OC's 5 s deadline), so
+none fires anywhere during it. Between sandbox code and the wall there is
+nothing but `lj52shim.c:290` returning `NULL`.
+
+That also means the obvious cheap experiment — emulate an emergency collector
+in Lua and see whether the garbage is reclaimable — **cannot be run in a
+machine**. It does not need to be: the `liveKB` column of the standalone sweep
+is produced by collecting and then counting, which is precisely the outcome an
+emergency collect would produce, and it reads 52.4–52.5 KB at REPS 5, 100, 500,
+1500 and 4500 in all three sampling modes. Reclaimability is measured, not
+conjectured.
+
+#### What the guard was doing, and why `sieve` is now quarantined by hand
+
+The six `sieve` cells of the re-run Phase 1 matrix came back `SKIP-LOWMEM`
+rather than dead, and that was **a units bug in the harness, not the guard
+working**. `references.txt`'s peak column is real KB; `computer.freeMemory()`
+is real free divided by `ramScaleFor64Bit` (`NativeLuaArchitecture.scala:161`,
+against the cap set at `:145`). A machine advertising 1024 KB holds 3072 real
+KB, and the guard was testing 1155 real against ~977 scaled.
+
+Fixing it does not rescue the guard, because **the peak it guards on does not
+exist**. Every sampler is a GC safepoint, so the figure tracks the sample rate:
+
+| sieve, same file | reported peak |
+|---|---:|
+| count hook, every 10000 instructions | 440.8 KB |
+| in-band, once per repetition | 1143.6 KB |
+| no sampling — heap *on return* at REPS=1500 | **1205.7 KB** |
+
+The unsampled heap at return exceeds the sampled *peak*, which a peak cannot
+do, so even the in-band figure is short; in a machine it goes past 3042 KB.
+`sieve` is therefore quarantined in `references.txt` by hand, as `strings`
+already was — quarantine records what has been **observed** to kill a machine,
+where the guard was trying to predict it from a number that is an artifact of
+its own instrument.
+
+### 8d. A third memory failure, on the persistence path, previously unrecorded
+
+Found while auditing the matrix logs for this section, and written down here
+because nothing else in the repository mentions it.
+
+`matrix3/B-strings` — cell B, JIT **off**, so distinct from §8b's JIT-on death:
+
+```
+strings/ok/12582912-3852468224/1.1043/1.1043/936/1     <- the benchmark SUCCEEDED
+JIT MEMORY: mcode=0 B, traces=0, jit=false
+restored machine running=true lastError=null            936 -> 968 KB free
+restored lastError = not enough memory                  <- then this
+MILESTONE m3-post-save-workload-resumes: FAIL
+MILESTONE f4-restore-no-error:            FAIL
+```
+
+The benchmark completed with a correct checksum and 936 KB free. The machine
+was saved, restored clean, and then the **encore** — the repeating timer that
+rides through `eris` holding a closure, which is how post-save recovery is
+measured at all — re-ran the workload and exhausted memory.
+
+Two things make this worth its own entry rather than a footnote to §8b. It is
+**JIT off**, so it is not the pinned-trace mechanism. And it happens **after a
+restore**, which is the one path where the heap's shape is not something the
+program produced incrementally — it is whatever `eris` rebuilt. Whether the
+restored heap starts denser than a booted one, and whether that is what pushed
+this over, is not established here. It should be measured before the emergency
+GC is designed, because a collector that fires at the wall behaves differently
+depending on how much of the heap is genuinely live at that moment.
 
 ## 9. Calibration: OC's stock RAM scale is not enough
 

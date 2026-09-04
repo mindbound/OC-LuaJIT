@@ -58,7 +58,6 @@
 # not fit belongs at the end.
 
 mandelbrot   37904620                                                         58
-sieve        4626000                                                        1155
 binarytrees  7038400                                                         221
 trampoline   247388                                                           78
 matmul       481.0000                                                        240
@@ -68,6 +67,32 @@ sha256       4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d 88
 
 # QUARANTINED -----------------------------------------------------------------
 #
+# The sieve, at the REPS this directory ships.  It KILLS A MACHINE ON OUR
+# NATIVE and runs on PUC, measured 2026-09-04 with the guard's units corrected
+# so that it was admitted rather than refused -- three replicates per cell:
+#
+#     A  PUC 5.2        ok 4626000, 2.65-2.84 s, 676-805 KB free   3 of 3
+#     B  ours, JIT off  not enough memory                          3 of 3
+#     C  ours, JIT on   not enough memory                          3 of 3
+#
+# Cell B ran with jit.status()=false after a jit.flush(), so no trace memory is
+# involved: this is plain table churn against the cap.  The live set is 52.4 KB
+# and the program budget is 3072 real KB, so the heap reached ~58x its live set
+# before the cap stopped it.  See docs/research/memory-accounting.md section 8.
+#
+#     OCLJ_BENCH_ONLY=sieve test/native/smoke-test.sh
+#
+# IT IS QUARANTINED BY HAND RATHER THAN LEFT TO THE GUARD, because the guard
+# cannot see this coming.  Its peak column is an undercount by construction --
+# every sampler is a GC safepoint, so the figure tracks the sample rate, and
+# sieve reads 440.8 KB from a hook, 1143.6 KB from one sample per repetition,
+# and unsampled at REPS=1500 its heap ON RETURN is 1205.7 KB, above the sampled
+# "peak", which a peak cannot be.  In a machine, unsampled, it goes past 3042
+# KB.  There is no peak to guard on; quarantine records what was OBSERVED to
+# kill a machine instead of predicting it from a number that does not exist.
+
+!sieve       4626000                                                        1155
+
 # The naive half of the strings pair.  Same computation and the SAME CHECK as
 # strings2 -- two codings agreeing on one value is the suite's only oracle that
 # does not rest on a single implementation -- but the recorder answers its
@@ -107,10 +132,45 @@ sha256       4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d 88
 #
 # AN UNDER-ESTIMATE IS THE DANGEROUS DIRECTION and this one did real damage.
 # At 312 KB the guard asked for 440 KB free and let sieve start in a machine
-# with ~890 KB -- and sieve then killed that machine 6 runs out of 6
-# (bench/results-in-machine-phase1-2026-09-04.md).  At a truthful 1155 KB it
-# asks for 1283 KB, more than a 1024 KB machine has, and skips the row: which
-# is precisely the outcome the guard exists to produce.
+# with ~890 KB, and sieve then killed it.
+#
+# CORRECTED 2026-09-04, LATER THE SAME DAY.  This block used to end by saying
+# that at a truthful 1155 KB the guard "asks for 1283 KB, more than a 1024 KB
+# machine has, and skips the row: which is precisely the outcome the guard
+# exists to produce."  That skip was A UNITS BUG, not the guard working.
+#
+#   * this column is REAL KB -- peak-inband.lua runs standalone and reads
+#     collectgarbage("count")
+#   * the guard was reading computer.freeMemory(), which ocelot-brain DIVIDES
+#     by ramScaleFor64Bit on the way out to the sandbox
+#     (NativeLuaArchitecture.scala:161), against a cap set as
+#     kernelMemory + memoryBytes*ramScale at :145
+#
+# So a machine advertising 1024 KB has 1024 x 3.0 = 3072 REAL KB, and the
+# guard was comparing 1155 real against ~977 scaled -- off by 3x, in the
+# direction that refuses.  It skipped sieve in six cells of the Phase 1 matrix
+# for no reason: the machine had 2.5x the room.  The guard now multiplies by
+# manifest.ramScale so both sides are real KB.
+#
+# AND THE DEEPER PROBLEM IS THAT THIS COLUMN CANNOT BE MADE RIGHT.  Every
+# sampler is a GC safepoint, so the number tracks the SAMPLE RATE and is always
+# an undercount.  sieve, same file, three rates:
+#
+#     hook, every 10000 instructions      440.8 KB
+#     in-band, once per repetition       1143.6 KB
+#     no sampling at all                 heap ON RETURN at REPS=1500 is 1205.7
+#
+# A peak cannot be below a value the heap demonstrably held, so even the
+# in-band figure is short.  In a machine, unsampled, sieve goes past 3042 KB --
+# 2.6x this column and ~58x its own 52.4 KB live set -- because lj_gc.c:752-753
+# pins threshold = gc.total once the collector is behind, so behind is where it
+# stays and the heap climbs until the cap stops it.
+#
+# THE COLUMN IS THEREFORE A BACKSTOP, NOT A PREDICTOR, and what actually keeps
+# a machine-killer out of the suite is the `!` quarantine above -- a record of
+# what was OBSERVED to kill a machine.  sieve is quarantined for exactly that
+# reason, measured 3 of 3 in both of our cells against 3 of 3 completions on
+# PUC.
 #
 # Re-run peak-inband.lua after changing any benchmark's parameters.
 #
