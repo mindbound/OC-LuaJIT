@@ -581,16 +581,11 @@ object Smoke {
       |  event.timer(1, function()
       |    local t0 = os.clock(); work(N)
       |    bench2 = string.format("OCLJBENCH2=%.4f", os.clock() - t0)
-      |    -- The suite starts here, from the callback that finished, once the
-      |    -- post-timeout re-arm has been shown to be cleared (that is what
-      |    -- this very measurement is).
+      |    -- The suite starts from the callback that finished, the shape OC
+      |    -- programs actually use.
       |    event.timer(0.05, function() startSuiteOnce() end)
       |  end)
-      |  -- Backup, in case the follow-up above never runs -- it races
-      |  -- checkDeadline's 0.5 s grace and misses roughly one run in six, and
-      |  -- losing the whole suite to that would be worse than starting it
-      |  -- without the bench2 reading.  Registered here rather than up front
-      |  -- for the reason written at startSuiteOnce.
+      |  -- Backup, registered here rather than up front: see startSuiteOnce.
       |  event.timer(6, function() startSuiteOnce() end)
       |end)
       |
@@ -683,7 +678,12 @@ object Smoke {
       |  local freeKB = math.floor(computer.freeMemory() / 1024)
       |  local peak = (manifest.peak or {})[name] or 0
       |  local need = peak + 128
-      |  if peak > 0 and freeKB < need then
+      |  -- manifest.guard is false for the PUC baseline; see the comment where
+      |  -- the manifest is generated.  PUC collects and retries when an
+      |  -- allocation is refused, so it does not need this, and its
+      |  -- freeMemory() counts uncollected garbage as used, so the figure the
+      |  -- guard would be testing is not a measure of what is available.
+      |  if manifest.guard ~= false and peak > 0 and freeKB < need then
       |    -- Only report a skip if NOTHING has succeeded yet.  A later rep
       |    -- being skipped must not overwrite the status and CHECK that
       |    -- earlier reps established, which is how two good sieve runs came
@@ -855,8 +855,28 @@ object Smoke {
       |  startSuite()
       |end
       |
+      |-- THE HEARTBEAT, AND WHY ITS BODY IS INSIDE A pcall.
+      |--
+      |-- This is a REPEATING timer, and OpenOS drops a repeating timer whose
+      |-- callback raises.  So a single error anywhere in the paint path -- one
+      |-- bad string.format, one gpu.set that objects -- silently and
+      |-- permanently stops the scoreboard, while the machine carries on
+      |-- running the shell perfectly happily.  From outside, that is
+      |-- indistinguishable from a hung benchmark: OCLJCTR frozen,
+      |-- lastError=null, isRunning=true, and nothing in any log.  Cell A of
+      |-- the Phase 1 matrix did exactly that in about 6 of its 26 runs and
+      |-- cost two rows of the published table.
+      |--
+      |-- Wrapping the body has two effects, and both matter.  The timer can no
+      |-- longer die, so a paint error costs one tick instead of the run; and
+      |-- the error is CAPTURED, so the next tick can say what it was.  The
+      |-- tick row below is painted separately and is itself protected, because
+      |-- the one thing that must survive a broken paint path is the evidence
+      |-- that the paint path is broken.
+      |local perr, perrs = "none", 0
       |event.timer(0.05, function()
       |  n = n + 1
+      |  local pok, pe = pcall(function()
       |  -- Phase 0 rows.  Repainted like the others: boot output scrolls, and
       |  -- a row written once can be gone by the time Java reads the screen.
       |  component.gpu.set(1, 20, "OCLJENV=" .. math.floor(computer.totalMemory() / 1024)
@@ -879,6 +899,16 @@ object Smoke {
       |    dirty = false
       |    paintSuite()
       |  end
+      |  end)
+      |  if not pok then
+      |    perrs = perrs + 1
+      |    perr = tostring(pe):gsub("[ /]", "_"):sub(1, 60)
+      |  end
+
+      |  -- Minimal, independently protected, and never skipped: OCLJTICK is a
+      |  -- liveness signal that does not depend on anything above it working.
+      |  pcall(component.gpu.set, 1, 19,
+      |    "OCLJTICK=" .. n .. " OCLJPERR=" .. perrs .. ":" .. perr .. "        ")
       |end, math.huge)
       |""".stripMargin
 
@@ -1051,7 +1081,33 @@ object Smoke {
       try Option(System.getenv("OCLJ_ENCORE_PERIOD")).map(_.toInt).getOrElse(5)
       catch { case _: Throwable => 5 }
     mfst.append("  encore = ").append(if (encorePick.isEmpty) "nil" else "\"" + encorePick + "\"")
-      .append(",\n  encore_period = ").append(encorePeriod).append(",\n}\n")
+      .append(",\n  encore_period = ").append(encorePeriod)
+    // WHETHER THE RAM GUARD APPLIES AT ALL, and it does not apply to cell A.
+    //
+    // The guard exists for one reason: LuaJIT has no emergency GC, so our
+    // lj52_alloc refuses an allocation rather than collecting and retrying,
+    // and an oversized benchmark takes the machine down instead of failing its
+    // own row.  PUC Lua has that retry (lmem.c, luaM_realloc_), so on
+    // ocelot-brain's bundled 5.2 the premise is simply false.
+    //
+    // Worse, the INPUT is wrong there too.  computer.freeMemory() on PUC
+    // reports whatever has not been collected yet as used, which is near zero
+    // for a machine that has been working -- the Phase 1 matrix caught it
+    // reading 4 KB and 13 KB free on machines that then ran the same benchmark
+    // a dozen more times.  A guard fed that number skips real work: one
+    // strings2 run lost two of its three reps, and a sieve row was reported
+    // SKIP-LOWMEM after two good reps had already completed.
+    //
+    // Read from the system property and not from `nativeMode`, which is the
+    // obvious thing to reach for and is a forward reference here -- it is
+    // defined ~100 lines below, with the guard block, while this runs during
+    // planting.  scalac catches it, but only with the real classpath.
+    //
+    // So the guard is gated on our native being loaded.  Cell A gets none,
+    // which is right on both counts: it does not need one, and the number it
+    // would be handed is not a measure of what is available.
+    mfst.append(",\n  guard = ").append(if (System.getProperty("ocljit.native", "luajit") == "stock") "false" else "true")
+      .append(",\n}\n")
     Files.write(diskDir.resolve("manifest.lua"), mfst.toString.getBytes(StandardCharsets.UTF_8))
     p("planted " + plantedN + " more .lua from " + benchDirPath + "; suite = " +
       (if (suiteNames.isEmpty) "<none>" else suiteNames.mkString(",")) + " x" + suiteReps +
@@ -1440,6 +1496,11 @@ object Smoke {
       var lastCtr = -1
       var stalled = 0
       var stallStop = false
+      // OCLJTICK counts heartbeat firings.  Its RATE is the diagnostic: the
+      // timer's period is 0.05 s, so a healthy machine turns in hundreds of
+      // ticks over a suite wait and a hobbled one turns in tens.
+      val tick0 = try parse(nonEmptyScreen(screen), "OCLJTICK").toInt catch { case _: Throwable => -1 }
+      val twall0 = System.currentTimeMillis()
       while (sw < swMax && computer.machine.isRunning && !stallStop &&
              (doneRow == "pending" || doneRow == "<missing>")) {
         ws.update(); Thread.sleep(25); sw += 1
@@ -1457,10 +1518,19 @@ object Smoke {
             // supposed to repaint twenty times a second.
             if (stalled >= 400) {
               stallStop = true
+              // OCLJTICK/OCLJPERR come from the heartbeat's separately
+              // protected tail, so they survive a paint path that is itself
+              // broken.  If OCLJPERR is non-zero the scoreboard was dying of
+              // its own error rather than the machine hanging -- which is the
+              // distinction that used to be invisible.
+              val tick = parse(t, "OCLJTICK")
+              val perr = parse(t, "OCLJPERR")
               p("!! SUITE STALLED: OCLJCTR frozen at " + ctr + " for ~10 s while the " +
-                "machine still reports running.  The sandbox stopped dispatching timers; " +
-                "the suite never reached its end.  Giving up here instead of waiting out " +
-                suiteWaitS + " s.")
+                "machine still reports running.  OCLJTICK=" + tick + " OCLJPERR=" + perr +
+                ".  Giving up here instead of waiting out " + suiteWaitS + " s.")
+              if (perr != "<missing>" && !perr.startsWith("0:"))
+                p("!! the heartbeat's own paint path raised -- that, not the benchmark, " +
+                  "is what stopped the scoreboard: " + perr)
               reportDeath(computer.machine, screen, "the Phase 1 suite (stalled, not stopped)")
             }
           } else { lastCtr = ctr; stalled = 0 }
@@ -1469,6 +1539,43 @@ object Smoke {
       if (!computer.machine.isRunning) reportDeath(computer.machine, screen, "the Phase 1 suite")
       val suiteText = nonEmptyScreen(screen)
       doneRow = parse(suiteText, "OCLJPDONE")
+
+      // IS THIS RUN VOID?  A cell-A machine sometimes comes out of the
+      // deadline probe with OC's post-timeout hook still armed --
+      // checkDeadline re-arms debug.sethook(co, checkDeadline, "", 1), a hook
+      // on EVERY INSTRUCTION, and when the disarm loses the race the machine
+      // keeps running at roughly 1/200th speed for the rest of its life.
+      //
+      // Measured: 13 heartbeat ticks in 130 s against 400+ in a healthy run,
+      // on a 0.05 s timer.  Nothing crashes, so lastError is null and
+      // isRunning is true; the suite simply never gets far enough to paint a
+      // row.  Reported naively that looks like every benchmark failing, which
+      // is how two rows of the Phase 1 table were lost.
+      //
+      // It is not our bug -- cell A runs OC's stock kernel, and this is the
+      // standing-hook pathology the watchdog exists to remove, in its
+      // post-timeout form.  Cells B and C cannot hit it.  So the run is
+      // declared VOID and its benchmark rows are not judged: a discarded run
+      // is honest, a run reported as eight benchmark failures is not.
+      //
+      // The predictor is exact in the four runs that established it: every
+      // hobbled run had k4's post-timeout loop time missing, every healthy one
+      // had it.  The tick rate is used here because it is measured over the
+      // suite wait itself rather than inferred from an earlier probe.
+      val tickN = try parse(suiteText, "OCLJTICK").toInt catch { case _: Throwable => -1 }
+      val twall = (System.currentTimeMillis() - twall0) / 1000.0
+      val tickRate = if (tick0 >= 0 && tickN >= tick0 && twall > 1.0) (tickN - tick0) / twall else -1.0
+      val incomplete = doneRow != suiteNames.length.toString
+      val hobbled = incomplete && tickRate >= 0 && tickRate < 1.0
+      if (hobbled) {
+        p("PHASE1 VOID: the machine was hobbled, not the benchmark -- " +
+          f"$tickRate%.2f" + " heartbeat ticks/s over " + f"$twall%.0f" + " s (healthy: 3-4/s) " +
+          "on a 0.05 s timer.  OC's stock kernel left its post-timeout count=1 hook armed; " +
+          "the run is DISCARDED, not failed.  Re-run it.")
+        milestone("p1-run-VOID-stock-kernel-hook-not-cleared", ok = false,
+          "this run produced no usable benchmark data and its rows are not judged: the " +
+            "machine ran at " + f"$tickRate%.2f" + " ticks/s.  Not a benchmark result; re-run.")
+      } else
       milestone("p1-suite-complete", doneRow == suiteNames.length.toString,
         "driver reported OCLJPDONE=" + doneRow + " for " + suiteNames.length + " benchmarks" +
           (if (doneRow == suiteNames.length.toString) ""
@@ -1486,7 +1593,7 @@ object Smoke {
           (if (compatPath == "operators" || compatPath == "bit32-STITCHED") ""
            else "   <- compat.lua did not load, or _G is not reachable from the driver"))
       p("PHASE1 rows: name/status/CHECK/min/max/freeKB/reps")
-      for (i <- suiteNames.indices) {
+      for (i <- suiteNames.indices if !hobbled) {
         val key = "OCLJP%02d".format(i + 1)
         val row = parse(suiteText, key)
         val f = row.split("/")

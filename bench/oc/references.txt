@@ -57,14 +57,14 @@
 # already painted survive a machine that dies later, so a benchmark that might
 # not fit belongs at the end.
 
-mandelbrot   37904620                                                         51
-sieve        4626000                                                         312
-binarytrees  7038400                                                         217
-trampoline   247388                                                           60
-matmul       481.0000                                                        223
-strings2     12582912-3852468224                                             287
-nqueens      85200                                                            64
-sha256       4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d 65
+mandelbrot   37904620                                                         58
+sieve        4626000                                                        1155
+binarytrees  7038400                                                         221
+trampoline   247388                                                           78
+matmul       481.0000                                                        240
+strings2     12582912-3852468224                                             376
+nqueens      85200                                                            80
+sha256       4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d 88
 
 # QUARANTINED -----------------------------------------------------------------
 #
@@ -83,20 +83,42 @@ sha256       4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d 65
 # See bench/oc/strings.lua and bench/oc/strings2.lua, and
 # docs/research/memory-accounting.md section 8a.
 
-!strings     12582912-3852468224                                             171
+!strings     12582912-3852468224                                             212
 
 # WHAT THE peakKB COLUMN IS, AND WHAT IT CANNOT SEE ----------------------------
 #
-# Measured 2026-09-03 by `sh bench/oc/run-standalone.sh peaks`, which takes
-# every row the same way: peak Lua heap under `luajit -joff`, sampled by a
-# count hook every 10000 instructions.  Re-run that after changing any
-# benchmark's parameters.
+# Re-measured 2026-09-04 by `luajit -joff bench/oc/checks/peak-inband.lua .`,
+# which samples ONCE PER ITERATION OF THE BENCHMARK'S OWN OUTER LOOP.
 #
-# It must be `-joff`.  With the compiler on, the traces are themselves on the
-# heap AND the sampling hook is the very hook-versus-JIT pathology this project
-# exists to fix -- nqueens measures 1.5 KB honestly, 106.9 KB with the JIT on,
-# and 221.9 KB through the hook, an 11x time inflation that measures the hook
-# rather than the benchmark.
+# THE PREVIOUS COLUMN WAS MEASURED BY THE INSTRUMENT, NOT THE BENCHMARK.  It
+# came from `run-standalone.sh peaks`, which samples from a count hook every
+# 10000 instructions -- and a hook callback is Lua work, and Lua work is GC
+# safepoints, so a hooked run hands the collector hundreds of chances per
+# iteration that the bare program never gives it.  The heap stays low and the
+# hook's heap gets reported as the benchmark's.  Every row below rose; sieve
+# rose 3.7x:
+#
+#     bench        hook   in-band          bench        hook   in-band
+#     sieve         312      1155          strings2      287       376
+#     strings       171       212          matmul        223       240
+#     sha256         65        88          nqueens        64        80
+#     trampoline     60        78          binarytrees   217       221
+#     mandelbrot     51        58
+#
+# AN UNDER-ESTIMATE IS THE DANGEROUS DIRECTION and this one did real damage.
+# At 312 KB the guard asked for 440 KB free and let sieve start in a machine
+# with ~890 KB -- and sieve then killed that machine 6 runs out of 6
+# (bench/results-in-machine-phase1-2026-09-04.md).  At a truthful 1155 KB it
+# asks for 1283 KB, more than a 1024 KB machine has, and skips the row: which
+# is precisely the outcome the guard exists to produce.
+#
+# Re-run peak-inband.lua after changing any benchmark's parameters.
+#
+# It must still be `-joff`.  With the compiler on the traces are themselves on
+# the heap, and worse, they are PINNED for as long as the running prototype is
+# reachable -- which for a benchmark is its whole run, since the prototype is
+# the function on the stack (docs/research/memory-accounting.md section 8a).
+# The figure would be the compiler's footprint, not the workload's.
 #
 # THE GUARD IS THEREFORE BLIND TO THE ONE FAILURE IT MOST WANTS TO CATCH, and
 # `strings` is the proof: its -joff peak is 170 KB, comfortably inside any

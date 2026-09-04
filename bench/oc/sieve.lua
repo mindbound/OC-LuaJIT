@@ -37,8 +37,28 @@
 -- i.e. the same workload:
 --   * hook-rate independent.  Sampling every 200 instructions instead of every
 --     2000 returned 233.5 KB -- the same figure to the tenth of a KB.
---   * REPS-independent, which is the property that matters.  Measured at
---     REPS = 1500, 6000 and 12000 the peak was 233.5 KB every time: each
+--   * RETRACTED 2026-09-04 -- THIS PARAGRAPH MEASURED THE INSTRUMENT.  The
+--     "233.5 KB, REPS-independent" figure below was sampled from a count hook
+--     every 10000 instructions, and a hook callback is Lua work, which is GC
+--     safepoints: the hooked run hands the collector hundreds of chances per
+--     repetition that this loop never gives it, so the collector keeps up and
+--     the heap stays flat.  Sampled instead ONCE PER REPETITION from inside
+--     this file's own loop (bench/oc/checks/peak-inband.lua), the same file at
+--     the same parameters peaks at 1154.5 KB -- and it is flat at 1143.6 KB
+--     across REPS 100, 500, 1500 and 4500, so the flatness was real and the
+--     LEVEL was not.  The steady state genuinely is small: live-after-collect
+--     is 52-65 KB at every REPS in every mode.  What the RAM guard needs is
+--     the high-water mark, and that is 3.7x what was published here.
+--     references.txt now carries 1155.
+--
+--     The consequence was not academic.  At 312 KB the guard asked for 440 KB
+--     free and let this benchmark start in a machine with ~890 KB -- and it
+--     killed that machine 6 runs out of 6.  See
+--     bench/results-in-machine-phase1-2026-09-04.md.
+--
+--   * The original claim, kept so the retraction can be checked against it:
+--     REPS-independent, measured at REPS = 1500, 6000 and 12000 the peak was
+--     233.5 KB every time -- each
 --     repetition drops its `flags` before the next allocates, so the workload
 --     reaches a steady state after the first rep and stays there.  REPS can
 --     therefore be retuned for runtime without touching the memory row.

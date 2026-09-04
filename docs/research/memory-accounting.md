@@ -341,8 +341,37 @@ parameters (BASE 4096, PASSES 3072), both columns returning the same checksum:
 | reclaimed by `jit.flush()` | 0.0 KB | — |
 | traces recorded (`-jv`) | 210 | 0 |
 
-The live set is ~70 KB either way: **this is churn, not a leak.** A full
-collect reclaims all of it and `jit.flush()` then finds nothing to free. But
+**CORRECTED 2026-09-04, AND THIS SECTION HAD IT BACKWARDS TWICE.** The
+"~70 KB live, flush reclaims nothing" reading above is what you get when the
+loaded chunk is DROPPED before collecting. Hold it, and the same run at the
+same parameters retains 1.4 MB across three full collects that only
+`jit.flush()` releases:
+
+| JIT ON, same file, same parameters | drop the chunk | hold the chunk |
+|---|---:|---:|
+| heap on return | 2627.0 KB | 1625.9 KB |
+| after 3 collects | **78.4 KB** | **1467.2 KB** |
+| after `jit.flush()` + collect | 78.0 KB | 79.8 KB |
+| reclaimed by flush | 0.4 KB | **1387.4 KB** |
+
+Under `-joff` the two columns agree to within 6 KB, so this is trace memory
+specifically. The mechanism is `gc_traverse_proto` marking `pt->trace`
+(`lj_gc.c:287`): a trace is reachable exactly as long as the prototype it hangs
+off is reachable, and `lj_trace_free` therefore never runs on it. Traces are
+released by `lj_trace_flushall`, not by the collector.
+
+**Which case is a machine in? The holding one, necessarily.** While a benchmark
+runs, its prototype is the function on the stack, so its traces are pinned for
+the entire run — exactly when the memory is needed. So for a compiled workload
+this is **not** churn a collector could reclaim, and the earlier draft this
+section replaced (which said the same thing and was retracted here) was closer
+to right than the retraction was.
+
+**Consequence for the emergency-GC work: `strings` with the JIT on is out of
+scope for it.** No collection, emergency or otherwise, can free memory the
+running prototype pins. That needs a trace tier — separate work. `sieve` is a
+different mechanism (tables, not traces) and remains the case an emergency GC
+would address. But
 the churn is charged — trace objects go through `lj_mem_*` → `g->allocf` →
 `lj52_alloc`, unlike machine code, which is `VirtualAlloc`'d and invisible
 (§11) — and `lj52_alloc` refuses rather than collecting. So the JIT-on column

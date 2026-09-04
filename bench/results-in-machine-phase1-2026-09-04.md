@@ -157,10 +157,24 @@ Phase 0's component-call result: a faster VM does not make a host call cheaper.
 
 ## What this does not say
 
-* **Cell A is unstable: about 6 of its 26 runs wedged** (machine alive, suite
-  never completing, ~160 s), which is why several A rows have n=1 or n=2. The
-  A column is the weakest in the table and `sieve`/`sha256` A-values rest on a
-  single run each.
+* **Cell A is unstable: about 6 of its 26 runs wedged**, which is why several A
+  rows have n=1 or n=2 and `sieve`/`sha256` A-values rest on a single run each.
+  **The cause was identified after this table was produced** (2026-09-04): OC's
+  stock kernel sometimes fails to clear the count-hook `checkDeadline` re-arms
+  when a deadline fires — `debug.sethook(co, checkDeadline, "", 1)`, a hook on
+  *every instruction* — and the machine then runs about 200x slow for the rest
+  of its life. Measured: **0.00–0.1 heartbeat ticks per second against 3–4 in a
+  healthy run**, on a 0.05 s timer. Nothing crashes, so `lastError` is null and
+  `isRunning` is true; the suite simply never gets far enough to paint a row,
+  which reads from outside as every benchmark failing.
+
+  It correlates 4/4 with `k4`'s post-timeout loop time being missing. **Cells B
+  and C cannot hit it** — it is the standing-hook pathology the watchdog
+  exists to remove, in its post-timeout form, so only the stock-kernel baseline
+  is exposed. The harness now detects it from the tick rate and reports the run
+  as `PHASE1 VOID` with `p1-run-VOID-stock-kernel-hook-not-cleared`, and does
+  not judge its benchmark rows: a discarded run is honest, a run reported as
+  eight benchmark failures is not. **Re-run a void run; do not tabulate it.**
 * **The RAM guard is wrong for cell A and is still applied there.** It exists
   because LuaJIT has no emergency GC; PUC does, and `computer.freeMemory()`
   reads near zero on PUC simply because nothing has been collected yet. One
