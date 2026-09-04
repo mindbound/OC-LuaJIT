@@ -1,0 +1,107 @@
+# bench/oc/references.txt -- the in-machine benchmark suite: what runs, in what
+# order, and what each must return.  Generated 2026-09-03.
+#
+# THIS FILE IS THE SUITE DEFINITION.  test/native/OcljSmoke.scala plants every
+# .lua in this directory on the machine's disk, but builds the manifest from
+# THIS file: a benchmark without a line here is never run in-machine, and a
+# line without a file is skipped.  bench/oc/run-standalone.sh fails on either
+# mismatch, which is the boring drift that actually happens.
+#
+# FORMAT:  [!]<name>  <CHECK>  [<peakKB>]
+#
+#   <CHECK>   compared TEXTUALLY against what the benchmark returns.  A wrong
+#             answer that runs fast is the failure mode this defends against;
+#             Phase 0 observed it reject a sabotaged mandelbrot that ran 4.7x
+#             "faster" (bench/results-in-machine-2026-09-03.md).
+#   <peakKB>  standalone-measured peak.  The driver skips a benchmark unless
+#             free >= peak + 128 KB, because LuaJIT has no emergency GC: an
+#             oversized workload does not fail its own row, it kills the
+#             machine and loses every row after it.  0 disables the guard.
+#             The margin was peak*2 + 64 until it was run: peak is the
+#             TOTAL heap including the ~57 KB base, so doubling it asked for
+#             more than the machine ever has free.  sieve (312 KB) demanded
+#             688 KB against 653-676 KB measured free and could never run.
+#             peak + 128 is what a workload of this size actually needs.
+#   !         QUARANTINED: planted and referenced, but kept OUT of the default
+#             suite.  Runs only when named in OCLJ_BENCH_ONLY.
+#
+# PUBLISHED vs NEW references.  Three rows carry the reference value from
+# bench/results-2026-09-01.md UNCHANGED, because the sandbox port changed only
+# their last two lines (print -> return) and not their parameters.  Those are
+# the strongest rows in the suite: reproducing them in-machine is evidence
+# about the VM rather than about this directory.  The rest were rescaled to fit
+# an OpenComputers machine, which invalidates the published value, so their
+# references were generated here and each file's header says how.
+#
+#   PUBLISHED, unchanged : mandelbrot, nqueens, sha256
+#   NEW, generated here  : trampoline, sieve, binarytrees, matmul,
+#                          strings2, strings
+#
+# Every value below was observed identical on our LuaJIT (compiled), our LuaJIT
+# under -joff, PUC lua5.3 and PUC lua5.4, loaded exactly the way the machine
+# loads them -- source read off disk, load(src), no arguments, compat published
+# as a global.  Re-verify with:  sh bench/oc/run-standalone.sh check
+#
+# PUC 5.2 IS NOT IN THAT LIST AND IT IS THE ONE THAT MATTERS MOST: cell A of the
+# in-machine matrix is PUC Lua 5.2, so the four VMs above verify every cell
+# EXCEPT the baseline a player actually runs.  That gap has already cost a
+# result.  The strings pair ended its checksum with string.format("%d", acc)
+# where acc is above 2^31; on 5.2 that raises "bad argument #3", so in cell A
+# the pair could not return its answer at all -- and because the failure came
+# back through the driver as a skipped row, it was first read as OC's RAM cap
+# refusing the benchmark.  Both files now use "%.0f", which prints the same
+# digits everywhere.  There is no PUC 5.2 binary in bench/vendor, so this
+# remains verified by in-machine behaviour rather than by run-standalone.sh.
+#
+# ORDER IS RUN ORDER, cheapest and best-understood first.  It matters: rows
+# already painted survive a machine that dies later, so a benchmark that might
+# not fit belongs at the end.
+
+mandelbrot   37904620                                                         51
+sieve        4626000                                                         312
+binarytrees  7038400                                                         217
+trampoline   247388                                                           60
+matmul       481.0000                                                        223
+strings2     12582912-3852468224                                             287
+nqueens      85200                                                            64
+sha256       4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d 65
+
+# QUARANTINED -----------------------------------------------------------------
+#
+# The naive half of the strings pair.  Same computation and the SAME CHECK as
+# strings2 -- two codings agreeing on one value is the suite's only oracle that
+# does not rest on a single implementation -- but the recorder answers its
+# shape with 210 traces for one loop, and standalone it allocates 3064 KB at
+# return against 90 KB with -joff.  The machine has 865-1024 KB free.
+#
+# It is expected to exhaust the machine.  That is worth measuring and is NOT
+# worth measuring in the same run as the persist and restore milestones, which
+# run after the suite and would be lost with it.  So:
+#
+#     OCLJ_BENCH_ONLY=strings test/native/smoke-test.sh
+#
+# See bench/oc/strings.lua and bench/oc/strings2.lua, and
+# docs/research/memory-accounting.md section 8a.
+
+!strings     12582912-3852468224                                             171
+
+# WHAT THE peakKB COLUMN IS, AND WHAT IT CANNOT SEE ----------------------------
+#
+# Measured 2026-09-03 by `sh bench/oc/run-standalone.sh peaks`, which takes
+# every row the same way: peak Lua heap under `luajit -joff`, sampled by a
+# count hook every 10000 instructions.  Re-run that after changing any
+# benchmark's parameters.
+#
+# It must be `-joff`.  With the compiler on, the traces are themselves on the
+# heap AND the sampling hook is the very hook-versus-JIT pathology this project
+# exists to fix -- nqueens measures 1.5 KB honestly, 106.9 KB with the JIT on,
+# and 221.9 KB through the hook, an 11x time inflation that measures the hook
+# rather than the benchmark.
+#
+# THE GUARD IS THEREFORE BLIND TO THE ONE FAILURE IT MOST WANTS TO CATCH, and
+# `strings` is the proof: its -joff peak is 170 KB, comfortably inside any
+# budget, while the SAME file with the compiler on allocates 3064 KB at return.
+# The cost that would kill the machine is JIT churn, and a -joff probe cannot
+# see JIT churn by construction.  So the guard catches workloads that are too
+# big, not codings that are too pathological -- which is why `strings` is
+# quarantined by hand above rather than left for the guard to stop.

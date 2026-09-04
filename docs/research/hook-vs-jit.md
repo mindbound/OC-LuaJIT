@@ -593,6 +593,95 @@ so a trace inside an OpenComputers sandbox runs at essentially bare-VM speed.
 And component-bound work is flat across a VM change *and* a compiler, because
 an indirect component call costs a game tick regardless.
 
+### Step 3 Phase 1: the suite exists, and it is built and verified
+
+`bench/oc/` now holds nine benchmarks, a pinned bit-ops module, a runner and a
+reference file. Every CHECK is identical on our LuaJIT compiled, our LuaJIT
+under `-joff`, PUC lua5.3 and PUC lua5.4, loaded exactly the way the machine
+loads them — `sh bench/oc/run-standalone.sh check` asserts it and passes.
+Three rows carry their **published** references unchanged (`mandelbrot`,
+`nqueens`, `sha256`), so reproducing them in-machine will be evidence about the
+VM rather than about this directory.
+
+Standalone, against the PUC baseline a player runs today — min of 3, one fresh
+process per run. These are an upper bound and not the answer: no sandbox, no
+deadline, no RAM accounting. The in-machine numbers are what Phase 1 is for.
+
+| | luajit | -joff | vs lua5.3 |
+|---|---:|---:|---:|
+| sha256 | 0.044 | 1.018 | **33.5×** |
+| mandelbrot | 0.093 | 0.511 | 13.7× |
+| trampoline | 0.008 | 0.051 | 12.9× |
+| matmul | 0.120 | 0.734 | 11.4× |
+| sieve | 0.098 | 0.591 | 9.2× |
+| binarytrees | 0.249 | 0.315 | 3.8× |
+| strings2 | 0.187 | 0.406 | 3.4× |
+| nqueens | 1.559 | 1.022 | 1.1× |
+| **strings** | **2.727** | **0.423** | **0.27×** |
+
+The rescaling needed to fit an OpenComputers machine preserved the published
+ratios closely (`strings` 0.27× against a published 0.25×, `strings2` 3.4×
+against 3.70×, `nqueens` 1.09× against 1.18×), which is the best evidence
+available that the ports are faithful. **No geomean should be quoted from
+this**: the spread is 120× wide and bimodal by design.
+
+The `strings`/`strings2` pair survived, and it is the suite's only oracle that
+does not rest on one implementation — two different codings of one computation,
+returning one identical checksum, 13× apart in speed. `strings` is
+**quarantined** (a leading `!` in `references.txt`): standalone it allocates
+3064 KB at return against 90 KB with `-joff`, and the machine has 865–1024 KB
+free, so it is expected to exhaust the machine. That is worth measuring and is
+not worth measuring in the same run as the persist milestones, which run after
+the suite. See `memory-accounting.md` §8a — the churn is charged through
+`lj52_alloc`, which refuses rather than collecting, and LuaJIT has no emergency
+GC where PUC does.
+
+### Phase 1 RAN, 2026-09-04
+
+Full record: [../../bench/results-in-machine-phase1-2026-09-04.md](../../bench/results-in-machine-phase1-2026-09-04.md).
+78 runs, one benchmark per freshly booted 1 MB machine, three cells
+interleaved, three replicates, every boot carrying a fixed 2M-iteration loop as
+a box-speed meter.
+
+**B/C is the clean compiler experiment** — same binary, same watchdog kernel,
+same source, only `jit.off()` differing — and it reproduces the standalone
+ratio where the work stays in the VM:
+
+| | in-machine B/C | standalone -joff/compiled |
+|---|---:|---:|
+| sha256 | **22.6x** | 23.1x |
+| mandelbrot | 5.13x | 5.49x |
+| matmul | 4.79x | 6.12x |
+| strings2 | 1.80x | 2.19x |
+| nqueens | 1.44x | 0.66x (sign reverses, unexplained) |
+| binarytrees | 1.08x | 1.27x |
+| trampoline | 1.08x | 6.4x |
+
+Against the PUC 5.2 a player runs today: mandelbrot **12.3x**, matmul
+**11.0x**. (An earlier pass reported mandelbrot at 28x; that was two cells
+landing in a fast box window, which is what the meter exists to catch.)
+
+**The two rows that do not have a time are the more important ones.** `sieve`
+fails on our native 6 runs out of 6 and runs on PUC in 2.6 s -- the
+emergency-GC divergence of §8 with a control built in. And `strings` is
+unrunnable with the compiler on and fine with it off, while its idiomatic twin
+`strings2` -- identical checksum -- runs everywhere and is 1.80x faster under
+that same compiler. See §8/§8a/§8b of memory-accounting.md.
+
+**And the ceiling:** `trampoline` runs 0.62 s in-machine compiled against
+0.051 s standalone interpreted, twelve times slower inside the sandbox than
+outside it with the compiler off, while mandelbrot is the same in and out. For
+`pcall`-heavy work the surcharge is paid outside the VM and no compiler
+reaches it -- the same shape as Phase 0's component-call result.
+
+**Phase 0's harness claims, superseded.** The harness carries the suite driver
+(one benchmark per timer callback, so each gets a fresh 5 s deadline and an
+overrun costs its own row rather than the run), the RAM guard, and an *encore*
+probe that measures post-save recovery by riding on the feature under test: a
+repeating timer holding a Lua closure is exactly what eris must serialise, so
+it survives the persist and fires again unprompted, and Java compares the warm
+samples with the first one whose sequence number advanced.
+
 ## 9. Interaction with memory accounting
 
 Mild, and in our favour. Every design reviewed for the RAM cap flagged

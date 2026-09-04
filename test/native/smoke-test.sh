@@ -24,7 +24,29 @@
 #   OCLJ_JAVA     JDK home (needs java 11+; verified on 17)     [default: $JAVA_HOME, else `java` on PATH]
 #   OCLJ_WORK     scratch dir for classes/conf/logs   [default $TMPDIR/ocljit-smoke]
 #   OCLJ_SRC      OcljSmoke.scala                               [default: next to this script]
-#   OCLJ_TIMEOUT  seconds before the run is killed              [default 300]
+#   OCLJ_TIMEOUT  seconds before the run is killed              [default 600]
+#                 Raised from 300 when the Phase 1 suite landed: boot plus
+#                 Phase 0 is about a minute, the suite is minutes more in the
+#                 PUC 5.2 cell, and a kill mid-suite loses every row.
+#   OCLJ_REPS     repetitions per benchmark, in-machine            [default 3]
+#                 The harness reports MIN and MAX, never a mean: with one
+#                 sample the two are equal and the row says so honestly.
+#   OCLJ_BENCH_ONLY  comma-separated benchmark names to run   [default: all in
+#                 bench/oc/references.txt].  Set it to the empty string to boot
+#                 with NO benchmarks, which is how the mcode baseline for the
+#                 per-benchmark delta is taken.
+#   OCLJ_SUITE_WAIT  seconds to wait for the suite to finish     [default 300]
+#                 Deliberately shorter than OCLJ_TIMEOUT, so a stuck suite
+#                 reports the rows it did get instead of being killed.
+#   OCLJ_ENCORE   benchmark kept running on a repeating timer after the suite
+#                 ends                                     [default mandelbrot]
+#                 This is how POST-SAVE RECOVERY is measured.  The timer holds
+#                 a Lua closure, so eris has to serialise it, so it survives the
+#                 persist and fires again on the other side with nothing telling
+#                 it to -- the probe rides on the feature under test.  Java
+#                 compares the best warm sample before the save with the first
+#                 sample whose sequence number advanced after the restore.
+#   OCLJ_ENCORE_PERIOD  seconds between encore runs               [default 5]
 #   OCLJ_NATIVE   luajit (default) | stock.  "stock" does NOT point
 #                 forceNativeLibPathFirst at our DLL, so ocelot-brain loads
 #                 its own bundled PUC-Lua 5.2 native instead -- the VM a
@@ -133,7 +155,7 @@ fi
 : "${OCLJ_LIBS:=$OCLJ_WORK/lib}"
 : "${OCLJ_SRC:=$SELF_DIR/OcljSmoke.scala}"
 : "${OCLJ_JAVA:=${JAVA_HOME:-}}"
-: "${OCLJ_TIMEOUT:=300}"
+: "${OCLJ_TIMEOUT:=600}"
 
 DLL_NAME=libjnlua52-windows-x86_64.dll
 SCALA_VER=2.13.11

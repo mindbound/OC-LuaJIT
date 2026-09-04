@@ -324,6 +324,79 @@ roadmap item. It is VM surgery, not a six-line patch: running arbitrary `__gc`
 Lua from inside an allocation is exactly what PUC's emergency flag exists to
 prevent.
 
+### 8a. Step 3 Phase 1 found a workload that produces exactly this
+
+Until Phase 1 the paragraph above was a mechanism argument with no program
+behind it. `bench/oc/strings.lua` is that program. It is the naive coding of
+the strings pair — a table constructor fed by a multi-return `string.byte` and
+a wide `unpack` back into `string.char` — and the recorder answers its shape by
+producing **210 traces for one loop**. Measured standalone at the shipped
+parameters (BASE 4096, PASSES 3072), both columns returning the same checksum:
+
+| | JIT on | `-joff` |
+|---|---:|---:|
+| wall time | 2.739 s | 0.430 s |
+| **allocated at return** | **3064.3 KB** | **90.2 KB** |
+| live after a full collect | 70.7 KB | 48.1 KB |
+| reclaimed by `jit.flush()` | 0.0 KB | — |
+| traces recorded (`-jv`) | 210 | 0 |
+
+The live set is ~70 KB either way: **this is churn, not a leak.** A full
+collect reclaims all of it and `jit.flush()` then finds nothing to free. But
+the churn is charged — trace objects go through `lj_mem_*` → `g->allocf` →
+`lj52_alloc`, unlike machine code, which is `VirtualAlloc`'d and invisible
+(§11) — and `lj52_alloc` refuses rather than collecting. So the JIT-on column
+asks a machine with 865–1024 KB free for about 3 MB of transient heap that a
+collection would have reclaimed. That is §8's scenario, exactly, with numbers.
+
+This is the strongest argument yet for the emergency mode: on PUC Lua — what
+OC ships — this program gets a full collect and a retry and very likely
+survives. On ours it throws. The divergence is invisible in every benchmark
+that fits comfortably and decisive for one that churns.
+
+### 8b. Confirmed in a machine, 2026-09-04
+
+It is now measured. One benchmark per freshly booted 1 MB machine, our native
+and the watchdog kernel in both cells, the compiler the only variable:
+
+| | `strings` in a 1 MB machine |
+|---|---|
+| **JIT off** | `strings/ok/12582912-3852468224/0.5461/0.5461/990/1` — runs, correct checksum, **990 KB free after** |
+| **JIT on** | `OCLJPNOW=strings#1`, `OCLJPCOMPAT=operators`, 909 KB free on entry → **machine stopped, `lastError = not enough memory`** |
+
+The compiler's allocation churn is the difference between running and not
+running. §8's mechanism argument now has the workload behind it, and the
+divergence from PUC is not academic: this is a program a player could write.
+
+Two cautions carried forward. The failure does **not** surface as an
+`ERROR/not_enough_memory` row the way cell B's `sieve` does — the driver
+`pcall`s every benchmark, but this allocation failure takes the machine down
+rather than unwinding into the `pcall`, so the evidence is the frozen row plus
+the harness's `lastError`. And establishing it needed three runs and a harness
+fix: the first attempt wedged for 463 s with the machine still reporting
+`isRunning` and was read, reasonably but wrongly, as "the benchmark never
+started" — because the scoreboard was painted only by a timer that stops when
+the machine does. Painting synchronously before each `pcall` is what separated
+"died before the suite" from "died inside the benchmark".
+
+**The sibling failure is still only partly attributed.** `strings` is planted but
+*quarantined* (a leading `!` on its `references.txt` line), because the persist
+and restore milestones run after the suite and a run that loses the machine
+would lose them too; it runs on its own with `OCLJ_BENCH_ONLY=strings`. Note
+also that the sandbox-visible figure depends on `ramScaleFor64Bit`, so ~3 MB of
+real bytes is ~1021 KB as the sandbox counts it — over, but close enough that
+the divisor decides it, which is a second reason to measure rather than assert.
+
+One correction is recorded with this, because it was published before it was
+checked: an earlier draft of `bench/oc/strings2.lua` reported the same workload
+as holding ~1456 KB **live**, reclaimable only by `jit.flush()`, and attributed
+it to GCtrace objects pinned on the heap. That does not reproduce. It came from
+reading `collectgarbage("count")` after a single `collect` — LuaJIT's collector
+is incremental, and one cycle is not a full sweep. The conclusion (the twin is
+not runnable in a 1 MB machine) survives; the mechanism behind it does not, and
+the difference matters, because churn is something an emergency GC fixes and
+pinned live state is not.
+
 ## 9. Calibration: OC's stock RAM scale is not enough
 
 `ramScaleFor64Bit` is how many real bytes OC charges per apparent byte of

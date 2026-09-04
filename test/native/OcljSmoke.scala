@@ -11,7 +11,7 @@ import totoro.ocelot.brain.workspace.Workspace
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 
 /**
  * OC-LuaJIT smoke test.  One command, one verdict.
@@ -79,6 +79,45 @@ object Smoke {
     * costs.  It is also the trace-flush signature: lj_trace_flushall zeroes
     * szallmcarea, so a drop to 0 across a persist proves the serializer threw
     * away every compiled trace in the VM. */
+  /**
+   * Wait for the machine's worker thread to stop executing before this thread
+   * touches its LuaState, and REPORT rather than proceed if it does not.
+   *
+   * Every one of these waits used to run out its budget and then probe anyway.
+   * The Phase 1 matrix showed the price: C-matmul's watchdog stats came back
+   * as `-16.05` -- one float where five integers belong -- and ocelot-brain's
+   * own save then tripped `assert(lua.isThread(1))`, losing the persist blob,
+   * the restore, and every milestone after them.  That is this thread and the
+   * machine thread racing over one Lua stack, which is the single thing a JNI
+   * caller must never do.  A probe skipped and announced is worth more than a
+   * number read off a stack somebody else is using.
+   */
+  def quiesced(machine: totoro.ocelot.brain.entity.machine.Machine, what: String,
+               spins: Int = 600, ms: Long = 10L): Boolean = {
+    var q = 0
+    while (machine.isExecuting && q < spins) { Thread.sleep(ms); q += 1 }
+    val ok = !machine.isExecuting
+    if (ok) p("quiesced after " + q + " spins, before " + what)
+    else p("!! NOT QUIESCED after " + q + " spins: SKIPPING " + what +
+      " -- reading the Lua state while the machine thread runs corrupts it")
+    ok
+  }
+
+  /**
+   * Say why a machine stopped.  ocelot-brain's Machine.crash fires an event
+   * with no subscriber here, so a machine that dies mid-run leaves nothing in
+   * the log at all -- which is exactly what happened to A-strings.  OC paints
+   * "Unrecoverable Error" and the wrapped message onto the screen when a
+   * machine stops with one, so the screen is usually the whole diagnosis.
+   */
+  def reportDeath(machine: totoro.ocelot.brain.entity.machine.Machine,
+                  screen: Screen, where: String): Unit = {
+    p("!! MACHINE STOPPED during " + where +
+      ": running=" + machine.isRunning + " lastError=" + machine.lastError)
+    p("!! screen at death:")
+    println(nonEmptyScreen(screen))
+  }
+
   def jitStats(lua: LuaState): (Long, Long, Int, Boolean) = {
     val s = evalStr(lua, "local m, c, t, on = _OCLJ_JITSTATS() " +
       "return string.format('%d/%d/%d/%s', m, c, t, tostring(on))")
@@ -90,12 +129,18 @@ object Smoke {
 
   /** Evaluate a text chunk in the live state and return its single result. */
   def evalStr(lua: LuaState, code: String): String = {
-    val base = lua.getTop
+    // getTop INSIDE the try.  It used to sit above it, and on a machine that
+    // had already crashed it threw IllegalStateException("Lua state is
+    // closed") straight out of this function -- which killed the whole harness
+    // mid-run and threw away every milestone that had not been reached yet.
+    // That is how the Phase 1 A-strings run ended with no diagnosis at all.
+    var base = -1
     try {
+      base = lua.getTop
       lua.load(new ByteArrayInputStream(code.getBytes(StandardCharsets.UTF_8)), "=smoke", "t")
       lua.call(0, 1)
       val r = if (lua.isNil(-1)) "<nil>" else lua.toString(-1)
-      lua.setTop(base)
+      if (base >= 0) lua.setTop(base)
       r
     } catch {
       case t: Throwable => lua.setTop(base); "<error: " + t.getMessage + ">"
@@ -505,6 +550,14 @@ object Smoke {
       |-- whitespace-delimited parse() can read it.
       |local deadlineResult = "pending"
       |local bench2 = "pending"
+      |-- DECLARED HERE, ABOVE the probe that calls it, and that placement is
+      |-- load-bearing.  It was first declared down in the suite section, below
+      |-- this point: the call sites inside the probe then compiled as reads of
+      |-- a GLOBAL of the same name -- nil forever -- while the assignment
+      |-- bound the local.  Everything registered fine and the suite simply
+      |-- never started, with no error anywhere, because a nil global read is
+      |-- only an error at the moment it is called.
+      |local startSuiteOnce
       |event.timer(6, function()
       |  local okd, err = pcall(function() while true do end end)
       |  deadlineResult = (okd and "RAN-TO-COMPLETION" or tostring(err)):gsub(" ", "_")
@@ -528,8 +581,279 @@ object Smoke {
       |  event.timer(1, function()
       |    local t0 = os.clock(); work(N)
       |    bench2 = string.format("OCLJBENCH2=%.4f", os.clock() - t0)
+      |    -- The suite starts here, from the callback that finished, once the
+      |    -- post-timeout re-arm has been shown to be cleared (that is what
+      |    -- this very measurement is).
+      |    event.timer(0.05, function() startSuiteOnce() end)
       |  end)
+      |  -- Backup, in case the follow-up above never runs -- it races
+      |  -- checkDeadline's 0.5 s grace and misses roughly one run in six, and
+      |  -- losing the whole suite to that would be worse than starting it
+      |  -- without the bench2 reading.  Registered here rather than up front
+      |  -- for the reason written at startSuiteOnce.
+      |  event.timer(6, function() startSuiteOnce() end)
       |end)
+      |
+      |-- PHASE 1 -- THE SUITE.  Everything above is Phase 0 and is left exactly
+      |-- as it was, because those numbers are published; the suite runs the
+      |-- same mandelbrot again as one of its rows, which makes the two an
+      |-- independent cross-check of each other.
+      |--
+      |-- manifest.lua is GENERATED by the Java side from the contents of
+      |-- bench/oc/ and its references.txt, so adding a benchmark means dropping
+      |-- a file in that directory -- neither this script nor the Java side
+      |-- needs editing.  Fields: reps, order (array of names), peak (name->KB).
+      |--
+      |-- NO CUSTOM ENVIRONMENT, deliberately.  The obvious way to hand a
+      |-- benchmark its bit-ops module is load(src, name, "t", env) over a
+      |-- table copied from _ENV.  Both halves of that are unsafe here: _ENV is
+      |-- a Lua 5.2 construct LuaJIT does not implement, and cell A is real PUC
+      |-- 5.2 -- so the two VMs under comparison would disagree about what the
+      |-- code even means.  Instead the module goes in the sandbox global that
+      |-- benchmarks already read, which is the mechanism the working Phase-0
+      |-- pole already depends on, and the driver reads it back to prove it
+      |-- landed rather than assuming it did.
+      |local suite = {}          -- name -> {status=, check=, min=, max=, n=, free=}
+      |local suiteOrder = {}
+      |local suiteDone = "OCLJPDONE=pending"
+      |local suiteNow = "-"
+      |-- Separate from suiteNow ON PURPOSE.  The first version reported the
+      |-- bit-ops path through suiteNow, which is PROGRESS and gets reset to
+      |-- "-" when the last benchmark finishes -- so by the time Java read the
+      |-- screen the marker was always gone and every run logged "compat: -".
+      |-- The whole point of compat.lua recording which branch it took is that
+      |-- the results row can carry it, so it needs a field that is written
+      |-- once and never overwritten.
+      |local compatPath = "unknown"
+      |local dirty = true
+      |local manifest = nil
+      |local srcCache = {}
+      |local encoreRow = "OCLJENCORE=pending"
+      |local encoreSeq = 0
+      |local startEncore
+      |
+      |-- One (benchmark, repetition) per timer callback, and the next one is
+      |-- registered FROM the callback that finished rather than up front --
+      |-- the same shape the deadline probe had to adopt, for the same reason.
+      |-- It also means every unit gets a fresh 5 s deadline instead of sharing
+      |-- one, so a benchmark that overruns costs its own row and not the run.
+      |-- Paint the suite rows NOW, not on the next heartbeat tick.
+      |--
+      |-- This exists because of a question the harness could not answer.  When
+      |-- a machine dies inside a benchmark the 0.05 s repaint timer never runs
+      |-- again, so the screen still shows what it showed BEFORE the suite
+      |-- started -- OCLJPCOMPAT=unknown, no row -- which is indistinguishable
+      |-- from dying before the suite started at all.  startSuite() ends by
+      |-- calling unit() synchronously, so no tick falls in between.  A whole
+      |-- investigation of a lost cell-C run turned on that ambiguity and could
+      |-- not settle it.  Painting before each pcall makes the last thing on
+      |-- the screen the name of the benchmark that was actually running.
+      |local paintSuite
+      |
+      |local unit
+      |unit = function(bi, rep)
+      |  local name = suiteOrder[bi]
+      |  if not name then
+      |    suiteDone = string.format("OCLJPDONE=%d", #suiteOrder)
+      |    suiteNow = "-"
+      |    dirty = true
+      |    startEncore()
+      |    return
+      |  end
+      |  local r = suite[name]
+      |  suiteNow = name .. "#" .. rep
+      |  dirty = true
+      |  local function nxt()
+      |    if rep >= (manifest.reps or 3) then event.timer(0.05, function() unit(bi + 1, 1) end)
+      |    else event.timer(0.05, function() unit(bi, rep + 1) end) end
+      |  end
+      |  -- THE RAM GUARD.  LuaJIT has no emergency GC and the sandbox has no
+      |  -- collectgarbage, so a benchmark that does not fit does not fail its
+      |  -- own row -- it kills the machine and loses every row after it too.  A
+      |  -- skipped row is a reported result; a dead machine is not.
+      |  --
+      |  -- THE MARGIN WAS peak*2 + 64 AND THAT WAS WRONG.  peak is the TOTAL
+      |  -- standalone heap, base included, so doubling it asks for more than
+      |  -- the machine ever has: sieve (312 KB) demanded 688 KB against a
+      |  -- measured 653-676 KB free, so it could never run, and it did not --
+      |  -- it skipped a rep, then reported SKIP-LOWMEM over two perfectly good
+      |  -- ones.  The 2x came from LuaJIT letting the heap reach twice the LIVE
+      |  -- set before a cycle completes, which is a statement about the live
+      |  -- set and not about a total that already includes the base.
+      |  local freeKB = math.floor(computer.freeMemory() / 1024)
+      |  local peak = (manifest.peak or {})[name] or 0
+      |  local need = peak + 128
+      |  if peak > 0 and freeKB < need then
+      |    -- Only report a skip if NOTHING has succeeded yet.  A later rep
+      |    -- being skipped must not overwrite the status and CHECK that
+      |    -- earlier reps established, which is how two good sieve runs came
+      |    -- back looking like a failure with a byte count where the checksum
+      |    -- should have been.
+      |    if r.n == 0 then
+      |      r.status = "SKIP-LOWMEM"
+      |      r.check = string.format("%dKB_lt_%dKB", freeKB, need)
+      |    end
+      |    dirty = true
+      |    return nxt()
+      |  end
+      |  local src = srcCache[name]
+      |  if not src then
+      |    local e
+      |    src, e = readAll(name .. ".lua")
+      |    if not src then r.status = "READFAIL" r.check = tostring(e):gsub("[ /]", "_") dirty = true return nxt() end
+      |    srcCache[name] = src
+      |  end
+      |  local fn, lerr = load(src, "=" .. name)
+      |  if not fn then r.status = "LOADFAIL" r.check = tostring(lerr):gsub("[ /]", "_") dirty = true return nxt() end
+      |  -- The last paint before control leaves for the benchmark.  If the
+      |  -- machine does not come back, this is the evidence of what it was
+      |  -- doing when it went.
+      |  if paintSuite then paintSuite() end
+      |  local ok, check, secs = pcall(fn)
+      |  if not ok then
+      |    local msg = tostring(check)
+      |    -- OC's own timeout sentinel, reached through pcall.  Kept distinct
+      |    -- from any other error because it means "too big for one resume",
+      |    -- which is a sizing fact about the benchmark rather than a failure
+      |    -- of the VM under test.
+      |    r.status = msg:find("too long without yielding", 1, true) and "DEADLINE" or "ERROR"
+      |    r.check = msg:gsub("[ /]", "_"):sub(1, 40)
+      |    dirty = true
+      |    return nxt()
+      |  end
+      |  secs = tonumber(secs) or -1
+      |  r.status = "ok"
+      |  -- "/" is the row separator and " " ends the Java side's parse, so a
+      |  -- CHECK containing either would silently shift every later field --
+      |  -- the time would be read out of the free-memory column and still look
+      |  -- like a number.  Benchmarks return plain integers, hex digests and
+      |  -- %.4f floats today; this makes that a property of the row format
+      |  -- rather than of the current set of benchmarks.
+      |  r.check = tostring(check):gsub("[ /]", "_")
+      |  if secs < r.min then r.min = secs end
+      |  if secs > r.max then r.max = secs end
+      |  r.n = r.n + 1
+      |  r.free = math.floor(computer.freeMemory() / 1024)
+      |  dirty = true
+      |  return nxt()
+      |end
+      |
+      |-- THE ENCORE -- what does a world save actually cost?
+      |--
+      |-- Every OpenComputers world save runs eris.persist, and Phase 0 measured
+      |-- what that does to us: 196 608 B of machine code and 349 traces go to
+      |-- 0 and 0.  So a machine loaded from a save starts COLD and must
+      |-- recompile.  The obvious way to price that is to run a benchmark after
+      |-- the restore -- but the Java side has no safe way to tell a restored
+      |-- sandbox to do anything, and reaching into a running machine's Lua
+      |-- state from the harness thread is the exact race this project spent a
+      |-- milestone closing.
+      |--
+      |-- So the probe rides on the thing under test.  A repeating timer holding
+      |-- a Lua closure is precisely what eris has to serialise, so the encore
+      |-- SURVIVES THE SAVE by the same mechanism the boot counter does and
+      |-- fires again on the other side unprompted.  Java only has to read a
+      |-- sequence number and notice it advanced: samples before the persist are
+      |-- warm, the first sample after the restore is cold.
+      |--
+      |-- Phase 0's m3 tried to answer this by watching an IDLE machine and got
+      |-- it backwards -- it PASSED the thrashing build and FAILED the working
+      |-- one, because an idle machine has nothing hot to recompile.  This is
+      |-- the workload that measurement was missing.
+      |startEncore = function()
+      |  local name = manifest and manifest.encore
+      |  if not name or not srcCache[name] then return end
+      |  event.timer(manifest.encore_period or 5, function()
+      |    local fn = load(srcCache[name], "=" .. name)
+      |    if not fn then return end
+      |    local ok, check, secs = pcall(fn)
+      |    encoreSeq = encoreSeq + 1
+      |    if ok then
+      |      encoreRow = string.format("OCLJENCORE=%s/ok/%s/%.4f/%d",
+      |        name, tostring(check), tonumber(secs) or -1, encoreSeq)
+      |    else
+      |      encoreRow = string.format("OCLJENCORE=%s/ERR/%s/-1/%d", name,
+      |        tostring(check):gsub("[ /]", "_"):sub(1, 30), encoreSeq)
+      |    end
+      |    dirty = true
+      |  end, math.huge)
+      |end
+      |
+      |paintSuite = function()
+      |  component.gpu.set(1, 23, suiteDone .. " OCLJPNOW=" .. suiteNow ..
+      |    " OCLJPCOMPAT=" .. compatPath .. "                    ")
+      |  component.gpu.set(1, 41, encoreRow .. "                    ")
+      |  for i = 1, #suiteOrder do
+      |    local nm = suiteOrder[i]
+      |    local r = suite[nm]
+      |    component.gpu.set(1, 23 + i, string.format("OCLJP%02d=%s/%s/%s/%.4f/%.4f/%d/%d%s",
+      |      i, nm, r.status, r.check,
+      |      r.min == math.huge and -1 or r.min, r.max, r.free, r.n,
+      |      "                    "))
+      |  end
+      |end
+      |
+      |local function startSuite()
+      |  local msrc = readAll("manifest.lua")
+      |  if not msrc then suiteDone = "OCLJPDONE=NOMANIFEST" dirty = true return end
+      |  local mfn = load(msrc, "=manifest")
+      |  if not mfn then suiteDone = "OCLJPDONE=BADMANIFEST" dirty = true return end
+      |  local okm
+      |  okm, manifest = pcall(mfn)
+      |  if not okm or type(manifest) ~= "table" then suiteDone = "OCLJPDONE=BADMANIFEST" dirty = true return end
+      |  -- compat.lua is loaded ONCE and published as a sandbox global, because
+      |  -- require() searches /lib;/usr/lib;/home/lib;./ and never sees this
+      |  -- disk.  It is a hard stop if it does not land: bench/oc/compat.lua
+      |  -- records WHICH bit-ops implementation it picked, and a benchmark that
+      |  -- silently took the other one would be a different program measured
+      |  -- under the same name.
+      |  local csrc = readAll("compat.lua")
+      |  if csrc then
+      |    local cfn = load(csrc, "=compat")
+      |    if cfn then
+      |      local okc, c = pcall(cfn)
+      |      -- Guarded, because this is NOT inside a pcall.  The whole reason
+      |      -- the sandbox global is used at all is that _G is assumed to
+      |      -- exist there; an assumption that kills the suite by indexing
+      |      -- nil is worse than one that reports itself, and the readback
+      |      -- two lines down is what turns it into a reported result.
+      |      if okc and type(c) == "table" and type(_G) == "table" then _G.__OCLJ_COMPAT = c end
+      |    end
+      |  end
+      |  -- Read it back THROUGH _G, the way a benchmark will, instead of
+      |  -- trusting that the write above was visible.
+      |  local seen = _G and _G.__OCLJ_COMPAT
+      |  compatPath = seen and tostring(seen.path) or "UNREACHABLE"
+      |  suiteOrder = manifest.order or {}
+      |  for i = 1, #suiteOrder do
+      |    suite[suiteOrder[i]] = {status = "pending", check = "-", min = math.huge, max = -1, n = 0, free = 0}
+      |  end
+      |  dirty = true
+      |  unit(1, 1)
+      |end
+      |
+      |-- The suite must start AFTER the deadline probe, and the way it is
+      |-- started matters as much as the ordering.
+      |--
+      |-- The first version of this was a repeating gate timer registered up
+      |-- front that polled for bench2.  It made the deadline probe never
+      |-- report: OCLJDEADLINE stayed "pending", the watchdog never fired
+      |-- (fires=0), and k1/k2/k5 all failed -- while the SAME native and the
+      |-- same kernel passed 30/30 under the previous harness.  That is the
+      |-- failure the k4 comment above already describes in as many words,
+      |-- from the last time someone registered follow-up work up front, and
+      |-- it cost a run to rediscover.
+      |--
+      |-- So the suite is started the way OC programs actually schedule work:
+      |-- from the callback that finished.  Both registrations below happen
+      |-- INSIDE the deadline probe's callback, i.e. after the timeout has
+      |-- already fired, so nothing of ours is ever pending across it.
+      |local suiteStarted = false
+      |startSuiteOnce = function()
+      |  if suiteStarted then return end
+      |  suiteStarted = true
+      |  startSuite()
+      |end
       |
       |event.timer(0.05, function()
       |  n = n + 1
@@ -546,6 +870,15 @@ object Smoke {
       |  -- repainted every tick for the same reason as the counter: boot output
       |  -- would otherwise scroll a one-shot line off the screen.
       |  component.gpu.set(1, 16, gate .. "        ")
+      |  -- The suite block.  gpu.set is a DIRECT call and OC meters those per
+      |  -- tick; painting twenty-odd rows every 50 ms would spend the machine's
+      |  -- call budget on the scoreboard and stretch the wall time of the very
+      |  -- runs it is reporting.  So paint on change, plus once a second
+      |  -- regardless, because boot output scrolls a row away.
+      |  if dirty or n % 20 == 0 then
+      |    dirty = false
+      |    paintSuite()
+      |  end
       |end, math.huge)
       |""".stripMargin
 
@@ -606,7 +939,8 @@ object Smoke {
     // deliberately wrong variant instead -- the control for the checksum
     // assertion, because a checksum nobody has watched REJECT a wrong answer
     // is not evidence of anything.
-    val benchSrcPath = Paths.get(System.getProperty("ocljit.benchdir", "bench/oc"), "mandelbrot.lua")
+    val benchDirPath = Paths.get(System.getProperty("ocljit.benchdir", "bench/oc"))
+    val benchSrcPath = benchDirPath.resolve("mandelbrot.lua")
     val benchSabotage = System.getenv("OCLJ_BENCH_SABOTAGE") == "1"
     var benchSrc = new String(Files.readAllBytes(benchSrcPath), StandardCharsets.UTF_8)
     if (benchSabotage) {
@@ -616,6 +950,113 @@ object Smoke {
       p("!! the checksum assertion is not being enforced.")
     }
     Files.write(diskDir.resolve("mandelbrot.lua"), benchSrc.getBytes(StandardCharsets.UTF_8))
+
+    // --- PHASE 1: the suite -------------------------------------------
+    // Every .lua in bench/oc/ is planted; WHICH of them run, in what order,
+    // and what CHECK each must produce is decided by references.txt.  Adding a
+    // benchmark is therefore dropping a file and a line in that directory --
+    // neither this harness nor autorun.lua needs editing, which is what keeps
+    // the reference values and the assertions from drifting apart.
+    //
+    // Line format:  [!]<name> <CHECK> [<peakKB>]
+    //
+    // A LEADING "!" means QUARANTINED: the file is planted and its reference is
+    // known, but it stays OUT of the default suite and runs only when named
+    // explicitly in OCLJ_BENCH_ONLY.  That exists for a benchmark expected to
+    // exhaust the machine -- `strings`, whose naive coding allocates about 3 MB
+    // in a machine with under 1 MB free (bench/oc/strings2.lua).  Whether it
+    // survives is a real question worth measuring, but measuring it must not
+    // also cost the persist and restore milestones that run after the suite,
+    // so it gets a run of its own.
+    // peakKB is the standalone-measured peak; the sandbox driver refuses to
+    // start a benchmark unless free memory is comfortably above it, because
+    // LuaJIT has no emergency GC and an oversized workload does not fail its
+    // own row, it kills the machine and loses every row after it.
+    val refsPath = benchDirPath.resolve("references.txt")
+    val refCheck = scala.collection.mutable.LinkedHashMap.empty[String, String]
+    val refPeak = scala.collection.mutable.HashMap.empty[String, Int]
+    val refQuarantine = scala.collection.mutable.HashSet.empty[String]
+    if (Files.exists(refsPath)) {
+      val srcF = scala.io.Source.fromFile(refsPath.toFile, "UTF-8")
+      try for (raw <- srcF.getLines()) {
+        val line = raw.trim
+        if (line.nonEmpty && !line.startsWith("#")) {
+          val f = line.split("\\s+")
+          if (f.length >= 2) {
+            val quarantined = f(0).startsWith("!")
+            val nm = if (quarantined) f(0).substring(1) else f(0)
+            refCheck(nm) = f(1)
+            if (quarantined) refQuarantine += nm
+            if (f.length >= 3) refPeak(nm) = try f(2).toInt catch { case _: Throwable => 0 }
+          }
+        }
+      } finally srcF.close()
+    } else p("!! no " + refsPath + ": the Phase 1 suite will not run (Phase 0 is unaffected)")
+
+    var suiteNames: Seq[String] =
+      refCheck.keys.toSeq.filter(n => Files.exists(benchDirPath.resolve(n + ".lua")))
+    System.getenv("OCLJ_BENCH_ONLY") match {
+      case null =>
+        val held = suiteNames.filter(refQuarantine.contains)
+        suiteNames = suiteNames.filterNot(refQuarantine.contains)
+        if (held.nonEmpty)
+          p("quarantined, not in the default suite: " + held.mkString(",") +
+            "   (run one with OCLJ_BENCH_ONLY=<name>)")
+      case o =>
+        // Naming a benchmark explicitly overrides its quarantine; that is the
+        // only way a quarantined one ever runs.
+        val keep = o.split(",").map(_.trim).filter(_.nonEmpty).toSet
+        suiteNames = suiteNames.filter(keep.contains)
+        p("OCLJ_BENCH_ONLY=" + o + " -- suite restricted to " + suiteNames.mkString(",") +
+          (if (suiteNames.exists(refQuarantine.contains))
+             "   (includes a QUARANTINED benchmark: this run may lose the machine, which is the point)"
+           else ""))
+    }
+    val suiteReps =
+      try Option(System.getenv("OCLJ_REPS")).map(_.toInt).getOrElse(3)
+      catch { case _: Throwable => 3 }
+    if (benchSabotage) {
+      // The sabotage run is a control for the Phase-0 checksum and nothing
+      // else.  Leaving the suite in would make every Phase-1 row fail for a
+      // reason that has nothing to do with what is being controlled for.
+      p("!! OCLJ_BENCH_SABOTAGE=1: the Phase 1 suite is skipped; this run controls Phase 0 only")
+      suiteNames = Seq.empty
+    }
+    // Everything, including compat.lua, which the driver publishes as a
+    // sandbox global because require() cannot see this disk.
+    var plantedN = 0
+    val dstream = Files.newDirectoryStream(benchDirPath, "*.lua")
+    try dstream.forEach { pth =>
+      val fn = pth.getFileName.toString
+      if (fn != "mandelbrot.lua") {   // already planted above, possibly sabotaged
+        Files.copy(pth, diskDir.resolve(fn), StandardCopyOption.REPLACE_EXISTING)
+        plantedN += 1
+      }
+    } finally dstream.close()
+    val mfst = new StringBuilder
+    mfst.append("-- GENERATED by OcljSmoke from bench/oc/references.txt.  Do not edit.\n")
+    mfst.append("return {\n  reps = ").append(suiteReps).append(",\n  order = {")
+      .append(suiteNames.map(n => "\"" + n + "\"").mkString(", ")).append("},\n  peak = {")
+      .append(suiteNames.map(n => "[\"" + n + "\"] = " + refPeak.getOrElse(n, 0)).mkString(", "))
+      .append("},\n")
+    // The encore: one benchmark kept running on a repeating timer after the
+    // suite ends, so that post-save recovery has a workload to be measured
+    // against.  mandelbrot by default -- it allocates nothing (so it cannot be
+    // killed by the RAM cap while the harness is busy persisting), it is pure
+    // compute (so a flushed trace actually shows up), and its cost is already
+    // known in every cell.
+    val encorePick = Option(System.getenv("OCLJ_ENCORE")).filter(_.nonEmpty)
+      .getOrElse(if (suiteNames.contains("mandelbrot")) "mandelbrot" else suiteNames.headOption.getOrElse(""))
+    val encorePeriod =
+      try Option(System.getenv("OCLJ_ENCORE_PERIOD")).map(_.toInt).getOrElse(5)
+      catch { case _: Throwable => 5 }
+    mfst.append("  encore = ").append(if (encorePick.isEmpty) "nil" else "\"" + encorePick + "\"")
+      .append(",\n  encore_period = ").append(encorePeriod).append(",\n}\n")
+    Files.write(diskDir.resolve("manifest.lua"), mfst.toString.getBytes(StandardCharsets.UTF_8))
+    p("planted " + plantedN + " more .lua from " + benchDirPath + "; suite = " +
+      (if (suiteNames.isEmpty) "<none>" else suiteNames.mkString(",")) + " x" + suiteReps +
+      " reps; encore = " + (if (encorePick.isEmpty) "<none>" else encorePick) +
+      " every " + encorePeriod + " s")
     // 120 nested directories for the component pole.  Nested rather than flat
     // so the walk makes 120 SEPARATE fs.list calls (one per level); a flat
     // directory would be a single call and would measure nothing.
@@ -674,9 +1115,7 @@ object Smoke {
 
     // The LuaState belongs to the machine's worker thread; quiesce before
     // reading it, or the guard and the kernel race on the same state.
-    var q = 0
-    while (computer.machine.isExecuting && q < 600) { Thread.sleep(10); q += 1 }
-    p("quiesced after " + q + " spins (isExecuting=" + computer.machine.isExecuting + ")")
+    val qOk = quiesced(computer.machine, "the VM fingerprint")
     val fp = guard(computer.machine)
 
     // --- (b2) the MACHINE's own accounting -----------------------------
@@ -719,7 +1158,7 @@ object Smoke {
         (if ((kernelMode == "watchdog") == (kernelSeen == "watchdog")) ""
          else "   <- the kernel that ran is NOT the one requested; nothing below means what it says"))
     var qj = 0
-    while (computer.machine.isExecuting && qj < 600) { Thread.sleep(10); qj += 1 }
+    quiesced(computer.machine, "the JIT probe read-out")
     if (jitMode == "off")
       p("JIT PROBE: jit.off() + jit.flush() -> jit.status()=" +
         evalStr(mLua, "jit.off() jit.flush() return tostring(jit.status())"))
@@ -765,7 +1204,7 @@ object Smoke {
     // not something a persisted blob should ever contain.
     val bootMs = tBootShell - tBootStart
     var qk = 0
-    while (computer.machine.isExecuting && qk < 600) { Thread.sleep(10); qk += 1 }
+    quiesced(computer.machine, "the k-milestone read-out")
     val trRaw = evalStr(mLua, "local t = __ocljTr return t.start .. '/' .. t.stop .. '/' .. t.abort .. '/' .. t.flush")
     val jitStatus = evalStr(mLua, "return tostring(jit.status())")
     evalStr(mLua, "jit.attach(__ocljTrFn) __ocljTr = nil __ocljTrFn = nil return 'ok'")
@@ -875,9 +1314,11 @@ object Smoke {
     // ignored by the thread filter.  Read on the quiesced raw state.  In
     // watchdog mode the timeout probe above must have produced at least one
     // fire; in stock mode the kernel never arms, so all three must be zero.
-    var q5 = 0
-    while (computer.machine.isExecuting && q5 < 600) { Thread.sleep(10); q5 += 1 }
-    val wdStats = evalStr(mLua, "local f, r, x, dp, h = _OCLJ_WATCHDOG.stats() return f .. '/' .. r .. '/' .. x .. '/' .. dp .. '/' .. tostring(h)")
+    // If this one probes a running machine it does not merely misreport --
+    // it corrupted the stack badly enough to break the persist that follows.
+    val wdStats =
+      if (!quiesced(computer.machine, "the watchdog stats read-out")) "<not-quiesced>"
+      else evalStr(mLua, "local f, r, x, dp, h = _OCLJ_WATCHDOG.stats() return f .. '/' .. r .. '/' .. x .. '/' .. dp .. '/' .. tostring(h)")
     val wdFires = try wdStats.split("/")(0).toInt catch { case _: Throwable => -1 }
     p("WATCHDOG STATS: fires/refires/filtered/depth/hooked = " + wdStats)
     if (nativeMode == "stock")
@@ -975,13 +1416,115 @@ object Smoke {
       " kernel=" + kernelMode + " jit=" + jitMode +
       "  compute=" + bSecs + "s  component=" + wSecs + "s  env=" + envRow)
 
+    // --- (p1) PHASE 1: the suite ---------------------------------------
+    // Waits on the driver's own DONE sentinel rather than polling each row for
+    // "pending": with N rows, "have they all stopped saying pending" is a
+    // weaker question than "did the driver reach the end of its list", and only
+    // the second one distinguishes a finished suite from one that died in the
+    // middle.
+    if (suiteNames.nonEmpty) {
+      val suiteWaitS =
+        try Option(System.getenv("OCLJ_SUITE_WAIT")).map(_.toInt).getOrElse(300)
+        catch { case _: Throwable => 600 }
+      var sw = 0
+      val swMax = suiteWaitS * 40                 // 25 ms per poll
+      var doneRow = parse(nonEmptyScreen(screen), "OCLJPDONE")
+      var lastNow = ""
+      // THE STALL DETECTOR.  OCLJCTR is bumped by autorun's 0.05 s repeating
+      // timer, so it advances for as long as the machine dispatches timers at
+      // all.  Without this the harness sat out its whole 300 s budget twice in
+      // the Phase 1 matrix (C-strings, C-matmul) on machines that had stopped
+      // painting 280 s earlier -- ocelot-brain reports isRunning for a machine
+      // that is merely Sleeping or Yielded, so "still running" says nothing.
+      // A stalled scoreboard is the observable that does.
+      var lastCtr = -1
+      var stalled = 0
+      var stallStop = false
+      while (sw < swMax && computer.machine.isRunning && !stallStop &&
+             (doneRow == "pending" || doneRow == "<missing>")) {
+        ws.update(); Thread.sleep(25); sw += 1
+        if (sw % 8 == 0) {
+          val t = nonEmptyScreen(screen)
+          doneRow = parse(t, "OCLJPDONE")
+          val now = parse(t, "OCLJPNOW")
+          // A heartbeat, so a suite that takes minutes does not look hung and
+          // so a run killed by the outer timeout says where it got to.
+          if (now != lastNow && now != "<missing>") { lastNow = now; p("PHASE1 .. " + now) }
+          val ctr = try parse(t, "OCLJCTR").toInt catch { case _: Throwable => -1 }
+          if (ctr >= 0 && ctr == lastCtr) {
+            stalled += 1
+            // 400 polls of 25 ms with no tick = 10 s of a machine that is
+            // supposed to repaint twenty times a second.
+            if (stalled >= 400) {
+              stallStop = true
+              p("!! SUITE STALLED: OCLJCTR frozen at " + ctr + " for ~10 s while the " +
+                "machine still reports running.  The sandbox stopped dispatching timers; " +
+                "the suite never reached its end.  Giving up here instead of waiting out " +
+                suiteWaitS + " s.")
+              reportDeath(computer.machine, screen, "the Phase 1 suite (stalled, not stopped)")
+            }
+          } else { lastCtr = ctr; stalled = 0 }
+        }
+      }
+      if (!computer.machine.isRunning) reportDeath(computer.machine, screen, "the Phase 1 suite")
+      val suiteText = nonEmptyScreen(screen)
+      doneRow = parse(suiteText, "OCLJPDONE")
+      milestone("p1-suite-complete", doneRow == suiteNames.length.toString,
+        "driver reported OCLJPDONE=" + doneRow + " for " + suiteNames.length + " benchmarks" +
+          (if (doneRow == suiteNames.length.toString) ""
+           else "   <- the suite did not finish; rows below are partial"))
+      // Which bit-ops implementation the sandbox actually took.  It differs
+      // BY CELL and not by accident: PUC 5.2 cannot parse bitwise operators,
+      // so cell A necessarily runs the bit32 branch while B and C run the
+      // operator one.  Rows that use compat are therefore comparing two
+      // implementations across A, which is a real property of what players
+      // have rather than a defect -- but it has to be visible in the results.
+      val compatPath = parse(suiteText, "OCLJPCOMPAT")
+      p("PHASE1 compat path in-sandbox: " + compatPath)
+      milestone("p1-compat-path-known", compatPath == "operators" || compatPath == "bit32-STITCHED",
+        "sandbox bit-ops implementation = " + compatPath +
+          (if (compatPath == "operators" || compatPath == "bit32-STITCHED") ""
+           else "   <- compat.lua did not load, or _G is not reachable from the driver"))
+      p("PHASE1 rows: name/status/CHECK/min/max/freeKB/reps")
+      for (i <- suiteNames.indices) {
+        val key = "OCLJP%02d".format(i + 1)
+        val row = parse(suiteText, key)
+        val f = row.split("/")
+        val nm = if (f.length >= 1) f(0) else suiteNames(i)
+        val st = if (f.length >= 2) f(1) else "<norow>"
+        val ck = if (f.length >= 3) f(2) else "<none>"
+        val mn = if (f.length >= 4) f(3) else "-1"
+        val mx = if (f.length >= 5) f(4) else "-1"
+        val fr = if (f.length >= 6) f(5) else "-1"
+        val nr = if (f.length >= 7) f(6) else "0"
+        p("PHASE1 ROW: native=" + nativeMode + " kernel=" + kernelMode + " jit=" + jitMode +
+          "  " + nm + "/" + st + "/" + ck + "/" + mn + "/" + mx + "/" + fr + "/" + nr)
+        val want = refCheck.getOrElse(suiteNames(i), "<no-reference>")
+        val nrI = try nr.toInt catch { case _: Throwable => 0 }
+        val ok = st == "ok" && ck == want && nrI >= 1
+        // A skipped row is a reported outcome, not a pass.  It is called out
+        // separately because "did not fit in this machine" is a fact about
+        // OC's RAM cap that belongs in the writeup, and is not the same kind
+        // of thing as a wrong answer.
+        val why =
+          if (ok) ""
+          else if (st == "SKIP-LOWMEM") "   <- did not fit: " + ck
+          else if (st == "DEADLINE") "   <- overran OC's 5 s per-resume deadline; it is sized too big"
+          else if (st == "ok") "   <- WRONG ANSWER: expected " + want
+          else "   <- " + st + ": " + ck
+        milestone("p1-" + suiteNames(i), ok,
+          nm + " CHECK=" + ck + " (reference " + want + "), min " + mn + " s / max " + mx +
+            " s over " + nr + " reps, " + fr + " KB free after" + why)
+      }
+    }
+
     // --- (m1/m2) what the machine costs, and what a save destroys ------
     // Sampled either side of the persist below.  Both numbers were masked
     // until the watchdog landed: with traces thrashing there was almost no
     // mcode to account for and nothing worth flushing.
-    var qm = 0
-    while (computer.machine.isExecuting && qm < 600) { Thread.sleep(10); qm += 1 }
-    val (mc0, mcCap, tr0, jitOn) = jitStats(mLua)
+    val (mc0, mcCap, tr0, jitOn) =
+      if (quiesced(computer.machine, "the mcode read-out")) jitStats(mLua)
+      else (-1L, -1L, -1, false)
     p("JIT MEMORY: mcode=" + mc0 + " B of a " + mcCap + " B cap, traces=" + tr0 +
       ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
     // The control for "mcode is real" is the JIT being OFF, not the stock
@@ -1006,6 +1549,32 @@ object Smoke {
         "kernel=" + kernelMode + ": " + mc0 + " B of machine code the RAM cap does not charge for, " +
           tr0 + " traces, cap " + mcCap + " B" +
           (if (mc0 >= 65536) "" else "   <- too little compiled to measure a flush against"))
+    }
+
+    // --- (m3a) WARM encore samples, taken before the persist -----------
+    // Best of several, because the comparison wants a machine whose traces are
+    // compiled; one sample could land on a GC pause and make the post-restore
+    // cost look smaller than it is.
+    var encWarm = -1.0
+    var encSeqBefore = -1
+    var encName = "<none>"
+    if (suiteNames.nonEmpty) {
+      var es = 0
+      while (es < 1200 && computer.machine.isRunning && encSeqBefore < 3) {
+        ws.update(); Thread.sleep(25); es += 1
+        if (es % 8 == 0) {
+          val f = parse(nonEmptyScreen(screen), "OCLJENCORE").split("/")
+          if (f.length >= 5 && f(1) == "ok") {
+            val sq = try f(4).toInt catch { case _: Throwable => -1 }
+            val sc = try f(3).toDouble catch { case _: Throwable => -1.0 }
+            if (sq > encSeqBefore) {
+              encName = f(0); encSeqBefore = sq
+              if (sc > 0 && (encWarm < 0 || sc < encWarm)) encWarm = sc
+            }
+          }
+        }
+      }
+      p("ENCORE warm: " + encName + ", best of " + encSeqBefore + " samples = " + encWarm + " s")
     }
 
     // --- (f1) persist through OC's own PersistenceAPI ------------------
@@ -1095,6 +1664,51 @@ object Smoke {
     } else {
       p("restored machine running=" + computer2.machine.isRunning +
         " lastError=" + computer2.machine.lastError)
+
+      // THE RESTORED MACHINE NEEDS ITS OWN jit.off(), AND THIS IS WHY.
+      //
+      // OCLJ_JIT=off is applied once, to the LIVE state, before the persist
+      // (the "JIT PROBE: jit.off() + jit.flush()" line far above).  eris
+      // rebuilds a DIFFERENT lua_State on restore and nothing re-applied it
+      // there, so every post-restore number in the JIT-OFF cell was in fact
+      // measured with the compiler ON -- which silently destroys the negative
+      // control this cell exists to be.
+      //
+      // The Phase 1 matrix made it unmistakable: cell B's cold encore samples
+      // landed on cell C's for six benchmarks out of six, and B-sha256
+      // reported a post-save "recovery" of 0.0822 s against a bare-metal
+      // -joff time of 1.018 s.  An interpreter does not beat its own
+      // uncontended standalone run by 12x; a compiler does.
+      //
+      // This is a HARNESS fault, not a shipping one -- the shim's own
+      // OCLJ_JITOFF is applied at luaopen time and survives the restore -- but
+      // a control that is not real is worse than no control.
+      if (jitMode == "off") {
+        var ra: AnyRef = null
+        var rt = 0
+        while (rt < 120 && (ra == null || luaOf(ra) == null)) {
+          ws2.update(); Thread.sleep(25); rt += 1
+          ra = computer2.machine.architecture
+        }
+        val rLua = if (ra == null) null else luaOf(ra)
+        if (rLua == null)
+          milestone("f6-restored-jit-still-off", ok = false,
+            "could not reach the restored machine's LuaState after " + rt +
+              " ticks, so jit.off() was NOT re-applied -- every post-restore " +
+              "number in this cell is a JIT-ON number")
+        else if (!quiesced(computer2.machine, "re-applying jit.off() after the restore"))
+          milestone("f6-restored-jit-still-off", ok = false,
+            "the restored machine never quiesced, so jit.off() was NOT re-applied")
+        else {
+          val st = evalStr(rLua, "jit.off() jit.flush() return tostring(jit.status())")
+          milestone("f6-restored-jit-still-off", st == "false",
+            "re-applied jit.off() to the state eris rebuilt -> jit.status()=" + st +
+              (if (st == "false")
+                 "   (without this, this cell's post-restore numbers are the COMPILER's)"
+               else "   <- still on: no post-restore number in this cell is an interpreter number"))
+        }
+      }
+
       var k = 0
       while (k < 160 && computer2.machine.isRunning) { ws2.update(); Thread.sleep(25); k += 1 }
       val txtB = if (screen2 != null) nonEmptyScreen(screen2) else "<no screen>"
@@ -1106,6 +1720,48 @@ object Smoke {
       val ctrB = try parse(txtB, "OCLJCTR").toInt catch { case _: Throwable => -1 }
       val sameVm = nonceA != "<missing>" && nonceA == nonceB
       val advanced = ctrB > ctrBeforeRestore
+
+      // --- (m3) post-save recovery: the first encore AFTER the restore ---
+      // The save flushed every trace (m2 measures that), so this run is cold.
+      // What is ASSERTED is only that a sample was obtained; the ratio is
+      // REPORTED.  Phase 0 taught that lesson expensively -- m1 and m3 each
+      // encoded a guess about which way a number would go and both guesses
+      // were wrong, one of them passing the broken build.
+      if (suiteNames.nonEmpty && encSeqBefore > 0) {
+        var encCold = -1.0
+        var encSeqAfter = -1
+        var ec = 0
+        while (ec < 1600 && computer2.machine.isRunning && encCold < 0) {
+          ws2.update(); Thread.sleep(25); ec += 1
+          if (ec % 8 == 0) {
+            val f = parse(nonEmptyScreen(screen2), "OCLJENCORE").split("/")
+            if (f.length >= 5 && f(1) == "ok") {
+              val sq = try f(4).toInt catch { case _: Throwable => -1 }
+              // Only a sequence number PAST the pre-persist one is a
+              // post-restore sample.  The restore paints the old screen back,
+              // so the row is already there and already says "ok"; without
+              // this the harness would read the warm number twice and report
+              // a recovery cost of exactly 1.00x.
+              if (sq > encSeqBefore) {
+                encSeqAfter = sq
+                encCold = try f(3).toDouble catch { case _: Throwable => -1.0 }
+              }
+            }
+          }
+        }
+        val ratio = if (encWarm > 0 && encCold > 0) encCold / encWarm else -1.0
+        val ratioS = if (ratio > 0) f"$ratio%.2f" + "x" else "n/a"
+        p("ENCORE cold: " + encName + ", first post-restore sample (seq " + encSeqBefore +
+          " -> " + encSeqAfter + ") = " + encCold + " s")
+        p("POST-SAVE RECOVERY: warm " + encWarm + " s -> cold " + encCold + " s = " + ratioS +
+          "   (a world save flushes every compiled trace" +
+          (if (jitMode == "off") "; with the JIT off there is nothing to flush, so ~1.0x is the control" else "") + ")")
+        milestone("m3-post-save-workload-resumes", encCold > 0,
+          "the encore closure survived the persist and ran again on the other side: " +
+            encName + " cold " + encCold + " s against warm " + encWarm + " s, ratio " + ratioS +
+            (if (encCold > 0) "   (ratio REPORTED, not asserted)"
+             else "   <- no post-restore sample: the encore did not survive, or never fired"))
+      }
 
       milestone("f2-restore-same-vm", sameVm,
         s"boot nonce before=$nonceA after=$nonceB (identical=$sameVm) " +
