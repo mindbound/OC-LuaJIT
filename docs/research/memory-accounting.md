@@ -581,14 +581,111 @@ was saved, restored clean, and then the **encore** — the repeating timer that
 rides through `eris` holding a closure, which is how post-save recovery is
 measured at all — re-ran the workload and exhausted memory.
 
-Two things make this worth its own entry rather than a footnote to §8b. It is
-**JIT off**, so it is not the pinned-trace mechanism. And it happens **after a
-restore**, which is the one path where the heap's shape is not something the
-program produced incrementally — it is whatever `eris` rebuilt. Whether the
-restored heap starts denser than a booted one, and whether that is what pushed
-this over, is not established here. It should be measured before the emergency
-GC is designed, because a collector that fires at the wall behaves differently
-depending on how much of the heap is genuinely live at that moment.
+It is **JIT off**, so it is not the pinned-trace mechanism of §8b.
+
+**RESOLVED 2026-09-05, and the interesting half of the speculation was wrong.**
+This entry originally asked whether the restore path is structurally harder —
+whether "the heap's shape is whatever `eris` rebuilt" starts denser than a
+booted one — and said it should be measured before the emergency GC is
+designed. It has been measured, as a side effect of the pacing sweep
+(§8e), and the answer is no.
+
+The first sweep reported `ENCORE_OOM` on **8 of 8** runs whose benchmark
+survived, which reads as "no amount of pacing saves the persistence path". That
+was an artifact. `g->gc.stepmul` is a `global_State` field, and `eris` rebuilds
+a *different* `lua_State` on restore — the same reason the harness has to
+re-apply `jit.off()` there (milestone `f6`). Every one of those encores ran at
+the default `stepmul` of 200 whatever the sweep was set to, and the restored
+state's readback proves it:
+
+```
+GC PACE: re-applied after restore -- setstepmul was 200
+```
+
+With the pacing re-applied on both sides, the same eight runs come back
+**`ENCORE_OK` 8 of 8**. So the encore is simply the workload run a second time,
+and at default pacing this workload dies — which is §8c, not a new mechanism.
+
+**What survives as a caution is narrower and worth keeping.** A per-state
+setting does not cross `eris`. Anything the emergency-GC work ends up putting on
+the `global_State` — a pressure flag, a deferred-collect bit, a tuned
+`stepmul` — is gone on the far side of a persist unless it is re-established
+at restore, or lives somewhere that survives (the shim applies `OCLJ_JITOFF` at
+`luaopen` time, which does). That is a design constraint on the fix, not a
+property of the heap.
+
+### 8e. Pacing measured: it buys headroom, sublinearly, and cannot buy enough
+
+The collector's pacing is tunable at runtime (`collectgarbage('setstepmul', n)`
+-> `g->gc.stepmul`, `lj_api.c:1272-1280`). §8's corrected mechanism says the
+collector is losing a **rate contest**, so raising `stepmul` should move the
+failure boundary without removing it. Both halves of that were measured.
+
+**Phase A — does pacing save `sieve` at all?** Cell B, JIT off, two replicates
+per point. `stepmul` 200 is the VM's default (`LUAI_GCMUL`, `luaconf.h:94`), and
+the harness reads back the previous value so that "pacing did not help" and "the
+knob never took" cannot be confused.
+
+| `stepmul` | rate vs default | benchmark | free at exit |
+|---:|---:|---|---:|
+| 200 | 1× | **dies** 2/2 | — |
+| 400 | 2× | **dies** 2/2 | — |
+| 800 | 4× | survives 2/2 | 212–234 KB |
+| 1600 | 8× | survives 2/2 | 596–900 KB |
+| 3200 | 16× | survives 2/2 | 1006 KB |
+| 6400 | 32× | survives 2/2 | 832–852 KB |
+| `pause` 110 | — | **dies** 2/2 | — |
+
+Survival appears between 2× and 4×, and margin saturates by 16×. **The
+`pause` arm is the control for §8's claim that `gc.pause` is inert under
+sustained churn** — it is read only at `lj_gc.c:742` and `:801`, both of which
+set the start threshold of the *next* cycle, and a churning collector never
+reaches `GCSpause`. It dies 2/2, as predicted, which is better than the
+assertion it replaces.
+
+**Phase B — where does a fixed pacing break?** `stepmul` held at 3200 (16×),
+the workload scaled on two axes separately. `N` moves the live set *and* the
+bytes allocated per repetition; `REPS` moves only how long the churn runs.
+Checksums were generated standalone and each is `4500 × π(N)`, with the
+1× variant reproducing the shipped `4626000` as the control that the generator
+did not change the workload.
+
+| variant | N | REPS | live set | result at `stepmul` 3200 |
+|---|---:|---:|---:|---|
+| `sieveN1` | 8192 | 4500 | ~64 KB | survives, 980 KB free |
+| `sieveN2` | 16384 | 4500 | ~128 KB | survives, 970 KB free |
+| `sieveN4` | 32768 | 4500 | ~256 KB | **`not_enough_memory`** |
+| `sieveN8` | 65536 | 4500 | ~512 KB | **`not_enough_memory`** |
+| `sieveR2` | 8192 | 9000 | ~64 KB | survives, 978 KB free |
+| `sieveR4` | 8192 | 18000 | ~64 KB | dies of the **5 s deadline**, not memory |
+
+**Three things follow, and they decide the design.**
+
+**1. The failure is RATE, not volume.** `sieveN4` dies with a live set of about
+**256 KB against a 3072 KB budget** — 8% — while the collector runs at 16
+times its default speed. Nothing is too big to fit. The allocator simply
+produces garbage faster than the collector reclaims it, exactly as §8's
+arithmetic says: a fixed `lim` per step against unbounded allocation.
+
+**2. Pacing's return is sublinear and it runs out early.** Sixteen times the
+collector's rate buys between two and four times the workload size. A player
+writing code 4× heavier than `sieve` — not 10× or 20×, *four* — is
+already outside what the most aggressive safe pacing covers, and `stepmul` is
+paid on every workload, including the ones that never needed it.
+
+**3. Duration is bounded by something else entirely.** `sieveR2` at twice the
+repetitions survives with the same free memory as `sieveN1` (978 vs 980 KB) —
+running longer does not accumulate a deficit, because the collector either keeps
+up or it does not. `sieveR4` at four times dies of `too_long_without_yielding`,
+OC's 5 s per-resume deadline, before memory is ever the constraint.
+
+**So pacing is a real mitigation and provably not a fix.** It is worth shipping
+— 4× turns a reproducible death into a completion, and `sieve` at 3200
+finishes in 0.90 s against PUC's 2.65–2.84 s, so the old "it spends collector
+CPU" objection needs re-measuring rather than repeating. But a collect-and-retry
+at the wall is the only thing that addresses a rate failure, because at the wall
+the heap is over 98% garbage *whatever the rate was that got it there*. That is
+§11's emergency-mode item, and no pacing value retires it.
 
 ## 9. Calibration: OC's stock RAM scale is not enough
 
@@ -772,20 +869,36 @@ cap is armed. Safe, it helps, and it does not rescue the stock scale -- 0/3 at
 `ramScale` 1.8 with pause 150 / stepmul 400 -- while spending collector CPU,
 which is the opposite of this project's point.
 
-That rejection was measured against **boot success**, which is a different
-question from the one §8c now poses, so it is worth re-testing against `sieve`.
-But §8's corrected mechanism already bounds what such a test can conclude: the
-collector is rate-limited below the allocation rate, at a fixed `lim = 2000`
-cost units per step against unbounded allocation. Raising `lim` raises a
-ceiling; it does not remove one. **For any pacing setting there is an allocation
-rate above it, and in OpenComputers the player picks that rate and picks the
-wall as well, since `ramScaleFor64Bit` and the memory tiers are both mod
-settings.**
+That rejection was measured against **boot success**, a different question from
+the one §8c poses, so it was re-tested against `sieve`. **§8e has the
+numbers, and they are better than the old note and worse than they first look.**
 
-So a pacing experiment must be designed to find **where pacing breaks**, sweeping
-the workload and the cap independently, and its result is a margin figure. It
-cannot retire this item, and a passing benchmark must not be allowed to become
-the implicit ceiling on what gets built.
+`stepmul` 800 — 4× the default collector rate — turns `sieve`'s reproducible
+death into a completion, 2/2, and at 3200 it finishes in **0.90 s against PUC's
+2.65–2.84 s**. So pacing is a real mitigation and the "it spends collector
+CPU" objection needs re-measuring rather than repeating. It is worth shipping as
+a complement.
+
+**And it cannot be the fix, which §8e measures rather than argues.** At
+`stepmul` 3200 — sixteen times the default — a `sieve` with N merely
+**4× larger dies of `not_enough_memory` with a live set of ~256 KB against a
+3072 KB budget**. Eight per cent. Nothing is too big to fit; the allocator
+simply outruns the collector. Sixteen times the rate buys two to four times the
+workload, sublinearly, and is paid on every program including those that never
+needed it.
+
+The axes separate cleanly, which is what makes this conclusive rather than
+suggestive: scaling `REPS` — the same rate for longer — does **not** break
+it (2× duration survives with the same free memory), because a collector
+either keeps up or does not. Only the **rate** axis breaks it. And a
+collect-and-retry at the wall is precisely the mechanism that answers a rate
+failure, because at the wall the heap is over 98% garbage *whatever rate got it
+there*.
+
+**So this item stands on measurement, not on mechanism alone. No pacing value
+retires it, and a passing benchmark must not be allowed to become the implicit
+ceiling on what gets built** — the first version of this experiment was a
+pass/fail on one `sieve`, and it would have reported a clean win.
 
 ### The JIT fix landed, and the blind spot now has a number
 

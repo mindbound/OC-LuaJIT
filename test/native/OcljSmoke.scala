@@ -1305,6 +1305,59 @@ object Smoke {
       "__ocljTr = {start=0, stop=0, abort=0, flush=0} " +
       "__ocljTrFn = function(what) local t = __ocljTr t[what] = (t[what] or 0) + 1 end " +
       "jit.attach(__ocljTrFn, 'trace') return 'ok'"))
+    // --- GC PACING, for the rate-contest experiment --------------------
+    //
+    // WHY THIS KNOB AND NOT THE OTHER ONES.  memory-accounting.md section 8
+    // shows the collector losing a RATE contest: lj_gc_step gets a fixed
+    // budget lim = (GCSTEPSIZE/100)*stepmul (lj_gc.c:734) = 2000 at the
+    // defaults, while lj_gc.c:737-738 charges it everything allocated since
+    // the last step and :752 repays only GCSTEPSIZE = 1024 bytes.  Work per
+    // byte allocated is therefore ~stepmul/100, and STEPMUL IS THE ONLY KNOB
+    // THAT CHANGES IT -- GCSTEPSIZE cancels out of that ratio (it sets
+    // granularity, not rate), and gc.pause is read only at lj_gc.c:742/:801,
+    // both of which set the START threshold of the NEXT cycle.  Under
+    // sustained churn the collector never reaches GCSpause, so pause is inert
+    // in exactly the regime being tested.  It is settable here anyway, so a
+    // run can DEMONSTRATE that rather than assert it.
+    //
+    // THE OLD VALUE IS THE CONTROL AND IT MATTERS.  collectgarbage('setstepmul')
+    // returns the previous setting (lj_api.c:1272-1280).  It must read 200 --
+    // LUAI_GCMUL at luaconf.h:94, seeded at lj_state.c:309.  Without that
+    // readback a null result is unattributable: "pacing did not help" and "the
+    // knob never took" look identical in the row.
+    //
+    // NOT stepmul = 0: lj_gc.c:735-736 turns that into LJ_MAX_MEM, i.e. a
+    // whole stop-the-world cycle inside one bytecode.  The property is ignored
+    // unless positive.
+    //
+    // This runs on the RAW state, pre-boot, where collectgarbage is still
+    // reachable (machine.lua:1526 uses it).  It is NOT reachable from the
+    // sandbox -- machine.lua:737 omits it from the global table -- which is
+    // why a SHIPPED version of this would have to live in lj52_setallocf or
+    // the patched kernel, never in user code.
+    val gcStepMul = Integer.getInteger("ocljit.gcstepmul", 0).intValue()
+    val gcPause = Integer.getInteger("ocljit.gcpause", 0).intValue()
+    if (gcStepMul > 0) {
+      val was = evalStrLocked(computer.machine, mLua,
+        "local ok, old = pcall(collectgarbage, 'setstepmul', " + gcStepMul + ") " +
+        "return ok and tostring(old) or ('ERR:' .. tostring(old))")
+      p("GC PACE: setstepmul=" + gcStepMul + "  (was " + was + ")")
+      milestone("gc-pace-stepmul-took", was == "200",
+        "collectgarbage('setstepmul', " + gcStepMul + ") returned the previous value " + was +
+          (if (was == "200") "" else "   <- expected 200 (LUAI_GCMUL); the knob did NOT take, so this run measures nothing"))
+    }
+    if (gcPause > 0) {
+      val was = evalStrLocked(computer.machine, mLua,
+        "local ok, old = pcall(collectgarbage, 'setpause', " + gcPause + ") " +
+        "return ok and tostring(old) or ('ERR:' .. tostring(old))")
+      p("GC PACE: setpause=" + gcPause + "  (was " + was + ")")
+      milestone("gc-pace-pause-took", was == "200",
+        "collectgarbage('setpause', " + gcPause + ") returned the previous value " + was +
+          (if (was == "200") "" else "   <- expected 200 (LUAI_GCPAUSE); the knob did NOT take"))
+    }
+    p("GC PACE: stepmul=" + (if (gcStepMul > 0) gcStepMul.toString else "default(200)") +
+      "  pause=" + (if (gcPause > 0) gcPause.toString else "default(200)"))
+
     val tBootStart = System.currentTimeMillis()
 
     // --- (c) OpenOS boots to a shell ----------------------------------
@@ -1933,6 +1986,51 @@ object Smoke {
               (if (st == "false")
                  "   (without this, this cell's post-restore numbers are the COMPILER's)"
                else "   <- still on: no post-restore number in this cell is an interpreter number"))
+        }
+      }
+
+      // THE RESTORED MACHINE ALSO NEEDS ITS OWN setstepmul, FOR THE SAME
+      // REASON AND WITH THE SAME CONSEQUENCE.
+      //
+      // g->gc.stepmul is a global_State field (lj_obj.h), seeded from
+      // LUAI_GCMUL at lj_state.c:309 and written by collectgarbage('setstepmul')
+      // via lj_api.c:1272-1280.  eris rebuilds a DIFFERENT lua_State, so the
+      // pre-persist injection is gone on the other side and the restored
+      // machine runs at the default 200 however the sweep was configured.
+      //
+      // THIS WAS CAUGHT BY A CONFOUNDED COLUMN, NOT BY READING THE CODE.  The
+      // first gc-pace sweep reported ENCORE_OOM on 8 of 8 runs whose benchmark
+      // SURVIVED, which reads as "no amount of pacing saves the persistence
+      // path" -- a much stronger claim than the data supported, because the
+      // encore was running at stepmul 200 in every one of those rows.  It is
+      // the f6 defect above, one field over.
+      if (gcStepMul > 0 || gcPause > 0) {
+        var ra2: AnyRef = null
+        var rt2 = 0
+        while (rt2 < 120 && (ra2 == null || luaOf(ra2) == null)) {
+          ws2.update(); Thread.sleep(25); rt2 += 1
+          ra2 = computer2.machine.architecture
+        }
+        val rLua2 = if (ra2 == null) null else luaOf(ra2)
+        if (rLua2 == null || !quiesced(computer2.machine, "re-applying GC pacing after the restore"))
+          milestone("gc-pace-restored", ok = false,
+            "could not reach the restored machine's LuaState, so the pacing was NOT re-applied -- " +
+              "the encore below ran at the default stepmul and says nothing about pacing")
+        else {
+          val sm = if (gcStepMul > 0)
+            evalStr(rLua2, "local ok, old = pcall(collectgarbage, 'setstepmul', " + gcStepMul +
+              ") return ok and tostring(old) or ('ERR:' .. tostring(old))") else "-"
+          val pz = if (gcPause > 0)
+            evalStr(rLua2, "local ok, old = pcall(collectgarbage, 'setpause', " + gcPause +
+              ") return ok and tostring(old) or ('ERR:' .. tostring(old))") else "-"
+          // The old value is the evidence for the claim in the comment above:
+          // if the restored state had kept the injection it would read back the
+          // swept value, not 200.
+          p("GC PACE: re-applied after restore -- setstepmul was " + sm + ", setpause was " + pz)
+          milestone("gc-pace-restored", sm != "ERR" && !sm.startsWith("ERR:"),
+            "re-applied pacing to the state eris rebuilt (previous stepmul on the RESTORED state = " +
+              sm + (if (sm == "200") "; note it reset to the LUAI_GCMUL default, which is why this is needed"
+                    else "") + ")")
         }
       }
 

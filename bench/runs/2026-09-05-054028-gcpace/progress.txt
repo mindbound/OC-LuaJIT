@@ -1,0 +1,24 @@
+gc-pace-sweep 2026-09-05-054028
+  bench:      sieve
+  cells:      B
+  stepmuls:   200 400 800 1600 3200 6400   (200 = the VM default, i.e. the control arm)
+  pauses:     110     (expected inert; run to demonstrate it)
+  replicates: 2
+
+B-sm200-pz0-r1            33s meter=0.0181   DIED     ENCORE_OOM    free=0     sieve/pending/-/-1.0000/-1.0000/0/0
+B-sm400-pz0-r1            61s meter=0.0109   DIED     ENCORE_OOM    free=0     sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sm800-pz0-r1            43s meter=0.0250   SURVIVED ENCORE_OOM    free=192   sieve/ok/4626000/1.7156/1.7156/192/1
+B-sm1600-pz0-r1           44s meter=0.0196   SURVIVED ENCORE_OOM    free=621   sieve/ok/4626000/1.7357/1.7357/621/1
+B-sm3200-pz0-r1           41s meter=0.0106   SURVIVED ENCORE_OOM    free=979   sieve/ok/4626000/0.8853/0.8853/979/1
+B-sm6400-pz0-r1           41s meter=0.0123   SURVIVED ENCORE_OOM    free=876   sieve/ok/4626000/0.9439/0.9439/876/1
+B-sm0-pz110-r1            43s meter=0.0198   DIED     ENCORE_OOM    free=0     sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+--- replicate 1 done 05:45:40 ---
+B-sm200-pz0-r2            61s meter=0.0191   DIED     ENCORE_OOM    free=0     sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sm400-pz0-r2            43s meter=0.0196   DIED     ENCORE_OOM    free=0     sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sm800-pz0-r2            52s meter=0.0194   SURVIVED ENCORE_OOM    free=212   sieve/ok/4626000/1.7520/1.7520/212/1
+B-sm1600-pz0-r2           51s meter=0.0252   SURVIVED ENCORE_OOM    free=900   sieve/ok/4626000/1.7774/1.7774/900/1
+B-sm3200-pz0-r2           43s meter=0.0257   SURVIVED ENCORE_OOM    free=1006  sieve/ok/4626000/0.9225/0.9225/1006/1
+B-sm6400-pz0-r2           48s meter=0.0256   SURVIVED ENCORE_OOM    free=836   sieve/ok/4626000/1.6905/1.6905/836/1
+B-sm0-pz110-r2            45s meter=0.0205   DIED     ENCORE_OOM    free=0     sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+--- replicate 2 done 05:51:30 ---
+SWEEP COMPLETE 05:51:30

@@ -1,0 +1,21 @@
+gc-pace-sweep 2026-09-05-060451
+  benches:    sieveN1 sieveN2 sieveN4 sieveN8 sieveR2 sieveR4
+  cells:      B
+  stepmuls:   3200   (200 = the VM default, i.e. the control arm)
+  pauses:     110     (expected inert; run to demonstrate it)
+  replicates: 1
+
+B-sieveN1-sm3200-pz0-r1           42s meter=0.0106   SURVIVED ENCORE_OK     free=980   sieveN1/ok/4626000/0.8953/0.8953/980/1
+B-sieveN1-sm0-pz110-r1            34s meter=0.0095   DIED     ENCORE_OOM    free=0     sieveN1/pending/-/-1.0000/-1.0000/0/0
+B-sieveN2-sm3200-pz0-r1           44s meter=0.0098   SURVIVED ENCORE_OK     free=970   sieveN2/ok/8550000/1.7597/1.7597/970/1
+B-sieveN2-sm0-pz110-r1            54s meter=0.0180   DIED     ENCORE_OOM    free=0     sieveN2/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sieveN4-sm3200-pz0-r1           77s meter=0.0216   DIED     ENCORE_OK     free=0     sieveN4/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sieveN4-sm0-pz110-r1            77s meter=0.0268   DIED     ENCORE_OK     free=0     sieveN4/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sieveN8-sm3200-pz0-r1           76s meter=0.0249   DIED     ENCORE_OK     free=0     sieveN8/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sieveN8-sm0-pz110-r1            71s meter=0.0277   DIED     ENCORE_OK     free=0     sieveN8/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+B-sieveR2-sm3200-pz0-r1           56s meter=0.0145   SURVIVED ENCORE_OK     free=978   sieveR2/ok/9252000/2.3639/2.3639/978/1
+B-sieveR2-sm0-pz110-r1            42s meter=0.0234   DIED     ENCORE_OOM    free=0     sieveR2/pending/-/-1.0000/-1.0000/0/0
+B-sieveR4-sm3200-pz0-r1           79s meter=0.0253   DIED     ENCORE_OK     free=0     sieveR4/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+B-sieveR4-sm0-pz110-r1            44s meter=0.0207   DIED     ENCORE_OOM    free=0     sieveR4/pending/-/-1.0000/-1.0000/0/0
+--- replicate 1 done 06:16:39 ---
+SWEEP COMPLETE 06:16:39

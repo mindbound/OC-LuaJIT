@@ -1,0 +1,12 @@
+# Scaled sieve variants for the pacing breaking-point sweep (Phase B).
+# N scales the live set AND the bytes allocated per repetition (the RATE).
+# REPS scales only how long the churn runs (the DURATION), live set fixed.
+# peak column 0 = guard disabled: these are meant to reach the wall.
+
+mandelbrot   37904620                                                         58
+!sieveN1     4626000              0
+!sieveN2     8550000              0
+!sieveN4     15804000             0
+!sieveN8     29439000             0
+!sieveR2     9252000              0
+!sieveR4     18504000             0

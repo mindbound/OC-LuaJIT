@@ -1,0 +1,20 @@
+gc-pace-sweep 2026-09-05-055243
+  bench:      sieve
+  cells:      B
+  stepmuls:   800 1600 3200 6400   (200 = the VM default, i.e. the control arm)
+  pauses:     110     (expected inert; run to demonstrate it)
+  replicates: 2
+
+B-sm800-pz0-r1            85s meter=0.0101   SURVIVED ENCORE_OK     free=212   sieve/ok/4626000/0.9515/0.9515/212/1
+B-sm1600-pz0-r1           51s meter=0.0175   SURVIVED ENCORE_OK     free=877   sieve/ok/4626000/1.6757/1.6757/877/1
+B-sm3200-pz0-r1           52s meter=0.0230   SURVIVED ENCORE_OK     free=1006  sieve/ok/4626000/1.8083/1.8083/1006/1
+B-sm6400-pz0-r1           44s meter=0.0219   SURVIVED ENCORE_OK     free=852   sieve/ok/4626000/0.9031/0.9031/852/1
+B-sm0-pz110-r1            37s meter=0.0096   DIED     ENCORE_OOM    free=0     sieve/pending/-/-1.0000/-1.0000/0/0
+--- replicate 1 done 05:57:17 ---
+B-sm800-pz0-r2           100s meter=0.0208   SURVIVED ENCORE_OK     free=234   sieve/ok/4626000/1.7018/1.7018/234/1
+B-sm1600-pz0-r2           50s meter=0.0239   SURVIVED ENCORE_OK     free=596   sieve/ok/4626000/1.6987/1.6987/596/1
+B-sm3200-pz0-r2           50s meter=0.0196   SURVIVED ENCORE_OK     free=1006  sieve/ok/4626000/1.7158/1.7158/1006/1
+B-sm6400-pz0-r2           51s meter=0.0177   SURVIVED ENCORE_OK     free=832   sieve/ok/4626000/1.2442/1.2442/832/1
+B-sm0-pz110-r2            44s meter=0.0222   DIED     ENCORE_OOM    free=0     sieve/ERROR/not_enough_memory/-1.0000/-1.0000/0/0
+--- replicate 2 done 06:02:16 ---
+SWEEP COMPLETE 06:02:16

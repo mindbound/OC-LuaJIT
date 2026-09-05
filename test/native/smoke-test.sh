@@ -139,6 +139,16 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # anything at all -- it is appended last and HOCON lets the later assignment
 # win.
 : "${OCLJ_RAM_SCALE:=3.0}"
+
+# GC PACING, for the rate-contest experiment (memory-accounting.md section 8).
+# 0 = leave the VM's own LUAI_GCMUL / LUAI_GCPAUSE alone, which is the control.
+# stepmul is the only knob that changes the collector's RATE (work per byte
+# allocated is ~stepmul/100); pause is inert under sustained churn and is here
+# so a run can demonstrate that rather than assert it.  The harness prints the
+# PREVIOUS value and fails a milestone unless it reads 200 -- otherwise "pacing
+# did not help" and "the knob never took" are the same row.
+: "${OCLJ_GCSTEPMUL:=0}"
+: "${OCLJ_GCPAUSE:=0}"
 : "${OCLJ_NATIVE:=luajit}"
 case $OCLJ_NATIVE in luajit|stock) ;; *) fail "OCLJ_NATIVE must be luajit or stock, not '$OCLJ_NATIVE'";; esac
 if [ "$OCLJ_NATIVE" = "stock" ]; then
@@ -320,9 +330,9 @@ case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT
 [ "$OCLJ_JIT" = "off" ] && say "    OCLJ_JIT=off -- the harness will jit.off() the machine's state (JIT PROBE control run)"
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
-  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
 else
-  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
 fi
 RC=$?
 cat "$LOG"
