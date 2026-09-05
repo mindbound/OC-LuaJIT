@@ -319,11 +319,57 @@ involved):
 | live set, collect-then-count, every REPS in every sampling mode | **52.4 KB** |
 
 The machine died of memory, so the heap reached roughly **58× its live set**,
-and the only thing that stopped it there was the cap. `LUAI_GCPAUSE` does not
-bound this, because `lj_gc.c:752-753` pins `threshold = gc.total` once the
-collector has fallen behind: behind is where it stays, and under sustained
-churn the heap climbs until something external stops it. A pause multiplier
-bounds a collector that is keeping up.
+and the only thing that stopped it there was the cap.
+
+**CORRECTED 2026-09-04.** An earlier version of this paragraph said
+`LUAI_GCPAUSE` fails to bound the growth "because `lj_gc.c:752-753` pins
+`threshold = gc.total` once the collector has fallen behind: behind is where it
+stays." The conclusion is right and **the mechanism was backwards**, which
+matters because it is the mechanism that decides whether tuning could ever be
+the fix.
+
+`gc.threshold` is the **trip-wire for running a step**, never an allowance to
+grow. Every one of the ~49 `lj_gc_check` sites (`lj_gc.h`), `lj_meta.c:382` and
+the JIT's `asm_gc_check` test `total >= threshold` and *call the collector*. A
+**high** threshold is what suppresses collection, stated in the source itself:
+
+```c
+lj_gc.c:516     g->gc.threshold = LJ_MAX_MEM;  /* Prevent GC steps. */
+lj_api.c:1249   case LUA_GCSTOP:      g->gc.threshold = LJ_MAX_MEM;
+lj_api.c:1252   case LUA_GCRESTART:   g->gc.threshold = ... : g->gc.total;
+lj_api.c:1282   case LUA_GCISRUNNING: res = (g->gc.threshold != LJ_MAX_MEM);
+```
+
+So `threshold = g->gc.total` at `:753` is the **maximum-pressure** setting —
+collect at the very next checkpoint. It is LuaJIT's *response* to falling
+behind, not the cause of it.
+
+**The heap grows because the collector is rate-limited below the allocation
+rate.** `lj_gc_step` takes a fixed budget per invocation,
+`lim = (GCSTEPSIZE/100) * stepmul` (`lj_gc.c:734`) — exactly **2000** at the
+defaults (`GCSTEPSIZE` 1024u at `lj_gc.c:32`, `LUAI_GCMUL` 200 at
+`luaconf.h:94`, installed at `lj_state.c:309`). Against that, `:737-738` charges
+it `total - threshold`, i.e. *everything allocated since the last step*, while
+`:752` repays only `GCSTEPSIZE` = 1024 bytes of debt. Any program allocating
+more than ~1 KB between checkpoints therefore grows `debt` monotonically and
+never finishes a cycle before the cap arrives. `sieve` allocates ~64 KB per
+repetition.
+
+`LUAI_GCPAUSE` (`luaconf.h:93`) never entered into it: `gc.pause` is read at
+exactly two sites, `lj_gc.c:742` and `:801`, and both set the **start**
+threshold of the *next* cycle from the post-sweep estimate. It does not bound
+anything within a cycle.
+
+**Why this is the paragraph that settles the design question.** If the collector
+were merely mis-tuned, tuning would fix it. It is not: this is a *rate contest*
+between a collector with a fixed per-step budget and an allocator with none.
+Raising `lim` raises the collector's throughput ceiling, and for any ceiling
+there is an allocation rate above it — and in OpenComputers the player chooses
+that rate, and chooses the wall too, since `ramScaleFor64Bit` and the memory
+tiers are both mod settings. **Pacing changes the probability of reaching the
+wall; only collect-and-retry changes what happens at it.** That is the
+difference between a mitigation and a fix, and it is why §11's emergency-mode
+item cannot be retired by a tuning experiment, however well the tuning does.
 
 Two things were tried:
 
@@ -632,17 +678,114 @@ PUC collects-and-retries at the wall (`lmem.c:85-94`); LuaJIT throws
 (`lj_mem_realloc`). With calibration done, the whole remaining exposure is "a
 program right at the edge OOMs slightly earlier than it would on stock OC."
 
-The faithful fix is an emergency mode in `lj_gc.c`: a full collection that
-skips finalizers, as PUC's `isemergency` does, and a retry in `lj_mem_realloc`.
-It cannot be done from the allocator callback -- a full GC from inside
-`lua_Alloc` is precisely the re-entrancy that took the JVM down in §2 -- so it
-is VM surgery inside `lj_gc.c`, on the same footing as the CHECKHOOK patch, and
-it gets its own adversarial review. Schedule it; do not gate anything on it.
+#### The constraints, verified against this tree 2026-09-04
 
-Tried and rejected: pacing the collector (`lua_gc(LUA_GCSETPAUSE, ...)` when a
-cap is armed). Safe, and it looked promising, but it does not rescue the stock
-scale -- 0/3 at 1.8 with pause 150 / stepmul 400 -- and it spends collector CPU
-to buy whatever margin it does give. Not shipped.
+An earlier design pass produced these as a transcript that no longer exists.
+Each was re-derived here by reading the source and then adversarially re-checked
+by a second reader told to default to disagreement. **All nine came back
+PARTIAL: every conclusion roughly survived and every stated mechanism was wrong
+in some load-bearing way.** They are recorded with the corrections because the
+wrong mechanisms are the plausible ones, and this section previously prescribed
+a design built on two of them.
+
+**C1 -- A full collect driven from the allocator hangs on-trace, and does so
+unconditionally.** `lj_gc_fullgc`'s terminal loop is
+`do { gc_onestep(L); } while (g->gc.state != GCSpause);` (`lj_gc.c:800`), driven
+on *state*, not on the return value. `case GCSatomic` returns `LJ_MAX_MEM`
+without assigning `g->gc.state` while `tvref(g->jit_base)` is set
+(`lj_gc.c:673-677`), and `:799` forces `GCSpause` immediately before the loop,
+so the first pass always reaches `GCSatomic`. There is a second non-advancing
+return at `GCSfinalize` (`:706-710`).
+
+> Corrections to the inherited claim, all three material. The guard is
+> `jit_base` -- *executing mcode* -- not "recording or compiling"; recording is
+> explicitly supported, with `gc_traverse_curtrace` marking the trace under
+> construction (`lj_gc.c:636`) behind a `traceno == 0` early-out (`:259`). The
+> loop is not driven on `gc_onestep`'s return value. And in `lj_gc_step`,
+> `LJ_MAX_MEM` is the *opposite* of a spin -- it is a working "abandon this
+> budget" sentinel: `lim -= LJ_MAX_MEM` makes the `:746` loop condition 0 in
+> both the GC64 and 32-bit builds.
+
+**C2 -- It also re-enters the allocator, in a narrower place than claimed.**
+Only *positive-delta* re-entry matters, because `lj52shim.c:290` lets every
+shrink through. The live site is the sweep phase itself: `lj_gc.c:696` calls
+`lj_str_resize`, which reaches `lj_mem_realloc` -> `g->allocf` (`lj_str.c:139`).
+A nested refusal there raises `lj_err_mem` and longjmps out of the middle of a
+sweep, leaving `g->gc.state` mid-sweep with `mref(g->gc.sweep)` pointing into a
+partially-swept list.
+
+**C3 -- The finalizer objection is backwards, and following it would diverge
+from PUC rather than match it.** LuaJIT has no finalizer-in-OOM hazard today,
+because nothing drives a GC from the allocator at all: `lj_gc.c:874-875` and
+`:888-889` go straight to `lj_err_mem`. Do **not** add an `isemergency`-style
+guard to `lj_gc_fullgc` -- its only caller is `lua_gc(LUA_GCCOLLECT)`
+(`lj_api.c:1255`), an ordinary Lua-visible collect where running finalizers is
+correct and where PUC itself passes `isemergency = 0`. The open question is
+whether to *add* an emergency variant, not to guard the existing one.
+
+**C4 -- There is no re-entrancy guard, and the threshold sentinel is not one.**
+Setting `threshold = LJ_MAX_MEM` mutes *implicit* triggers only. Calling
+`collectgarbage("collect"/"step"/"restart")` from inside a `__gc` metamethod
+re-enters or disarms the collector today, unguarded, in stock LuaJIT.
+**Unreachable for us, and worth stating why:** OpenComputers does not put
+`collectgarbage` in the sandbox global table (`machine.lua:737`, and see §8c),
+so sandbox code cannot reach it. That is a mitigation by the host, not by the
+VM -- if the sandbox ever gains `collectgarbage` alongside `__gc` userdata, this
+becomes reachable state corruption.
+
+**C5 -- PUC-faithful pinning fails, but not by reading uninitialised slots.**
+A collection at `lj_tab.c:123-124` *frees the table under construction* -- it is
+unreachable, current-white, and already on `g->gc.root` -- leaving `newtab`
+writing through a dangling pointer at `:46-48`.
+
+**C6 -- `L->top` is stale at arbitrary allocation points**, and from
+`lj_mem_newgco` the object is worse than stale: it is partially initialised and
+already rooted and whitened (`lj_gc.c:893-895`). So the allocator is the one
+place in this tree that provably never collects, and it must stay that way.
+
+#### What the fix therefore has to look like
+
+**Not a collect at the point of refusal.** C1, C2 and C6 each independently
+forbid it. The previous text here -- "a full collection that skips finalizers,
+as PUC's `isemergency` does, and a retry in `lj_mem_realloc`" -- is a
+transliteration of PUC that does not survive contact with this VM, and C3 says
+the finalizer half of it was aimed at a hazard LuaJIT does not have.
+
+**The shim can reach the VM, and that is where the design space is.** An
+earlier draft asserted the allocator has no handle on the running state. It is
+false: `lj52shim.c:472-474` already includes `lj_obj.h`, `lj_dispatch.h` and
+`lj_jit.h`, and `:540` already does `G(M->L)`, so `gcref(g->cur_L)`,
+`g->gc.total` and `g->gc.threshold` are all in reach *today*. That makes a
+**deferred** design available -- the allocator refuses as it does now, but
+records the pressure, and the next ordinary safepoint (where `L->top` is sound
+and `jit_base` is clear) does the collect and the retry. Writing the false
+version into this document would have cost us that option, which is the concrete
+reason these constraints are being recorded rather than the conclusions alone.
+
+Whatever the shape, it gets its own adversarial review, on the same footing as
+the CHECKHOOK patch. Schedule it; nothing is gated on it.
+
+#### Pacing is a mitigation, not a candidate
+
+Recorded earlier as "tried and rejected": `lua_gc(LUA_GCSETPAUSE, ...)` when a
+cap is armed. Safe, it helps, and it does not rescue the stock scale -- 0/3 at
+`ramScale` 1.8 with pause 150 / stepmul 400 -- while spending collector CPU,
+which is the opposite of this project's point.
+
+That rejection was measured against **boot success**, which is a different
+question from the one §8c now poses, so it is worth re-testing against `sieve`.
+But §8's corrected mechanism already bounds what such a test can conclude: the
+collector is rate-limited below the allocation rate, at a fixed `lim = 2000`
+cost units per step against unbounded allocation. Raising `lim` raises a
+ceiling; it does not remove one. **For any pacing setting there is an allocation
+rate above it, and in OpenComputers the player picks that rate and picks the
+wall as well, since `ramScaleFor64Bit` and the memory tiers are both mod
+settings.**
+
+So a pacing experiment must be designed to find **where pacing breaks**, sweeping
+the workload and the cap independently, and its result is a margin figure. It
+cannot retire this item, and a passing benchmark must not be allowed to become
+the implicit ceiling on what gets built.
 
 ### The JIT fix landed, and the blind spot now has a number
 
