@@ -31,13 +31,34 @@ oracle against real Eris. ocelot-brain does.
 - [ ] Vendor ocelot-brain at a pinned commit. No published artifact; consumed as
   a git submodule + sbt composite build, with three dependency jars fetched by
   URL from asie.pl — vendor those too. MIT, compatible with ours.
-- [ ] Split `LuaJITArchitecture` into a host-agnostic core plus two thin shells
-  (~60 lines each). Exactly four things diverge: `recomputeMemory`'s body
-  (`Iterable[Entity]` versus stack → `Driver.driverFor`), the two extra memory
-  getters, the NBT blob write (direct `setByteArray` versus `SaveHandler`), and
-  the imports. Compile the shared core with `--release 8` — ocelot-brain's
-  Scala is already Java 8; only its 19 Java sources are 61, and our javac
-  output is ours to control.
+- [x] ~~Split `LuaJITArchitecture` into a host-agnostic core plus two thin
+  shells (~60 lines each).~~ **DONE 2026-09-15, and there is no shared core:
+  there is nothing left to share.** The plan assumed we would implement
+  `Architecture` and factor out what the two hosts have in common. We do not
+  implement it at all. `NativeLuaArchitecture` is a `public abstract class` in
+  both OpenComputers and ocelot-brain whose **only** abstract member is
+  `factory()`, and each host's own three VMs are one-line subclasses of it; so
+  are ours. The four divergences the plan enumerated — `recomputeMemory`'s
+  body, the memory getters, the NBT write, the imports — are all **inherited**,
+  which is why they stopped being our problem. What each adapter supplies is a
+  `LuaStateFactory` subclass: `version()`, `create()`, `openLibs()`.
+  `version()` is the load-bearing one — it determines the library filename the
+  host's own loader hunts for, which is why the additive artifact is named
+  `libjnluajit52-*`. See [research/shipping-model.md](research/shipping-model.md),
+  "The port is a subclass, not a port".
+  - harness adapter: `test/native/OcljArch.scala` — **runs**; AxisOS boots to
+    `localhost login:` on it (`bench/runs/2026-09-15-census-axisos-additive/`)
+  - mod adapter: `src/main/java/io/github/astronfo/ocluajit/arch/` — written
+    and compile-checked against the pinned OC jar; **not run**, that needs
+    Minecraft
+- [ ] **Bound the `@Mod` OpenComputers dependency.** We now subclass
+  `li.cil.oc.server.machine.luac.NativeLuaArchitecture` and `LuaStateFactory`,
+  OpenComputers' implementation classes, pinned only at COMPILE time. The `@Mod`
+  string is `required-after:OpenComputers;` with no version range, so an
+  OpenComputers whose shape changed gives a `NoSuchMethodError` at class load —
+  a startup crash for the player, not a build failure for us. Not guessed at:
+  a malformed FML range stops the mod loading outright, and nothing here can run
+  FML to validate one. Settle it in `runClient`.
 - [ ] Pin `NativeLua52Architecture` for every comparison. **Three languages are
   in play**: ocelot defaults to 5.3, GTNH ships 5.2, we are LuaJIT 5.1 +
   `LUA52COMPAT`. Any 5.3/5.4 result is inadmissible.

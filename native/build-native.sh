@@ -64,7 +64,9 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_SHIM:=$OCLJ_REPO/native}"
 : "${OCLJ_SER:=$OCLJ_REPO/serializer}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
-: "${OCLJ_OUT:=$OCLJ_BUILD/libdir}"
+# OCLJ_OUT is defaulted BELOW, once the variant is known: the two variants must
+# land in DIFFERENT directories.  See the OCLJ_VARIANT block.
+: "${OCLJ_OUT:=}"
 : "${OCLJ_JNLUA:=}"
 : "${OCLJ_JNI:=}"
 : "${CC:=gcc}"
@@ -88,12 +90,46 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 #
 # docs/research/shipping-model.md has the reasoning; test/native/LinkProbe.java
 # is the proof a JVM actually binds the additive one (5/5, 2026-09-15).
+#
+# WHY THE ADDITIVE NAME IS libjnluaJIT52 AND NOT libocluajit52.  The name is a
+# JOINT, not a label, and the other side of the joint is not ours to choose.
+# Both OC's and ocelot-brain's LuaStateFactory compute
+#
+#     libraryName = "libjnlua" + version + "-" + platform + ext
+#
+# as a PRIVATE val, load it in init(), and record the result in two PRIVATE
+# fields that createState() reads.  A subclass can override `version` and can
+# touch none of the rest.  So `version = "jit52"` is the whole hook: the base
+# class's own loader finds OUR library, sets its own private state, and ~110
+# lines of sandbox preparation (os.setlocale, killing the 5.1 compat entries,
+# the per-state RNG) are INHERITED rather than copied.  Copying them would be a
+# second implementation of OpenComputers' sandbox shape, drifting silently the
+# first time upstream changed it.
+#
+# One artifact, one name, and NOBODY of ours computes it.  Both adapters declare
+# version() = "jit52" and let the host's own LuaStateFactory derive the filename,
+# so there is no second copy of this string to drift:
+#   src/main/java/io/github/astronfo/ocluajit/arch/LuaJITStateFactory.java (mod)
+#   test/native/OcljArch.scala                                          (harness)
 : "${OCLJ_VARIANT:=dropin}"
 case $OCLJ_VARIANT in
-  dropin)   DLL_NAME=libjnlua52-windows-x86_64.dll    ;;
-  additive) DLL_NAME=libocluajit52-windows-x86_64.dll ;;
+  dropin)   DLL_NAME=libjnlua52-windows-x86_64.dll    ; : "${OCLJ_OUT:=$OCLJ_BUILD/libdir}"          ;;
+  additive) DLL_NAME=libjnluajit52-windows-x86_64.dll ; : "${OCLJ_OUT:=$OCLJ_BUILD/libdir-additive}" ;;
   *) echo "OCLJ_VARIANT must be dropin or additive" >&2; exit 1 ;;
 esac
+
+# WHY SEPARATE DIRECTORIES AND NOT ONE, GIVEN THE FILENAMES ALREADY DIFFER.
+# Because the directory is itself a switch.  ocelot-brain (and OC) check
+# debug.forceNativeLibPathFirst for EVERY factory, each looking for its own
+# filename, so a directory holding both variants makes "Lua 5.2" resolve to the
+# DROPIN -- our LuaJIT wearing OpenComputers' 5.2 name -- at the very moment we
+# are trying to prove our additive library coexists with the REAL PUC 5.2.  The
+# test would pass while measuring LuaJIT against itself.
+#
+# With libdir-additive holding only libjnluajit52-*, the 5.2 factory misses,
+# falls back to the bundled PUC native, and one JVM ends up running both VMs at
+# once -- which is the shipped configuration, and a far stronger check of the
+# no-collision claim than any symbol count.
 LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK"
 
 fail() { echo "BUILD FAIL: $*" >&2; exit 1; }

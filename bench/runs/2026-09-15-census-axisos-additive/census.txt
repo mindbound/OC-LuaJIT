@@ -1,0 +1,86 @@
+CENSUS| =============== AxisOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b355bc57-105f-4f62-a48e-26f24e7e01db\scratchpad\os\axis-os\src\kernel
+CENSUS|     boot        = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/os/axis-os/eeprom/boot.lua
+CENSUS|     entries     = bin, boot, dev, drivers, etc, home, kco.lua, kernel.lua, lib, opt, sys, system, usr
+CENSUS|     native      = additive
+CENSUS|     ticks       = 14000
+CENSUS| ADDITIVE ARM: pinned to ocljit.arch.OCLuaJITArchitecture (LuaStateLuaJIT,
+CENSUS| libjnluajit52).  OpenComputers' own PUC 5.2 native is loaded alongside it.
+CENSUS|     ram         = 1 x ExtendedTier.ThreeHalf = 1024 KB advertised
+CENSUS|     boot fs     = 6bdef257-b7e3-4102-8a09-bef1773082f6
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = ocljit.arch.OCLuaJITArchitecture
+CENSUS| coexistence    = OpenComputers' own LuaState reports <stock PUC>   (expected <stock PUC>)
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 3535553 B   kernelMemory = 389825 B
+CENSUS| PEAK USED      = 2741421 B REAL   (min free 794132 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = arms=141316 collects=141315 bailouts=0 refusals=0 armed=true
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 211 non-blank glyphs, 2 distinct cell colours
+CENSUS| ---------------- SCREEN [AxisOS] ----------------
+    _        _       ___   ____
+   / \  __ _(_)_____/ _ \/ ___|
+  / _ \ \ \/ / / __| | | \___ \
+ / ___ \ >  <| \__ \ |_| |___) |
+/_/   \_/_/\_\_|___/\___/|____/
+AxisOS v0.82-DQA-beta
+
+________________________________________________
+
+XEN XKA v0.82-DQA-beta on localhost
+
+localhost login:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+  the harness did not report a passing verdict
+  no LuaJIT fingerprint: the run did not prove which VM it used --
+  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ
+  has no Eris, so every persistence assertion would pass vacuously.
+[smoke] +259s  log: /tmp/ocljit-additive/smoke.log
+SMOKE FAIL

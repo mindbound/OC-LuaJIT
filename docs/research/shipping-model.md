@@ -104,6 +104,14 @@ any other registered architecture."*
 
 ## What (b) costs
 
+> **SUPERSEDED 2026-09-15 by "The port is a subclass, not a port", below.** This
+> table prices a from-scratch implementation of `Architecture`. That turned out
+> not to be the job: `NativeLuaArchitecture` is a `public abstract class` with
+> exactly one abstract member, and OpenComputers' own three VMs are one-line
+> subclasses of it. Almost every row below is inherited rather than written. The
+> table is kept because the reasoning that chose (b) over (a) is unchanged, and
+> because it is the estimate the later measurement should be read against.
+
 Ten interface methods (`api/machine/Architecture.java`), measured against OC's
 own `NativeLuaArchitecture.scala` (438 lines):
 
@@ -225,17 +233,159 @@ covariant — while `lua_getstack`'s **return** is deliberately left as the bare
 (narrowed) `LuaDebug`, because that covariance is what carries our natives
 along with the handle.
 
-**Still outstanding: the factory.** Nothing yet drives a *machine* through
-`LuaStateLuaJIT`; the probe runs bare Lua. The `Architecture` port needs a
-factory path that constructs `LuaStateLuaJIT` and loads our differently-named
-library — the one piece with no template on either side, since OC's and
-ocelot-brain's `LuaStateFactory` both construct `jnlua.LuaState` and have no
-fourth entry to copy.
+> **SUPERSEDED the same day, by "The port is a subclass, not a port" below.**
+> This paragraph read *"Still outstanding: the factory. Nothing yet drives a
+> machine through `LuaStateLuaJIT`; the probe runs bare Lua. The `Architecture`
+> port needs a factory path … the one piece with no template on either side."*
+> A machine does drive it now (AxisOS, to a login prompt), and the premise was
+> wrong twice over: the factory has a template on **both** sides — an abstract
+> `LuaStateFactory` with `version`/`create`/`openLibs` — and "loads our
+> differently-named library" turned out to be the one thing we must **not** do
+> ourselves, because the loader's private state is what `createState()` reads.
 
 **Scope note for anyone reading the sections above.** Wherever this document or
 the roadmap says "drop-in replacement for OC's 5.2 native", that describes the
 HARNESS. The shipped mod replaces nothing: fourth class, fourth symbol family,
 fourth entry in the CPU cycle, OC's three untouched.
+
+## The port is a subclass, not a port, 2026-09-15
+
+The cost table above is wrong, in our favour, and by a wide margin. It priced
+writing `Architecture`. Nobody has to: **`NativeLuaArchitecture` is a
+`public abstract class` whose only abstract member is `factory()`**, and
+OpenComputers' own three VMs are one-line subclasses of it. Measured with
+`javap` against the 1.12.58 `-dev` jar we build against:
+
+```
+public abstract class li.cil.oc.server.machine.luac.NativeLuaArchitecture
+        implements li.cil.oc.api.machine.Architecture {
+  public abstract LuaStateFactory factory();      <- the only abstract member
+  public LuaState lua();                          public boolean initialize();
+  public int kernelMemory();                      public ExecutionResult runThreaded(boolean);
+  public double ramScale();                       public void runSynchronized();
+  public boolean recomputeMemory(Iterable<ItemStack>);
+  public void load(NBTTagCompound);               public void save(NBTTagCompound);
+}
+public class NativeLua52Architecture extends NativeLuaArchitecture {
+  public LuaStateFactory$Lua52$ factory();        <- that is the entire class
+}
+```
+
+`LuaStateFactory` is the same shape, and it is where every difference between
+the VMs actually lives:
+
+```
+public abstract class li.cil.oc.server.machine.luac.LuaStateFactory {
+  public abstract String version();
+  public abstract LuaState create(scala.Option<Object>);
+  public abstract void openLibs(LuaState);
+  public void init();  public boolean isAvailable();  public Option<LuaState> createState();
+}
+```
+
+So `runThreaded`, `runSynchronized`, `save`/`load`, and all seven
+`ArchitectureAPI` subclasses — the ~823 lines the table called the bulk, and the
+three rows it called hard — are **inherited, not ported**. The mod-side
+adapter is `src/main/java/io/github/astronfo/ocluajit/arch/LuaJITArchitecture.java`:
+a constructor and `factory()`.
+
+### `version()` is the whole hook, and it is why the artifact got renamed
+
+`LuaStateFactory` computes
+
+```
+libraryName = "libjnlua" + version() + "-" + platform + extension
+```
+
+as a **private** field, resolves and `System.load`s it in `init()`, and records
+the outcome in **private** state that `createState()` reads. A subclass can
+override `version()`, `create()` and `openLibs()`, and can touch none of the
+rest. That single fact decides several things at once:
+
+* Declaring `version() = "jit52"` points OpenComputers' own loader at
+  `libjnluajit52-<platform><ext>`. The additive artifact was renamed from
+  `libocluajit52-*` to exactly that (`native/build-native.sh`), so there is one
+  name and nothing translates between a "harness name" and a "shipped name".
+* We must let the base class do the loading. Overriding `init()` to load the
+  library ourselves would leave those private fields unset and `createState()`
+  returning `None` — which is what "native libraries not available" means, and
+  is the error the first additive run produced for an unrelated reason.
+* Therefore ~110 lines of `createState()` are inherited too, and that is the
+  part worth having. It is where OpenComputers shapes the sandbox:
+  `os.setlocale("C")`, removal of the 5.1 compat entries (`unpack`,
+  `loadstring`, `math.log10`, `table.maxn`), dropping `dofile`/`loadfile`, and
+  the per-state RNG. A copy of that in our source would be a second definition
+  of OpenComputers' sandbox shape, and the first upstream change to it would
+  make our architecture quietly different from the other three in a
+  security-relevant way.
+
+### Where the library has to live in the shipped mod
+
+When `debug.forceNativeLibPathFirst` is unset — i.e. always, for a player —
+`init()` resolves the library as a classpath resource at
+`/assets/opencomputers/lib/<libraryName>`, built from **OpenComputers'** resource
+domain. We cannot change that path without overriding `init()`, which strands us
+on the wrong side of those private fields. Minecraft gives every mod one shared
+classloader, so a resource shipped in **our** jar under
+`assets/opencomputers/lib/` is found by that lookup. It is another mod's asset
+namespace and we are a guest in it; what makes it safe is that the filename is
+ours alone — `libjnluajit52-*` collides with nothing OpenComputers ships, and
+`build-native.sh` fails the build if our library exports a single symbol in
+OpenComputers' `LuaState` family. **Not yet verified in game.**
+
+### What it costs
+
+A dependency on `li.cil.oc.server.*`, which is OpenComputers' implementation
+rather than its published `li.cil.oc.api`. Deliberate, and the alternative is
+worse: reimplementing against the public API alone means maintaining our own
+copy of the sandbox setup and the persistence protocol, and a divergence there
+is a silent behavioural difference between architectures rather than a compile
+error. Inheriting makes an upstream break a **build** failure, which is the
+failure mode to prefer.
+
+**That holds at build time only, and the gap is real.** We compile against a
+version pinned in `dependencies.gradle`, but the `@Mod` dependency string is
+`required-after:OpenComputers;` with no version range, so a player can load this
+jar against an OpenComputers whose `NativeLuaArchitecture` has changed shape.
+The result is a `NoSuchMethodError`/`AbstractMethodError` at class load — a
+startup crash, not a build failure. Bounding the dependency is on the roadmap,
+deliberately not guessed at here: a malformed FML version range stops the mod
+loading entirely and nothing in this repository can run FML to check one.
+
+### Proven by running it, on the side where running is possible
+
+`test/native/OcljArch.scala` is the same construction against ocelot-brain,
+whose `NativeLuaArchitecture` is a port of OpenComputers' and is if anything
+*more* restrictive (there `lua`/`kernelMemory`/`ramScale` are `private[machine]`;
+in OC they are public). A real machine boots AxisOS on it:
+
+```
+architecture   = ocljit.arch.OCLuaJITArchitecture
+native marker  = luajit/LuaJIT 2.1.ROLLING
+kernel (final) = watchdog
+coexistence    = OpenComputers' own LuaState reports <stock PUC>
+```
+
+That last line is the one this whole document was written to establish, and it
+is now measured rather than argued: with `forceNativeLibPathFirst` pointing at a
+directory holding only `libjnluajit52-*`, OpenComputers' 5.2 factory misses,
+falls back to its own bundled PUC-Lua native, and **our library and
+OpenComputers' own 5.2 native are loaded together** — ours driving the machine,
+OpenComputers' answering as a separate VM when asked. The no-collision claim
+previously rested on a symbol count in `build-native.sh`.
+
+State that precisely, because several natives were always loaded.
+`Ocelot.initialize` calls `init()` on all three stock factories every run
+(`LuaStateFactory.scala:42-44`), so PUC 5.3 and 5.4 load regardless — the
+drop-in runs had three libraries in the JVM too. Coexistence *in general* was
+never in doubt. What is new is that the native our drop-in **replaces** is
+present at the same time as ours, and it is the only one that could ever have
+collided: the drop-in is `libjnlua52`, binding the same `LuaState` class OC's
+5.2 native binds, whereas 5.3 and 5.4 bind `LuaStateFiveThree` and
+`LuaStateFiveFour` and were never contended.
+
+What has **not** been run is the mod-side file, because running it needs a
+Minecraft instance.
 
 ## What this de-risks, and it is more than the question asked
 

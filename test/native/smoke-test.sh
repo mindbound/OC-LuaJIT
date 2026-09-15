@@ -107,6 +107,16 @@
 set -u
 
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# DEFINED HERE, NOT LOWER DOWN, BECAUSE THEY ARE USED HERE.  These four sat
+# below the OCLJ_NATIVE validation that calls them, so an unrecognised value hit
+# `fail: command not found`, sh carried on to the next line, and the run
+# proceeded in whatever mode the defaults gave it.  A guard that cannot exit is
+# not a guard.
+fail() { echo "SMOKE FAIL: $*" >&2; exit 1; }
+say()  { echo "[smoke] $*"; }
+T0=$(date +%s)
+stamp() { echo "[smoke] +$(( $(date +%s) - T0 ))s  $*"; }
 : "${OCLJ_LIBDIR:=}"
 : "${OCLJ_BRAIN:=}"
 : "${OCLJ_BRAIN_CP:=}"
@@ -149,13 +159,52 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # did not help" and "the knob never took" are the same row.
 : "${OCLJ_GCSTEPMUL:=0}"
 : "${OCLJ_GCPAUSE:=0}"
-: "${OCLJ_CENSUS_ARCH:=52}"
+# Defaulted BELOW, from OCLJ_NATIVE: an additive run must pin OUR architecture,
+# because in that mode "Lua 5.2" is the real PUC native sitting right next to us.
+: "${OCLJ_CENSUS_ARCH:=}"
 : "${OCLJ_CENSUS_RAM:=1}"   # ExtendedTier.ThreeHalf sticks; MineOS declares a 2048 KB floor   # census baseline arm only; 53 measures PUC, not us
 : "${OCLJ_NATIVE:=luajit}"
-case $OCLJ_NATIVE in luajit|stock) ;; *) fail "OCLJ_NATIVE must be luajit or stock, not '$OCLJ_NATIVE'";; esac
+# WHICH LIBRARY BACKS THE MACHINE, and therefore which filename the preflight
+# demands.  The name is not decoration: LuaStateFactory looks under
+# forceNativeLibPathFirst for ITS OWN filename, one per factory, so the filename
+# IS the selection mechanism.
+#
+#   luajit    (default)  libjnlua52-*    our DROPIN, wearing OC's 5.2 name.
+#                        "Lua 5.2" IS LuaJIT; there is no PUC VM in the JVM.
+#                        Every measurement in bench/runs/ was taken like this.
+#   stock                no forced path at all -- the bundled PUC-Lua 5.2, the
+#                        VM a player runs today, and the only honest baseline.
+#   additive             libjnluajit52-*, backing LuaStateLuaJIT.  OpenComputers'
+#                        own PUC 5.2 native ALSO loads, from the natives jar,
+#                        because the 5.2 factory misses in that directory and
+#                        falls back.  Both VMs live in one JVM, which is the
+#                        shipped configuration -- and the machine runs on ours
+#                        only because ocljit.arch.OCLuaJITArchitecture is pinned.
+case $OCLJ_NATIVE in
+  luajit)   DLL_NAME=libjnlua52-windows-x86_64.dll    ;;
+  additive) DLL_NAME=libjnluajit52-windows-x86_64.dll ;;
+  stock)    DLL_NAME=libjnlua52-windows-x86_64.dll    ;;
+  *) fail "OCLJ_NATIVE must be luajit, additive or stock, not '$OCLJ_NATIVE'";;
+esac
 if [ "$OCLJ_NATIVE" = "stock" ]; then
   OCLJ_KERNEL=stock
   say "    OCLJ_NATIVE=stock -- ocelot-brain's own PUC-Lua 5.2 native (the baseline a player runs today); kernel forced to stock"
+fi
+if [ "$OCLJ_NATIVE" = "additive" ]; then
+  say "    OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM"
+  : "${OCLJ_CENSUS_ARCH:=luajit}"
+else
+  : "${OCLJ_CENSUS_ARCH:=52}"
+fi
+case $OCLJ_CENSUS_ARCH in
+  52|53|luajit) ;;
+  *) fail "OCLJ_CENSUS_ARCH must be 52, 53 or luajit, not '$OCLJ_CENSUS_ARCH'";;
+esac
+if [ "$OCLJ_CENSUS_ARCH" = luajit ] && [ "$OCLJ_NATIVE" != additive ]; then
+  # Refused rather than allowed, because it reads as the stronger test and is
+  # the weaker one: in dropin mode BOTH architectures are LuaJIT, so "it ran on
+  # our architecture" would be true and would prove nothing about coexistence.
+  fail "OCLJ_CENSUS_ARCH=luajit needs OCLJ_NATIVE=additive (the LuaJIT architecture is backed by libjnluajit52, which only the additive build produces)"
 fi
 : "${OCLJ_KERNEL:=watchdog}"
 : "${OCLJ_LUAJIT_EXE:=}"
@@ -166,6 +215,14 @@ fi
 : "${OCLJ_WORK:=${TMPDIR:-/tmp}/ocljit-smoke}"
 : "${OCLJ_LIBS:=$OCLJ_WORK/lib}"
 : "${OCLJ_SRC:=$SELF_DIR/OcljSmoke.scala}"
+
+# THE ADAPTER AND THE CLASS IT DRIVES, compiled on every run rather than only on
+# additive ones.  They cost a second, and they sit on the critical path of the
+# thing this harness exists to check; a dropin run that quietly stopped
+# compiling them would hide the break until the next additive run, possibly
+# weeks later with a dozen unrelated changes in between.
+: "${OCLJ_ARCH_SRC:=$SELF_DIR/OcljArch.scala}"
+: "${OCLJ_JAVA_SRC:=$SELF_DIR/../../src/main/java/li/cil/repack/com/naef/jnlua/LuaStateLuaJIT.java}"
 
 # WHICH HARNESS RUNS.  Everything above this line -- the classpath, the
 # generated ocelot-brain config, the ramScale pin, the native selection -- is
@@ -189,14 +246,8 @@ fi
 # references.txt, which run-standalone.sh checks for drift.
 : "${OCLJ_BENCHDIR:=bench/oc}"
 
-DLL_NAME=libjnlua52-windows-x86_64.dll
 SCALA_VER=2.13.11
 ASM_VER=9.5.0-scala-1
-
-fail() { echo "SMOKE FAIL: $*" >&2; exit 1; }
-say()  { echo "[smoke] $*"; }
-T0=$(date +%s)
-stamp() { echo "[smoke] +$(( $(date +%s) - T0 ))s  $*"; }
 
 # Windows/JVM classpath plumbing: java wants native paths and ';'.
 if command -v cygpath >/dev/null 2>&1; then
@@ -213,8 +264,15 @@ fi
 
 # --------------------------------------------------------------- 0
 say "=============== 0. preflight ==============="
-[ -n "$OCLJ_LIBDIR" ] || fail "OCLJ_LIBDIR is unset (dir holding $DLL_NAME)"
-[ -f "$OCLJ_LIBDIR/$DLL_NAME" ] || fail "no $OCLJ_LIBDIR/$DLL_NAME -- run build-native.sh first"
+# In stock mode NONE of our artifacts are used: no forced path is written, the
+# kernel is forced to stock, and the point of the arm is that no LuaJIT exists
+# in the JVM at all.  Demanding our DLL there made the baseline depend on the
+# thing it is the baseline FOR, and staging it planted our library in the one
+# arm that must not have it.
+if [ "$OCLJ_NATIVE" != stock ]; then
+  [ -n "$OCLJ_LIBDIR" ] || fail "OCLJ_LIBDIR is unset (dir holding $DLL_NAME)"
+  [ -f "$OCLJ_LIBDIR/$DLL_NAME" ] || fail "no $OCLJ_LIBDIR/$DLL_NAME -- run build-native.sh first"
+fi
 [ -n "$OCLJ_BRAIN" ] || fail "OCLJ_BRAIN is unset (git clone https://gitlab.com/cc-ru/ocelot/ocelot-brain.git)"
 [ -f "$OCLJ_SRC" ] || fail "no harness source at $OCLJ_SRC"
 
@@ -222,7 +280,11 @@ if [ -n "$OCLJ_JAVA" ] && [ -x "$OCLJ_JAVA/bin/java" ]; then JAVA="$OCLJ_JAVA/bi
 elif command -v java >/dev/null 2>&1; then JAVA=java
 else fail "no java: set OCLJ_JAVA to a JDK 11+ home"; fi
 say "java    = $("$JAVA" -version 2>&1 | head -1)"
-say "dll     = $OCLJ_LIBDIR/$DLL_NAME ($(wc -c < "$OCLJ_LIBDIR/$DLL_NAME") bytes)"
+if [ "$OCLJ_NATIVE" != stock ]; then
+  say "dll     = $OCLJ_LIBDIR/$DLL_NAME ($(wc -c < "$OCLJ_LIBDIR/$DLL_NAME") bytes)"
+else
+  say "dll     = <none: stock arm, ocelot-brain bundled PUC-Lua only>"
+fi
 
 mkdir -p "$OCLJ_WORK/classes" "$OCLJ_LIBS" || fail "cannot create $OCLJ_WORK"
 
@@ -276,13 +338,32 @@ SCALAC_CP="$(w "$OCLJ_LIBS/scala-compiler-$SCALA_VER.jar")$SEP$(w "$OCLJ_LIBS/sc
 
 # --------------------------------------------------------------- 2
 say "=============== 2. compile the harness ==============="
-"$JAVA" -cp "$SCALAC_CP" scala.tools.nsc.Main \
-  -classpath "$CP" -d "$(w "$OCLJ_WORK/classes")" "$(w "$OCLJ_SRC")" \
-  > "$OCLJ_WORK/scalac.log" 2>&1
+# 2a. OUR Java class first -- the Scala adapter extends a LuaState subclass that
+# lives in this repository and in no jar, so javac has to run before scalac.
+[ -f "$OCLJ_JAVA_SRC" ] || fail "no $OCLJ_JAVA_SRC (regenerate it with native/jnlua/gen-luastate-subclass.py)"
+if [ -n "$OCLJ_JAVA" ] && [ -x "$OCLJ_JAVA/bin/javac" ]; then JAVAC="$OCLJ_JAVA/bin/javac"
+elif command -v javac >/dev/null 2>&1; then JAVAC=javac
+else fail "no javac: OCLJ_JAVA must point at a JDK, not a JRE"; fi
+"$JAVAC" -nowarn -cp "$CP" -d "$(w "$OCLJ_WORK/classes")" "$(w "$OCLJ_JAVA_SRC")" > "$OCLJ_WORK/javac.log" 2>&1
+JC=$?
+[ $JC -eq 0 ] || { head -20 "$OCLJ_WORK/javac.log"; fail "javac exit=$JC (log: $OCLJ_WORK/javac.log)"; }
+# The nested class is asserted separately because its absence is not a compile
+# error -- it is a System.load that throws NoClassDefFoundError with no Lua run
+# yet, which is how it was found the first time.  jnlua.c JNI_OnLoad (:1741)
+# references LuaStateLuaJIT$LuaDebug by name.
+[ -f "$OCLJ_WORK/classes/li/cil/repack/com/naef/jnlua/"'LuaStateLuaJIT$LuaDebug.class' ] || fail "LuaStateLuaJIT compiled without its nested LuaDebug"
+stamp "LuaStateLuaJIT compiled"
+
+# 2b. the harness main PLUS the architecture adapter.  Our classes dir goes
+# first on scalac's classpath, so the adapter resolves LuaStateLuaJIT from what
+# javac just produced rather than from anything that might lurk in a jar.
+SRC_CP="$(w "$OCLJ_WORK/classes")$SEP$CP"
+"$JAVA" -cp "$SCALAC_CP" scala.tools.nsc.Main -classpath "$SRC_CP" -d "$(w "$OCLJ_WORK/classes")" "$(w "$OCLJ_SRC")" "$(w "$OCLJ_ARCH_SRC")" > "$OCLJ_WORK/scalac.log" 2>&1
 SC=$?
 grep -E '^.*error' "$OCLJ_WORK/scalac.log" | head -20
 [ $SC -eq 0 ] || fail "scalac exit=$SC (log: $OCLJ_WORK/scalac.log)"
 [ -f "$OCLJ_WORK/classes/$OCLJ_MAIN_CLASSFILE" ] || fail "harness did not compile (no $OCLJ_MAIN_CLASSFILE)"
+[ -f "$OCLJ_WORK/classes/ocljit/arch/OCLuaJITArchitecture.class" ] || fail "the architecture adapter did not compile"
 stamp "harness compiled"
 
 # --------------------------------------------------------------- 3
@@ -292,7 +373,34 @@ say "=============== 3. generate the ocelot-brain config ==============="
 # application.conf and append HOCON path assignments, which merge over it.
 CONF="$OCLJ_WORK/ocljit.conf"
 cp "$BRAIN_RES/application.conf" "$CONF" || fail "cannot copy application.conf"
-LIBDIR_ABS=$(wm "$(CDPATH= cd -- "$OCLJ_LIBDIR" && pwd)")
+# STAGE THE LIBRARY INSTEAD OF POINTING AT THE BUILD TREE.
+#
+# LuaStateFactory.init() ends with `catch { case t => ...; tmpLibFile.delete() }`,
+# and under forceNativeLibPathFirst tmpLibFile IS the file that setting names.
+# So any load failure -- a missing MSVC runtime, a half-written DLL, a JNI_OnLoad
+# that throws -- DELETES the artifact build-native.sh just produced, and the next
+# thing anyone sees is "no such file", which describes the cleanup rather than
+# the fault.  Copying first means the deletion falls on a copy in the scratch
+# dir and the build output is never at risk.
+#
+# THE STAGING DIRECTORY IS PER-VARIANT, AND IS EMPTIED FIRST.  build-native.sh
+# deliberately builds the dropin and the additive into SEPARATE directories,
+# because forceNativeLibPathFirst names one directory and every factory looks in
+# it for its own filename -- so a directory holding both makes "Lua 5.2" resolve
+# to the dropin at the very moment an additive run is trying to prove it
+# coexists with the REAL PUC 5.2.  A single shared staging directory would have
+# quietly undone that split the first time someone ran both variants with the
+# default OCLJ_WORK, and the coexistence probe would have reported a collision
+# that does not exist.
+STAGE="$OCLJ_WORK/libdir-$OCLJ_NATIVE"
+mkdir -p "$STAGE" || fail "cannot create $STAGE"
+rm -f "$STAGE"/libjnlua*.dll "$STAGE"/libjnlua*.so "$STAGE"/libjnlua*.dylib
+if [ "$OCLJ_NATIVE" != stock ]; then
+  cp "$OCLJ_LIBDIR/$DLL_NAME" "$STAGE/$DLL_NAME" || fail "cannot stage $DLL_NAME"
+  STAGED=$(ls "$STAGE" | wc -l)
+  [ "$STAGED" = 1 ] || fail "staging dir $STAGE holds $STAGED files, expected exactly 1 -- forceNativeLibPathFirst would offer more than one VM"
+fi
+LIBDIR_ABS=$(wm "$(CDPATH= cd -- "$STAGE" && pwd)")
 {
   echo ""
   echo "# ---- appended by smoke-test.sh ----"
@@ -300,7 +408,12 @@ LIBDIR_ABS=$(wm "$(CDPATH= cd -- "$OCLJ_LIBDIR" && pwd)")
   # OC-JNLua-Natives.  This is the ONLY hook the whole thing needs.
   # In stock mode this line is OMITTED, which is the whole mechanism:
   # LuaStateFactory then falls back to the bundled PUC-Lua 5.2 native.
-  [ "$OCLJ_NATIVE" = "luajit" ] && echo "opencomputers.debug.forceNativeLibPathFirst = \"$LIBDIR_ABS\""
+  # Emitted for BOTH native-backed modes, and the reason they share one line is
+  # that they select by FILENAME, not by path: the dropin is libjnlua52-* and the
+  # additive is libjnluajit52-*, so pointing the same setting at libdir-additive
+  # hands our library to the LuaJIT factory while the 5.2 factory misses and
+  # falls back to the bundled PUC native.  Omitted only for stock.
+  [ "$OCLJ_NATIVE" != "stock" ] && echo "opencomputers.debug.forceNativeLibPathFirst = \"$LIBDIR_ABS\""
   # The security setting whose enforcement we assert.  OCLJ_ALLOW_BYTECODE
   # exists ONLY so the d2 milestone can be run in its open polarity as a
   # negative control; it defaults to false and any other value is announced
@@ -357,29 +470,134 @@ cat "$LOG"
 
 # --------------------------------------------------------------- 5
 say "=============== 5. verdict ==============="
-# Three independent gates, because a JVM that dies inside the native can exit
-# with a status that means nothing.
+# GATES PER HARNESS, because the gates below are assertions about what the MAIN
+# printed, and the mains print different things.  They used to be hard-coded to
+# OcljSmoke, so every census run -- which emits CENSUS| lines and no SMOKE|
+# line and no GUARD line -- ended in "SMOKE FAIL" no matter how well it went.
+# A verdict that is always wrong for a whole class of runs is worse than none:
+# it is read once, disbelieved, and then ignored on the run where it was right.
+: "${OCLJ_VERDICT:=smoke}"
+case $OCLJ_VERDICT in
+  smoke|census) ;;
+  # Validated because it SELECTS A GATE SET.  Any unrecognised value silently
+  # chose the OpenOS gates, which is the always-wrong verdict this block exists
+  # to stop -- and it would have chosen them for a census run, scoring it FAIL.
+  *) fail "OCLJ_VERDICT must be smoke or census, not '$OCLJ_VERDICT'";;
+esac
+
+# WHICH VM THIS RUN IS SUPPOSED TO HAVE USED.  Not the same as OCLJ_NATIVE: the
+# census 53 arm runs the stock PUC 5.3 native DELIBERATELY, as the baseline that
+# separates "this OS cannot run on our VM" from "this OS cannot run on a
+# 5.2-class VM at all", and it does so with OCLJ_NATIVE at its luajit default.
+# Keying the marker gate on OCLJ_NATIVE alone made that documented arm
+# unpassable.  Every gate below is TWO-SIDED: when we expect LuaJIT we demand
+# the LuaJIT marker, and when we expect PUC we demand a marker that is NOT
+# LuaJIT.  A one-sided gate cannot catch a baseline that silently ran on us,
+# which is the direction that would quietly invalidate a comparison.
+EXPECT_VM=luajit
+[ "$OCLJ_NATIVE" = stock ] && EXPECT_VM=puc
+[ "$OCLJ_VERDICT" = census ] && [ "$OCLJ_CENSUS_ARCH" = 53 ] && EXPECT_VM=puc
+
 OK=1
 [ $RC -eq 0 ] || { echo "  java exit=$RC (124 = timed out)"; OK=0; }
-# The diagnostic deliberately does NOT contain the string it is reporting the
-# absence of.  It used to read "no 'VERDICT: PASS' line", which meant a caller
-# scoring a batch of runs with `grep -q 'VERDICT: PASS'` scored every FAILURE
-# as a pass.  That is not hypothetical: it produced a confident "3/3 at
-# ramScale 1.8" here that a second measurement contradicted, and the truth was
-# 2/10.  Anything scanning these logs should match the harness's own line,
-# anchored: grep -qx 'SMOKE| VERDICT: PASS'.
-grep -q "^SMOKE| VERDICT: PASS" "$LOG" || { echo "  the harness did not report a passing verdict"; OK=0; }
-grep -q "GUARD VM FINGERPRINT: native=luajit/" "$LOG" || {
-  echo "  no LuaJIT fingerprint: the run did not prove which VM it used --"
-  echo "  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ"
-  echo "  has no Eris, so every persistence assertion would pass vacuously."
-  OK=0; }
-grep -c "MILESTONE .*: FAIL" "$LOG" | grep -qv '^0$' && { echo "  failing milestones:"; grep "MILESTONE .*: FAIL" "$LOG" | sed 's/^/    /'; OK=0; }
+
+if [ "$OCLJ_VERDICT" = census ]; then
+  grep -q "^CENSUS| VERDICT:" "$LOG" || { echo "  the census did not report a verdict at all"; OK=0; }
+  grep -q "^CENSUS| lastError      = <none>" "$LOG" || {
+    echo "  the machine ended with an error:"; grep "^CENSUS| lastError" "$LOG" | sed 's/^/    /'; OK=0; }
+  grep -q "^CENSUS| VERDICT: no panic" "$LOG" || { echo "  panic text on screen"; OK=0; }
+
+  # LIVENESS.  Every gate above is satisfied by a machine that never ran: no
+  # verdict error, no panic text, lastError none.  The verdict line claims the
+  # system "ran to the tick limit", so check that rather than assert it.
+  TICKLINE=$(grep "^CENSUS| ticks run" "$LOG" | head -1)
+  RAN=$(printf '%s' "$TICKLINE" | awk '{print $5}')
+  TOT=$(printf '%s' "$TICKLINE" | awk '{print $7}')
+  if [ -z "$RAN" ] || [ -z "$TOT" ]; then
+    echo "  no tick count in the log: nothing establishes the machine ever ran"; OK=0
+  elif [ "$RAN" = 0 ]; then
+    echo "  the machine ran 0 ticks -- it never started"; OK=0
+  elif [ "$RAN" != "$TOT" ]; then
+    echo "  the machine stopped early: $RAN of $TOT ticks"; OK=0
+  fi
+
+  if [ "$EXPECT_VM" = luajit ]; then
+    grep -q "^CENSUS| native marker  = luajit/" "$LOG" || {
+      echo "  no LuaJIT marker: this run did not prove which VM it used, and"
+      echo "  ocelot-brain substitutes LuaJ or its own PUC native when ours fails"
+      echo "  to load -- so every number above would describe a different VM."
+      OK=0; }
+  else
+    grep -q "^CENSUS| native marker  =" "$LOG" || { echo "  no native marker line at all"; OK=0; }
+    grep -q "^CENSUS| native marker  = luajit/" "$LOG" && {
+      echo "  this is a BASELINE arm (expected PUC) but it ran on OUR LuaJIT native --"
+      echo "  it cannot serve as a control for anything."
+      OK=0; }
+  fi
+
+  # The pin is load-bearing and CensusOs shouts when it slips; treat that as fatal
+  # rather than as a line in the log nobody reads.
+  grep -q "^CENSUS| !! architecture is" "$LOG" && {
+    echo "  the architecture pin did not take:"; grep "^CENSUS| !! architecture" "$LOG" | sed 's/^/    /'; OK=0; }
+
+  # COEXISTENCE, asserted POSITIVELY.  Checking only for the shouted failure
+  # line let the probe be absent entirely -- and its "OpenComputers 5.2 native
+  # did not load" branch shouts nothing, because from CensusOs side that is a
+  # report, not an error.  In the additive arm the probe IS the result, so
+  # demand that it ran and said what it must say.
+  if [ "$OCLJ_CENSUS_ARCH" = luajit ]; then
+    grep -q "^CENSUS| coexistence    = OpenComputers' own LuaState reports <stock PUC>" "$LOG" || {
+      echo "  the coexistence probe did not report a separate PUC state:"
+      grep "^CENSUS| coexistence" "$LOG" | sed 's/^/    /'
+      echo "  (absent, or OpenComputers' own LuaState answered with OUR marker)"
+      OK=0; }
+  fi
+  grep -q "^CENSUS| !! OpenComputers" "$LOG" && {
+    echo "  the coexistence probe failed:"; grep "^CENSUS| !!" "$LOG" | sed 's/^/    /'; OK=0; }
+else
+  # The diagnostic deliberately does NOT contain the string it is reporting the
+  # absence of.  It used to read "no 'VERDICT: PASS' line", which meant a caller
+  # scoring a batch of runs with `grep -q 'VERDICT: PASS'` scored every FAILURE
+  # as a pass.  That is not hypothetical: it produced a confident "3/3 at
+  # ramScale 1.8" here that a second measurement contradicted, and the truth was
+  # 2/10.  Anything scanning these logs should match the harness's own line,
+  # anchored: grep -qx 'SMOKE| VERDICT: PASS'.
+  grep -q "^SMOKE| VERDICT: PASS" "$LOG" || { echo "  the harness did not report a passing verdict"; OK=0; }
+  # TWO-SIDED, like the census gate and for the same reason.  This was
+  # unconditional, so every OCLJ_NATIVE=stock run scored SMOKE FAIL however well
+  # it went -- while OcljSmoke's own in-VM guard asserted the stock fingerprint
+  # correctly and printed VERDICT: PASS. The shell disagreed with the harness on
+  # a whole arm.
+  grep -q "GUARD VM FINGERPRINT:" "$LOG" || { echo "  no VM fingerprint line: the run did not prove which VM it used"; OK=0; }
+  if [ "$EXPECT_VM" = luajit ]; then
+    grep -q "GUARD VM FINGERPRINT: native=luajit/" "$LOG" || {
+      echo "  no LuaJIT fingerprint: the run did not prove which VM it used --"
+      echo "  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ"
+      echo "  has no Eris, so every persistence assertion would pass vacuously."
+      OK=0; }
+  else
+    grep -q "GUARD VM FINGERPRINT: native=luajit/" "$LOG" && {
+      echo "  OCLJ_NATIVE=stock but the fingerprint says LuaJIT: this is not a baseline."
+      OK=0; }
+  fi
+  grep -c "MILESTONE .*: FAIL" "$LOG" | grep -qv '^0$' && { echo "  failing milestones:"; grep "MILESTONE .*: FAIL" "$LOG" | sed 's/^/    /'; OK=0; }
+fi
 
 stamp "log: $LOG"
 if [ $OK -eq 1 ]; then
-  if [ "$OCLJ_ALLOW_BYTECODE" = false ]; then
-    echo "SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed."
+  if [ "$OCLJ_VERDICT" = census ]; then
+    echo "CENSUS PASS -- the system ran to the tick limit on the pinned architecture, without error."
+  elif [ "$OCLJ_ALLOW_BYTECODE" = false ]; then
+    # NAME THE VM THAT ACTUALLY RAN.  This line was hard-coded to "on LuaJIT",
+    # which was simply false for the stock arm -- and unnoticeable for as long as
+    # the stock arm could never reach it.  A pass message that asserts something
+    # the run did not check is the same defect as a gate that cannot fail.
+    if [ "$EXPECT_VM" = luajit ]; then
+      echo "SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed."
+    else
+      echo "SMOKE PASS (BASELINE) -- OpenOS booted on ocelot-brain's stock PUC-Lua 5.2,"
+      echo "  persisted, and resumed. No LuaJIT was involved; this is the control."
+    fi
   else
     echo "SMOKE PASS (NEGATIVE CONTROL, allowBytecode=$OCLJ_ALLOW_BYTECODE) --"
     echo "  the sandbox gate was expected to be OPEN and was.  This run shows"
@@ -387,5 +605,5 @@ if [ $OK -eq 1 ]; then
   fi
   exit 0
 fi
-echo "SMOKE FAIL"
+if [ "$OCLJ_VERDICT" = census ]; then echo "CENSUS FAIL"; else echo "SMOKE FAIL"; fi
 exit 1

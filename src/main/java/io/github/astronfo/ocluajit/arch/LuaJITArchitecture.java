@@ -1,106 +1,79 @@
 package io.github.astronfo.ocluajit.arch;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-
-import li.cil.oc.api.Driver;
-import li.cil.oc.api.driver.Item;
-import li.cil.oc.api.driver.item.Memory;
 import li.cil.oc.api.machine.Architecture;
-import li.cil.oc.api.machine.ExecutionResult;
 import li.cil.oc.api.machine.Machine;
+import li.cil.oc.server.machine.luac.LuaStateFactory;
+import li.cil.oc.server.machine.luac.NativeLuaArchitecture;
 
 /**
- * LuaJIT-backed OpenComputers architecture.
+ * LuaJIT-backed OpenComputers architecture: OpenComputers' own machine, running
+ * our VM.
  *
- * PERSISTENT. The original premise of this class — that a LuaJIT VM cannot be
- * serialized because Eris works only on PUC Lua internals — turned out to be
- * false, and Track P disproved it: serializer/eris_lj.c persists and restores a
- * full LuaJIT state, including suspended coroutines and live for-in loops, with
- * an Eris-compatible API. See serializer/README.md for the contract and what it
- * still refuses, docs/roadmap.md for where the integration stands, and
- * docs/watchdog.md for timeout enforcement.
+ * THIS CLASS USED TO IMPLEMENT Architecture FROM SCRATCH, and the stub that did
+ * was on its way to roughly a thousand lines: the component/computer/os/system/
+ * unicode/userdata API bindings, the closure-yield protocol between
+ * runThreaded and runSynchronized, the RAM cap arithmetic, and eris persistence.
+ * All of that already exists in OpenComputers, it is identical for Lua 5.2, 5.3
+ * and 5.4, and OpenComputers factored it exactly the way a fourth VM would need:
  *
- * NOTE: this class is still a stub. Nothing below is wired to a VM yet.
+ * public abstract class NativeLuaArchitecture implements Architecture {
+ * public abstract LuaStateFactory factory();
+ * ...
+ * }
+ *
+ * `factory()` is the ONLY abstract member, and OpenComputers' own three VMs are
+ * one-line subclasses of this same class. So is ours. A survey of the
+ * equivalent class in ocelot-brain found one single reference to `factory` in
+ * its whole body -- `factory.createState()` inside initialize() -- and no
+ * version-conditional logic anywhere in it: nothing branches on 5.2 versus 5.3,
+ * nothing special-cases bit32 or utf8, nothing reads factory.version. Every
+ * difference between the three VMs lives in LuaStateFactory. That is the right
+ * shape and we should not fight it: the VM is what we are replacing, and the
+ * machine around it is not.
+ *
+ * WHAT THIS COSTS: a dependency on li.cil.oc.server.*, which is
+ * OpenComputers' implementation rather than its published li.cil.oc.api.
+ * Deliberate, and the alternative is worse. Reimplementing against the public
+ * API alone would mean maintaining our own copy of the sandbox setup and the
+ * persistence protocol -- both security-relevant, both changing when
+ * OpenComputers changes -- and a divergence there is a silent behavioural
+ * difference between architectures, not a compile error. Inheriting means a
+ * breaking change upstream is a BUILD failure, which is the failure mode to
+ * prefer.
+ *
+ * BUT ONLY AT BUILD TIME, and the distinction is not academic. We compile
+ * against a version pinned in dependencies.gradle; the @Mod dependency in
+ * OCLuaJIT.java carries NO version bound, so a player may load this jar beside
+ * an OpenComputers whose NativeLuaArchitecture has changed shape. That is a
+ * NoSuchMethodError or AbstractMethodError at class load -- a startup crash,
+ * not the compile error above. Bounding the dependency is on the roadmap; it is
+ * left undone rather than guessed at, because a malformed FML version range
+ * stops the mod loading at all and nothing in this repository can run FML to
+ * check one.
+ *
+ * PROVEN, THOUGH NOT HERE. The identical construction runs today against
+ * ocelot-brain -- see test/native/OcljArch.scala -- where a real machine boots
+ * AxisOS on our LuaState while OpenComputers' own PUC-Lua 5.2 native is loaded
+ * in the same JVM and reports itself as a different VM. ocelot-brain is a port
+ * of this code and its class is if anything MORE restrictive than this one
+ * (there, lua/kernelMemory/ramScale are private[machine]; here they are public),
+ * so what compiles against it compiles against this. What has NOT been run is
+ * this file, because running it needs a Minecraft instance.
  */
 @Architecture.Name("LuaJIT")
-public class LuaJITArchitecture implements Architecture {
+public class LuaJITArchitecture extends NativeLuaArchitecture {
 
-    private final Machine machine;
-
-    /** Total installed RAM in bytes, from the last recomputeMemory call. */
-    private volatile double totalMemory = 0;
-
-    private volatile boolean initialized = false;
-
+    /**
+     * OpenComputers instantiates architectures reflectively through this exact
+     * constructor; Machine.add refuses a class that lacks it.
+     */
     public LuaJITArchitecture(final Machine machine) {
-        this.machine = machine;
+        super(machine);
     }
 
+    /** The only member we override. */
     @Override
-    public boolean isInitialized() {
-        return initialized;
+    public LuaStateFactory factory() {
+        return LuaJITStateFactory.INSTANCE;
     }
-
-    @Override
-    public boolean recomputeMemory(final Iterable<ItemStack> components) {
-        double memory = 0;
-        for (final ItemStack stack : components) {
-            final Item driver = Driver.driverFor(stack);
-            if (driver instanceof Memory) {
-                memory += ((Memory) driver).amount(stack) * 1024;
-            }
-        }
-        totalMemory = memory;
-        // TODO: apply as the counting-allocator ceiling of the native state
-        // (state must be created via lua_newstate with the counting allocator on a
-        // GC64 build — installing it after luaL_newstate is unsafe on LuaJIT).
-        return memory > 0;
-    }
-
-    @Override
-    public boolean initialize() {
-        // TODO: create the native LuaJIT state over JNI; open base/math/string/table/bit
-        // and the jit library (JIT_F_ON is only set by luaopen_jit — CCLuaJIT's mistake),
-        // then hide the jit/debug globals from the sandbox; load machine.lua as the
-        // kernel coroutine.
-        initialized = true;
-        return true;
-    }
-
-    @Override
-    public void close() {
-        // TODO: destroy the native state.
-        initialized = false;
-    }
-
-    @Override
-    public void runSynchronized() {
-        // TODO: resume the kernel with the pending synchronized-call closure, mirroring
-        // NativeLuaArchitecture's closure-yield protocol.
-    }
-
-    @Override
-    public ExecutionResult runThreaded(final boolean isSynchronizedReturn) {
-        // TODO: resume the kernel coroutine under the watchdog deadline and translate
-        // its yield into Sleep / SynchronizedCall / Shutdown.
-        return new ExecutionResult.Error("The LuaJIT architecture is not implemented yet.");
-    }
-
-    @Override
-    public void onSignal() {}
-
-    @Override
-    public void onConnect() {}
-
-    @Override
-    public void load(final NBTTagCompound nbt) {
-        if (machine.isRunning()) {
-            machine.stop();
-            machine.start();
-        }
-    }
-
-    @Override
-    public void save(final NBTTagCompound nbt) {}
 }

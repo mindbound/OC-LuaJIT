@@ -22,6 +22,8 @@ ROOT=$1; NAME=$2; EEPROM=$3; TICKS=${4:-2000}
 [ -d "$ROOT" ]   || { echo "census-os.sh: no kernel root at $ROOT" >&2; exit 2; }
 case "$EEPROM" in bios|-) ;; *) [ -f "$EEPROM" ] || { echo "census-os.sh: no eeprom at $EEPROM (pass 'bios' for OC's Lua BIOS)" >&2; exit 2; };; esac
 export OCLJ_SRC="$SELF_DIR/CensusOs.scala"
+# Score this run by the census main's own output, not by OcljSmoke's.
+export OCLJ_VERDICT=census
 export OCLJ_MAIN="ocljit.census.CensusOs"
 export OCLJ_MAIN_CLASSFILE='ocljit/census/CensusOs$.class'
 export OCLJ_MAIN_ARGS="$ROOT $NAME $EEPROM $TICKS"
