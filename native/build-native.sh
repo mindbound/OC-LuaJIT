@@ -510,6 +510,29 @@ fi
 SZ=$(wc -c < "$OCLJ_OUT/$DLL_NAME")
 SHA=$(sha256sum "$OCLJ_OUT/$DLL_NAME" 2>/dev/null | cut -c1-16)
 stamp "OK  $OCLJ_OUT/$DLL_NAME  ${SZ} bytes  sha256:${SHA}..."
+
+# COLLECT ADDITIVE ARTIFACTS FOR PACKAGING.
+#
+# build.gradle.kts stages this directory into the jar at
+# assets/opencomputers/lib/, which is where OpenComputers' own loader looks. It
+# is a COLLECTION point, deliberately not cleared: building on Windows and then
+# on Linux leaves both libraries here, their filenames differ by platform, and
+# one jar carries both. That is the only way a multi-platform release gets
+# built, since no single machine can produce them all.
+#
+# The DROPIN is never collected. It is our LuaJIT wearing OpenComputers 5.2
+# name, which is right for the benchmark harness and catastrophic in a jar --
+# OC own factory would find it and replace the 5.2 VM for every computer. The
+# gradle side refuses it by name as well; this is the first of the two gates.
+if [ "$OCLJ_VARIANT" = additive ]; then
+  DIST="$OCLJ_BUILD/dist"
+  mkdir -p "$DIST" || fail "cannot create $DIST"
+  cp "$OCLJ_OUT/$DLL_NAME" "$DIST/$DLL_NAME" || fail "cannot collect $DLL_NAME into $DIST"
+  say "collected for packaging: $DIST/$DLL_NAME"
+  say "    dist now holds: $(ls "$DIST" | tr '
+' ' ')"
+fi
+
 echo
 echo "NEXT: point ocelot-brain at it and boot OpenOS:"
 echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
