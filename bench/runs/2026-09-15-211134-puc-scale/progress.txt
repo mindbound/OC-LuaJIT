@@ -1,0 +1,16 @@
+gc-pace-sweep 2026-09-15-211134
+  benches:    sieveN2 sieveN4 sieveN8
+  cells:      A
+  stepmuls:   0   (200 = the VM default, i.e. the control arm)
+  pauses:     110     (expected inert; run to demonstrate it)
+  replicates: 1
+
+A-sieveN2-sm0-pz0-r1              76s meter=0.0337   DIED     ENCORE_OK     free=0     sieveN2/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A-sieveN2-sm0-pz110-r1            75s meter=0.0298   DIED     ENCORE_OK     free=0     sieveN2/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A-sieveN4-sm0-pz0-r1              76s meter=0.0326   DIED     ENCORE_OK     free=0     sieveN4/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A-sieveN4-sm0-pz110-r1            77s meter=0.0331   DIED     ENCORE_OK     free=0     sieveN4/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A-sieveN8-sm0-pz0-r1              75s meter=0.0311   DIED     ENCORE_OK     free=0     sieveN8/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A-sieveN8-sm0-pz110-r1            74s meter=0.0316   DIED     ENCORE_OK     free=0     sieveN8/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+--- replicate 1 done 21:19:09 ---
+SWEEP COMPLETE 21:19:10
+archived to bench/runs/2026-09-15-211134-puc-scale

@@ -123,6 +123,35 @@ object Smoke {
                      lua: LuaState): (Long, Long, Int, Boolean) =
     machine.synchronized { jitStats(lua) }
 
+  /** _OCLJ_GCSTATS -> arms, collects, bailouts, refusals, armed, state.
+    *
+    * THE EMERGENCY COLLECTOR'S ACCEPTANCE TEST IS UNREADABLE WITHOUT THIS.
+    * A `sieve` that passes with arms == 0 proves nothing about the collector:
+    * it would mean the run never approached the watermark and the trip-wire was
+    * never exercised.  That is the same class of false green as the peak column
+    * measured by its own instrument (references.txt), and it is why the
+    * milestones below assert arms >= 1 as well as the benchmark row.
+    *
+    * bailouts is the sharpest of the four.  Nonzero means the currentwhite
+    * latch is not seeing flips it should, so the disarm predicate -- the whole
+    * safety argument for handing the collector an unbounded budget -- is
+    * wrong.  It is a bug signal, never a tuning signal. */
+  def gcStatsLocked(machine: totoro.ocelot.brain.entity.machine.Machine,
+                    lua: LuaState): (Long, Long, Long, Long, Boolean, Int) =
+    machine.synchronized { gcStats(lua) }
+
+  def gcStats(lua: LuaState): (Long, Long, Long, Long, Boolean, Int) = {
+    val s = evalStr(lua,
+      "if _OCLJ_GCSTATS == nil then return 'absent' end " +
+      "local a, c, b, r, on, tot, thr, mul, st = _OCLJ_GCSTATS() " +
+      "return string.format('%d/%d/%d/%d/%s/%d', a, c, b, r, tostring(on), st)")
+    try {
+      val q = s.split("/")
+      (q(0).toDouble.toLong, q(1).toDouble.toLong, q(2).toDouble.toLong,
+       q(3).toDouble.toLong, q(4) == "true", q(5).toInt)
+    } catch { case _: Throwable => (-1L, -1L, -1L, -1L, false, -1) }
+  }
+
   def jitStats(lua: LuaState): (Long, Long, Int, Boolean) = {
     val s = evalStr(lua, "local m, c, t, on = _OCLJ_JITSTATS() " +
       "return string.format('%d/%d/%d/%s', m, c, t, tostring(on))")
@@ -1807,6 +1836,32 @@ object Smoke {
       else (-1L, -1L, -1, false)
     p("JIT MEMORY: mcode=" + mc0 + " B of a " + mcCap + " B cap, traces=" + tr0 +
       ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
+
+    // --- the emergency collector, and whether it was even exercised ------
+    val (gcArms, gcCollects, gcBailouts, gcRefusals, gcArmed, gcState) =
+      if (quiesced(computer.machine, "the GC pressure read-out"))
+        gcStatsLocked(computer.machine, mLua)
+      else (-1L, -1L, -1L, -1L, false, -1)
+    if (gcArms >= 0) {
+      p("GC PRESSURE: arms=" + gcArms + " collects=" + gcCollects +
+        " bailouts=" + gcBailouts + " refusals=" + gcRefusals +
+        " armed=" + gcArmed + " gcstate=" + gcState)
+      // Every arm must be PROVEN to have completed a cycle.  The disarm
+      // predicate is "currentwhite flipped AND state back at GCSpause"; a
+      // shortfall means arms are resolving through the safety valve instead,
+      // which is exactly the case the latch exists to prevent.
+      milestone("gc-emergency-collects-resolve", gcCollects == gcArms && gcBailouts == 0,
+        "arms=" + gcArms + " collects=" + gcCollects + " bailouts=" + gcBailouts +
+          (if (gcCollects == gcArms && gcBailouts == 0) ""
+           else "   <- an arm did not complete a cycle; the currentwhite latch is not " +
+                "seeing flips it should and the disarm argument needs re-deriving"))
+      milestone("gc-emergency-not-stuck-armed", !gcArmed,
+        "armed=" + gcArmed + " at rest" +
+          (if (!gcArmed) "" else "   <- the window is still open: stepmul is 0 and EVERY " +
+                                 "lj_gc_step from any site is unbounded"))
+    } else {
+      p("GC PRESSURE: _OCLJ_GCSTATS absent (stock native, or an older DLL)")
+    }
     // The control for "mcode is real" is the JIT being OFF, not the stock
     // kernel.  The first draft asserted the stock kernel holds ~no mcode and
     // it FAILED, for a reason worth keeping: stock holds MORE (448 KB / 776

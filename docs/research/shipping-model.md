@@ -127,6 +127,75 @@ side), the persistence sink, and state access. **ocelot-brain left OC's original
 lines commented out directly above each replacement** — verified at all four
 persistence sites — so the reverse port is mechanical.
 
+## The binding layer, which the first version of this document missed
+
+**CORRECTED 2026-09-15.** The cost table above prices (b) as ten `Architecture`
+methods plus the `ArchitectureAPI` glue. That is incomplete, and the omission
+matters, because an `Architecture` needs a Java `LuaState` to drive and ours
+cannot be OpenComputers' own.
+
+**Why not.** `native/lj52shim.h:42-43` does this deliberately:
+
+```c
+#undef  LUA_VERSION_NUM
+#define LUA_VERSION_NUM 502   /* gives li.cil...jnlua.LuaState with no suffix */
+```
+
+because `jnlua.c:42-53` selects both the JNI class and the symbol suffix from
+`LUA_VERSION_NUM` — 504 → `LuaStateFiveFour`, 503 → `LuaStateFiveThree`,
+502 → `LuaState`, anything else → `#error`. So our native exports exactly one
+family, `Java_li_cil_repack_com_naef_jnlua_LuaState_*`, and **is by construction
+a replacement for OC's 5.2 native.** That is what makes the harness work, and it
+is mechanism (a).
+
+It cannot be what the mod ships. OpenComputers loads its own 5.2 native in
+`preInit` and binds `li.cil.repack.com.naef.jnlua.LuaState`'s natives to it.
+Two libraries exporting the same JNI symbols cannot both back one class, so an
+`Architecture` reusing that class would get PUC Lua, not ours — and a mod that
+*did* win the binding would have replaced OC's 5.2 for every computer in the
+world, which is the additive principle inverted.
+
+**The fix is the shape OC already uses to run three VMs in one JVM.** They do
+not collide because each binds a *different class*:
+
+| native | Java class | symbol family |
+|---|---|---|
+| `libjnlua52` | `LuaState` | `Java_…_LuaState_*` |
+| `libjnlua53` | `LuaStateFiveThree` | `Java_…_LuaStateFiveThree_*` |
+| `libjnlua54` | `LuaStateFiveFour` | `Java_…_LuaStateFiveFour_*` |
+
+We become the fourth. `LuaStateFiveThree.java` is **332 lines** and
+`LuaStateFiveFour.java` **290**, against `LuaState.java`'s 3145 — because a
+version class is a thin subclass that **redeclares all 88 native methods with
+`@Override`**. That redeclaration *is* the mechanism: it mints the distinct
+symbol family. The rest is two version-specific id mappings
+(`arith_operator_id`, `gc_action_id`) and constructors.
+
+So `LuaStateLuaJIT extends LuaState`, ~300 lines, almost entirely mechanical,
+with two working templates to copy.
+
+**And the native needs a repack step.** The suffix and `JNI_LUASTATE_CLASS` come
+from that closed `#if` chain, with no arm for us and no `-D` hook, so the build
+must copy `jnlua.c` into the build directory and rewrite both there. A symbol
+rename alone (`objcopy --redefine-sym`) is *not* enough — `JNI_LUASTATE_CLASS`
+is a string used for `FindClass` at runtime, so it has to be a source
+transform.
+
+That is precisely the operation OpenComputers performed to turn upstream
+`com.naef.jnlua` into `li.cil.repack.com.naef.jnlua`: OC-JNLua *is* a repack.
+We would be doing what they did, for the same reason.
+
+**What this costs the "unmodified `jnlua.c`" claim.** It narrows it rather than
+killing it. The checkout stays pristine and `build-native.sh`'s `git status`
+assertion keeps its meaning — it becomes a statement about the *input* to the
+repack rather than about the compiled artifact. What must not happen is a fork
+of `jnlua.c`'s *logic*; renaming its JNI surface is a build step, not a fork.
+
+**Scope note for anyone reading the sections above.** Wherever this document or
+the roadmap says "drop-in replacement for OC's 5.2 native", that describes the
+HARNESS. The shipped mod replaces nothing: fourth class, fourth symbol family,
+fourth entry in the CPU cycle, OC's three untouched.
+
 ## What this de-risks, and it is more than the question asked
 
 Three things the whole project rests on turn out to be the same in the harness

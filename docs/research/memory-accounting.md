@@ -687,6 +687,144 @@ at the wall is the only thing that addresses a rate failure, because at the wall
 the heap is over 98% garbage *whatever the rate was that got it there*. That is
 §11's emergency-mode item, and no pacing value retires it.
 
+### 8f. The emergency collector, built and measured
+
+Landed 2026-09-15 as `lj52_gc_pressure` in `native/lj52shim.c`: ~35 lines of
+shim, **zero VM lines**.
+
+**It does not collect at the refusal**, because §11's C1, C5 and C6 each
+independently forbid that. Instead the allocator writes two scalars the VM
+already owns and lets the VM collect at a point the VM already considers safe:
+
+* `g->gc.threshold = g->gc.total` — the trip-wire. ~49 `lj_gc_check` sites,
+  `lj_meta.c:382`, the interpreter's inline compares and the JIT's
+  `asm_gc_check` all test `total >= threshold` and *call* the collector. It is
+  what `lj_gc.c:753` and `lj_api.c:1252` write themselves.
+* `g->gc.stepmul = 0` — which `lj_gc.c:734-736` turns into
+  `lim = LJ_MAX_MEM`, so the step at that safepoint runs a **whole cycle**
+  rather than a 2000-unit slice.
+
+Armed when free space falls below `max(total/4, 128 KB)`, disarmed only on proof
+a cycle completed.
+
+**Two traps, both found in design review rather than in testing, and both would
+have been invisible in a pass/fail benchmark.**
+
+*Write `gc.total`, never `0`.* `lj_gc.c:737-738` charges
+`debt += total - threshold` at step entry. With `0` that is the entire heap as
+debt; it survives any step that does not reach `GCSpause` — i.e. every
+on-trace bail through the `LJ_MAX_MEM` sentinel — and then `:751-755` pins
+`threshold = total` and repays 1024 bytes per step for thousands of steps. It
+would present as an unexplained throughput regression on the JIT-on path, never
+as a failure.
+
+*`GCSpause` is not evidence a cycle ran.* `gc_onestep` reaches it from
+`GCSsweep` (`:700`, "skip this phase to help the JIT") and from `GCSfinalize`
+(`:719`) **without ever calling `atomic()`**. Since §8's whole finding is that
+the collector is chronically behind, mid-sweep is the *normal* state to arm
+from, so disarming on `GCSpause` alone would credit a sweep tail that re-marked
+nothing. `atomic()` flips `g->gc.currentwhite` at `lj_gc.c:654` and is its only
+writer in normal operation, so the shim latches that byte at arm time and
+disarms on **white changed AND state back at `GCSpause`** — an exact
+mark-plus-atomic-plus-sweep predicate.
+
+`GCSpause` is spelled as the literal `0` (`LJ52_GCS_PAUSE`) rather than by
+including `lj_gc.h`, because that header also declares `lj_gc_step` and
+`lj_gc_fullgc` and `build-native.sh` now fails the build if either reaches the
+shim's scope. That trades "the shim could call the collector" for "the enum
+could be reordered" — the smaller risk, and unlike the other one it is
+checkable, so the build also asserts the enum still begins
+`GCSpause, GCSpropagate`.
+
+#### The acceptance test
+
+`sieve` at the shipped `N,REPS = 8192,4500`, fresh 1 MB machines, **default
+pacing** (`stepmul` 200 — not the 3200 of §8e), three replicates per cell,
+each cell run twice. This is the workload that died **6 of 6** in §8c.
+
+| | result | wall | free at exit |
+|---|---|---:|---:|
+| B — ours, JIT **off** | **survives 6/6**, `4626000` | 1.47–1.52 s | 661–757 KB |
+| C — ours, JIT **on** | **survives 6/6**, `4626000` | 0.40–0.49 s | 426–449 KB |
+
+and the instrument, which is what makes the pass mean anything:
+
+```
+arms 134-160   collects == arms (every run)   bailouts = 0   refusals = 0
+armed = false at rest
+```
+
+* **`arms` ≥ 1** — the trip-wire was genuinely exercised. A pass with
+  `arms == 0` would prove only that the run never approached the watermark; that
+  is the same class of false green as a peak measured by its own instrument.
+* **`collects == arms`** — every arm was *proven* to complete a cycle.
+* **`bailouts == 0`** — the safety valve never fired, so the `currentwhite`
+  latch resolved every time and the disarm argument holds.
+* **`refusals == 0`** — the allocator never refused at all. This is not
+  recovery at the wall; the wall is never reached.
+
+Cell C is the sharper surprise: it died 3 of 3 in §8c and now finishes in
+0.40 s against PUC's 2.65–2.84 s. `ENCORE_OK` throughout, with **nothing
+re-applied after the restore** — §8d's trap is closed by construction, because
+deleting the runtime watermark estimator left no per-state parameter to lose
+across `eris`.
+
+#### Scaled: where the binding constraint moves, and what PUC does there
+
+The trio above is one workload size. §8e's Phase B variants, re-run at
+**default** pacing with the collector, and — critically — **with cell A
+measured on the same variants**, which §8e never did:
+
+| workload | live set | PUC 5.2 | ours, JIT off |
+|---|---:|---|---|
+| `sieveN1` 8192 | ~64 KB | *(completes, §8c)* | **survives** 1.62 s, `refusals 0` |
+| `sieveN2` 16384 | ~128 KB | **dies — deadline** | **survives** 3.06 s, `refusals 0` |
+| `sieveN4` 32768 | ~256 KB | **dies — deadline** | dies — deadline, `refusals 0` over 477 cycles |
+| `sieveN8` 65536 | ~512 KB | **dies — deadline** | dies — deadline, and once `not_enough_memory` |
+| `sieveR2` (2× duration) | ~64 KB | — | **survives** 2.66 s, `refusals 0` |
+| `sieveR4` (4× duration) | ~64 KB | — | dies — deadline (unchanged control) |
+
+**MEMORY STOPS BEING THE BINDING CONSTRAINT, AND THE DEADLINE TAKES OVER — FOR
+BOTH VMs.** `sieveN4` completes 477 full collection cycles with the allocator
+never refusing once, and still dies: 477 stop-the-world cycles do not fit in
+OC's 5 s per-resume deadline. That is the shape this document warned about in
+advance — *"a watermark that converts `not_enough_memory` into
+`too_long_without_yielding` has moved the failure, not fixed it"* — and the
+first reading of this table was exactly that, pessimistically.
+
+**The cell-A control refutes it.** PUC dies on `N2`, `N4` and `N8` too, all on
+the deadline, none on memory. So at `N4` and beyond the workload simply exceeds
+what a 1 MB machine can do inside one resume on *any* VM, and the deadline is a
+designed protection rather than a defect. We converged on OC's own limit; we did
+not relabel our own failure. **Run the baseline before concluding the failure is
+yours** — without cell A this table reads as a regression.
+
+**`sieveN2` is the result worth quoting.** PUC cannot complete it and we can, at
+twice the size of the workload that killed us 6/6 in §8c. Both halves are
+load-bearing: the collector removes memory as the constraint (264 cycles, zero
+refusals), and the speed keeps the run inside the deadline at 3.06 s where PUC
+runs out of time.
+
+**The residual, stated plainly.** `sieveN8` at `pause=110` died of
+`not_enough_memory` with `arms=1, refusals=1` — the watermark fired once and
+the inter-safepoint burst beat it, while PUC died of *time* there rather than
+memory. That is the gap below, at the predicted size and in the predicted
+shape, and it is a divergence that remains.
+
+#### What it buys, and what it does not
+
+The survival condition becomes
+
+    live + largest inter-safepoint burst  <=  cap
+
+where PUC's is
+
+    live + largest single allocation      <=  cap.
+
+The gap is real and irreducible without a finer safepoint, which would
+reintroduce C5 and C6. **This narrows the divergence of §8; it does not close
+it**, and §12's entry is amended rather than deleted.
+
 ## 9. Calibration: OC's stock RAM scale is not enough
 
 `ramScaleFor64Bit` is how many real bytes OC charges per apparent byte of
@@ -922,7 +1060,12 @@ neither done:
 
 ## 12. Not fixed here
 
-* the emergency-GC divergence of §8;
+* the emergency-GC divergence of §8 — **narrowed, not closed** (§8f). The
+  collector now runs a full cycle at a safepoint under memory pressure, and
+  `sieve` survives 6/6 in both cells at default pacing with zero allocator
+  refusals. What remains is the gap between `live + largest inter-safepoint
+  burst` and PUC's `live + largest single allocation`, which needs a finer
+  safepoint than the allocator can safely provide;
 * the C-recursion ceiling (LuaJIT has no `nCcalls`), still open;
 * a real JIT benchmark inside a machine — still the project's largest
   unmeasured claim, and now with a second reason to want it.

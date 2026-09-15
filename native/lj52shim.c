@@ -20,6 +20,7 @@
  *   - no build flags that select a known-broken behaviour.
  */
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -186,9 +187,25 @@ typedef struct lj52_mem {
   volatile long wd_fires;    /* first fires, ever                            */
   volatile long wd_refires;  /* periodic re-fires, ever                      */
   volatile long wd_filtered; /* hook invocations ignored by the thread filter */
+  /* -- the emergency collector; see lj52_gc_pressure below -- */
+  int           gc_armed;      /* a cycle has been demanded, not yet proven   */
+  int           gc_busy;       /* re-entrancy guard; see the note below       */
+  /* Fixed-width C types, not LuaJIT's: lj_obj.h is included ~300 lines BELOW
+   * this struct, so MSize and friends are not in scope here.  These mirror
+   * gc.stepmul (MSize, lj_obj.h:614) and gc.currentwhite (uint8_t, :597). */
+  uint32_t      gc_savedmul;   /* gc.stepmul to put back when we disarm       */
+  uint8_t       gc_white;      /* gc.currentwhite latched at arm time         */
+  unsigned      gc_armedcalls; /* allocator calls since arming -- the bailout */
+  volatile long gc_arms;       /* diagnostics, for a human and for the tests  */
+  volatile long gc_collects;   /* arms that were PROVEN to complete a cycle   */
+  volatile long gc_bailouts;   /* arms abandoned by the safety valve          */
+  volatile long gc_refusals;   /* allocations refused -> lj_err_mem           */
 } lj52_mem;
 
 static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
+/* Defined below the LuaJIT-internal includes -- it needs G(), LJ_MAX_MEM and
+ * HOOK_GC -- but called from lj52_alloc, which is above them. */
+static void lj52_gc_pressure(lj52_mem *M, long long total, long long used);
 
 /* The record for L, or NULL for a state this shim did not create. */
 static lj52_mem *lj52_memof(lua_State *L) {
@@ -283,14 +300,28 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     M->setmem(env, obj, lj52_clampi(used));
   }
   if (nsize == 0) {
+    /* BEFORE the free, not after: a free is the one call that can take us back
+     * under the watermark, and the disarm check wants to see the heap as the
+     * VM will see it at the next safepoint. */
+    lj52_gc_pressure(M, total, used + delta);
     free(ptr);
     M->setmem(env, obj, lj52_clampi(used + delta));
     return NULL;
   }
-  if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse))
+  if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse)) {
+    /* We are at the wall.  We still do not collect here -- C1/C5/C6 -- but an
+     * arm costs nothing and the next safepoint may yet save the machine if
+     * this refusal is survivable.  A refusal with gc_arms == 0 means the
+     * trip-wire never fired and is a bug here, not a volume failure. */
+    M->gc_refusals++;
+    lj52_gc_pressure(M, total, used);
     return NULL;                        /* -> lj_err_mem -> LUA_ERRMEM */
+  }
   p = realloc(ptr, nsize);
-  if (p != NULL) M->setmem(env, obj, lj52_clampi(used + delta));
+  if (p != NULL) {
+    M->setmem(env, obj, lj52_clampi(used + delta));
+    lj52_gc_pressure(M, total, used + delta);
+  }
   return p;
 }
 
@@ -472,6 +503,154 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
 #include "lj_obj.h"
 #include "lj_dispatch.h"
 #include "lj_jit.h"
+
+/* ===================================================================== */
+/* THE EMERGENCY COLLECTOR.                                              */
+/* ===================================================================== */
+/*
+ * WHAT IT IS FOR.  PUC Lua's luaM_realloc_ runs luaC_fullgc(L, 1) and RETRIES
+ * when the allocator refuses; LuaJIT's lj_mem_realloc calls lj_err_mem on the
+ * first refusal and the machine dies.  Measured (memory-accounting.md 8c):
+ * `sieve` completes on PUC 3/3 and dies on ours 6/6 in a 3072 real-KB machine
+ * whose LIVE SET is 52.4 KB -- over 98% garbage at the moment of refusal.
+ *
+ * WHY THIS DOES NOT COLLECT AT THE REFUSAL.  Three verified constraints each
+ * independently forbid it (memory-accounting.md 11):
+ *   C1  lj_gc_fullgc's loop (lj_gc.c:800) runs on gc.state, and GCSatomic
+ *       returns LJ_MAX_MEM WITHOUT advancing state while tvref(g->jit_base) is
+ *       set (:673-677).  :799 forces GCSpause first, so an on-trace call hangs
+ *       unconditionally -- not as a race.
+ *   C5  a collect at lj_tab.c:123-124 frees the table under construction:
+ *       unreachable, current-white, already rooted.
+ *   C6  L->top is stale at arbitrary allocation points, and from
+ *       lj_mem_newgco the object is partially initialised AND already rooted
+ *       and whitened (lj_gc.c:893-895).
+ * So the allocator still never collects.  It writes two scalars the VM already
+ * owns and lets the VM collect at a point the VM already considers safe.
+ *
+ * THE TWO CARRIERS, both the VM's own idioms.
+ *   g->gc.threshold = g->gc.total  is "collect at the very next checkpoint":
+ *       ~49 lj_gc_check sites, lj_meta.c:382, the interpreter's inline compares
+ *       and the JIT's asm_gc_check all test total >= threshold and CALL the
+ *       collector.  It is exactly what lj_gc.c:753 and lj_api.c:1252 write.
+ *   g->gc.stepmul = 0  makes that step UNBOUNDED: lj_gc.c:734-736 turns a zero
+ *       stepmul into lim = LJ_MAX_MEM, and the loop at :739-746 then runs to
+ *       GCSpause.  A whole cycle, not a 2000-unit slice.
+ *
+ * WRITE gc.total, NEVER 0.  lj_gc.c:737-738 charges
+ *     if (total > threshold) debt += total - threshold
+ * at the entry of the armed step.  With 0 that is the WHOLE HEAP as debt; it
+ * survives any step that does not reach GCSpause -- i.e. every on-trace bail
+ * through the LJ_MAX_MEM sentinel -- and then :751-755 pins threshold = total
+ * and repays 1024 bytes per step for thousands of steps.  Invisible in a
+ * pass/fail benchmark; it would surface as an unexplained throughput
+ * regression on the JIT-ON path.  With gc.total the charge is exactly zero.
+ *
+ * GCSpause IS NOT EVIDENCE THAT A CYCLE RAN, which is why we latch the white.
+ * gc_onestep reaches GCSpause from GCSsweep (:700, "skip this phase to help
+ * the JIT") and from GCSfinalize (:719) WITHOUT ever calling atomic().  Since
+ * the whole finding of section 8 is that the collector is chronically behind,
+ * mid-sweep is the NORMAL state to arm from -- so disarming on GCSpause alone
+ * would credit a tail-of-sweep that re-marked nothing.  atomic() flips
+ * g->gc.currentwhite at lj_gc.c:654 and is its only writer in normal operation
+ * (:612 is freeall teardown, lj_state.c:282 is state init).  So
+ * "currentwhite changed AND state == GCSpause" is an exact
+ * mark-plus-atomic-plus-sweep-completed predicate.
+ *
+ * Compare the whole byte for inequality on purpose: pulling in lj_gc.h for
+ * LJ_GC_WHITES would drag lj_gc_step/lj_gc_fullgc declarations into this
+ * file's scope, which is the very thing build-native.sh's gate forbids.
+ *
+ * THE WATERMARK IS FIXED, AND DELIBERATELY SO.  total/4, floor 128 KB.  The
+ * quantity it must cover is the largest allocation burst between two
+ * safepoints, and lj_tab_resize grows the array part with lj_mem_realloc
+ * (lj_tab.c:249) rather than alloc-new-then-free-old, so the positive deltas
+ * telescope to the FINAL array size -- 64 KB per repetition for `sieve` at
+ * N=8192, matching 8c's measurement, 512 KB at N=65536.  768 KB on a 3072-KB
+ * machine covers all of them with margin.  An earlier design learned this
+ * watermark at runtime; that was deleted, because the proxy available inside
+ * the allocator measures the collector's RUN rate, not safepoint density, and
+ * cannot observe the quantity its own correctness condition names.
+ *
+ * WHAT THIS BUYS, AND WHAT IT DOES NOT.  The survival condition becomes
+ *     live + largest inter-safepoint burst  <=  cap
+ * where PUC's is
+ *     live + largest single allocation      <=  cap.
+ * The gap is real and irreducible without a finer safepoint, which would
+ * reintroduce C5 and C6.  This narrows the divergence; it does not close it.
+ */
+
+#define LJ52_GC_WMIN   (128 * 1024)     /* watermark floor                   */
+#define LJ52_GC_ARMCAP (1 << 16)        /* allocator calls before we give up */
+
+/* GCSpause, WITHOUT including lj_gc.h.
+ *
+ * The collector-state enum is lj_gc.h:11-14, and GCSpause is its first member,
+ * so its value is 0.  We do not include that header to say so, because it also
+ * declares lj_gc_step and lj_gc_fullgc -- and bringing those into this file's
+ * scope is precisely what build-native.sh's collector gate forbids.  The
+ * alternative, spelling the constant here, moves the risk from "the shim can
+ * call the collector" to "the enum could be reordered", which is the smaller
+ * risk and, unlike the other one, is CHECKABLE AT BUILD TIME: build-native.sh
+ * asserts the enum still begins with GCSpause.  The enum's own comment reads
+ * "Order matters." */
+#define LJ52_GCS_PAUSE 0
+
+static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
+{
+  global_State *g;
+  long long headroom, w;
+
+  /* gc_busy guards nothing today -- this function calls nothing that can
+   * re-enter the allocator, it only reads and writes scalars.  It is here so
+   * that the day someone adds a call, the guard is already in place rather
+   * than being the thing they forgot. */
+  if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+  M->gc_busy = 1;
+  g = G(M->L);
+
+  /* Two states where the VM owns gc.threshold and we must not touch it:
+   * inside a finalizer (gc_call_finalizer sets HOOK_GC at lj_gc.c:514 and
+   * parks threshold at LJ_MAX_MEM at :516), and after a host lua_gc(GCSTOP),
+   * which OC does around persistence. */
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) {
+    M->gc_busy = 0;
+    return;
+  }
+
+  if (M->gc_armed) {
+    if (g->gc.currentwhite != M->gc_white && g->gc.state == LJ52_GCS_PAUSE) {
+      if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
+      M->gc_armed = 0;
+      M->gc_collects++;
+    } else if (++M->gc_armedcalls > LJ52_GC_ARMCAP) {
+      /* The safety valve.  While armed, EVERY lj_gc_step from any site is
+       * unbounded, so the window must not be allowed to persist if the latch
+       * somehow never resolves.  A nonzero bailouts count is a bug in this
+       * code, not a tuning signal: it means the white flip is not being seen
+       * and the disarm argument needs re-deriving. */
+      if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
+      M->gc_armed = 0;
+      M->gc_bailouts++;
+    }
+    M->gc_busy = 0;
+    return;
+  }
+
+  w = total / 4;
+  if (w < LJ52_GC_WMIN) w = LJ52_GC_WMIN;
+  headroom = total - used;
+  if (headroom < w) {
+    M->gc_savedmul = g->gc.stepmul;
+    M->gc_white    = g->gc.currentwhite;
+    g->gc.stepmul  = 0;                 /* -> lim = LJ_MAX_MEM: a whole cycle */
+    g->gc.threshold = g->gc.total;      /* NOT 0 -- see the comment above     */
+    M->gc_armed = 1;
+    M->gc_armedcalls = 0;
+    M->gc_arms++;
+  }
+  M->gc_busy = 0;
+}
 
 #define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
 static const char LJ52_WD_KEY = 0;      /* registry slot for the armed fn */
@@ -725,6 +904,42 @@ static int lj52_jitstats(lua_State *L) {
   return 4;
 }
 
+/* _OCLJ_GCSTATS() -> arms, collects, bailouts, refusals, armed,
+ *                    gc_total, gc_threshold, gc_stepmul, gc_state
+ *
+ * THE INSTRUMENT FOR THE EMERGENCY COLLECTOR, and it is not optional.  A
+ * `sieve` that passes with arms == 0 proves nothing about this code -- it
+ * would mean the run never approached the watermark and the trip-wire was
+ * never exercised, which is exactly the class of false green that
+ * bench/oc/sieve.lua's own retracted paragraph records.  The acceptance test
+ * asserts arms >= 1 AND collects == arms AND bailouts == 0.
+ *
+ * bailouts is the one that matters most.  A nonzero count means the
+ * currentwhite latch is not seeing flips it should, so the disarm predicate --
+ * the whole safety argument for handing the collector an unbounded budget --
+ * needs re-deriving.  It is a bug signal, never a tuning knob.
+ *
+ * The four gc.* fields are returned raw so a test can tell "never armed" from
+ * "armed and still waiting": armed == true with a stepmul of 0 is the window
+ * being open, and it should never be observable at rest.
+ *
+ * Read-only, allocates nothing, raw global like _OCLJ_JITSTATS -- the sandbox
+ * never sees raw _G. */
+static int lj52_gcstats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  global_State *g = G(L);
+  lua_pushinteger(L, M ? M->gc_arms : -1);
+  lua_pushinteger(L, M ? M->gc_collects : -1);
+  lua_pushinteger(L, M ? M->gc_bailouts : -1);
+  lua_pushinteger(L, M ? M->gc_refusals : -1);
+  lua_pushboolean(L, M ? M->gc_armed : 0);
+  lua_pushnumber(L, (lua_Number)g->gc.total);
+  lua_pushnumber(L, (lua_Number)g->gc.threshold);
+  lua_pushnumber(L, (lua_Number)g->gc.stepmul);
+  lua_pushinteger(L, (lua_Integer)g->gc.state);
+  return 9;
+}
+
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
 static void lj52_wd_install(lua_State *L) {
   lua_createtable(L, 0, 2);
@@ -739,6 +954,8 @@ static void lj52_wd_install(lua_State *L) {
   lua_setglobal(L, "_OCLJ_WATCHDOG");
   lua_pushcclosure(L, lj52_jitstats, 0);
   lua_setglobal(L, "_OCLJ_JITSTATS");
+  lua_pushcclosure(L, lj52_gcstats, 0);
+  lua_setglobal(L, "_OCLJ_GCSTATS");
 }
 
 /* lua_close does not free the record, so we do -- after making sure no timer

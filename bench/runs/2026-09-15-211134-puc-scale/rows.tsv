@@ -1,0 +1,6 @@
+A	sieveN2	0	0	1	0.0337	DIED	ENCORE_OK	0	sieveN2/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A	sieveN2	0	110	1	0.0298	DIED	ENCORE_OK	0	sieveN2/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A	sieveN4	0	0	1	0.0326	DIED	ENCORE_OK	0	sieveN4/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A	sieveN4	0	110	1	0.0331	DIED	ENCORE_OK	0	sieveN4/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A	sieveN8	0	0	1	0.0311	DIED	ENCORE_OK	0	sieveN8/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0
+A	sieveN8	0	110	1	0.0316	DIED	ENCORE_OK	0	sieveN8/DEADLINE/too_long_without_yielding/-1.0000/-1.0000/0/0

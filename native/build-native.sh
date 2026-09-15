@@ -133,6 +133,43 @@ for tok in OCLJ_NOMODECHECK LJ52_DROP_LOAD_MODE OCLJ_TRACE OCLJ_JITOFF OCLJ_JITO
     fail "escape hatch '$tok' is back in the shim (line above).  The canonical"
   fi
 done
+# THE COLLECTOR-STATE ENUM MUST STILL BEGIN WITH GCSpause.
+# lj52shim.c spells GCSpause as the literal 0 (LJ52_GCS_PAUSE) rather than
+# including lj_gc.h, because that header also declares lj_gc_step and
+# lj_gc_fullgc and the gate below forbids those from reaching the shim's scope.
+# That trade is only safe if the assumption is checked, so check it.  The enum
+# is lj_gc.h:11-14 and its own comment says "Order matters."
+LJGC_H="$OCLJ_LUAJIT/src/lj_gc.h"
+if [ -f "$LJGC_H" ]; then
+  if ! tr -d ' 	' < "$LJGC_H" | grep -q '^GCSpause,GCSpropagate,'; then
+    grep -n -A3 'Garbage collector states' "$LJGC_H"
+    fail "lj_gc.h's collector-state enum no longer begins 'GCSpause, GCSpropagate'
+         (see above).  lj52shim.c hardcodes GCSpause as 0 via LJ52_GCS_PAUSE and
+         that is now wrong -- the emergency collector would disarm on the wrong
+         state and hand the collector an unbounded budget it never gives back."
+  fi
+else
+  fail "cannot find $LJGC_H to verify the collector-state enum that
+         lj52shim.c's LJ52_GCS_PAUSE depends on."
+fi
+
+# THE SHIM MUST NEVER DRIVE THE COLLECTOR DIRECTLY.  lj52_gc_pressure writes
+# two scalars (gc.threshold, gc.stepmul) and latches a third (gc.currentwhite);
+# it calls nothing.  That is the whole safety argument, and three verified
+# constraints say why a collect from inside the allocator is unsound:
+# lj_gc_fullgc hangs on-trace unconditionally (lj_gc.c:673-677 + :799-800), a
+# collect at lj_tab.c:123-124 frees the table under construction, and L->top is
+# stale at arbitrary allocation points (memory-accounting.md section 11, C1/C5/C6).
+# Including lj_gc.h to reach LJ_GC_WHITES would also drag these declarations
+# into scope, which is why the shim compares the whole currentwhite byte.
+if codegrep 'lj_gc_fullgc|lj_gc_step|luaC_|lua_gc *\(|LUA_GCCOLLECT|LUA_GCSTEP' | grep -q .; then
+  codegrep 'lj_gc_fullgc|lj_gc_step|luaC_|lua_gc *\(|LUA_GCCOLLECT|LUA_GCSTEP'
+  fail "the shim drives the collector directly (line above).  It must not: a
+         collection from inside the allocator hangs on-trace, can free the
+         object under construction, and runs with a stale L->top.  The shim
+         ARMS the VM's own trip-wire and lets a safepoint do the work -- see
+         lj52_gc_pressure and docs/research/memory-accounting.md section 11."
+fi
 if codegrep getenv | grep -q .; then
   codegrep getenv
   fail "the shim calls getenv().  Security- and scheduling-relevant behaviour
