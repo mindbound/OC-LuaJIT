@@ -191,6 +191,47 @@ assertion keeps its meaning — it becomes a statement about the *input* to the
 repack rather than about the compiled artifact. What must not happen is a fork
 of `jnlua.c`'s *logic*; renaming its JNI surface is a build step, not a fork.
 
+### Built and proven to link, 2026-09-15
+
+`native/jnlua/gen-luastate-subclass.py` generates the class,
+`native/jnlua/repack.sh` renames the C side, `build-native.sh` takes
+`OCLJ_VARIANT=dropin|additive`, and `test/native/LinkProbe.java` loads the
+result in a JVM and runs Lua through it: **5/5**, with the `_OCLJ_NATIVE`
+marker reading `luajit/LuaJIT 2.1.ROLLING`. The additive library exports
+**87 `LuaStateLuaJIT_*` symbols and zero in OpenComputers' `LuaState` family**,
+so non-collision is a measured property of the binary rather than an argument
+about macros.
+
+**The nested `LuaDebug` is mandatory, and inspection could not have shown it.**
+Compilation passed, `objdump` showed exactly the right export names, and the
+library still would not load: `jnlua.c:1741` does
+`referenceclass(JNI_LUASTATE_CLASS "$LuaDebug")`, so renaming the class string
+renamed a nested class that did not exist, and `System.load` threw
+`NoClassDefFoundError` before a single Lua call. It needs a `(JZ)V` constructor
+and a `long luaDebug` field (`:1742-1743`).
+
+**Emitting it as a subclass of `LuaState.LuaDebug` closes a hazard rather than
+working around it.** The base's `getName()`/`getNameWhat()` dispatch virtually,
+so they land on our overridden natives — meaning a handle produced by our
+`lua_getstack` is read by *our* library and not by OpenComputers' PUC code,
+which would be type confusion across two VMs. The constructor calls
+`super(_, false)` deliberately: the base's finalize guardian calls *its own*
+`lua_debugfree`, which would bind to OC's library and fire during GC.
+
+Two Java-level details that cost a compile each, recorded because both are
+counter-intuitive. `lua_getinfo`'s **parameter** must stay
+`LuaState.LuaDebug` — Java parameter types are invariant, and only returns are
+covariant — while `lua_getstack`'s **return** is deliberately left as the bare
+(narrowed) `LuaDebug`, because that covariance is what carries our natives
+along with the handle.
+
+**Still outstanding: the factory.** Nothing yet drives a *machine* through
+`LuaStateLuaJIT`; the probe runs bare Lua. The `Architecture` port needs a
+factory path that constructs `LuaStateLuaJIT` and loads our differently-named
+library — the one piece with no template on either side, since OC's and
+ocelot-brain's `LuaStateFactory` both construct `jnlua.LuaState` and have no
+fourth entry to copy.
+
 **Scope note for anyone reading the sections above.** Wherever this document or
 the roadmap says "drop-in replacement for OC's 5.2 native", that describes the
 HARNESS. The shipped mod replaces nothing: fourth class, fourth symbol family,

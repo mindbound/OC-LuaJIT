@@ -64,3 +64,6 @@ layout.json
 /build/
 /native/build/
 /test/native/build/
+
+# python bytecode from native/jnlua/ generators
+__pycache__/

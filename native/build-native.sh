@@ -70,7 +70,30 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${CC:=gcc}"
 : "${JOBS:=4}"
 
-DLL_NAME=libjnlua52-windows-x86_64.dll
+# WHICH LIBRARY THIS BUILD PRODUCES, and it is two different products.
+#
+#   dropin   (default)  jnlua.c UNMODIFIED, so LUA_VERSION_NUM 502 makes it
+#                       export Java_..._LuaState_* -- it IS OpenComputers' 5.2
+#                       native.  The harness substitutes it wholesale via
+#                       debug.forceNativeLibPathFirst.  Every measurement in
+#                       bench/runs/ was taken on this, and it can never be the
+#                       shipped mod: OC loads its own 5.2 native in preInit and
+#                       binds LuaState to it; two libraries cannot back one class.
+#
+#   additive            native/jnlua/repack.sh rewrites two macro values on a
+#                       build-dir COPY so the library exports
+#                       Java_..._LuaStateLuaJIT_* instead, backing the fourth
+#                       LuaState class gen-luastate-subclass.py emits.  Nothing
+#                       of OpenComputers' is replaced.  THIS IS WHAT SHIPS.
+#
+# docs/research/shipping-model.md has the reasoning; test/native/LinkProbe.java
+# is the proof a JVM actually binds the additive one (5/5, 2026-09-15).
+: "${OCLJ_VARIANT:=dropin}"
+case $OCLJ_VARIANT in
+  dropin)   DLL_NAME=libjnlua52-windows-x86_64.dll    ;;
+  additive) DLL_NAME=libocluajit52-windows-x86_64.dll ;;
+  *) echo "OCLJ_VARIANT must be dropin or additive" >&2; exit 1 ;;
+esac
 LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK"
 
 fail() { echo "BUILD FAIL: $*" >&2; exit 1; }
@@ -327,9 +350,17 @@ say "=============== 3. OC-JNLua jnlua.c (UNMODIFIED, shim force-included) =====
 # before jnlua.c's own first line is read.  jnlua.c itself is byte-identical to
 # upstream OC-JNLua -- verified below.
 rm -f "$OCLJ_BUILD/obj/jnlua.o"
+JNLUA_SRC="$OCLJ_JNLUA/native/src/jnlua.c"
+if [ "$OCLJ_VARIANT" = additive ]; then
+  # repack.sh refuses unless it changes EXACTLY two lines, so 'additive' can
+  # never quietly become a fork of jnlua.c's logic.
+  sh "$OCLJ_REPO/native/jnlua/repack.sh" "$OCLJ_JNLUA" "$OCLJ_BUILD/jnlua-luajit.c" \
+    || fail "the jnlua repack refused (see above)"
+  JNLUA_SRC="$OCLJ_BUILD/jnlua-luajit.c"
+fi
 "$CC" -c -O2 -Wall -DNDEBUG -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -I"$LJ" -I"$OCLJ_SHIM" \
   -include "$OCLJ_SHIM/lj52shim.h" \
-  "$OCLJ_JNLUA/native/src/jnlua.c" -o "$OCLJ_BUILD/obj/jnlua.o" \
+  "$JNLUA_SRC" -o "$OCLJ_BUILD/obj/jnlua.o" \
   > "$OCLJ_BUILD/jnlua.err" 2>&1
 NERR=$(grep -c 'error:' "$OCLJ_BUILD/jnlua.err" || true)
 NWARN=$(grep -c 'warning:' "$OCLJ_BUILD/jnlua.err" || true)
@@ -353,9 +384,16 @@ say "    errors=$NERR  warnings=$NWARN   (-Wall; jnlua.c is byte-identical to up
 # shim introduces -- a wrong arity, a wrong type, a missing declaration -- is
 # a line outside the allowlist and fails the build.  If OC-JNLua is bumped and
 # these two move or vanish, update the allowlist deliberately.
+#
+# THE FILENAME IS VARIABLE BUT THE LINE NUMBERS ARE NOT.  The additive variant
+# compiles build/native/jnlua-luajit.c, a repack.sh copy, so warnings arrive as
+# jnlua-luajit.c:623 rather than jnlua.c:623 and the allowlist missed them --
+# the gate correctly refused an otherwise fine build.  repack.sh changes two
+# lines IN PLACE and inserts nothing, so :623 and :1666 still point at the same
+# statements in either file; that is precisely why it verifies a 2-line diff.
 grep -E 'warning:' "$OCLJ_BUILD/jnlua.err" \
-  | grep -vE 'jnlua\.c:623:[0-9]+: warning: pointer targets in passing argument 2' \
-  | grep -vE "jnlua\.c:1666:[0-9]+: warning: 'tablesize_result' may be used uninitialized" \
+  | grep -vE 'jnlua(-luajit)?\.c:623:[0-9]+: warning: pointer targets in passing argument 2' \
+  | grep -vE "jnlua(-luajit)?\.c:1666:[0-9]+: warning: 'tablesize_result' may be used uninitialized" \
   > "$OCLJ_BUILD/jnlua.unexpected" 2>/dev/null
 UNEXPECTED=$(grep -c . "$OCLJ_BUILD/jnlua.unexpected" || true)
 say "    shim-attributable warnings = $UNEXPECTED  (2 pre-existing jnlua.c warnings allowlisted)"
@@ -402,6 +440,22 @@ if command -v objdump >/dev/null 2>&1; then
   [ "$EXPORTS" -gt 50 ] || fail "only $EXPORTS Java_* exports; jnlua did not link in"
   [ -n "$PKG" ] || fail "no Java_li_cil_repack_* export: this is upstream naef/jnlua, not OC's repack.
          ocelot-brain looks up li.cil.repack.com.naef.jnlua.LuaState and would find nothing."
+
+  # THE VARIANT MUST HAVE THE FAMILY IT ASKED FOR.  The failure is silent
+  # either way: a dropin exporting LuaStateLuaJIT_* binds nothing in the
+  # harness, and an additive exporting LuaState_* COLLIDES with OpenComputers'
+  # own 5.2 native in a real game -- the exact thing this variant prevents.
+  # Both would look like a perfectly successful build.
+  OWN=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_')
+  OCS=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaState_[a-z]')
+  say "    symbol family: LuaStateLuaJIT_*=$OWN  LuaState_*=$OCS   (variant=$OCLJ_VARIANT)"
+  if [ "$OCLJ_VARIANT" = additive ]; then
+    [ "$OWN" -gt 50 ] || fail "additive exports only $OWN LuaStateLuaJIT_* symbols: the repack did not take"
+    [ "$OCS" = "0" ]  || fail "additive STILL exports $OCS LuaState_* symbols: it would collide with OC own 5.2 native"
+  else
+    [ "$OCS" -gt 50 ] || fail "dropin exports only $OCS LuaState_* symbols: it cannot stand in for OC native"
+    [ "$OWN" = "0" ]  || fail "dropin exports $OWN LuaStateLuaJIT_* symbols: the harness would bind nothing"
+  fi
   # ABI SURFACE, pinned.  ocelot-brain resolves every LuaState native method
   # by JNI name, so the DLL is ABI-compatible iff the exported NAME SET is the
   # one OC-JNLua declares.  jnlua.c at da3d4d45 exports 87 Java_* methods plus
