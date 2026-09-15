@@ -1,0 +1,82 @@
+CENSUS| =============== AxisOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b355bc57-105f-4f62-a48e-26f24e7e01db\scratchpad\os\axis-os\src\kernel
+CENSUS|     eeprom      = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b355bc57-105f-4f62-a48e-26f24e7e01db\scratchpad\os\axis-os\eeprom\boot.lua
+CENSUS|     entries     = bin, boot, dev, drivers, etc, home, kco.lua, kernel.lua, lib, opt, sys, system, usr
+CENSUS|     native      = luajit
+CENSUS|     ticks       = 14000
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 3471813 B   kernelMemory = 326085 B
+CENSUS| PEAK USED      = 2621157 B REAL   (min free 850656 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = arms=99542 collects=99541 bailouts=0 refusals=0 armed=true
+CENSUS| 
+CENSUS| ---------------- SCREEN [AxisOS] ----------------
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+CENSUS| ---------------- SCREEN [AxisOS] ----------------
+    _        _       ___   ____
+   / \  __ _(_)_____/ _ \/ ___|
+  / _ \ \ \/ / / __| | | \___ \
+ / ___ \ >  <| \__ \ |_| |___) |
+/_/   \_/_/\_\_|___/\___/|____/
+AxisOS v0.82-DQA-beta
+
+________________________________________________
+
+XEN XKA v0.82-DQA-beta on localhost
+
+localhost login:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+  the harness did not report a passing verdict
+  no LuaJIT fingerprint: the run did not prove which VM it used --
+  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ
+  has no Eris, so every persistence assertion would pass vacuously.
+[smoke] +241s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/census-axis3/smoke.log
+SMOKE FAIL

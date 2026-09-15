@@ -1,0 +1,83 @@
+CENSUS| =============== QuickOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b355bc57-105f-4f62-a48e-26f24e7e01db\scratchpad\os\QuickOS
+CENSUS|     boot        = OC Lua BIOS -> /init.lua
+CENSUS|     entries     = .git, .gitignore, base.lua, bin, etc, files.txt, genlist.sh, home, init.lua, lib, qmenu.lua, README.md, usr
+CENSUS|     native      = luajit
+CENSUS|     ticks       = 14000
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 104 of 14000   (running=false)
+CENSUS| totalMemory    = 3463413 B   kernelMemory = 317685 B
+CENSUS| PEAK USED      = 480873 B REAL   (min free 2982540 B)   <- section 11 calibration input
+CENSUS| lastError      = init:23: /lib/core/boot.lua:42: attempt to index global 'utf8' (a nil value)
+CENSUS| GC PRESSURE    = arms=0 collects=0 bailouts=0 refusals=0 armed=false
+CENSUS| 
+CENSUS| ---------------- SCREEN [QuickOS] ----------------
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=false, lastError=init:23: /lib/core/boot.lua:42: attempt to index global 'utf8' (a nil value))
+CENSUS| ---------------- SCREEN [QuickOS] ----------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=false, lastError=init:23: /lib/core/boot.lua:42: attempt to index global 'utf8' (a nil value))
+[smoke] =============== 5. verdict ===============
+  java exit=1 (124 = timed out)
+  the harness did not report a passing verdict
+  no LuaJIT fingerprint: the run did not prove which VM it used --
+  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ
+  has no Eris, so every persistence assertion would pass vacuously.
+[smoke] +8s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/census-quick/smoke.log
+SMOKE FAIL

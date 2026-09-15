@@ -138,6 +138,140 @@ IF THE PRODUCT EVER DEMANDS IT. The only defensible form is not `require('ffi')`
 
 ---
 
+# Booting them, 2026-09-15
+
+The census above is a static reading of what these systems' *code* does. This is
+what happens when they are actually run on our native, with
+`test/native/census-os.sh` (which exists because the previous runner --
+`totoro.ocelot.demo.CustomOs`, in ocelot-brain's demo tree -- evaporated along
+with the ability to check its one finding).
+
+Shipping configuration in both cases: our native, `NativeLua52Architecture`
+pinned, the patched watchdog kernel, `ramScaleFor64Bit` 3.0, a Tier-3 data card.
+
+## AxisOS boots, and the OOM it used to die of does not recur
+
+| | |
+|---|---|
+| result | **reaches `localhost login:`** |
+| native / kernel | `luajit/LuaJIT 2.1.ROLLING`, `kernel (final) = watchdog` |
+| emergency GC | **arms 99542, collects 99541, bailouts 0, refusals 0** |
+| memory | peak used **2621157 B real**, kernelMemory 326085 B, min free 850656 B |
+| errors | none |
+
+On 2026-09-02 this system panicked four times with
+`[PANIC: not enough memory  Tier3-files: initial hash...`, during PatchGuard's
+Tier3 hashing of 22 files. It now boots past that point to a login prompt. **It
+is not a strict before/after** -- the 2026-09-02 log does not record which
+native it ran on -- but the failure is gone in the configuration we ship, with
+the allocator never refusing once across ~100 000 emergency cycles
+(memory-accounting.md 8f).
+
+**The data card is load-bearing in this measurement.** `eeprom/boot.lua` scans
+for a component of type `data` and, finding none, takes its `ndc;skip` branch
+and never runs `sha256` at all. Without one the arm count is 2868; with one it
+is 99542. A census without a data card would have reported a clean pass for the
+allocation-heavy path the panic happened in.
+
+## QuickOS does not boot on a 5.2-class VM, and that is not about us
+
+| | on our 5.2 native | on PUC 5.3 *(baseline arm)* |
+|---|---|---|
+| result | **dies at boot** | **reaches `/home #`** |
+| error | `init:23: /lib/core/boot.lua:42: attempt to index global 'utf8' (a nil value)` | none |
+| emergency GC | `arms 0` -- it died before doing any work | n/a |
+
+`machine.lua:1033` exposes `utf8 = utf8 and { ... }`, i.e. **only if the host VM
+has it**, and `LuaStateFactory` opens `Library.UTF8` for 5.3 and 5.4 but
+`Library.BIT32` for 5.2. So QuickOS fails identically on OpenComputers' **own**
+stock 5.2 native. The 5.3 arm above is the control that turns that from a
+code-reading into a measurement.
+
+### The scope boundary this exposes
+
+**Our architecture is 5.2-class by construction.** LuaJIT is 5.1 plus partial
+5.2 compatibility: no `utf8` library, no integer subtype, no `//`. Any system
+written against 5.3 is therefore outside what it can run -- and 5.3 has been
+OpenComputers' default architecture for a long time, so this is likely to cover
+a substantial amount of existing content. That is a product-shaping fact, not a
+census footnote, and it belongs on the roadmap rather than here.
+
+**There is a tractable mitigation, and the same line shows it.** Because the
+sandbox writes `utf8 = utf8 and {...}`, a `utf8` table merely has to EXIST in
+the raw state for the sandbox to pick it up. A Lua implementation of `char`,
+`codes`, `codepoint`, `len`, `offset` and `charpattern`, installed at
+`luaopen` time the way the shim's `OCLJ_JITOFF` is (so it survives `eris`),
+would cost little.
+
+**What it would NOT do is make QuickOS work.** `utf8` is the FIRST 5.3
+dependency this OS hits, not necessarily the only one; integer division,
+`math.type` and integer-formatted `string.format` are all plausible next
+blockers. The honest claim is that the shim removes one known barrier and that
+the depth of the rest is unmeasured. Finding out costs one run per fix.
+
+## MineOS runs on our VM; it does not finish booting from a source checkout
+
+Cloned from `github.com/IgorTimofeev/MineOS` and run at **its own declared floor
+of 2048 KB** (`Installer/Main`), which is the configuration
+`mineos-census.md` names as the deciding one. Two gaps in the runner had to be
+closed first, and neither of the earlier systems could have exposed them:
+
+* **The boot filesystem address lives in the EEPROM's data.** `OS.lua`'s fourth
+  line is `component.proxy(component.invoke(component.list("eeprom")(),
+  "getData"))`, so an empty data field is `component.proxy(nil)` before the OS
+  does anything. AxisOS scans for a filesystem containing `/kernel.lua`;
+  QuickOS boots through OC's BIOS. Only MineOS needs it.
+* **A GUI is invisible to a character-only screen read.** A MineOS desktop is
+  overwhelmingly space characters on coloured backgrounds, so stripping
+  trailing whitespace renders a painted screen as a blank page -- "produced no
+  output" and "produced a desktop" become the same reading. `CensusOs` now
+  reports glyph count *and* distinct cell colours.
+
+| | |
+|---|---|
+| result | **runs, renders, does not finish booting** |
+| native / kernel | `luajit/LuaJIT 2.1.ROLLING`, `kernel (final) = watchdog` |
+| errors | **none from the VM** -- every failure is MineOS's own, rendered by its own handler |
+| emergency GC | `arms 0` -- no memory pressure at 2048 KB |
+| memory | peak used **3053003 B real**, kernelMemory 317773 B |
+
+**What it establishes.** EFI runs, `OS.lua` executes, the Libraries load, the
+GUI stack draws, and MineOS's own error handler renders a traceback through it
+(`/Libraries/System.lua:3145 ... /OS.lua:218: in main chunk`). All of that is
+our VM behaving correctly on the largest and most complex system in the census.
+
+**Where it stops, and why we stopped with it.** The repository is *source*, not
+an installed image -- the Installer builds one. Booting it in place fails in
+`system.authorize`, because `paths.system.users = "/Users/"` does not exist.
+Creating `/Users/root` gets past that and into a GUI dialog: *"Failed to update
+file list: no such file or directory"*. Each fix reveals the next artefact the
+Installer would have produced. Replicating it by hand is open-ended and is not
+what a memory census is for.
+
+**So the memory figure is a LOWER BOUND and must not be quoted as a peak.** An
+OS that has not reached its desktop has not allocated what a desktop allocates.
+The honest statement is that MineOS needs *at least* ~2.7 MB of program heap at
+its declared floor and did not stress the collector at that size.
+
+**Running it properly means running the Installer**, which is its own task: it
+wants an internet card and a network, or a pre-built image. Worth doing before
+any claim about MineOS's steady-state footprint, and required before
+`mineos-census.md`'s save experiment -- which is separate again, because
+`CensusOs` has no persistence path at all.
+
+## Calibration inputs (memory-accounting.md section 11)
+
+| system | VM | peak used, real | kernel | program-attributable | vs 1024 KB advertised |
+|---|---|---:|---:|---:|---:|
+| AxisOS | ours, LuaJIT GC64 | 2621157 B | 326085 B | ~2241 KB | **~2.2x** |
+| QuickOS | PUC 5.3 | 1216737 B | 163708 B | ~1028 KB | ~1.0x |
+
+The two rows are different systems and are not a like-for-like VM comparison,
+but the AxisOS figure is the one that matters for the default: **a real system
+needs better than 2.2x, which rules out OpenComputers' stock 1.8** and is
+consistent with the 1.8-boots-1-in-6 result of section 9. Our pinned 3.0 holds
+with margin.
+
 # Follow-up measurements
 
 Added after the census, to refine claims it stated more broadly than the

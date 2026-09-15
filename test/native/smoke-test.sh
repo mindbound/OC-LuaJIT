@@ -149,6 +149,8 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # did not help" and "the knob never took" are the same row.
 : "${OCLJ_GCSTEPMUL:=0}"
 : "${OCLJ_GCPAUSE:=0}"
+: "${OCLJ_CENSUS_ARCH:=52}"
+: "${OCLJ_CENSUS_RAM:=1}"   # ExtendedTier.ThreeHalf sticks; MineOS declares a 2048 KB floor   # census baseline arm only; 53 measures PUC, not us
 : "${OCLJ_NATIVE:=luajit}"
 case $OCLJ_NATIVE in luajit|stock) ;; *) fail "OCLJ_NATIVE must be luajit or stock, not '$OCLJ_NATIVE'";; esac
 if [ "$OCLJ_NATIVE" = "stock" ]; then
@@ -164,6 +166,22 @@ fi
 : "${OCLJ_WORK:=${TMPDIR:-/tmp}/ocljit-smoke}"
 : "${OCLJ_LIBS:=$OCLJ_WORK/lib}"
 : "${OCLJ_SRC:=$SELF_DIR/OcljSmoke.scala}"
+
+# WHICH HARNESS RUNS.  Everything above this line -- the classpath, the
+# generated ocelot-brain config, the ramScale pin, the native selection -- is
+# the same work whatever we are booting, so a second driver script would be a
+# second copy of it that drifts.  Instead the main class is a variable.
+#
+#   the default            OpenOS + the benchmark suite (OcljSmoke.scala)
+#   OS census              test/native/census-os.sh, which sets these three
+#                          to boot a third-party system (CensusOs.scala)
+#
+# OCLJ_MAIN_ARGS is deliberately UNQUOTED at the call site: the census runner
+# takes several positional arguments and they must word-split.  Paths with
+# spaces are therefore not supported there; the census trees do not have any.
+: "${OCLJ_MAIN:=ocljit.smoke.Smoke}"
+: "${OCLJ_MAIN_CLASSFILE:=ocljit/smoke/Smoke\$.class}"
+: "${OCLJ_MAIN_ARGS:=}"
 : "${OCLJ_JAVA:=${JAVA_HOME:-}}"
 : "${OCLJ_TIMEOUT:=600}"
 # Which directory the benchmarks come from.  Defaults to the shipped suite;
@@ -264,7 +282,7 @@ say "=============== 2. compile the harness ==============="
 SC=$?
 grep -E '^.*error' "$OCLJ_WORK/scalac.log" | head -20
 [ $SC -eq 0 ] || fail "scalac exit=$SC (log: $OCLJ_WORK/scalac.log)"
-[ -f "$OCLJ_WORK/classes/ocljit/smoke/Smoke\$.class" ] || fail "harness did not compile"
+[ -f "$OCLJ_WORK/classes/$OCLJ_MAIN_CLASSFILE" ] || fail "harness did not compile (no $OCLJ_MAIN_CLASSFILE)"
 stamp "harness compiled"
 
 # --------------------------------------------------------------- 3
@@ -330,9 +348,9 @@ case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT
 [ "$OCLJ_JIT" = "off" ] && say "    OCLJ_JIT=off -- the harness will jit.off() the machine's state (JIT PROBE control run)"
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
-  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
 else
-  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -cp "$RUNCP" ocljit.smoke.Smoke "$CONF_ARG" > "$LOG" 2>&1
+  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
 fi
 RC=$?
 cat "$LOG"

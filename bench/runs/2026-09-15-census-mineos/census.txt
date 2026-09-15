@@ -1,0 +1,85 @@
+CENSUS| =============== MineOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b355bc57-105f-4f62-a48e-26f24e7e01db\scratchpad\os\MineOS-installed
+CENSUS|     boot        = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/os/MineOS-installed/EFI/Minified.lua
+CENSUS|     entries     = .github, .gitignore, Applications, EFI, Icons, Installer, Libraries, LICENSE, Localizations, OS.lua, README-ru_RU.md, README-zh_CN.md, README.md, Users, Wallpapers
+CENSUS|     native      = luajit
+CENSUS|     ticks       = 14000
+CENSUS|     ram         = 2 x ExtendedTier.ThreeHalf = 2048 KB advertised
+CENSUS|     boot fs     = becd9826-d899-44dd-b3c3-6b1161408b96
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 6609229 B   kernelMemory = 317773 B
+CENSUS| PEAK USED      = 3053003 B REAL   (min free 3556226 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = arms=0 collects=0 bailouts=0 refusals=0 armed=false
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 78 non-blank glyphs, 7 distinct cell colours
+CENSUS| ---------------- SCREEN [MineOS] ----------------
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+CENSUS| ---------------- SCREEN [MineOS] ----------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                         ??    Failed to update file list: no such file or directory:
+                                        ?  ?   /Users/root/Desktop
+                                       ?Cyka?
+                                                                                                             ?   OK   ?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+  the harness did not report a passing verdict
+  no LuaJIT fingerprint: the run did not prove which VM it used --
+  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ
+  has no Eris, so every persistence assertion would pass vacuously.
+[smoke] +223s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/census-mineos3/smoke.log
+SMOKE FAIL

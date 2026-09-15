@@ -1,0 +1,84 @@
+CENSUS| =============== QuickOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b355bc57-105f-4f62-a48e-26f24e7e01db\scratchpad\os\QuickOS
+CENSUS|     boot        = OC Lua BIOS -> /init.lua
+CENSUS|     entries     = .git, .gitignore, base.lua, bin, etc, files.txt, genlist.sh, home, init.lua, lib, qmenu.lua, README.md, usr
+CENSUS|     native      = luajit
+CENSUS|     ticks       = 4000
+CENSUS| !! BASELINE ARM: pinned to NativeLua53Architecture, which our native does
+CENSUS| !! NOT back.  This run measures ocelot-brain's PUC 5.3, not OC-LuaJIT.
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua53Architecture
+CENSUS| native marker  = <stock PUC>
+CENSUS| watchdog       = false   kernel = <stock>
+CENSUS| kernel (final) = <stock>
+CENSUS| 
+CENSUS| ticks run      = 4000 of 4000   (running=true)
+CENSUS| totalMemory    = 3309436 B   kernelMemory = 163708 B
+CENSUS| PEAK USED      = 1216737 B REAL   (min free 2092699 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = absent (stock native)
+CENSUS| 
+CENSUS| ---------------- SCREEN [QuickOS] ----------------
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+CENSUS| ---------------- SCREEN [QuickOS] ----------------
+Welcome to QuickOS 1.1.0 by Renno231, based on GooberOS (based on OpenOS)!
+To get help, use "man". Use "osinstall" to run the OS installation wizard.
+Warning: Protect terminal access by setting a password in /home/.pwd!
+/home #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+  the harness did not report a passing verdict
+  no LuaJIT fingerprint: the run did not prove which VM it used --
+  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ
+  has no Eris, so every persistence assertion would pass vacuously.
+[smoke] +66s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/census-quick53/smoke.log
+SMOKE FAIL
