@@ -534,11 +534,29 @@ fi
 
 # --------------------------------------------------------------- 4
 say "=============== 4. eris_lj.c ==============="
+
+# THE BLOB FINGERPRINT HAS TO COVER THE SERIALIZER, and it did not.  LJ_COMMIT
+# above is the LUAJIT tree's HEAD, so every edit to eris_lj.c shipped under an
+# unchanged fingerprint: a blob written by the old restore code loaded silently
+# under the new one, which is precisely the failure the fingerprint exists to
+# refuse.  Hash the sources rather than trust a commit id -- this repo is built
+# dirty constantly, so a git id would not have moved either.
+if command -v sha1sum >/dev/null 2>&1; then
+  SER_HASH=$(cat "$OCLJ_SER/eris_lj.c" "$OCLJ_SER/eris_lj.h" | sha1sum | cut -c1-8)
+elif command -v md5sum >/dev/null 2>&1; then
+  SER_HASH=$(cat "$OCLJ_SER/eris_lj.c" "$OCLJ_SER/eris_lj.h" | md5sum | cut -c1-8)
+else
+  SER_HASH=$(cat "$OCLJ_SER/eris_lj.c" "$OCLJ_SER/eris_lj.h" | cksum | cut -d" " -f1)
+fi
+[ -n "$SER_HASH" ] || fail "could not hash the serializer sources for the blob fingerprint"
+say "    serializer hash = $SER_HASH  (blobs are pinned to this)"
+
 # Compiled WITHOUT -include lj52shim.h on purpose: the serializer must reach
 # the genuine LuaJIT lua_load/lua_loadx so it can load the LuaJIT bytecode it
 # writes with lj_bcwrite.  The 'b' path stays open INTERNALLY to eris_lj while
 # lj52_load keeps it shut to sandbox code (allowBytecode=false).
 "$CC" -c -O2 $PICFLAG -I"$LJ" -I"$OCLJ_SER" -DERIS_LJ_COMMIT="\"$LJ_COMMIT\"" \
+  -DERIS_LJ_SERHASH="\"$SER_HASH\"" \
   "$OCLJ_SER/eris_lj.c" -o "$OBJ/eris_lj.o" 2>"$OCLJ_BUILD/eris.err"
 [ -f "$OBJ/eris_lj.o" ] || { grep -oE 'error: .*' "$OCLJ_BUILD/eris.err" | head -20; fail "eris_lj.c did not compile"; }
 

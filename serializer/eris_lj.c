@@ -86,7 +86,16 @@
 /* Largest reference id we can hand to lua_rawseti/lua_rawgeti. */
 #define ERIS_LJ_MAXREF 0x7fffffff
 
-#define ERIS_LJ_FINGERPRINT ERIS_LJ_COMMIT "|" LUAJIT_VERSION
+/* ERIS_LJ_COMMIT is the LUAJIT tree's HEAD (native/build-native.sh:355), not
+ * this file's.  Every change to the serializer therefore used to ship under an
+ * unchanged fingerprint, and a blob written by the old restore code would load
+ * silently under the new one -- the exact silent-misload the fingerprint exists
+ * to prevent.  ERIS_LJ_SERHASH is a hash of the serializer sources, supplied by
+ * the build; without it a blob cannot say which serializer wrote it. */
+#ifndef ERIS_LJ_SERHASH
+#define ERIS_LJ_SERHASH "nohash"
+#endif
+#define ERIS_LJ_FINGERPRINT ERIS_LJ_COMMIT "|" LUAJIT_VERSION "|" ERIS_LJ_SERHASH
 
 /* Fixed stack slots used by both directions. */
 #define PERMIDX 1  /* perms (persist) / uperms (unpersist) table */
@@ -773,8 +782,31 @@ static void elj_push_replay_state(lua_State *L, uint32_t idx)
      * program's. elj_forin_replay re-checks t[key] on arrival, so the test
      * belongs there. An empty node has a nil key and is correctly skipped:
      * only a rehash could put a key there, and that is what makes inserting
-     * during a traversal undefined in the first place. */
-    if (!tvisnil(&nd->key)) {
+     * during a traversal undefined in the first place.
+     *
+     * BUT A COLLECTIBLE KEY IN A NIL-VALUED NODE MAY ALREADY BE FREED, and
+     * reading it is undefined behaviour, not merely a stale answer.  LuaJIT
+     * marks a node's key ONLY when its value is non-nil (lj_gc.c, gc_traverse_tab:
+     * "if (!tvisnil(&n->val)) { ... gc_marktv(g, &n->key); ... }"), so after
+     * t[obj] = nil the node keeps the pointer while the sweep is free to
+     * collect the object behind it.  LuaJIT itself never dereferences such a
+     * key; this walk did, and copyTV would resurrect freed memory.  Measured:
+     * a stress run segfaulted inside eris.persist 7 times out of 7.
+     *
+     * So a nil-valued node is visited only when its key is NOT collectible --
+     * a number or boolean key is a value, stored in the node itself, and is
+     * always safe to read.  The type tag lives in the node too, so tvisgcv()
+     * dereferences nothing.
+     *
+     * WHAT THIS COSTS, stated plainly: a GC-typed key whose value is nil at
+     * save time is now dropped from the replay list, so a loop will not visit
+     * it even if the program restores t[key] before the cursor arrives.  That
+     * is a real regression against the paragraph above, and it is the lesser
+     * evil -- the alternative is reading a dangling pointer.  Distinguishing
+     * "still referenced elsewhere" from "only this dead node refers to it"
+     * would require dereferencing the object to read its mark bit, which is
+     * the very access that is unsafe. */
+    if (!tvisnil(&nd->key) && (!tvisnil(&nd->val) || !tvisgcv(&nd->key))) {
       copyTV(L, L->top, &nd->key);      /* the key, whatever its type */
       L->top++;
       lua_rawseti(L, -2, (int)++n);

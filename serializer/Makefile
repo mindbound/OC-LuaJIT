@@ -6,9 +6,15 @@ LJSRC := $(LJDIR)/src
 LJLIB := ../prototype/watchdog/libluajit_stock.a
 LJ_COMMIT := 1ee778a4e37122d8ca7d5733c590a47dafd6b15c
 
+# The blob fingerprint must name THIS serializer, not just the LuaJIT tree;
+# build-native.sh does the same. Without it this path would compile with the
+# 'nohash' fallback in eris_lj.c and its blobs could not say what wrote them.
+SERHASH := $(shell cat eris_lj.c eris_lj.h | sha1sum | cut -c1-8)
+
 CC     ?= cc
 CFLAGS := -std=c11 -O2 -g -Wall -Wextra -I $(LJSRC) \
           -DERIS_LJ_COMMIT='"$(LJ_COMMIT)"'
+CFLAGS += -DERIS_LJ_SERHASH='"$(SERHASH)"'
 
 UNAME_S := $(shell uname -s)
 ifneq (,$(findstring MINGW,$(UNAME_S)))
