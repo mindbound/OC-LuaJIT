@@ -19,11 +19,46 @@
  *     escape hatch is wanted it belongs in OC's own config file.
  *   - no build flags that select a known-broken behaviour.
  */
+/* The Linux watchdog backend calls pthread_setname_np, which glibc guards with
+ * __USE_GNU.  _GNU_SOURCE only WIDENS declarations, and this file calls none of
+ * the functions whose SEMANTICS it changes (strerror_r, basename, qsort_r).
+ * Do not reach for _POSIX_C_SOURCE instead: setting it explicitly suppresses
+ * glibc's default _DEFAULT_SOURCE and would hide pthread_setname_np again,
+ * turning build-native.sh's zero-warning gate into an implicit-declaration
+ * failure. */
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* THE WATCHDOG BACKEND IS SELECTED HERE, far above the THREADING comment that
+ * explains it, for one mechanical reason: lj52_mem carries a pthread_mutex_t
+ * and a pthread_cond_t BY VALUE and is declared a little below.  windows.h is
+ * deliberately NOT hoisted with this -- it stays down at the THREADING comment,
+ * so the shipping Windows translation unit is unaffected by this change. */
+#if defined(_WIN32)
+#define LJ52_WD_WIN32 1
+#elif defined(__linux__)
+#define LJ52_WD_PTHREAD 1
+#include <errno.h>
+#include <limits.h>
+#include <pthread.h>
+#include <signal.h>
+#include <time.h>
+#else
+/* NOT "POSIX", and the distinction is load-bearing: pthread_condattr_setclock
+ * is POSIX clock-selection and macOS does not have it, so a Darwin build would
+ * have to put the deadline condvar on CLOCK_REALTIME and silently inherit an
+ * NTP-step hazard on a LIVE deadline.  A third backend is the honest answer
+ * there; refusing is the honest answer until someone can build and test one.
+ * This #error has narrowed, not vanished -- do not delete it as an oversight. */
+#error "lj52 watchdog: only the Win32 and Linux backends exist (macOS needs its own)"
+#endif
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -176,7 +211,25 @@ typedef struct lj52_mem {
   long long     pending;    /* bytes moved while nobody could be told yet    */
   /* -- the deadline watchdog; see its section below -- */
   lua_State    *L;          /* main thread: what the timer callback hooks    */
+  double        wd_due;     /* ABSOLUTE ms of the next fire; 0 == disarmed.  */
+#if defined(LJ52_WD_PTHREAD)
+  /* THE OWNERSHIP RULE, and it must not be lost: wd_mtx is a LEAF.  Nothing
+   * else may be acquired while it is held, and NO LUA API CALL may be made
+   * while it is held.  The timer thread holds it across lj52_wd_inject, which
+   * is what makes lj52_wd_cancel block; a Lua call underneath it would invite
+   * the allocator, and the allocator is lj52_alloc, which touches this same
+   * record. */
+  pthread_t       wd_thread;
+  pthread_mutex_t wd_mtx;
+  pthread_cond_t  wd_cv;     /* CLOCK_MONOTONIC -- see lj52_wd_start          */
+  double          wd_wake;   /* when the thread's CURRENT sleep ends; 0 ==    */
+                             /* parked indefinitely.  Thread writes, Lua      */
+                             /* thread reads to decide whether to signal.     */
+  int             wd_started;/* mutex + cond + thread all exist               */
+  int             wd_quit;   /* teardown: the thread must return              */
+#else
   void         *wd_timer;   /* pending Win32 timer-queue timer, or NULL      */
+#endif
   int           wd_depth;   /* nested arms                                   */
   double        wd_stack[LJ52_WD_MAXDEPTH]; /* absolute deadlines, ms      */
   lua_State    *wd_for[LJ52_WD_MAXDEPTH];   /* the thread each arm protects */
@@ -187,6 +240,10 @@ typedef struct lj52_mem {
   volatile long wd_fires;    /* first fires, ever                            */
   volatile long wd_refires;  /* periodic re-fires, ever                      */
   volatile long wd_filtered; /* hook invocations ignored by the thread filter */
+  /* The reliability instrument, on BOTH backends, because the Win32 one has an
+   * open finding against it (fires=0 in 2 of ~6 runs under host load) and
+   * "is this backend better" has to be answerable with a number. */
+  volatile int  wd_degraded; /* last program() fell back to the standing hook */
   /* -- the emergency collector; see lj52_gc_pressure below -- */
   int           gc_armed;      /* a cycle has been demanded, not yet proven   */
   int           gc_busy;       /* re-entrancy guard; see the note below       */
@@ -486,16 +543,19 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  * thread's own dispatch updates on trace start/stop; that tear is bounded by
  * the re-fire and by the recorder's next hot event, and is recorded.
  *
- * Only the Win32 timer-queue backend exists.  It is what this DLL is built
- * for; a pthread backend is a roadmap item, and a build for any other
- * platform refuses below rather than shipping an untested one. */
+ * TWO BACKENDS IMPLEMENT THIS, and everything above is common to both: the
+ * rule that the timer thread never calls lua_sethook, the store-then-atomic-OR
+ * in lj52_wd_inject, and the periodic re-fire that covers a dropped bit.  Only
+ * the CLOCK and the TIMER differ.  Win32 uses a timer-queue timer; Linux parks
+ * one thread per machine in pthread_cond_timedwait on a CLOCK_MONOTONIC
+ * condvar, where the mutex that thread holds across lj52_wd_inject IS the
+ * blocking cancel.  macOS has neither and gets an #error until someone can
+ * build and test a third. */
 
-#ifdef _WIN32
+#ifdef LJ52_WD_WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#else
-#error "lj52 watchdog: only the Win32 timer-queue backend is implemented"
 #endif
 
 /* LuaJIT internals, for the one thing the timer thread must do without
@@ -653,9 +713,32 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
 }
 
 #define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
+#define LJ52_WD_MAXMS     4294967000.0  /* ~49 d.  The Win32 DWORD bound, kept
+                                         * on Linux ON PURPOSE: one policy and
+                                         * one behaviour to test, rather than a
+                                         * config value that means two things. */
+#define LJ52_WD_MAXWAIT_MS 3600000.0    /* caps one WAIT, never the deadline  */
+#define LJ52_WD_STACKSZ   (128 * 1024)  /* not glibc's 8 MB: fifty machines is
+                                         * then ~1.5 MB of real memory rather
+                                         * than 400 MB of reserved address
+                                         * space, which is the number someone
+                                         * screenshots. */
 static const char LJ52_WD_KEY = 0;      /* registry slot for the armed fn */
 
-/* Monotonic milliseconds, QueryPerformanceCounter-backed like the prototype. */
+/* Monotonic milliseconds.
+ *
+ * CLOCK_MONOTONIC and not CLOCK_BOOTTIME: it excludes host suspend, which is
+ * what QueryPerformanceCounter does, so a wd_stack deadline means the same
+ * thing on both backends.  Only ever used as differences, so the epoch is as
+ * irrelevant as QPC's, and a double still resolves to microseconds after a year
+ * of uptime.  vDSO on x86-64 and aarch64, so no syscall. */
+#if defined(LJ52_WD_PTHREAD)
+static double lj52_wd_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
+}
+#else
 static double lj52_wd_now(void) {
   static LARGE_INTEGER freq;
   LARGE_INTEGER t;
@@ -663,6 +746,7 @@ static double lj52_wd_now(void) {
   QueryPerformanceCounter(&t);
   return (double)t.QuadPart * 1000.0 / (double)freq.QuadPart;
 }
+#endif
 
 /* The hook the timer installs.  Runs on the Lua thread, on the first
  * instruction after the trace exit.  callhook() has already reserved
@@ -723,6 +807,96 @@ static void lj52_wd_inject(lj52_mem *M) {
   lj_dispatch_update(g, 0);
 }
 
+#if defined(LJ52_WD_PTHREAD)
+
+/* Sleep until `due`, or LJ52_WD_MAXWAIT_MS from now, whichever is sooner.
+ * Enters and leaves with wd_mtx held. */
+static void lj52_wd_wait_until(lj52_mem *M, double due) {
+  struct timespec ts;
+  double now = lj52_wd_now();
+  double ms  = (due > now + LJ52_WD_MAXWAIT_MS) ? now + LJ52_WD_MAXWAIT_MS : due;
+  double sec = floor(ms / 1000.0);
+  ts.tv_sec  = (time_t)sec;
+  ts.tv_nsec = (long)((ms - sec * 1000.0) * 1000000.0);
+  if (ts.tv_nsec < 0L)         ts.tv_nsec = 0L;
+  if (ts.tv_nsec > 999999999L) ts.tv_nsec = 999999999L;
+  /* wd_wake is the END OF THE SLEEP WE ARE ABOUT TO TAKE and must never be
+   * EARLIER than that: program() skips its signal when the new deadline is not
+   * before wd_wake, so a wd_wake that understated the sleep would let the
+   * thread sleep straight through a deadline.  Overstating it merely costs a
+   * spurious signal.  It is derived from the same `ms` as ts, cap included, so
+   * it can be neither. */
+  M->wd_wake = ms;
+  (void)pthread_cond_timedwait(&M->wd_cv, &M->wd_mtx, &ts);
+}
+
+/* The ONLY thing that ever runs off the Lua thread on this backend.
+ *
+ * DELIVERY IS DERIVED, NOT REGISTERED.  Every iteration re-reads wd_due and
+ * recomputes its sleep from it, so a spurious wake costs one re-check and a
+ * LOST wake is not expressible -- there is no queued notification whose loss
+ * would be silent.  That is the structural answer to the Win32 backend's open
+ * finding (fires=0 in 2 of ~6 runs under host load).
+ *
+ * ITS ONLY BLOCKING POINT, EVER, IS ITS OWN CONDVAR.  It takes no second lock,
+ * never allocates, calls no Lua or JNI API, does no I/O, and enters the VM only
+ * through lj52_wd_inject -- two word stores, one atomic OR, one
+ * lj_dispatch_update, all non-blocking.  Keep that true and lj52_wd_stop can
+ * never hang on its join; break it and it hangs a Minecraft server thread. */
+static void *lj52_wd_thread(void *p) {
+  lj52_mem *M = (lj52_mem *)p;
+  pthread_mutex_lock(&M->wd_mtx);
+  for (;;) {
+    double now;
+    if (M->wd_quit) break;
+    if (M->wd_due == 0.0) {              /* disarmed: park */
+      M->wd_wake = 0.0;
+      pthread_cond_wait(&M->wd_cv, &M->wd_mtx);
+      continue;
+    }
+    now = lj52_wd_now();
+    if (now < M->wd_due) { lj52_wd_wait_until(M, M->wd_due); continue; }
+    if (!M->wd_fired) { M->wd_fired = 1; M->wd_fires++; } else M->wd_refires++;
+    lj52_wd_inject(M);                   /* MUTEX HELD -- this IS the cancel */
+    /* Re-fire measured from NOW, not from the previous due, so a thread that
+     * lost the CPU wakes owing exactly one re-fire rather than a backlog. */
+    M->wd_due = now + (double)LJ52_WD_REFIRE_MS;
+  }
+  M->wd_wake = 0.0;
+  pthread_mutex_unlock(&M->wd_mtx);
+  return NULL;
+}
+
+/* Withdraw the deadline, waiting for any in-flight injection to finish.
+ *
+ * pthread_mutex_lock IS THE WAIT.  The thread holds wd_mtx continuously from
+ * entering its loop to leaving it, releasing it only inside the condvar waits
+ * -- that is, only while asleep with nothing in flight -- and in particular it
+ * holds it across lj52_wd_inject.  So either it is asleep and we take the mutex
+ * at once, or it is mid-fire and we block until that completes.
+ *
+ * The invariant is STRONGER than DeleteTimerQueueTimer's: afterwards no
+ * injection can even START, because the only path into the fire block needs
+ * wd_due != 0 and only the Lua thread sets that, in program(), which by
+ * contract runs after this.  So arm's window (cancel, mutate wd_depth/wd_stack,
+ * program) and disarm's (cancel, then clear the hook) are genuinely exclusive
+ * of the timer thread -- and that falls out of "the callback runs under the
+ * lock the canceller takes", not out of an ordering argument a reader has to
+ * reconstruct.
+ *
+ * Deliberately NO signal: correctness needs only that no fire happen after we
+ * return, which clearing wd_due under the mutex gives. Skipping it is what
+ * makes disarm syscall-free, and the stale sleep it leaves usually makes the
+ * next arm syscall-free too. */
+static void lj52_wd_cancel(lj52_mem *M) {
+  if (!M->wd_started) return;
+  pthread_mutex_lock(&M->wd_mtx);
+  M->wd_due = 0.0;
+  pthread_mutex_unlock(&M->wd_mtx);
+}
+
+#else  /* LJ52_WD_WIN32 */
+
 /* Timer callback: the ONLY thing that ever runs off the Lua thread. */
 static VOID CALLBACK lj52_wd_fire(PVOID p, BOOLEAN timedOut) {
   lj52_mem *M = (lj52_mem *)p;
@@ -739,13 +913,27 @@ static void lj52_wd_cancel(lj52_mem *M) {
   }
 }
 
+#endif
+
 /* Program the timer for the deadline at the top of the stack -- or, if that
  * deadline has already passed, install the hook right now, synchronously. */
 static void lj52_wd_program(lj52_mem *M) {
   double remaining = M->wd_stack[M->wd_depth - 1] - lj52_wd_now();
+#if defined(LJ52_WD_WIN32)
   HANDLE h = NULL;
+#endif
   M->wd_fired = 0;
-  if (remaining <= 0.0) {
+  /* WRITTEN NEGATED, AND THAT IS A FIX RATHER THAN A STYLE CHOICE.  `secs`
+   * reaches wd_stack through luaL_checknumber, which accepts NaN, so `remaining`
+   * can be NaN -- and NaN fails BOTH `<= 0.0` and `>= LJ52_WD_MAXMS`, so the old
+   * spelling fell through to the cast below.  (DWORD)(NaN + 5.0) is undefined;
+   * on x86-64 cvttsd2si yields INT_MIN, so the "timer" would land about 24.8
+   * days out and the machine would run UNDEFENDED.  Negated, NaN takes the safe
+   * branch of each test.  Not reachable from a sandbox today -- _OCLJ_WATCHDOG
+   * is a raw global the sandbox never sees, and machine.lua only ever passes a
+   * finite difference or math.huge -- but it is reachable from the raw API, and
+   * the failure is silent. */
+  if (!(remaining > 0.0)) {             /* already past, or NaN */
     lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1);
     return;
   }
@@ -755,7 +943,26 @@ static void lj52_wd_program(lj52_mem *M) {
    * and on x64 GCC typically 0: a timer that fires at once and leaves the
    * whole tick running under a count=1 hook.  Past what a DWORD of
    * milliseconds can express (~49 days) there is no deadline to enforce. */
-  if (remaining >= 4294967000.0) return;
+  if (!(remaining < LJ52_WD_MAXMS)) return;  /* too far out, or +inf */
+
+#if defined(LJ52_WD_PTHREAD)
+  if (!M->wd_started) {          /* no thread: slow rather than undefended */
+    M->wd_degraded = 1;
+    lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000);
+    return;
+  }
+  pthread_mutex_lock(&M->wd_mtx);
+  /* +5 ms for the reason given below: checkDeadline compares against
+   * computer.realTime(), Java's wall clock, not this counter. */
+  M->wd_due = M->wd_stack[M->wd_depth - 1] + 5.0;
+  /* Signal ONLY if we moved the wake earlier.  wd_wake == 0 means parked
+   * indefinitely, i.e. waking at +infinity, so any deadline is earlier. */
+  if (M->wd_wake == 0.0 || M->wd_due < M->wd_wake)
+    pthread_cond_signal(&M->wd_cv);
+  M->wd_degraded = 0;
+  pthread_mutex_unlock(&M->wd_mtx);
+  return;
+#else
   /* +5 ms so that when checkDeadline reads computer.realTime() -- Java's
    * wall clock, not this counter -- the deadline it compares against has
    * genuinely passed.  If it had not, the count=1 hook would simply call
@@ -766,11 +973,96 @@ static void lj52_wd_program(lj52_mem *M) {
                              (DWORD)(remaining + 5.0), LJ52_WD_REFIRE_MS, 0)) {
     /* No timer: fall back to the standing hook OC has always used.  The
      * machine is then slow rather than undefended. */
+    M->wd_degraded = 1;
     lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000);
     return;
   }
   M->wd_timer = (void *)h;
+  M->wd_degraded = 0;
+#endif
 }
+
+#if defined(LJ52_WD_PTHREAD)
+/* EAGER, at state creation rather than lazily at the first arm.  pthread_create
+ * is fallible, and discovering that at newstate gives a machine that BOOTS on
+ * the standing-hook fallback; discovering it on the first arm puts a fallible
+ * call in the middle of a game tick.  Afterwards the invariant is total:
+ * wd_started == 1 means mutex, cond and thread all exist for the rest of the
+ * record's life, and 0 means none of them do.  One int guards every entry. */
+static void lj52_wd_start(lj52_mem *M) {
+  pthread_condattr_t ca;
+  pthread_attr_t     ta;
+  sigset_t           block, old;
+  size_t             stk = LJ52_WD_STACKSZ;
+  int                rc;
+
+  M->wd_quit = 0;
+  if (pthread_mutex_init(&M->wd_mtx, NULL) != 0) return;
+  if (pthread_condattr_init(&ca) != 0) goto err_mtx;
+  /* NOT OPTIONAL.  A condvar's default clock is CLOCK_REALTIME, and on it an
+   * NTP step or `date -s` moves a LIVE deadline -- into next week, or into the
+   * past.  prototype/watchdog/harness.c does exactly that, with the comment
+   * "pthread_cond uses REALTIME"; do not carry it forward.  If clock selection
+   * is unavailable, take the standing-hook fallback rather than ship a timer
+   * that is subtly wrong. */
+  if (pthread_condattr_setclock(&ca, CLOCK_MONOTONIC) != 0) {
+    pthread_condattr_destroy(&ca);
+    goto err_mtx;
+  }
+  rc = pthread_cond_init(&M->wd_cv, &ca);
+  pthread_condattr_destroy(&ca);
+  if (rc != 0) goto err_mtx;
+  if (pthread_attr_init(&ta) != 0) goto err_cv;
+#ifdef PTHREAD_STACK_MIN
+  if (stk < (size_t)PTHREAD_STACK_MIN) stk = (size_t)PTHREAD_STACK_MIN;
+#endif
+  (void)pthread_attr_setstacksize(&ta, stk);
+  /* THIS THREAD IS INVISIBLE TO HOTSPOT -- it is never AttachCurrentThread'd --
+   * so it must never be the one chosen to take an asynchronous signal the JVM
+   * owns: SIGQUIT's thread dump, SIGTERM, SIGINT, HotSpot's own SR_signum.
+   * Block everything across the create; the child inherits the mask.  The four
+   * synchronously generated ones stay unblocked, because blocking a
+   * hardware-generated SIGSEGV/SIGBUS/SIGFPE/SIGILL is undefined. */
+  sigfillset(&block);
+  sigdelset(&block, SIGSEGV); sigdelset(&block, SIGBUS);
+  sigdelset(&block, SIGFPE);  sigdelset(&block, SIGILL);
+  pthread_sigmask(SIG_SETMASK, &block, &old);
+  rc = pthread_create(&M->wd_thread, &ta, lj52_wd_thread, M);
+  pthread_sigmask(SIG_SETMASK, &old, NULL);
+  pthread_attr_destroy(&ta);
+  if (rc != 0) goto err_cv;
+  M->wd_started  = 1;
+  M->wd_degraded = 0;
+  (void)pthread_setname_np(M->wd_thread, "ocljit-wd");
+  return;
+
+err_cv:
+  pthread_cond_destroy(&M->wd_cv);
+err_mtx:
+  pthread_mutex_destroy(&M->wd_mtx);
+  /* wd_started stays 0: every entry point then takes the standing-hook path,
+   * which is slow rather than undefended. */
+  M->wd_degraded = 1;
+}
+
+/* Join the thread and destroy the primitives.  MUST happen before the record
+ * is freed and before lua_close, because the thread reaches into G(M->L). */
+static void lj52_wd_stop(lj52_mem *M) {
+  if (!M->wd_started) return;
+  pthread_mutex_lock(&M->wd_mtx);
+  M->wd_quit = 1;
+  M->wd_due  = 0.0;
+  pthread_cond_signal(&M->wd_cv);
+  pthread_mutex_unlock(&M->wd_mtx);
+  pthread_join(M->wd_thread, NULL);
+  pthread_cond_destroy(&M->wd_cv);
+  pthread_mutex_destroy(&M->wd_mtx);
+  M->wd_started = 0;
+}
+#else
+#define lj52_wd_start(M)  ((void)0)
+#define lj52_wd_stop(M)   lj52_wd_cancel(M)
+#endif
 
 /* _OCLJ_WATCHDOG.arm(seconds, fn [, outermost [, protects]]) -> depth token.
  * `protects` is the thread about to be resumed; it defaults to the caller,
@@ -779,6 +1071,12 @@ static int lj52_wd_arm(lua_State *L) {
   lj52_mem *M = lj52_memof(L);
   double secs = luaL_checknumber(L, 1);
   int outermost;
+  /* NaN -> fire now, the maximally defensive reading; +inf survives to the
+   * range guard in program().  Belt and braces with the negated tests there:
+   * this one is at the SOURCE, which is where a future caller is likeliest to
+   * introduce a NaN, and the file's own rule is that nothing may fail after the
+   * cancel further down. */
+  if (!(secs >= 0.0)) secs = 0.0;
   lua_State *co;
   luaL_checktype(L, 2, LUA_TFUNCTION);
   outermost = lua_toboolean(L, 3);
@@ -962,7 +1260,10 @@ static void lj52_wd_install(lua_State *L) {
  * callback can still arrive and hook a state that no longer exists. */
 void lj52_close(lua_State *L) {
   lj52_mem *M = lj52_memof(L);
-  if (M != NULL) lj52_wd_cancel(M);
+  /* STOP, not merely cancel: on Linux the timer thread must be JOINED before
+   * lua_close, because lj52_wd_inject reaches into G(M->L) and the state is
+   * about to stop existing. */
+  if (M != NULL) lj52_wd_stop(M);
   lua_close(L);
   free(M);
 }
@@ -1062,7 +1363,10 @@ lua_State *lj52_newstate(void) {
     L = luaL_newstate();
     if (!L) return NULL;
   }
-  if (M != NULL) M->L = L;               /* the watchdog hooks this thread */
+  if (M != NULL) {
+    M->L = L;                            /* the watchdog hooks this thread */
+    lj52_wd_start(M);                    /* no-op on Win32; see lj52_wd_start */
+  }
   lua_atpanic(L, lj52_panic);
 
   /* --- 5.2 registry layout -------------------------------------------

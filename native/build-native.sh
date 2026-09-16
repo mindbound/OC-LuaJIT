@@ -59,6 +59,19 @@
 # =====================================================================
 set -u
 
+# THE TOOLS MUST SPEAK ONE LANGUAGE, because this script matches on what they
+# say.  Two places depend on it and both broke on the first Linux build:
+#   * the jnlua warning allowlist pins warning TEXT by line, and gcc quotes
+#     identifiers with Unicode directional marks in a UTF-8 locale and with
+#     ASCII apostrophes otherwise -- so the allowlist matched on MinGW and
+#     missed the identical warning on Ubuntu, failing the build for a warning
+#     it was written to permit;
+#   * the postflight sorts exported symbol names, and collation order is
+#     locale-dependent, which would make the comparison platform-dependent too.
+# Pinning the locale is what makes the INSTRUMENT the same on both platforms.
+LC_ALL=C
+export LC_ALL
+
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/.." && pwd)}"
@@ -150,17 +163,22 @@ esac
 #   LINK_EXTRA --enable-stdcall-fixup is a PE/MinGW linker option and an ERROR
 #              on ELF.  -static-libgcc keeps us off a libgcc the host may not
 #              have, and is wanted wherever gcc is the compiler.
-#   LJ_PIC     LuaJIT's BUILDMODE=static does NOT compile position-independent
+#   PICFLAG    LuaJIT's BUILDMODE=static does NOT compile position-independent
 #              code by default, and linking a non-PIC archive into a shared
 #              object fails on x86-64 ELF with a relocation error against .text.
 #              A Windows DLL needs nothing of the sort.  This single flag is the
 #              difference between "builds" and "does not link" on Linux, and it
 #              has to reach the LUAJIT build rather than only ours -- which is
-#              why it is spliced into LJ_FLAGS and not into our own CFLAGS.
+#              why it is spliced into LJ_FLAGS -- AND into our own three
+#              compiles, because every object entering a shared library needs
+#              it, not only the archive.  Missing it on ours produced
+#              "relocation R_X86_64_PC32 against symbol stderr can not be used
+#              when making a shared object" at link, naming a libc symbol
+#              rather than anything that looks like ours.
 case $OCLJ_OS in
-  windows) LIBEXT=.dll   ; JNI_MD=win32    ; LINK_EXTRA="-static-libgcc -Wl,--enable-stdcall-fixup" ; LJ_PIC= ;;
-  darwin)  LIBEXT=.dylib ; JNI_MD=darwin   ; LINK_EXTRA=""                ; LJ_PIC=" -fPIC" ;;
-  *)       LIBEXT=.so    ; JNI_MD=$OCLJ_OS ; LINK_EXTRA="-static-libgcc"  ; LJ_PIC=" -fPIC" ;;
+  windows) LIBEXT=.dll   ; JNI_MD=win32    ; LINK_EXTRA="-static-libgcc -Wl,--enable-stdcall-fixup" ; PICFLAG= ;;
+  darwin)  LIBEXT=.dylib ; JNI_MD=darwin   ; LINK_EXTRA=""                ; PICFLAG=-fPIC ;;
+  *)       LIBEXT=.so    ; JNI_MD=$OCLJ_OS ; LINK_EXTRA="-static-libgcc"  ; PICFLAG=-fPIC ;;
 esac
 PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 
@@ -183,7 +201,7 @@ esac
 # falls back to the bundled PUC native, and one JVM ends up running both VMs at
 # once -- which is the shipped configuration, and a far stronger check of the
 # no-collision claim than any symbol count.
-LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK$LJ_PIC"
+LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK $PICFLAG"
 
 # --------------------------------------------------------------- 0
 say "=============== 0. preflight ==============="
@@ -441,7 +459,7 @@ say "=============== 2. lj52shim.c ==============="
 rm -f "$OBJ/lj52shim.o"
 # -I the JDK headers: the shim includes <jni.h> so its allocator can use
 # jnlua's own getluamemory/setluamemory to publish the machine's RAM use.
-"$CC" -c -O2 -Wall -Wextra -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
+"$CC" -c -O2 $PICFLAG -Wall -Wextra -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
   -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" \
   "$OCLJ_SHIM/lj52shim.c" -o "$OBJ/lj52shim.o" 2>"$OCLJ_BUILD/shim.err"
 [ -f "$OBJ/lj52shim.o" ] || { cat "$OCLJ_BUILD/shim.err"; fail "shim did not compile"; }
@@ -463,7 +481,7 @@ if [ "$OCLJ_VARIANT" = additive ]; then
     || fail "the jnlua repack refused (see above)"
   JNLUA_SRC="$OCLJ_BUILD/jnlua-luajit.c"
 fi
-"$CC" -c -O2 -Wall -DNDEBUG -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -I"$LJ" -I"$OCLJ_SHIM" \
+"$CC" -c -O2 $PICFLAG -Wall -DNDEBUG -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -I"$LJ" -I"$OCLJ_SHIM" \
   -include "$OCLJ_SHIM/lj52shim.h" \
   "$JNLUA_SRC" -o "$OBJ/jnlua.o" \
   > "$OCLJ_BUILD/jnlua.err" 2>&1
@@ -498,7 +516,7 @@ say "    errors=$NERR  warnings=$NWARN   (-Wall; jnlua.c is byte-identical to up
 # statements in either file; that is precisely why it verifies a 2-line diff.
 grep -E 'warning:' "$OCLJ_BUILD/jnlua.err" \
   | grep -vE 'jnlua(-luajit)?\.c:623:[0-9]+: warning: pointer targets in passing argument 2' \
-  | grep -vE "jnlua(-luajit)?\.c:1666:[0-9]+: warning: 'tablesize_result' may be used uninitialized" \
+  | grep -vE "jnlua(-luajit)?\.c:1666:[0-9]+: warning: .tablesize_result. may be used uninitialized" \
   > "$OCLJ_BUILD/jnlua.unexpected" 2>/dev/null
 UNEXPECTED=$(grep -c . "$OCLJ_BUILD/jnlua.unexpected" || true)
 say "    shim-attributable warnings = $UNEXPECTED  (2 pre-existing jnlua.c warnings allowlisted)"
@@ -520,7 +538,7 @@ say "=============== 4. eris_lj.c ==============="
 # the genuine LuaJIT lua_load/lua_loadx so it can load the LuaJIT bytecode it
 # writes with lj_bcwrite.  The 'b' path stays open INTERNALLY to eris_lj while
 # lj52_load keeps it shut to sandbox code (allowBytecode=false).
-"$CC" -c -O2 -I"$LJ" -I"$OCLJ_SER" -DERIS_LJ_COMMIT="\"$LJ_COMMIT\"" \
+"$CC" -c -O2 $PICFLAG -I"$LJ" -I"$OCLJ_SER" -DERIS_LJ_COMMIT="\"$LJ_COMMIT\"" \
   "$OCLJ_SER/eris_lj.c" -o "$OBJ/eris_lj.o" 2>"$OCLJ_BUILD/eris.err"
 [ -f "$OBJ/eris_lj.o" ] || { grep -oE 'error: .*' "$OCLJ_BUILD/eris.err" | head -20; fail "eris_lj.c did not compile"; }
 

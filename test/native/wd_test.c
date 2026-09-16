@@ -29,7 +29,7 @@
  *       (the hole the review reproduced in the first filter)
  *   W11 past the nesting cap, arm() degrades to the enclosing deadline
  *       instead of raising -- and never touches the live timer first
- *   W12 a timeout larger than a DWORD of milliseconds arms nothing
+ *   W12 a timeout past LJ52_WD_MAXMS arms nothing, on either backend
  *   W13 no HOOK_ACTIVE wedge: a second of hook-per-instruction under
  *       twenty re-fires leaves the state bits clean and the next deadline
  *       still fires (the timer thread ORs the count bit atomically instead of
@@ -49,8 +49,29 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+/* THIS TEST NEEDS EXACTLY THREE THINGS FROM THE PLATFORM, and it is worth
+ * naming them because none of them is the watchdog under test: a millisecond
+ * sleep, a monotonic clock for its own assertions, and a hard self-timeout so a
+ * hang is a fast failure rather than a stuck CI job.  The thing being tested is
+ * lj52shim.c's backend, which each platform supplies for itself. */
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <errno.h>
+#include <signal.h>
+#include <time.h>
+#include <unistd.h>
+/* Named for the Win32 call so the ~6 call sites below read identically on both
+ * platforms; nanosleep rather than usleep because usleep is obsolescent and
+ * caps at a second. */
+static void Sleep(unsigned long ms) {
+  struct timespec ts;
+  ts.tv_sec  = (time_t)(ms / 1000UL);
+  ts.tv_nsec = (long)(ms % 1000UL) * 1000000L;
+  while (nanosleep(&ts, &ts) == -1 && errno == EINTR) { }
+}
+#endif
 
 /* For W13 only: look at g->hookmask's state bits directly. */
 #include "lj_obj.h"
@@ -71,11 +92,19 @@ static void ok(int cond, const char *what, const char *detail) {
 }
 
 static double now_ms(void) {
+#ifdef _WIN32
   static LARGE_INTEGER f;
   LARGE_INTEGER t;
   if (f.QuadPart == 0) QueryPerformanceFrequency(&f);
   QueryPerformanceCounter(&t);
   return (double)t.QuadPart * 1000.0 / (double)f.QuadPart;
+#else
+  /* CLOCK_MONOTONIC, the same clock the Linux backend arms against, so a
+   * lateness this test measures is comparable with the one the shim records. */
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
+#endif
 }
 
 /* now() for Lua: wall-clock seconds, the role computer.realTime() plays for
@@ -101,11 +130,24 @@ static int hooked(lua_State *L) { return lua_gethook(L) != NULL; }
  * asynchronous injection removed, the deadline is not enforced and the only
  * thing that ends the loop is this alarm.  It is the mirror image of the
  * bare-frame death the pushcfunction window prevents. */
+#ifdef _WIN32
 static VOID CALLBACK test_alarm(PVOID p, BOOLEAN t) {
   (void)p; (void)t;
   printf("  ALARM  10 s elapsed inside a check that should have been interrupted -- exiting 99\n");
   ExitProcess(99);
 }
+#else
+/* _exit and write, not printf and exit: this runs in a signal handler, where
+ * neither is async-signal-safe.  A test harness that deadlocked inside its own
+ * abort path would be the worst possible failure here. */
+static void test_alarm(int sig) {
+  static const char m[] =
+    "  ALARM  10 s elapsed inside a check that should have been interrupted -- exiting 99\n";
+  (void)sig;
+  (void)!write(1, m, sizeof(m) - 1);
+  _exit(99);
+}
+#endif
 
 /* DEADLINE is machine.lua's checkDeadline, transcribed: error only once the
  * deadline has passed; re-arm a count=1 hook so a pcall that swallows the
@@ -142,10 +184,15 @@ int main(void) {
 
   setvbuf(stdout, NULL, _IONBF, 0);
   printf("wd_test -- lj52 deadline watchdog\n");
+#ifdef _WIN32
   {
     HANDLE alarm = NULL;
     CreateTimerQueueTimer(&alarm, NULL, test_alarm, NULL, 10000, 0, WT_EXECUTEONLYONCE);
   }
+#else
+  signal(SIGALRM, test_alarm);
+  alarm(10);
+#endif
 
   L = luaL_newstate();                  /* -> lj52_newstate */
   if (!L) { printf("  FAIL  luaL_newstate returned NULL\n"); return 1; }
@@ -410,8 +457,13 @@ int main(void) {
   /* ---- W12: a huge timeout is "no deadline", not an immediate fire ------ */
   run(L, "ARM(1e16)");
   Sleep(120);
-  sprintf(d, "hook=%s 120 ms after arm(1e16 s)", hooked(L) ? "SET (the DWORD wrapped and the timer fired at once)" : "clear");
-  ok(!hooked(L), "W12 a timeout beyond what a DWORD holds arms no timer at all", d);
+  sprintf(d, "hook=%s 120 ms after arm(1e16 s)", hooked(L) ? "SET (the bound was not applied and the timer fired at once)" : "clear");
+  /* The bound is LJ52_WD_MAXMS, ~49 days, and it is the Win32 DWORD limit kept
+   * on Linux DELIBERATELY: a time_t does not need it, but one config value
+   * behaving two ways across backends is worse than an arbitrary constant.
+   * Named for the constant rather than for DWORD, because on Linux there is no
+   * DWORD and the old wording read as a test that could not apply. */
+  ok(!hooked(L), "W12 a timeout past LJ52_WD_MAXMS arms no timer at all", d);
   run(L, "DISARM()");
   lua_settop(L, 0);
 

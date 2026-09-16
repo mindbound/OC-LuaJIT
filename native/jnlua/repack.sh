@@ -54,6 +54,15 @@ NEW_CLASS="#define JNI_LUASTATE_CLASS \"$CLASS\""
 mkdir -p "$(dirname "$OUT")" || exit 1
 
 awk -v oldc="$OLD_CLASS" -v newc="$NEW_CLASS" -v suf="$SUFFIX" '
+  # CRLF, STRIPPED BEFORE ANYTHING IS MATCHED.  OC-JNLua is checked out on
+  # Windows, so every line here ends CR-LF.  MSYS awk opens files in text
+  # mode and hides that; gawk on Linux does not -- so the $ anchor below and
+  # the exact $0 == oldc comparison both matched NOTHING, and the repack
+  # refused with class=0 suffix=0 on the first Linux build.  The same CRLF
+  # trap this project has hit in machine.lua and in the diff check further
+  # down; rebuilding $0 here fixes every rule at once, and the output is LF,
+  # which is what the compiler and the --strip-trailing-cr diff both want.
+  { sub(/\r$/, "") }
   # Only inside the 502 arm: the 503/504 arms must be left exactly as they are,
   # or a future build for another version would silently inherit our names.
   /^#elif LUA_VERSION_NUM == 502$/ { in502 = 1 }

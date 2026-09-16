@@ -30,6 +30,13 @@
 #define LJ52SHIM_H
 
 #include <stddef.h>
+/* FOR jnlua.c, NOT FOR US.  jnlua.c uses uintptr_t in ten places and includes
+ * no header that defines it; on MinGW it arrives transitively and on Linux it
+ * does not, so the first Linux build failed with ten "uintptr_t undeclared".
+ * This header is force-included ahead of jnlua.c precisely so its environment
+ * can be adapted without editing it -- the build asserts the checkout stays
+ * byte-identical to upstream -- so the include belongs here and nowhere else. */
+#include <stdint.h>
 
 #include <lua.h>
 #include <lauxlib.h>
