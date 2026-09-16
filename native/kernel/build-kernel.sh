@@ -1,0 +1,115 @@
+#!/bin/sh
+# =====================================================================
+# build-kernel.sh -- OpenComputers' machine.lua -> the OC-LuaJIT variant,
+# staged where build.gradle.kts will package it into the mod jar.
+#
+#     sh native/kernel/build-kernel.sh
+#
+# WHY THIS EXISTS SEPARATELY FROM THE HARNESS. test/native/smoke-test.sh also
+# runs patch-machine-lua.lua, but against OCELOT-BRAIN's copy of the kernel,
+# because that is the kernel the harness's machines will load. The MOD must ship
+# the patched form of the kernel GTNH OpenComputers actually has, and the two
+# are not the same file: 46483 bytes in the pinned 1.12.58 dev jar against
+# 47998 in ocelot-brain. They differ by one line of content (GTNH adds
+# `realTime = computer.realTime` to the sandbox `computer` table) and by line
+# endings. Patching the wrong one and shipping it would put ocelot-brain's
+# kernel into a Minecraft instance.
+#
+# WHERE IT GOES, AND WHY NOT OPENCOMPUTERS' OWN PATH.
+# OCLuaJITArchitecture.initialize() loads /assets/ocluajit/lua/machine.lua --
+# OUR resource domain -- after super.initialize() has run, and swaps it for what
+# OpenComputers loaded. It cannot be delivered at OC's own path, because a mod
+# cannot win a classpath race against OpenComputers for OpenComputers' own
+# resource. See docs/research/shipping-model.md.
+#
+# WHEN IT IS ABSENT. The build stays green and the jar ships without it; the
+# architecture then logs a warning and runs on OpenComputers' kernel with its
+# standing deadline hook. Computers work; the JIT thrashes (measured 0.47 s for
+# a sandbox loop against 0.0047 s). That is the right failure for CI, which has
+# no Lua interpreter to run the patcher, and the wrong one for a release.
+#
+# INPUTS
+#   OCLJ_OC_JAR      the OpenComputers jar to take machine.lua from
+#                    [default: the newest -dev jar in the Gradle cache]
+#   OCLJ_LUAJIT_EXE  a luajit that can run the patcher
+#                    [default: $OCLJ_BUILD/luajit/src/luajit.exe]
+#   OCLJ_BUILD       build root  [default: <repo>/build/native]
+# =====================================================================
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+fail() { echo "KERNEL BUILD FAIL: $*" >&2; exit 1; }
+say()  { echo "[kernel] $*"; }
+
+: "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
+: "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
+: "${OCLJ_LUAJIT_EXE:=$OCLJ_BUILD/luajit/src/luajit.exe}"
+: "${OCLJ_OC_JAR:=}"
+
+OUT_DIR="$OCLJ_BUILD/kernel"
+OUT="$OUT_DIR/machine.lua"
+RAW="$OCLJ_BUILD/kernel-src/machine.lua"
+
+# --------------------------------------------------------------- 0
+# THE JAR IS PINNED BY dependencies.gradle AND WE MUST USE THAT ONE. Taking
+# "whatever OpenComputers jar is lying around" would silently patch a kernel the
+# mod is not built against, and patch-machine-lua.lua's anchors are the only
+# thing that would notice -- loudly, but only if they happened to miss.
+if [ -z "$OCLJ_OC_JAR" ]; then
+  PIN=$(grep -oE 'OpenComputers:[0-9][^:]*:dev' "$OCLJ_REPO/dependencies.gradle" 2>/dev/null \
+        | head -1 | cut -d: -f2)
+  [ -n "$PIN" ] || fail "cannot read the pinned OpenComputers version from dependencies.gradle; set OCLJ_OC_JAR"
+  say "pinned OpenComputers = $PIN"
+  OCLJ_OC_JAR=$(find "$HOME/.gradle/caches/modules-2/files-2.1/com.github.GTNewHorizons/OpenComputers/$PIN" \
+                  -name '*-dev.jar' 2>/dev/null | head -1)
+  [ -n "$OCLJ_OC_JAR" ] || fail "no OpenComputers $PIN dev jar in the Gradle cache.
+       Run './gradlew build' once to populate it, or set OCLJ_OC_JAR."
+fi
+[ -f "$OCLJ_OC_JAR" ] || fail "no such jar: $OCLJ_OC_JAR"
+say "jar     = $OCLJ_OC_JAR"
+
+[ -x "$OCLJ_LUAJIT_EXE" ] || command -v "$OCLJ_LUAJIT_EXE" >/dev/null 2>&1 \
+  || fail "no luajit at $OCLJ_LUAJIT_EXE (set OCLJ_LUAJIT_EXE; build-native.sh builds one)"
+
+# --------------------------------------------------------------- 1
+say "=============== 1. extract OpenComputers' kernel ==============="
+mkdir -p "$(dirname "$RAW")" "$OUT_DIR" || fail "cannot create $OUT_DIR"
+rm -f "$RAW"
+( cd "$(dirname "$RAW")" && unzip -o -q -j "$OCLJ_OC_JAR" 'assets/opencomputers/lua/machine.lua' ) \
+  || fail "could not extract assets/opencomputers/lua/machine.lua from the jar"
+[ -s "$RAW" ] || fail "extracted machine.lua is empty"
+say "    stock kernel = $(wc -c < "$RAW") bytes"
+
+# --------------------------------------------------------------- 2
+say "=============== 2. patch ==============="
+# patch-machine-lua.lua refuses rather than guessing when an anchor misses, and
+# that refusal is the entire safety property here: a kernel that silently lost
+# one of its three arm sites would arm the watchdog in two places and leave the
+# third on OpenComputers' standing hook, which is not a state anything else
+# would detect.
+"$OCLJ_LUAJIT_EXE" "$SELF_DIR/patch-machine-lua.lua" "$RAW" "$OUT" \
+  || fail "the patcher refused OpenComputers' machine.lua -- an anchor no longer matches.
+       This is the expected result of an OpenComputers update; the anchors in
+       native/kernel/patch-machine-lua.lua need review against the new kernel."
+
+# --------------------------------------------------------------- 3
+say "=============== 3. postflight ==============="
+# Assert the OUTPUT, not just the patcher's exit status. Each of these is a
+# thing that would otherwise be discovered by a machine failing to boot.
+grep -q '_OCLJ_KERNEL = "watchdog"' "$OUT" \
+  || fail "patched kernel carries no _OCLJ_KERNEL marker: the harness and the census could not
+       tell this kernel from OpenComputers' own, and neither could anyone reading a log"
+grep -q '_OCLJ_WATCHDOG' "$OUT" \
+  || fail "patched kernel never reads _OCLJ_WATCHDOG: the capture site did not apply"
+ARMS=$(grep -c 'watchdog.arm(' "$OUT")
+[ "$ARMS" = "3" ] || fail "expected exactly 3 watchdog.arm sites, found $ARMS"
+LEFT=$(grep -c 'debug.sethook' "$OUT")
+[ "$LEFT" = "3" ] || fail "expected exactly 3 surviving debug.sethook calls (bogomips x2 and the
+       immediate-fire arm at machine.lua:47), found $LEFT"
+
+say "    arms=$ARMS  surviving debug.sethook=$LEFT"
+say "    out     = $OUT  ($(wc -c < "$OUT") bytes)"
+echo
+echo "NEXT: package it."
+echo "  ./gradlew build     # stages it at assets/ocluajit/lua/machine.lua"

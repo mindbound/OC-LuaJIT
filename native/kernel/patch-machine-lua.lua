@@ -46,6 +46,12 @@ local CR, LF = string.char(13), string.char(10)
 local crlf = src:find(CR .. LF, 1, true) ~= nil
 src = src:gsub(CR .. LF, LF)
 
+-- The ORIGINAL size, captured before any substitution runs. The success line
+-- used to report #src at the END, which by then is the PATCHED source -- so it
+-- printed 47162 -> 47607 for a 46483-byte input and read as though the kernel
+-- had grown by 445 bytes when it had grown by 1124.
+local srcbytes = #src
+
 local function count(s, needle)
   local n, pos = 0, 1
   while true do
@@ -153,4 +159,4 @@ local g = assert(io.open(outpath, "wb"))
 g:write(out)
 g:close()
 io.write(("patch-machine-lua: ok  %d -> %d bytes, 4 sites, 3 debug.sethook left, %s endings"):format(
-  #src, #out, crlf and "CRLF" or "LF") .. LF)
+  srcbytes, #out, crlf and "CRLF" or "LF") .. LF)
