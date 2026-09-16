@@ -67,3 +67,7 @@ layout.json
 
 # python bytecode from native/jnlua/ generators
 __pycache__/
+
+# serializer test byproducts: run-forin.sh / forin.lua write these into the cwd
+serializer/*.blob
+serializer/*.keys

@@ -1,0 +1,138 @@
+--- serializer/eris_lj.c	2026-09-16 22:08:14.162604200 +0300
++++ C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/judge/eris_lj_SHELL.c	2026-09-17 00:24:02.610590100 +0300
+@@ -116,6 +116,10 @@
+  * encountered in the meantime have already been joined to the placeholder,
+  * so they must all be re-pointed at the real one afterwards. */
+ #define UPVLIST 7
++/* Restoring only (SHELL-FILL judge prototype): array part = shells in
++ * registration order; hash part shell -> {closure, byte offset} while the
++ * shell is still UNFILLED. */
++#define FILLIDX 8
+ 
+ /* ------------------------------------------------------------------ tags */
+ 
+@@ -1814,19 +1818,27 @@
+   unsigned char flag = r_byte(I);
+   luaL_checkstack(L, 4, "eris-lj table");
+   if (flag == TABLE_SPECIAL) {
+-    /* Reserve the id before reading the closure, mirroring persist_keyed;
+-     * the table itself only exists once the closure has been called. */
+-    lua_Integer ref = newref(I);
+-    unpersist(I);                       /* closure */
++    /* SHELL-FILL: allocate the object's FINAL identity now, under the same
++     * id the old arm reserved, and defer the recipe until the whole graph
++     * exists. Nothing is ever swapped: every consumer stores this table. */
++    int shell;
++    lua_newtable(L);                    /* shell */
++    registerobject(I);
++    shell = lua_gettop(L);
++    unpersist(I);                       /* shell closure */
+     if (!lua_isfunction(L, -1))
+       luaL_error(L, "eris-lj: special-persist record is a %s, expected a "
+                     "function", luaL_typename(L, -1));
+-    lua_call(L, 0, 1);                  /* result */
+-    if (!lua_istable(L, -1))
+-      luaL_error(L, "eris-lj: special-persist function returned a %s, "
+-                    "expected a table", luaL_typename(L, -1));
+-    lua_pushvalue(L, -1);
+-    lua_rawseti(L, REFTIDX, (int)ref);
++    lua_pushvalue(L, shell);            /* shell closure shell */
++    lua_createtable(L, 2, 0);           /* shell closure shell rec */
++    lua_pushvalue(L, -3);
++    lua_rawseti(L, -2, 1);              /* rec[1] = closure */
++    lua_pushinteger(L, (lua_Integer)I->pos);
++    lua_rawseti(L, -2, 2);              /* rec[2] = byte offset */
++    lua_rawset(L, FILLIDX);             /* FILL[shell] = rec; shell closure */
++    lua_pop(L, 1);                      /* shell */
++    lua_pushvalue(L, shell);
++    lua_rawseti(L, FILLIDX, (int)lua_objlen(L, FILLIDX) + 1);
+     return;
+   }
+   if (flag != TABLE_LITERAL)
+@@ -1849,10 +1861,69 @@
+   } else {
+     if (!lua_istable(L, -1))
+       luaL_error(L, "eris-lj: metatable slot holds a %s", luaL_typename(L, -1));
++    lua_pushvalue(L, -1);
++    lua_rawget(L, FILLIDX);
++    if (!lua_isnil(L, -1))
++      luaL_error(L, "eris-lj: a special table is the metatable of another "
++                    "object; not supported during restore");
++    lua_pop(L, 1);
+     lua_setmetatable(L, -2);
+   }
+ }
+ 
++/* SHELL-FILL drain: after the whole graph exists, call recipe(shell) once per
++ * special, descending id, each under pcall; refuse loudly on any deviation. */
++static void elj_fill(Info *I)
++{
++  lua_State *L = I->L;
++  int n = (int)lua_objlen(L, FILLIDX);
++  int k;
++  luaL_checkstack(L, 8, "eris-lj fill");
++  for (k = n; k >= 1; k--) {
++    int shell, ofs;
++    lua_rawgeti(L, FILLIDX, k);         /* shell */
++    shell = lua_gettop(L);
++    lua_pushvalue(L, shell);
++    lua_rawget(L, FILLIDX);             /* shell rec */
++    if (!lua_istable(L, -1))
++      luaL_error(L, "eris-lj: fill record %d is missing", k);
++    lua_rawgeti(L, -1, 1);              /* shell rec closure */
++    lua_rawgeti(L, -2, 2);              /* shell rec closure ofs */
++    ofs = (int)lua_tointeger(L, -1);
++    lua_pop(L, 1);
++    lua_remove(L, -2);                  /* shell closure */
++    lua_pushvalue(L, shell);
++    lua_pushnil(L);
++    lua_rawset(L, FILLIDX);             /* mark filled: FILL[shell] = nil */
++    lua_getfenv(L, -1);                 /* shell closure fenv */
++    lua_rawget(L, FILLIDX);
++    if (!lua_isnil(L, -1))
++      luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d): its "
++                    "environment is an unfilled special table",
++                 lua_tostring(L, SPKIDX), k, n, ofs);
++    lua_pop(L, 1);                      /* shell closure */
++    lua_pushvalue(L, shell);            /* shell closure shell */
++    if (lua_pcall(L, 1, 1, 0) != 0) {
++      const char *msg = lua_tostring(L, -1);
++      luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d) "
++                    "failed: %s", lua_tostring(L, SPKIDX), k, n, ofs,
++                 msg ? msg : "(non-string error)");
++    }
++    if (!lua_isnil(L, -1) && !lua_rawequal(L, -1, shell))
++      luaL_error(L, "eris-lj: '%s' recipe %d of %d returned a %s instead of "
++                    "filling its argument (references to this object were "
++                    "already resolved to the argument; a fresh table cannot "
++                    "be honoured)", lua_tostring(L, SPKIDX), k, n,
++                 luaL_typename(L, -1));
++    lua_pop(L, 1);                      /* shell */
++    if (!lua_getmetatable(L, shell))
++      luaL_error(L, "eris-lj: '%s' recipe %d of %d left its object without a "
++                    "metatable (an inert or legacy recipe)",
++                 lua_tostring(L, SPKIDX), k, n);
++    lua_pop(L, 2);                      /* mt shell */
++  }
++}
++
+ 
+ /* ------------------------------------------------------------- u_thread */
+ 
+@@ -2547,6 +2618,8 @@
+   lua_insert(L, UPVNIDX);
+   lua_newtable(L);
+   lua_insert(L, UPVLIST);
++  lua_newtable(L);
++  lua_insert(L, FILLIDX);
+ 
+   if (inlen < sizeof(MAGIC) + 2 + 4)
+     return luaL_error(L, "eris-lj: data too short to be a valid blob");
+@@ -2575,6 +2648,7 @@
+   if (I.pos != I.inlen)
+     return luaL_error(L, "eris-lj: %d trailing bytes after the value",
+                       (int)(I.inlen - I.pos));
++  elj_fill(&I);                         /* recipes run only now */
+   return 1;
+ }
+ 

@@ -1,0 +1,11 @@
+--- C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/retry/eris_lj_ONCE.c	2026-09-17 00:11:48.664726600 +0300
++++ C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-105f-4f62-a48e-26f24e7e01db/scratchpad/retry/eris_lj_ONCE_NOEDGE.c	2026-09-17 00:13:11.236553900 +0300
+@@ -2729,7 +2729,7 @@
+         reach_push(R, uvval(uv));
+       } else {
+         const TValue *p = uvval(uv);
+-        reach_slotptr(R, p);
++        /* NEGATIVE CONTROL: open-upvalue edge deleted */
+         reach_push(R, p);
+       }
+     }
