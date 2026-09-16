@@ -387,6 +387,29 @@ collided: the drop-in is `libjnlua52`, binding the same `LuaState` class OC's
 What has **not** been run is the mod-side file, because running it needs a
 Minecraft instance.
 
+**AND IT PERSISTS, which took a second change to establish.** For a while this
+was only a boot: `OcljSmoke`, which owns every persistence, deadline, RAM-cap and
+bytecode-gate milestone, pinned `NativeLua52Architecture` unconditionally and its
+`guard()` refused `ocljit.native=additive` outright, so those milestones had only
+ever been measured on the DROP-IN shape. That mattered concretely rather than
+pedantically: the natives `PersistenceAPI` drives (`lua_dump`,
+`lua_pushbytearray`, `lua_tobytearray`, `lua_next`, `lua_rawset`) are redeclared
+into our own JNI symbol family by `LuaStateLuaJIT`, so a persistence result from
+the drop-in was a result about a **different binding**. Inheriting `save`/`load`
+was a reason to expect it to work, not evidence that it did.
+
+The suite now takes the architecture from the same switch as the native, and on
+the additive arm reports **32 checks, 0 failures**: persist 160 355 bytes in
+35 ms, restore into a fresh workspace with an identical boot nonce and the
+counter advanced 151 -> 442, `lastError` null, the deadline firing with the
+machine surviving, and the RAM cap OOMing at the cap. Two things had to be
+fixed to get there, both of which had been invisible: `setArchitecture` checks
+the class against `MachineAPI`'s registry and throws for anything unregistered
+(so `register()` is required, not optional, and this document's adapter comment
+said the opposite); and `m2-persist-flush-observed` was gated on the literal
+`nativeMode == "luajit"`, which SKIPPED it for the one shape we ship -- and a
+skipped milestone reads exactly like a passing one.
+
 ## What this de-risks, and it is more than the question asked
 
 Three things the whole project rests on turn out to be the same in the harness

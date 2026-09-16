@@ -143,9 +143,16 @@ object OCLuaJITStateFactory extends LuaStateFactory {
     System.err.println("[ocljit] " + msg)
   }
 
-  /** Register with ocelot-brain so it appears in MachineAPI.architectures.
-    * Optional -- setArchitecture takes a class directly -- but a harness that
-    * pins without registering would not exercise the path a mod uses. */
+  /**
+    * Register with ocelot-brain. REQUIRED BEFORE setArchitecture, not optional.
+    *
+    * An earlier version of this comment said it was optional, on the reasoning
+    * that setArchitecture takes a class directly. It does, and then checks that
+    * class against MachineAPI's registry and throws "Unsupported processor
+    * type." if it is absent (MutableProcessor.scala:26-29). ocelot-brain
+    * registers its own three during Ocelot.initialize; ours is a fourth nothing
+    * else knows about, so every caller must do this first.
+    */
   def register(name: String = "LuaJIT"): Unit =
     MachineAPI.add(classOf[OCLuaJITArchitecture], name)
 }

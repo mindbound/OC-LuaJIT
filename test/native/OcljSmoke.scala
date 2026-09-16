@@ -3,6 +3,7 @@ package ocljit.smoke
 import li.cil.repack.com.naef.jnlua.LuaState
 import totoro.ocelot.brain.Ocelot
 import totoro.ocelot.brain.entity.machine.luac.{LuaStateFactory, NativeLua52Architecture, NativeLuaArchitecture}
+import ocljit.arch.OCLuaJITArchitecture
 import totoro.ocelot.brain.entity.{CPU, Case, GraphicsCard, HDDManaged, Memory, Screen}
 import totoro.ocelot.brain.loot.Loot
 import totoro.ocelot.brain.nbt.NBTTagCompound
@@ -30,7 +31,9 @@ import java.nio.file.{Files, Path, Paths, StandardCopyOption}
  * then every persistence assertion passes VACUOUSLY.  Nothing below is
  * believed until `guard` has run: it asserts the native factory is available,
  * that LuaJ is out of play, that the live architecture is a
- * NativeLua52Architecture, and it prints a fingerprint read out of the running
+ * the architecture ocljit.native implies -- NativeLua52Architecture for the
+ * dropin and stock arms, OCLuaJITArchitecture for the additive one -- and it
+ * prints a fingerprint read out of the running
  * Lua state (the _OCLJ_NATIVE marker only the shim can plant, _VERSION, the
  * jit table, and eris's shape and version).  A run without that fingerprint in
  * its log is not a result.
@@ -216,6 +219,25 @@ object Smoke {
     }
   }
 
+  /** Which native this run is driven by: luajit (dropin) | additive | stock. */
+  val nativeMode: String = System.getProperty("ocljit.native", "luajit")
+
+  /**
+    * Which architecture must drive the machine, DERIVED from nativeMode rather
+    * than chosen separately.
+    *
+    * They cannot move independently. In the additive arm the forced library
+    * directory holds only libjnluajit52-*, so OpenComputers' own 5.2 factory
+    * MISSES and falls back to its bundled PUC native -- pinning
+    * NativeLua52Architecture there would quietly run the whole suite on PUC Lua
+    * while every line of output claimed to describe OC-LuaJIT. That is the
+    * failure this harness exists to make impossible, so the two come from one
+    * switch and the guard below asserts the result.
+    */
+  val expectedArch: Class[_ <: totoro.ocelot.brain.entity.machine.Architecture] =
+    if (nativeMode == "additive") classOf[OCLuaJITArchitecture]
+    else classOf[NativeLua52Architecture]
+
   def guard(machine: totoro.ocelot.brain.entity.machine.Machine): String = {
     if (!LuaStateFactory.isAvailable)
       die("LuaStateFactory.isAvailable == false: no native loaded, LuaJ would be substituted. " +
@@ -227,8 +249,9 @@ object Smoke {
     if (arch == null) die("machine.architecture is null")
     if (!arch.isInstanceOf[NativeLuaArchitecture])
       die("architecture is " + arch.getClass.getName + ", not a NativeLuaArchitecture -- LuaJ fallback.")
-    if (!arch.isInstanceOf[NativeLua52Architecture])
-      die("architecture is " + arch.getClass.getName + ", not NativeLua52Architecture.")
+    if (!expectedArch.isInstance(arch))
+      die("architecture is " + arch.getClass.getName + ", not the pinned " + expectedArch.getName +
+        " -- this run is measuring a different VM than it claims to.")
     val lua = luaOf(arch)
     if (lua == null) die("architecture holds a null LuaState")
 
@@ -245,8 +268,8 @@ object Smoke {
         "local ok, a, b, c = pcall(eris.version) " +
         "return ok and (tostring(a) .. ' / ' .. tostring(b) .. ' / fmt=' .. tostring(c)) or '<err>'")
 
-    val fp = s"native=$nativeMark | _VERSION=$version | jit=$hasJit ($jitStatus) | " +
-      s"eris=[$erisShape] | eris.version=$erisVer"
+    val fp = s"native=$nativeMark | class=${lua.getClass.getSimpleName} | _VERSION=$version | " +
+      s"jit=$hasJit ($jitStatus) | eris=[$erisShape] | eris.version=$erisVer"
     p("GUARD OK. arch=" + arch.getClass.getName)
     p("GUARD VM FINGERPRINT: " + fp)
     // The guard is TWO-SIDED, and the stock side is asserted with equal force.
@@ -256,8 +279,33 @@ object Smoke {
     // direction would produce a plausible-looking number for the wrong VM,
     // which is the one way this benchmark could lie outright.  So each mode
     // refuses the other's fingerprint.
-    System.getProperty("ocljit.native", "luajit") match {
+    // WHICH LuaState CLASS, not just which VM. The dropin and the additive
+    // build are the same LuaJIT behind different JNI symbol families, so the
+    // marker below cannot tell them apart -- only the Java class can, and it is
+    // the thing the additive arm exists to exercise. PersistenceAPI drives
+    // lua_dump/lua_pushbytearray/lua_tobytearray/lua_next/lua_rawset, all of
+    // which LuaStateLuaJIT redeclares into OUR family, so a persistence result
+    // from the wrong class would be a result about OpenComputers' bindings.
+    val stateClass = lua.getClass.getName
+
+    nativeMode match {
+      case "additive" =>
+        if (!nativeMark.startsWith("luajit/"))
+          die("ocljit.native=additive but the live state carries no _OCLJ_NATIVE marker: " +
+            "this is not our VM. Check that forceNativeLibPathFirst names a directory " +
+            "holding libjnluajit52-<platform>.")
+        if (!stateClass.endsWith("LuaStateLuaJIT"))
+          die("ocljit.native=additive but the live LuaState is " + stateClass +
+            ", not LuaStateLuaJIT: the machine is running on OpenComputers' own binding, " +
+            "so nothing here describes the additive shape we ship.")
+        if (hasJit == "NO-JIT-TABLE")
+          die("no jit table in the live state: the shim did not open luaopen_jit.")
+        if (erisShape == "NO-ERIS")
+          die("no eris library in the live state: eris_lj.o did not link in, or luaopen_eris was not called.")
       case "luajit" =>
+        if (stateClass.endsWith("LuaStateLuaJIT"))
+          die("ocljit.native=luajit (dropin) but the live LuaState is " + stateClass +
+            ": that is the ADDITIVE class. The two arms would not be measuring the same thing.")
         if (!nativeMark.startsWith("luajit/"))
           die("the live state carries no _OCLJ_NATIVE marker: this is the STOCK PUC-Lua 5.2 " +
             "native, not the LuaJIT one. forceNativeLibPathFirst did not take effect.")
@@ -286,7 +334,7 @@ object Smoke {
         if (!version.contains("5.2"))
           die("ocljit.native=stock but _VERSION=" + version + ", expected a 5.2 of some kind.")
       case other =>
-        die("ocljit.native must be luajit or stock, not '" + other + "'")
+        die("ocljit.native must be luajit, additive or stock, not '" + other + "'")
     }
     fp
   }
@@ -1187,10 +1235,11 @@ object Smoke {
     // strings2 run lost two of its three reps, and a sieve row was reported
     // SKIP-LOWMEM after two good reps had already completed.
     //
-    // Read from the system property and not from `nativeMode`, which is the
-    // obvious thing to reach for and is a forward reference here -- it is
-    // defined ~100 lines below, with the guard block, while this runs during
-    // planting.  scalac catches it, but only with the real classpath.
+    // `nativeMode` is an object-level val now (it moved up with the
+    // architecture switch, which planting needs too), so this could read it
+    // directly.  Left as the property for one reason: this line runs during
+    // PLANTING and the value it wants is "is this the stock baseline", which is
+    // exactly what it spells out.
     //
     // So the guard is gated on our native being loaded.  Cell A gets none,
     // which is right on both counts: it does not need one, and the number it
@@ -1246,8 +1295,14 @@ object Smoke {
     val screen = ws.add(new Screen(Tier.Three))
     computer.connect(screen)
 
-    cpu.setArchitecture(classOf[NativeLua52Architecture])
-    p("architecture pinned to NativeLua52Architecture")
+    // REGISTER FIRST, AND IT IS NOT OPTIONAL. MutableProcessor.setArchitecture
+    // checks the class against MachineAPI's registry and throws
+    // "Unsupported processor type." for anything absent (MutableProcessor.scala:26-29).
+    // ocelot-brain registers its own three during Ocelot.initialize; ours is a
+    // fourth that nothing else knows about.
+    if (nativeMode == "additive") ocljit.arch.OCLuaJITStateFactory.register()
+    cpu.setArchitecture(expectedArch)
+    p("architecture pinned to " + expectedArch.getName + "   (ocljit.native=" + nativeMode + ")")
 
     val started = computer.machine.start()
     if (!started) die("machine.start() returned false")
@@ -1320,7 +1375,6 @@ object Smoke {
     // "kernel=watchdog" in the log would merely echo -Docljit.kernel, and a
     // classpath mishap that quietly loaded OC's kernel would go unnoticed.
     val kernelSeen = evalStrLocked(computer.machine, mLua, "return tostring(_OCLJ_KERNEL)")
-    val nativeMode = System.getProperty("ocljit.native", "luajit")
     milestone("k0-kernel-observed", (kernelMode == "watchdog") == (kernelSeen == "watchdog"),
       "asked for " + kernelMode + ", raw _G._OCLJ_KERNEL=" + kernelSeen +
         (if ((kernelMode == "watchdog") == (kernelSeen == "watchdog")) ""
@@ -1925,7 +1979,11 @@ object Smoke {
     p("JIT MEMORY after persist: mcode=" + mc1 + " B, traces=" + tr1 +
       (if (flushed) "   <- FLUSHED: the save discarded every compiled trace"
        else if (mc0 > 0) "   (traces survived the save)" else ""))
-    if (nativeMode == "luajit" && kernelMode == "watchdog" && jitMode == "on")
+    // OURS, not "luajit": the additive arm is the same VM behind a different
+    // JNI symbol family, so it has mcode and traces exactly as the dropin does.
+    // Gating on the literal "luajit" silently SKIPPED this milestone for the
+    // one shape we actually ship -- and a skipped milestone reads as a pass.
+    if (nativeMode != "stock" && kernelMode == "watchdog" && jitMode == "on")
       // Not an assertion about WHICH way it goes -- both are legitimate, and
       // the serializer flushes only when the coroutine is suspended inside a
       // generic-for loop (eris_lj.c:1209).  What is asserted is that we can
