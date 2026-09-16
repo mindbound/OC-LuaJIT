@@ -1,5 +1,8 @@
 package io.github.astronfo.ocluajit.arch;
 
+import java.io.IOException;
+import java.io.InputStream;
+
 import li.cil.oc.api.machine.Architecture;
 import li.cil.oc.api.machine.Machine;
 import li.cil.oc.server.machine.luac.LuaStateFactory;
@@ -71,9 +74,87 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
         super(machine);
     }
 
-    /** The only member we override. */
+    /** Which VM backs this architecture. */
     @Override
     public LuaStateFactory factory() {
         return LuaJITStateFactory.INSTANCE;
+    }
+
+    /**
+     * OUR resource domain, deliberately not OpenComputers'. See initialize().
+     */
+    private static final String KERNEL_RESOURCE = "/assets/ocluajit/lua/machine.lua";
+
+    /**
+     * Swap in OC-LuaJIT's patched kernel after the inherited initialize() runs.
+     *
+     * WHY THIS IS NEEDED AT ALL. NativeLuaArchitecture.initialize() loads the
+     * kernel with classOf[Machine].getResourceAsStream(scriptPath +
+     * "machine.lua") -- a fixed path in OPENCOMPUTERS' resource domain. The
+     * benchmark harness gets its patched kernel in by putting it first on the
+     * classpath so it shadows OC's, which works only because the harness builds
+     * that classpath. A mod cannot: FML loads mod jars in an order we do not
+     * choose, and OpenComputers' own jar holds that exact resource. Unlike the
+     * native, where the FILENAME is ours alone and collision is impossible by
+     * construction, here the path is byte-identical -- so "ours wins" would be
+     * a coin flip, and every deadline and JIT result depends on the answer.
+     *
+     * WHY NOT REPLACE initialize() OUTRIGHT. It is sixteen lines, but four of
+     * them are `apis.foreach(_.initialize())`, and `apis` is private with no
+     * accessor -- those four lines cannot be reproduced from outside the
+     * package at all. super.initialize() is the only way to get the APIs
+     * installed, so we let it run and then change the one thing we need.
+     *
+     * THE STACK CONTRACT. initialize() leaves the kernel thread as the first
+     * stack value and runThreaded resumes exactly that. So: drop it, load ours,
+     * make a thread again. If the load throws after the pop, the stack no
+     * longer holds a thread and the machine must NOT start -- hence false
+     * rather than a swallowed exception.
+     *
+     * PROVEN IN THE HARNESS, where the same sequence runs against ocelot-brain
+     * (test/native/OcljArch.scala; ocelot-brain hides `lua` behind
+     * private[machine], so it reaches the field reflectively while this reads
+     * the public accessor). With the patched kernel present ONLY at our path
+     * and nothing at OpenComputers', that run reports _OCLJ_KERNEL=watchdog,
+     * 147 traces where the standing hook gives ~2500, and a sandbox loop at
+     * 0.0047 s where the standing hook gives 0.47 s.
+     */
+    @Override
+    public boolean initialize() {
+        if (!super.initialize()) return false;
+
+        final InputStream patched = LuaJITArchitecture.class.getResourceAsStream(KERNEL_RESOURCE);
+        if (patched == null) {
+            // NOT silent, and not fatal. OpenComputers' own kernel runs fine on
+            // our VM -- that is the harness's stock-kernel arm -- but it
+            // reinstates the standing count hook, which is what stops traces
+            // being entered at all. A hundredfold slowdown is not something a
+            // server operator should have to discover from a benchmark.
+            io.github.astronfo.ocluajit.OCLuaJIT.LOG.warn(
+                "No patched kernel at " + KERNEL_RESOURCE
+                    + " in this jar: falling back to "
+                    + "OpenComputers' own machine.lua and its standing deadline hook. Computers "
+                    + "will run, but the JIT will thrash. This is a packaging fault, not a "
+                    + "configuration one.");
+            return true;
+        }
+
+        try {
+            lua().pop(1);
+            lua().load(patched, "=machine", "t");
+            lua().newThread();
+        } catch (final IOException e) {
+            io.github.astronfo.ocluajit.OCLuaJIT.LOG.error(
+                "The patched kernel at " + KERNEL_RESOURCE
+                    + " failed to load; refusing to start "
+                    + "this machine, because the stack no longer holds a kernel thread.",
+                e);
+            return false;
+        } finally {
+            try {
+                patched.close();
+            } catch (final IOException ignored) {}
+        }
+        return true;
     }
 }

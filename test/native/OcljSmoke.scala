@@ -1444,9 +1444,21 @@ object Smoke {
     val tBootStart = System.currentTimeMillis()
 
     // --- (c) OpenOS boots to a shell ----------------------------------
+    // THE TIMEOUT IS SIZED FOR THE SLOWEST LEGITIMATE ARM, because it only
+    // binds when something is wrong: the loop leaves the moment the screen
+    // shows what it waits for, so a generous cap costs the fast arms nothing.
+    //
+    // It was a flat 600 ticks (15 s). Ample with the watchdog kernel, and NOT
+    // ample under OpenComputers' standing count hook, which stops traces being
+    // entered and makes boot roughly a hundred times slower. Measured in BOTH
+    // stock-kernel arms on 2026-09-16: the shell appeared, the autorun's first
+    // line had not, the loop left on the timeout, and (d) then failed with
+    // counter -1 -- so the suite reported SMOKE FAIL for a documented control
+    // arm, for a timing reason, with nothing actually wrong.
+    val bootCapTicks = if (kernelMode == "watchdog") 600 else 3000
     var i = 0
     var booted = false
-    while (i < 600 && computer.machine.isRunning && !booted) {
+    while (i < bootCapTicks && computer.machine.isRunning && !booted) {
       ws.update(); Thread.sleep(25); i += 1
       if (i % 20 == 0) {
         val t = nonEmptyScreen(screen)
@@ -1458,18 +1470,35 @@ object Smoke {
     p(s"SCREEN AFTER BOOT ($i ticks, ${secs}s, running=${computer.machine.isRunning}):")
     println(txtA)
     p("lastError = " + computer.machine.lastError)
+    // REPORT WHICH WAY THE LOOP LEFT. It waits for the prompt AND the autorun's
+    // first line, but this milestone asserts only the prompt -- so a run that
+    // timed out with the shell up passed HERE and failed later, describing a
+    // symptom instead of its cause.
     milestone("c-openos-shell", txtA.contains("/home #"),
-      "OpenOS shell prompt on screen (" + txtA.split("\n").length + " non-empty lines)")
+      "OpenOS shell prompt on screen (" + txtA.split("\n").length + " non-empty lines)" +
+        (if (booted) "" else "   <- loop hit its " + bootCapTicks +
+          "-tick cap without the autorun line; expect (d) to fail"))
 
     // --- (d) the autorun closure is alive and counting ----------------
     val nonceA = parse(txtA, "OCLJNONCE")
     val ctrA1 = try parse(txtA, "OCLJCTR").toInt catch { case _: Throwable => -1 }
+    // UNTIL IT ADVANCES, not for a fixed 60 ticks. 60 ticks is 1.5 s: several
+    // counter ticks with the watchdog kernel, and possibly none at all under
+    // the standing hook. Same rule as the boot cap -- wait on the condition,
+    // and let the timeout be the generous part.
+    val dCapTicks = if (kernelMode == "watchdog") 300 else 2000
     var j = 0
-    while (j < 60 && computer.machine.isRunning) { ws.update(); Thread.sleep(25); j += 1 }
+    var ctrA2 = -1
+    while (j < dCapTicks && computer.machine.isRunning && !(ctrA1 > 0 && ctrA2 > ctrA1)) {
+      ws.update(); Thread.sleep(25); j += 1
+      if (j % 10 == 0)
+        ctrA2 = try parse(nonEmptyScreen(screen), "OCLJCTR").toInt catch { case _: Throwable => -1 }
+    }
     val txtA2 = nonEmptyScreen(screen)
-    val ctrA2 = try parse(txtA2, "OCLJCTR").toInt catch { case _: Throwable => -1 }
+    ctrA2 = try parse(txtA2, "OCLJCTR").toInt catch { case _: Throwable => -1 }
     milestone("d-autorun-counter-live", nonceA != "<missing>" && ctrA1 > 0 && ctrA2 > ctrA1,
-      s"nonce=$nonceA counter $ctrA1 -> $ctrA2 over 60 ticks")
+      s"nonce=$nonceA counter $ctrA1 -> $ctrA2 in $j of $dCapTicks ticks" +
+        (if (ctrA1 > 0 && ctrA2 > ctrA1) "" else "   <- did not advance within the cap"))
     if (nonceA == "<missing>")
       die("autorun.lua never ran: no OCLJNONCE on screen. OpenOS did not mount the hard disk, " +
         "or /etc/filesystem.cfg disabled autorun.")

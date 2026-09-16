@@ -1,7 +1,7 @@
 package ocljit.arch
 
 import li.cil.repack.com.naef.jnlua
-import li.cil.repack.com.naef.jnlua.LuaStateLuaJIT
+import li.cil.repack.com.naef.jnlua.{LuaState, LuaStateLuaJIT}
 import totoro.ocelot.brain.Ocelot
 import totoro.ocelot.brain.entity.machine.{Machine, MachineAPI}
 import totoro.ocelot.brain.entity.machine.luac.{LuaStateFactory, NativeLuaArchitecture}
@@ -43,7 +43,65 @@ import java.nio.file.{Files, Path, Paths}
   */
 class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machine) {
 
-  /** The only member this architecture overrides.  ensureInitialized() rides
+  /**
+    * Swap in OC-LuaJIT's patched kernel, WITHOUT reimplementing initialize().
+    *
+    * THE PROBLEM. `NativeLuaArchitecture.initialize()` loads the kernel with
+    * `classOf[Machine].getResourceAsStream(Settings.scriptPath + "machine.lua")`
+    * -- a fixed path in OPENCOMPUTERS' resource domain. The harness gets its
+    * patched kernel in by putting it first on the classpath so it shadows OC's,
+    * which works only because the harness builds that classpath. A Minecraft
+    * instance does not let us: FML loads mod jars in an order we do not choose,
+    * and OC's own jar holds that exact resource. Unlike the native, where the
+    * FILENAME is ours alone, here the path is byte-identical -- so "ours wins"
+    * is a coin flip, and every deadline and JIT result depends on it.
+    *
+    * WHY NOT OVERRIDE initialize() OUTRIGHT. It is only sixteen lines, but four
+    * of them are `apis.foreach(_.initialize())`, and `apis` is private with no
+    * accessor in EITHER host -- so those four lines cannot be reproduced from
+    * outside the package at all. super.initialize() is not a convenience here,
+    * it is the only way to get the APIs installed.
+    *
+    * WHY NOT INTERCEPT debug.sethook IN THE NATIVE, which would need no kernel
+    * of ours at all: the kernel's three deadline arms are
+    * `debug.sethook(co, checkDeadline, "", hookInterval)`, but machine.lua:47
+    * calls `debug.sethook(coroutine.running(), checkDeadline, "", 1)` -- the
+    * SAME function with a different count, deliberately firing at once. Telling
+    * those apart from C means pattern-matching the kernel's internals, which is
+    * MORE coupled to its exact shape than patching its text, and which would
+    * mis-fire silently where patch-machine-lua.lua refuses loudly.
+    *
+    * SO: let initialize() do all of its work, then replace only what it loaded.
+    * It leaves the kernel thread as the first stack value; we drop that, load
+    * ours from OUR OWN resource domain, and make a thread of it again. Six
+    * lines, no path collision, and identical in the harness and in the mod --
+    * the mod reads `lua()` directly, which OpenComputers exposes publicly,
+    * while ocelot-brain makes it private[machine] and needs the reflection
+    * below. Same sequence either way, so the harness genuinely tests it.
+    */
+  override def initialize(): Boolean = {
+    if (!super.initialize()) return false
+    val patched = classOf[OCLuaJITArchitecture].getResourceAsStream(OCLuaJITArchitecture.KernelResource)
+    if (patched == null) {
+      // NOT silent. Falling back to OpenComputers' kernel still RUNS -- that is
+      // the OCLJ_KERNEL=stock arm -- but it reinstates the standing count hook,
+      // which is what stops traces being entered at all: measured 0.47 s for a
+      // sandbox loop against 0.0046 s with the watchdog. A hundredfold
+      // slowdown is not something to discover from a benchmark.
+      Ocelot.log.warn("OC-LuaJIT: no patched kernel at " + OCLuaJITArchitecture.KernelResource +
+        " -- falling back to OpenComputers' own machine.lua and its standing deadline hook. " +
+        "The JIT will thrash. Check that the build placed the patched kernel.")
+      System.err.println("[ocljit] no patched kernel at " + OCLuaJITArchitecture.KernelResource)
+      return true
+    }
+    val l = OCLuaJITArchitecture.luaOf(this)
+    l.pop(1)                       // initialize() left OC's kernel thread here
+    l.load(patched, "=machine", "t")
+    l.newThread()                  // and runThreaded expects a thread at index 1
+    true
+  }
+
+  /** The only other member this architecture overrides.  ensureInitialized() rides
     * here because Ocelot.initialize() calls init() on the THREE factories it
     * knows about and has no fourth entry to copy -- and factory is reached
     * exactly once, from initialize(), before any state is created. */
@@ -71,6 +129,25 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
   * implementation of OpenComputers' sandbox shape, drifting silently the first
   * time upstream changed it -- and that shape is security-relevant.
   */
+object OCLuaJITArchitecture {
+
+  /** OUR resource domain, deliberately. The whole point is not to contend with
+    * OpenComputers for /assets/opencomputers/lua/machine.lua. */
+  val KernelResource = "/assets/ocluajit/lua/machine.lua"
+
+  /**
+    * ocelot-brain declares `lua` as private[machine], so an adapter outside
+    * that package cannot see it. The mod side needs no such thing -- OC exposes
+    * `lua()` publicly -- but the harness is where this mechanism can actually
+    * be RUN, so it reaches the field the way CensusOs already does.
+    */
+  def luaOf(arch: NativeLuaArchitecture): LuaState = {
+    val f = classOf[NativeLuaArchitecture].getDeclaredField("lua")
+    f.setAccessible(true)
+    f.get(arch).asInstanceOf[LuaState]
+  }
+}
+
 object OCLuaJITStateFactory extends LuaStateFactory {
 
   /** Chosen so libraryName() comes out as libjnluajit52-<platform><ext>.

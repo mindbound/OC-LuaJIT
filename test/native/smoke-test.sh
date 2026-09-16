@@ -438,16 +438,40 @@ if [ "$OCLJ_KERNEL" = "watchdog" ]; then
   # finds ours before ocelot-brain's.  Nothing in ocelot-brain changes.
   [ -n "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE="$OCLJ_LIBDIR/../luajit/src/luajit.exe"
   [ -x "$OCLJ_LUAJIT_EXE" ] || fail "OCLJ_KERNEL=watchdog needs luajit.exe to run the kernel patcher; none at $OCLJ_LUAJIT_EXE (set OCLJ_LUAJIT_EXE)"
-  KDIR="$OCLJ_WORK/classes/assets/opencomputers/lua"
+  # WHICH DELIVERY MECHANISM, and it follows the ARCHITECTURE, not taste.
+  #
+  #   dropin/stock arm  drives OpenComputers' own NativeLua52Architecture, which
+  #                     loads /assets/opencomputers/lua/machine.lua and has no
+  #                     override, so the only way in is to shadow that path.
+  #   additive arm      drives OCLuaJITArchitecture, whose initialize() swaps in
+  #                     a kernel from OUR resource domain after super() runs.
+  #                     That is the mechanism the shipped mod has to use, since
+  #                     no mod can win a classpath race against OC for its own
+  #                     resource path -- so the harness must exercise IT, not
+  #                     the shadow.
+  #
+  # BOTH PATHS ARE CLEARED FIRST. A stale kernel left at the shadow path by an
+  # earlier run would deliver the watchdog to the additive arm for free, and k0
+  # would pass while the override did nothing at all -- a green run proving the
+  # opposite of what it claims.
+  rm -f "$OCLJ_WORK/classes/assets/opencomputers/lua/machine.lua"         "$OCLJ_WORK/classes/assets/ocluajit/lua/machine.lua"
+  if [ "$OCLJ_NATIVE" = additive ]; then
+    KDIR="$OCLJ_WORK/classes/assets/ocluajit/lua"
+    KHOW="OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in"
+  else
+    KDIR="$OCLJ_WORK/classes/assets/opencomputers/lua"
+    KHOW="shadows OC's on the classpath (this arm drives OC's own architecture)"
+  fi
   mkdir -p "$KDIR" || fail "cannot create $KDIR"
   "$OCLJ_LUAJIT_EXE" "$SELF_DIR/../../native/kernel/patch-machine-lua.lua" \
     "$BRAIN_RES/assets/opencomputers/lua/machine.lua" "$KDIR/machine.lua" \
     || fail "the kernel patcher refused ocelot-brain's machine.lua (an anchor no longer matches)"
-  say "    kernel  = WATCHDOG variant at $KDIR/machine.lua (shadows OC's on the classpath)"
+  say "    kernel  = WATCHDOG variant at $KDIR/machine.lua"
+  say "              $KHOW"
 else
   # Make sure a stale patched kernel from a previous watchdog run cannot
   # linger in the shared classes dir and silently turn a stock run into one.
-  rm -f "$OCLJ_WORK/classes/assets/opencomputers/lua/machine.lua"
+  rm -f "$OCLJ_WORK/classes/assets/opencomputers/lua/machine.lua"         "$OCLJ_WORK/classes/assets/ocluajit/lua/machine.lua"
   say "    kernel  = stock (OC's own machine.lua, standing deadline hook)"
 fi
 say "    ramScale= $OCLJ_RAM_SCALE   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)"
