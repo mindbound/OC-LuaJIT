@@ -566,6 +566,32 @@ object Smoke {
       |local nonce = string.format("%.4f-%d", computer.uptime(), math.random(100000, 999999))
       |local n = 0
       |
+      |-- THE USERDATA PROBE.  fs.open returns a Value (HandleValue), which
+      |-- machine.lua wraps into a proxy table whose metatable is userdataWrapper
+      |-- -- the one carrying the [persistKey] closure.  Held as an upvalue of
+      |-- the heartbeat timer below, so it is REACHABLE from the persisted root
+      |-- and eris must serialise it through that closure.
+      |local udh = fsproxy.open("manifest.lua", "r")
+      |local udSeq = 0
+      |local udRow = "OCLJUD=noopen/0"
+      |-- THE SEQUENCE NUMBER IS WHAT MAKES f7 NON-VACUOUS.  A machine that dies
+      |-- during unpersist leaves the PRE-SAVE screen painted, so a check that
+      |-- only reads the row's shape passes on a corpse.  Only a live probe can
+      |-- advance this, exactly as encoreSeq does for the encore.
+      |local function udProbe()
+      |  udSeq = udSeq + 1
+      |  if not udh then udRow = "OCLJUD=noopen/" .. udSeq return end
+      |  local okt, mt = pcall(getmetatable, udh)
+      |  local okr, chunk = pcall(function()
+      |    fsproxy.seek(udh, "set", 0)
+      |    return fsproxy.read(udh, 8)
+      |  end)
+      |  udRow = string.format("OCLJUD=%s/%s/%s/%s/%d", type(udh),
+      |    tostring(okt and mt):gsub("[ /]", "_"), tostring(okr),
+      |    tostring(okr and chunk and #chunk or chunk):gsub("[ /]", "_"), udSeq)
+      |end
+      |udProbe()
+      |
       |-- The computer.lua.allowBytecode gate, probed from INSIDE the real
       |-- machine.lua sandbox.  This `load` is the sandbox wrapper at
       |-- machine.lua:754, which overwrites mode with "t" whenever
@@ -1024,6 +1050,8 @@ object Smoke {
       |  component.gpu.set(1, 13, "OCLJDEADLINE=" .. deadlineResult .. "        ")
       |  component.gpu.set(1, 14, bench .. "        ")
       |  component.gpu.set(1, 15, "OCLJNONCE=" .. nonce .. " OCLJCTR=" .. n .. "        ")
+      |  if n % 10 == 0 then udProbe() end
+      |  component.gpu.set(1, 17, udRow .. "        ")
       |  -- repainted every tick for the same reason as the counter: boot output
       |  -- would otherwise scroll a one-shot line off the screen.
       |  component.gpu.set(1, 16, gate .. "        ")
@@ -2081,6 +2109,19 @@ object Smoke {
       s"persist ok=$persistOk err=$persistErr key=$kernelKey blobBytes=" +
         (if (blob == null) -1 else blob.length) + s" in ${persistMs}ms")
 
+    // (f1b) ANTI-VACUITY: did the blob actually carry a wrapped userdata?
+    // userdata.save pushes persistable.getClass.getName, and machine.lua closes
+    // over it as the [persistKey] closure's upvalue, so a blob that serialised
+    // one necessarily contains that class name as a literal string.  Without
+    // this, f7 below would pass vacuously on a run where no proxy was reachable.
+    val blobText = if (blob == null) "" else new String(blob, StandardCharsets.ISO_8859_1)
+    val udInBlob = blobText.contains("HandleValue")
+    milestone("f1b-blob-carries-userdata", udInBlob,
+      "persisted blob " + (if (udInBlob) "CONTAINS" else "does NOT contain") +
+        " the userdata class name HandleValue; blobBytes=" +
+        (if (blob == null) -1 else blob.length))
+
+    val udBefore = parse(nonEmptyScreen(screen), "OCLJUD")
     val ctrBeforeRestore = try parse(nonEmptyScreen(screen), "OCLJCTR").toInt catch { case _: Throwable => -1 }
 
     // --- (f2) restore into a FRESH workspace and resume ----------------
@@ -2250,6 +2291,30 @@ object Smoke {
             (if (encCold > 0) "   (ratio REPORTED, not asserted)"
              else "   <- no post-restore sample: the encore did not survive, or never fired"))
       }
+
+      // (f7) THE WRAPPED USERDATA CAME BACK AND STILL WORKS.  The proxy is a
+      // table with __metatable = "userdata", so getmetatable must still read
+      // "userdata", and a component call through it must still reach the
+      // reconstructed HandleValue.
+      val udAfter = parse(txtB, "OCLJUD")
+      // The shape alone is not enough: a machine killed during unpersist leaves
+      // the pre-save row on the screen, and this read PASSED on two dead
+      // machines before the counter existed.  Demand a sample taken AFTER the
+      // restore, the same gate the encore uses.
+      def udSeqOf(row: String): Int = {
+        val f = row.split("/")
+        if (f.length >= 5) try f(4).trim.toInt catch { case _: Throwable => -1 } else -1
+      }
+      val udSeqBefore = udSeqOf(udBefore)
+      val udSeqAfter = udSeqOf(udAfter)
+      val udShapeOk = udAfter.startsWith("table/userdata/true/")
+      val udFresh = udSeqAfter > udSeqBefore && udSeqAfter > 0
+      milestone("f7-restored-userdata-proxy-live", udShapeOk && udFresh,
+        "OCLJUD before=" + udBefore + " after=" + udAfter +
+          (if (udShapeOk && udFresh) ""
+           else if (!udShapeOk) "   <- the wrapped userdata did not survive the round trip"
+           else "   <- STALE: seq " + udSeqAfter + " did not advance past " + udSeqBefore +
+             ", so this row predates the restore and proves nothing"))
 
       milestone("f2-restore-same-vm", sameVm,
         s"boot nonce before=$nonceA after=$nonceB (identical=$sameVm) " +
