@@ -65,7 +65,7 @@ Chosen design: no standing hook during normal execution; a Java watchdog thread 
 Scanned: machine.lua (1548 lines) and all 129 OpenOS loot files.
 
 - Build with `-DLUAJIT_ENABLE_LUA52COMPAT`: covers the pervasive `table.pack/unpack` and `rawlen` usage.
-- Stock LuaJIT extensions cover the rest: `load(..., env)` (OC sandboxes via load's env parameter — **zero** `_ENV` references anywhere), `xpcall(f, h, ...)` with args, `coroutine.isyieldable`, `table.move`, yield-across-pcall/metamethods.
+- Stock LuaJIT extensions cover the rest: `load(..., env)` (OC sandboxes via load's env parameter — ~~**zero** `_ENV` references anywhere~~ **WRONG, refuted in-game 2026-09-16: OpenOS reads `_ENV` at eleven sites across five files, including `bin/sh.lua` and `boot/01_process.lua`. The claim was true of `machine.lua` and false of OpenOS, and this audit did not separate them. See roadmap 'THE `_ENV` GAP'.**), `xpcall(f, h, ...)` with args, `coroutine.isyieldable`, `table.move`, yield-across-pcall/metamethods.
 - All 5.3-isms are guarded with `or`-fallbacks and are already nil on OC's supported Lua 5.2 profile (`string.pack`, `utf8`, `math.maxinteger`, ...). `sandbox._VERSION` would report "Lua 5.2". No `//`, no `goto` anywhere in OpenOS.
 - The one real porting item: a `bit32` shim (~100 lines over LuaJIT's built-in `bit`), because OpenOS's `lib/bit32.lua` is written in Lua 5.3 operator syntax.
 - machine.lua's pure-Lua pattern matcher (lines 86–686, used for strings ≥ 500 chars so timeouts apply during matching) is hot pure-Lua code — exactly what the JIT compiles well, and it keeps long string matching interruptible in our favor.

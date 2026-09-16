@@ -4,11 +4,14 @@
 --   luajit patch-machine-lua.lua <in: OC machine.lua> <out: patched machine.lua>
 --
 -- WHY A PATCH AND NOT A FORK.  The census argument stands: we run OC's real
--- kernel semantics and couple to no particular OS.  This script changes four
--- places, all of them the same change, and refuses to run if any anchor does
--- not match EXACTLY ONCE -- so an OpenComputers bump that moves or rewords a
--- site fails loudly at build time rather than shipping a kernel that arms the
--- old hook somewhere.
+-- kernel semantics and couple to no particular OS.  This script changes six
+-- places and refuses to run if any anchor does not match EXACTLY ONCE -- so an
+-- OpenComputers bump that moves or rewords a site fails loudly at build time
+-- rather than shipping a kernel that arms the old hook somewhere.
+--
+-- The six are TWO changes, not one.  Sites 0-3 replace the standing deadline
+-- hook with the watchdog.  Sites 4-5 bind the name _ENV, which LuaJIT does not
+-- provide at all; see THE SECOND CHANGE below.
 --
 -- THE CHANGE.  OC enforces its per-resume timeout by arming
 --     debug.sethook(co, checkDeadline, "", hookInterval)
@@ -23,6 +26,45 @@
 -- count=1 re-arm against pcall-swallowing loops.  What this patch changes is
 -- who arms the hook and when, and nothing else.
 --
+-- THE SECOND CHANGE: _ENV.  LuaJIT is API/ABI-locked to Lua 5.1, which is
+-- precisely why it cannot implement 5.2's _ENV -- upstream says so.  What it
+-- DOES honour is load(ld, source, mode, env): the env becomes the chunk's
+-- fenv, reads and writes go through it, and __index fallthrough works.  Only
+-- the NAME _ENV is unbound.  Measured on our own luajit.exe.
+--
+-- That gap is not cosmetic.  OpenOS reads _ENV at eleven sites, and this
+-- project's own docs claimed it read it at none (feasibility.md:68,
+-- report-compat-and-perf.md:28) -- a claim the first in-game boot refuted with
+-- "lua_shell.lua:14: attempt to index global '_ENV' (a nil value)".  Worse
+-- than the crash: an unbound global reads as nil in LuaJIT, so
+-- boot/01_process.lua:68's "env = _ENV" silently set the init process's env to
+-- nil, lib/process.lua:32 propagated the nil down the whole process tree, and
+-- machine.lua's own "env or sandbox" default below then handed EVERY program
+-- the raw sandbox.  Per-process environments were collapsed machine-wide, with
+-- nothing raised anywhere.
+--
+-- WHY THE OBVIOUS FIX IS WRONG.  Setting sandbox._ENV = sandbox alone (site 5
+-- only) resolves at every site, because every OpenOS env chains to _G through
+-- __index -- and answers with the WRONG TABLE everywhere a chunk has its own
+-- environment, which is nine of the eleven.  lib/shell.lua:21 loads /bin/sh.lua
+-- into a fresh table shadowing _G on purpose ("shells do not keep a global
+-- state"); boot/01_process.lua:29-41 wraps any non-nil env in a further table
+-- before the kernel sees it.  Under the one-site fix, .install floppies read
+-- _ENV.install as nil (the documented contract, usr/man/install:68), program
+-- globals escape the shell's shadow table into machine-wide _G, and the lua
+-- REPL's auto-require cache at lua_shell.lua:14 injects every module name typed
+-- into the real sandbox globals permanently.  All silent.
+--
+-- So site 4 publishes _ENV in the very table the chunk resolves globals
+-- through, and site 5 is only the base case for chunks the kernel loads itself
+-- (the BIOS at load(code, "=bios", "t", sandbox)).
+--
+-- What this does NOT fix, because nothing can: "local _ENV = t" is an ordinary
+-- local under LuaJIT, and assigning _ENV = t does not rebind name resolution.
+-- OpenOS does neither (zero hits), but third-party code might, silently.
+-- Divergences we accept: pairs(env) now yields _ENV where 5.2 yields nothing,
+-- and rawget(_G, "_ENV") is non-nil for us and nil on stock OC.
+
 -- Left alone on purpose:
 --   * calcHookInterval (the bogomips loop at the top) still arms a hook for
 --     0.05s at boot.  hookInterval is now used by nothing, but the loop is
@@ -138,6 +180,32 @@ src = replace_once(src, "main loop arm/disarm",
     args = nil -- clear upvalue, avoids trying to persist it
 ]==])
 
+-- 4. _ENV, per chunk.  This is the load every sandboxed chunk goes through.
+-- rawget/rawset rather than plain indexing: the env tables OpenOS builds carry
+-- an __index to _G and an __newindex that writes through, so a plain read would
+-- find _G's _ENV (site 5) and conclude the key was already set, and a plain
+-- write would go somewhere else entirely.  The type guard keeps a non-table env
+-- reaching load() as the same error it would raise on stock OC, rather than a
+-- new one from us.
+src = replace_once(src, "per-chunk _ENV",
+[==[    return load(ld, source, mode, env or sandbox)
+]==],
+[==[    env = env or sandbox
+    if type(env) == "table" and rawget(env, "_ENV") == nil then
+      rawset(env, "_ENV", env)
+    end
+    return load(ld, source, mode, env)
+]==])
+
+-- 5. _ENV, the base case, for chunks the kernel loads directly without going
+-- through sandbox.load above -- the BIOS being the one that matters.
+src = replace_once(src, "sandbox _ENV base case",
+[==[sandbox._G = sandbox
+]==],
+[==[sandbox._G = sandbox
+sandbox._ENV = sandbox
+]==])
+
 -- What must remain: exactly the three debug.sethook calls we leave alone
 -- (two in calcHookInterval, one in checkDeadline).  Anything else means OC
 -- grew a fourth arm site this patch does not know about.
@@ -148,8 +216,9 @@ assert(remaining == 3,
 local banner = [==[-- =====================================================================
 -- OC-LuaJIT KERNEL VARIANT -- generated by native/kernel/patch-machine-lua.lua
 -- from OpenComputers' machine.lua.  Do not edit; edit the patcher.
--- Four sites changed: the standing deadline hook is replaced by the native's
--- asynchronous watchdog.  Everything else is OpenComputers' own kernel.
+-- Six sites changed: the standing deadline hook is replaced by the native's
+-- asynchronous watchdog (4), and the name _ENV is bound per chunk, which
+-- LuaJIT does not do (2).  Everything else is OpenComputers' own kernel.
 -- =====================================================================
 ]==]
 
@@ -158,5 +227,5 @@ if crlf then out = out:gsub(LF, CR .. LF) end
 local g = assert(io.open(outpath, "wb"))
 g:write(out)
 g:close()
-io.write(("patch-machine-lua: ok  %d -> %d bytes, 4 sites, 3 debug.sethook left, %s endings"):format(
+io.write(("patch-machine-lua: ok  %d -> %d bytes, 6 sites, 3 debug.sethook left, %s endings"):format(
   srcbytes, #out, crlf and "CRLF" or "LF") .. LF)

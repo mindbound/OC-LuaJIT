@@ -109,7 +109,23 @@ LEFT=$(grep -c 'debug.sethook' "$OUT")
 [ "$LEFT" = "3" ] || fail "expected exactly 3 surviving debug.sethook calls (bogomips x2 and the
        immediate-fire arm at machine.lua:47), found $LEFT"
 
-say "    arms=$ARMS  surviving debug.sethook=$LEFT"
+# _ENV, and BOTH sites named separately on purpose.  A single grep for _ENV
+# would pass on the one-site fix that was tried first and is WRONG: setting
+# only sandbox._ENV = sandbox resolves the name everywhere (every OpenOS env
+# chains to _G) while answering with the sandbox instead of the chunk's own
+# environment -- silently breaking .install floppies, shell containment and the
+# lua REPL's require cache.  So the per-chunk site is asserted on its own, and
+# a kernel carrying only the base case must fail this build.
+grep -q 'rawset(env, "_ENV", env)' "$OUT"   || fail "patched kernel does not bind _ENV PER CHUNK: only the base case applied, which hands
+       every chunk the sandbox rather than its own environment.  That is the wrong fix; see
+       THE SECOND CHANGE in patch-machine-lua.lua."
+grep -q '^sandbox._ENV = sandbox$' "$OUT"   || fail "patched kernel has no sandbox._ENV base case: chunks the kernel loads directly (the
+       BIOS) would see no _ENV at all"
+ENVS=$(grep -c '_ENV' "$OUT")
+[ "$ENVS" = "4" ] || fail "expected exactly 4 _ENV mentions (1 banner, 2 per-chunk, 1 base case),
+       found $ENVS -- OpenComputers may have grown an _ENV of its own"
+
+say "    arms=$ARMS  surviving debug.sethook=$LEFT  _ENV sites=2"
 say "    out     = $OUT  ($(wc -c < "$OUT") bytes)"
 echo
 echo "NEXT: package it."
