@@ -32,7 +32,8 @@
 #   OCLJ_OC_JAR      the OpenComputers jar to take machine.lua from
 #                    [default: the newest -dev jar in the Gradle cache]
 #   OCLJ_LUAJIT_EXE  a luajit that can run the patcher
-#                    [default: $OCLJ_BUILD/luajit/src/luajit.exe]
+#                    [default: the first $OCLJ_BUILD/luajit*/src/luajit.exe --
+#                     the LuaJIT build tree is per-platform]
 #   OCLJ_BUILD       build root  [default: <repo>/build/native]
 # =====================================================================
 set -u
@@ -44,7 +45,7 @@ say()  { echo "[kernel] $*"; }
 
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
-: "${OCLJ_LUAJIT_EXE:=$OCLJ_BUILD/luajit/src/luajit.exe}"
+: "${OCLJ_LUAJIT_EXE:=$(ls "$OCLJ_BUILD"/luajit*/src/luajit.exe 2>/dev/null | head -1)}"
 : "${OCLJ_OC_JAR:=}"
 
 OUT_DIR="$OCLJ_BUILD/kernel"

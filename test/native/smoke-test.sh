@@ -436,6 +436,9 @@ if [ "$OCLJ_KERNEL" = "watchdog" ]; then
   # classpath entry -- so NativeLuaArchitecture's
   #   getResourceAsStream("/assets/opencomputers/lua/machine.lua")
   # finds ours before ocelot-brain's.  Nothing in ocelot-brain changes.
+  # The LuaJIT build tree is per-platform now (build/native/luajit-<os>-<arch>),
+  # so glob rather than hardcode: this script runs wherever the harness runs.
+  [ -n "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE=$(ls "$OCLJ_LIBDIR"/../luajit*/src/luajit.exe 2>/dev/null | head -1)
   [ -n "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE="$OCLJ_LIBDIR/../luajit/src/luajit.exe"
   [ -x "$OCLJ_LUAJIT_EXE" ] || fail "OCLJ_KERNEL=watchdog needs luajit.exe to run the kernel patcher; none at $OCLJ_LUAJIT_EXE (set OCLJ_LUAJIT_EXE)"
   # WHICH DELIVERY MECHANISM, and it follows the ARCHITECTURE, not taste.

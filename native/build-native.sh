@@ -1,6 +1,6 @@
 #!/bin/sh
 # =====================================================================
-# build-native.sh -- clean checkout -> libjnlua52-windows-x86_64.dll
+# build-native.sh -- clean checkout -> libjnlua[jit]52-<os>-<arch>.<so|dll|dylib>
 #
 # Builds the OC-compatible native that makes OpenComputers' OWN repackaged
 # JNLua drive LuaJIT 2.1. Nothing in OC-JNLua, in the OC Java layer, or in
@@ -29,12 +29,14 @@
 # the bottom of this header for exactly how each is obtained)
 #   OCLJ_REPO   OC-LuaJIT checkout      (default: parent dir of this script's dir)
 #   OCLJ_JNLUA  OC-JNLua checkout       git clone https://github.com/MightyPirates/OC-JNLua.git
-#   OCLJ_JNI    a JDK's include/ dir    any JDK 8+ (jni.h + win32/jni_md.h)
+#   OCLJ_JNI    a JDK's include/ dir    any JDK 8+ (jni.h + <os>/jni_md.h, where
+#                                      <os> is win32, linux or darwin to match the HOST)
 #   OCLJ_SHIM   dir holding lj52shim.c and lj52shim.h  (default $OCLJ_REPO/native)
 #   OCLJ_LUAJIT LuaJIT source tree      (default $OCLJ_REPO/prototype/watchdog/luajit)
 #   OCLJ_BUILD  scratch build dir       (default $OCLJ_REPO/build/native)
-#   OCLJ_OUT    where the DLL lands     (default $OCLJ_BUILD/libdir)
-#   CC          C compiler              (default gcc; MinGW-w64 x86_64 on Windows)
+#   OCLJ_OUT    where the library lands (default $OCLJ_BUILD/libdir, or
+#                                      libdir-additive for OCLJ_VARIANT=additive)
+#   CC          C compiler              (default gcc; MinGW-w64 on Windows)
 #   JOBS        make -j                 (default 4)
 #
 # USAGE
@@ -42,10 +44,10 @@
 #     sh build-native.sh
 #
 # OUTPUT
-#   $OCLJ_OUT/libjnlua52-windows-x86_64.dll
+#   $OCLJ_OUT/libjnlua52-<os>-<arch><ext>       e.g. -windows-x86_64.dll
 #   That exact basename is what ocelot-brain looks for.  LuaStateFactory
 #   builds it as  "libjnlua" + version + "-" + platformName + libExtension
-#   (version="52", platformName="windows-x86_64") and finds it by scanning
+#   (version="52", platformName from its own table) and finds it by scanning
 #   the directory named in the config key
 #       opencomputers.debug.forceNativeLibPathFirst
 #   BEFORE the natives bundled in OC-JNLua-Natives.  Point that key at
@@ -111,11 +113,62 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # so there is no second copy of this string to drift:
 #   src/main/java/io/github/astronfo/ocluajit/arch/LuaJITStateFactory.java (mod)
 #   test/native/OcljArch.scala                                          (harness)
+fail() { echo "BUILD FAIL: $*" >&2; exit 1; }
+say()  { echo "[build] $*"; }
+T0=$(date +%s)
+stamp() { echo "[build] +$(( $(date +%s) - T0 ))s  $*"; }
+
+# =====================================================================
+# PLATFORM
+#
+# THE SPELLINGS ARE NOT OURS TO CHOOSE. The host's LuaStateFactory builds
+# "libjnlua" + version + "-" + <system> + "-" + <arch> + <ext> from its own
+# table and then looks for exactly that file, so `darwin` and not `osx`,
+# `x86_64` and not `amd64`, `aarch64` and not `arm64`. A wrong spelling here is
+# a file-not-found at runtime, which is indistinguishable from an unsupported
+# platform: the library is simply never offered and nothing says why.
+# =====================================================================
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT) OCLJ_OS=windows ;;
+  Linux)   OCLJ_OS=linux   ;;
+  Darwin)  OCLJ_OS=darwin  ;;
+  FreeBSD) OCLJ_OS=freebsd ;;
+  *) fail "unsupported host system '$(uname -s)'.  Add it HERE and to the platform
+       table in LuaJITStateFactory.libraryName() together -- one without the other
+       builds a file under a name the loader never asks for." ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)  OCLJ_ARCH=x86_64  ;;
+  aarch64|arm64) OCLJ_ARCH=aarch64 ;;
+  *) fail "unsupported machine '$(uname -m)'" ;;
+esac
+
+# PER-PLATFORM BUILD DETAILS, each with a reason it cannot be the same everywhere.
+#
+#   LIBEXT     what the loader appends to the name.
+#   JNI_MD     jni_md.h lives in a per-OS subdirectory of a JDK's include/.
+#   LINK_EXTRA --enable-stdcall-fixup is a PE/MinGW linker option and an ERROR
+#              on ELF.  -static-libgcc keeps us off a libgcc the host may not
+#              have, and is wanted wherever gcc is the compiler.
+#   LJ_PIC     LuaJIT's BUILDMODE=static does NOT compile position-independent
+#              code by default, and linking a non-PIC archive into a shared
+#              object fails on x86-64 ELF with a relocation error against .text.
+#              A Windows DLL needs nothing of the sort.  This single flag is the
+#              difference between "builds" and "does not link" on Linux, and it
+#              has to reach the LUAJIT build rather than only ours -- which is
+#              why it is spliced into LJ_FLAGS and not into our own CFLAGS.
+case $OCLJ_OS in
+  windows) LIBEXT=.dll   ; JNI_MD=win32    ; LINK_EXTRA="-static-libgcc -Wl,--enable-stdcall-fixup" ; LJ_PIC= ;;
+  darwin)  LIBEXT=.dylib ; JNI_MD=darwin   ; LINK_EXTRA=""                ; LJ_PIC=" -fPIC" ;;
+  *)       LIBEXT=.so    ; JNI_MD=$OCLJ_OS ; LINK_EXTRA="-static-libgcc"  ; LJ_PIC=" -fPIC" ;;
+esac
+PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
+
 : "${OCLJ_VARIANT:=dropin}"
 case $OCLJ_VARIANT in
-  dropin)   DLL_NAME=libjnlua52-windows-x86_64.dll    ; : "${OCLJ_OUT:=$OCLJ_BUILD/libdir}"          ;;
-  additive) DLL_NAME=libjnluajit52-windows-x86_64.dll ; : "${OCLJ_OUT:=$OCLJ_BUILD/libdir-additive}" ;;
-  *) echo "OCLJ_VARIANT must be dropin or additive" >&2; exit 1 ;;
+  dropin)   DLL_NAME=libjnlua52-$PLATFORM$LIBEXT    ; : "${OCLJ_OUT:=$OCLJ_BUILD/libdir}"          ;;
+  additive) DLL_NAME=libjnluajit52-$PLATFORM$LIBEXT ; : "${OCLJ_OUT:=$OCLJ_BUILD/libdir-additive}" ;;
+  *) fail "OCLJ_VARIANT must be dropin or additive" ;;
 esac
 
 # WHY SEPARATE DIRECTORIES AND NOT ONE, GIVEN THE FILENAMES ALREADY DIFFER.
@@ -130,16 +183,24 @@ esac
 # falls back to the bundled PUC native, and one JVM ends up running both VMs at
 # once -- which is the shipped configuration, and a far stronger check of the
 # no-collision claim than any symbol count.
-LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK"
-
-fail() { echo "BUILD FAIL: $*" >&2; exit 1; }
-say()  { echo "[build] $*"; }
-T0=$(date +%s)
-stamp() { echo "[build] +$(( $(date +%s) - T0 ))s  $*"; }
+LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK$LJ_PIC"
 
 # --------------------------------------------------------------- 0
 say "=============== 0. preflight ==============="
-command -v "$CC" >/dev/null 2>&1 || fail "no C compiler '$CC' on PATH (need MinGW-w64 x86_64 gcc)"
+say "host    = $PLATFORM   (lib*$LIBEXT, jni_md in $JNI_MD/)"
+if [ "$OCLJ_OS" != windows ]; then
+  # NOT A REFUSAL -- the build script is portable and everything up to the shim
+  # works here (LuaJIT with -fPIC, the naming, the ELF postflight).  What is not
+  # portable yet is lj52shim.c's deadline watchdog, which is a Win32 timer queue;
+  # the shim REFUSES rather than silently building an untested backend, at
+  # lj52shim.c:498.  Saying so now means the cause is named before the twenty
+  # seconds of LuaJIT, instead of being inferred from the cascade of errors that
+  # gcc emits after an #error it has already reported.
+  say "    NOTE: on $OCLJ_OS this build is expected to stop in step 2 at"
+  say "          lj52shim.c:498 -- the deadline watchdog has only a Win32 backend."
+  say "          A POSIX one is a roadmap item; everything before it works here."
+fi
+command -v "$CC" >/dev/null 2>&1 || fail "no C compiler '$CC' on PATH (MinGW-w64 gcc on Windows, gcc or clang elsewhere)"
 say "cc      = $("$CC" --version | head -1)"
 [ -n "$OCLJ_JNLUA" ] || fail "OCLJ_JNLUA is unset: point it at an OC-JNLua checkout (git clone https://github.com/MightyPirates/OC-JNLua.git)"
 [ -f "$OCLJ_JNLUA/native/src/jnlua.c" ] || fail "no $OCLJ_JNLUA/native/src/jnlua.c"
@@ -149,7 +210,8 @@ if [ -z "$OCLJ_JNI" ]; then
   done
 fi
 [ -n "$OCLJ_JNI" ] && [ -f "$OCLJ_JNI/jni.h" ] || fail "OCLJ_JNI must name a JDK include dir containing jni.h"
-[ -f "$OCLJ_JNI/win32/jni_md.h" ] || fail "no $OCLJ_JNI/win32/jni_md.h (need a Windows JDK's include dir)"
+[ -f "$OCLJ_JNI/$JNI_MD/jni_md.h" ] || fail "no $OCLJ_JNI/$JNI_MD/jni_md.h -- that JDK include
+       directory belongs to a different platform than this build ($PLATFORM)"
 [ -f "$OCLJ_SHIM/lj52shim.c" ] || fail "no $OCLJ_SHIM/lj52shim.c"
 [ -f "$OCLJ_SHIM/lj52shim.h" ] || fail "no $OCLJ_SHIM/lj52shim.h"
 [ -f "$OCLJ_SER/eris_lj.c" ]   || fail "no $OCLJ_SER/eris_lj.c"
@@ -278,12 +340,19 @@ say "jnlua   = $OCLJ_JNLUA @ $(git -C "$OCLJ_JNLUA" rev-parse --short=8 HEAD 2>/
 say "shim    = $OCLJ_SHIM"
 say "out     = $OCLJ_OUT/$DLL_NAME"
 
-mkdir -p "$OCLJ_BUILD/obj" "$OCLJ_OUT" || fail "cannot create $OCLJ_BUILD"
+OBJ=$OCLJ_BUILD/obj-$PLATFORM
+mkdir -p "$OBJ" "$OCLJ_OUT" || fail "cannot create $OCLJ_BUILD"
 
 # --------------------------------------------------------------- 1
 say "=============== 1. LuaJIT 2.1 (static) ==============="
 say "    XCFLAGS=$LJ_FLAGS   BUILDMODE=static"
-LJ_WORK=$OCLJ_BUILD/luajit
+# PER-PLATFORM INTERMEDIATE TREES, for the same reason the output directories
+# are split. These were one shared directory, which is fine while only one
+# platform ever builds and wrong the moment a second does: the Windows build
+# leaves luajit.exe here and BOTH the harness and build-kernel.sh run it, so a
+# Linux build in the same tree would replace it with an ELF binary and the next
+# kernel patch would fail with a format error a long way from its cause.
+LJ_WORK=$OCLJ_BUILD/luajit-$PLATFORM
 if [ ! -d "$LJ_WORK" ]; then
   say "copying $OCLJ_LUAJIT -> $LJ_WORK (the source tree is built in place; we never dirty the checkout)"
   cp -r "$OCLJ_LUAJIT" "$LJ_WORK" || fail "copy failed"
@@ -369,13 +438,13 @@ say "    $PROBE"
 
 # --------------------------------------------------------------- 2
 say "=============== 2. lj52shim.c ==============="
-rm -f "$OCLJ_BUILD/obj/lj52shim.o"
+rm -f "$OBJ/lj52shim.o"
 # -I the JDK headers: the shim includes <jni.h> so its allocator can use
 # jnlua's own getluamemory/setluamemory to publish the machine's RAM use.
 "$CC" -c -O2 -Wall -Wextra -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
-  -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" \
-  "$OCLJ_SHIM/lj52shim.c" -o "$OCLJ_BUILD/obj/lj52shim.o" 2>"$OCLJ_BUILD/shim.err"
-[ -f "$OCLJ_BUILD/obj/lj52shim.o" ] || { cat "$OCLJ_BUILD/shim.err"; fail "shim did not compile"; }
+  -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" \
+  "$OCLJ_SHIM/lj52shim.c" -o "$OBJ/lj52shim.o" 2>"$OCLJ_BUILD/shim.err"
+[ -f "$OBJ/lj52shim.o" ] || { cat "$OCLJ_BUILD/shim.err"; fail "shim did not compile"; }
 SW=$(grep -c 'warning:' "$OCLJ_BUILD/shim.err" || true)
 say "    -Wall -Wextra warnings = $SW"
 [ "$SW" = "0" ] || { grep -E 'warning:' "$OCLJ_BUILD/shim.err" | head -20; fail "the shim must compile warning-clean"; }
@@ -385,7 +454,7 @@ say "=============== 3. OC-JNLua jnlua.c (UNMODIFIED, shim force-included) =====
 # -include lj52shim.h is the whole trick: jnlua.c's 5.2 calls bind to the shim
 # before jnlua.c's own first line is read.  jnlua.c itself is byte-identical to
 # upstream OC-JNLua -- verified below.
-rm -f "$OCLJ_BUILD/obj/jnlua.o"
+rm -f "$OBJ/jnlua.o"
 JNLUA_SRC="$OCLJ_JNLUA/native/src/jnlua.c"
 if [ "$OCLJ_VARIANT" = additive ]; then
   # repack.sh refuses unless it changes EXACTLY two lines, so 'additive' can
@@ -394,14 +463,14 @@ if [ "$OCLJ_VARIANT" = additive ]; then
     || fail "the jnlua repack refused (see above)"
   JNLUA_SRC="$OCLJ_BUILD/jnlua-luajit.c"
 fi
-"$CC" -c -O2 -Wall -DNDEBUG -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -I"$LJ" -I"$OCLJ_SHIM" \
+"$CC" -c -O2 -Wall -DNDEBUG -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -I"$LJ" -I"$OCLJ_SHIM" \
   -include "$OCLJ_SHIM/lj52shim.h" \
-  "$JNLUA_SRC" -o "$OCLJ_BUILD/obj/jnlua.o" \
+  "$JNLUA_SRC" -o "$OBJ/jnlua.o" \
   > "$OCLJ_BUILD/jnlua.err" 2>&1
 NERR=$(grep -c 'error:' "$OCLJ_BUILD/jnlua.err" || true)
 NWARN=$(grep -c 'warning:' "$OCLJ_BUILD/jnlua.err" || true)
 say "    errors=$NERR  warnings=$NWARN   (-Wall; jnlua.c is byte-identical to upstream)"
-[ "$NERR" = "0" ] && [ -f "$OCLJ_BUILD/obj/jnlua.o" ] \
+[ "$NERR" = "0" ] && [ -f "$OBJ/jnlua.o" ] \
   || { grep -oE 'error: .*' "$OCLJ_BUILD/jnlua.err" | head -20; fail "jnlua.c did not compile"; }
 
 # ZERO SHIM-ATTRIBUTABLE WARNINGS.
@@ -452,26 +521,69 @@ say "=============== 4. eris_lj.c ==============="
 # writes with lj_bcwrite.  The 'b' path stays open INTERNALLY to eris_lj while
 # lj52_load keeps it shut to sandbox code (allowBytecode=false).
 "$CC" -c -O2 -I"$LJ" -I"$OCLJ_SER" -DERIS_LJ_COMMIT="\"$LJ_COMMIT\"" \
-  "$OCLJ_SER/eris_lj.c" -o "$OCLJ_BUILD/obj/eris_lj.o" 2>"$OCLJ_BUILD/eris.err"
-[ -f "$OCLJ_BUILD/obj/eris_lj.o" ] || { grep -oE 'error: .*' "$OCLJ_BUILD/eris.err" | head -20; fail "eris_lj.c did not compile"; }
+  "$OCLJ_SER/eris_lj.c" -o "$OBJ/eris_lj.o" 2>"$OCLJ_BUILD/eris.err"
+[ -f "$OBJ/eris_lj.o" ] || { grep -oE 'error: .*' "$OCLJ_BUILD/eris.err" | head -20; fail "eris_lj.c did not compile"; }
 
 # --------------------------------------------------------------- 5
 say "=============== 5. link ==============="
 # javavm.c is deliberately NOT linked: it is OC-JNLua's "start a JVM from Lua"
 # entry point, which the embedded (JVM-hosted) direction never uses.
 "$CC" -shared -o "$OCLJ_OUT/$DLL_NAME" \
-  "$OCLJ_BUILD/obj/jnlua.o" "$OCLJ_BUILD/obj/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
-  "$LJ/libluajit.a" -lm -static-libgcc -Wl,--enable-stdcall-fixup \
+  "$OBJ/jnlua.o" "$OBJ/lj52shim.o" "$OBJ/eris_lj.o" \
+  "$LJ/libluajit.a" -lm $LINK_EXTRA \
   > "$OCLJ_BUILD/link.err" 2>&1
 [ -f "$OCLJ_OUT/$DLL_NAME" ] || { head -30 "$OCLJ_BUILD/link.err"; fail "link failed"; }
 
 # --------------------------------------------------------------- 6
 say "=============== 6. postflight ==============="
-if command -v objdump >/dev/null 2>&1; then
-  EXPORTS=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -oE '\bJava_[A-Za-z0-9_]+' | sort -u | wc -l)
-  ONLOAD=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -c 'JNI_OnLoad')
-  PKG=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -oE '\bJava_li_cil_repack_[A-Za-z0-9_]+' | head -1)
-  say "    Java_* exports = $EXPORTS   JNI_OnLoad = $ONLOAD"
+
+# ONE READER, TWO BACKENDS, AND THE SAME ASSERTIONS ON BOTH.
+#
+# No single command lists exported symbols on both object formats, and the
+# failure is silent in the direction that matters: `nm -D` on a PE DLL prints
+# "no symbols" and exits 0, so a naive port would have counted zero
+# LuaState_* symbols on Windows and concluded the additive build was clean.
+# Measured, on the real artifacts: objdump -p finds 87 Java_* in the DLL and
+# nm -D finds 0; on ELF objdump -p prints program headers and no symbols at all.
+#
+# So the reader branches and NOTHING ELSE DOES. Every assertion below runs on
+# its output, which means a Linux build cannot be waved through on weaker checks
+# than the Windows one gets -- the thing most likely to go wrong in a port of a
+# guard is that the new platform quietly asserts less.
+#
+#   PE   objdump -p lists each export as
+#          [   2] +base[   3]  0002 Java_li_cil_..._lua_1debugfree
+#        so the name is the last field of the +base[ lines.
+#   ELF  nm -D --defined-only prints  <addr> <type> <name>.
+exported_symbols() {
+  case $OCLJ_OS in
+    # The [0-9a-f]{4} ordinal field is load-bearing, not decoration: objdump
+    # prints a COLUMN HEADER line that also contains "+base[", whose last field
+    # is the word RVA. Matching on "+base[" alone therefore yields 90 names for
+    # an 89-export DLL -- which the count assertion below caught on its first
+    # run, before this reader had shipped anywhere.
+    windows) objdump -p "$1" | grep -E '[+]base[[][ 0-9]+[]][ ]+[0-9a-f]{4} ' | awk '{print $NF}' ;;
+    *)       nm -D --defined-only "$1" | awk '{print $NF}' ;;
+  esac
+}
+
+if command -v objdump >/dev/null 2>&1 && command -v nm >/dev/null 2>&1; then
+  SYMS=$(exported_symbols "$OCLJ_OUT/$DLL_NAME" | sort -u)
+  syms() { printf '%s\n' "$SYMS"; }
+
+  # THE READER ITSELF IS CHECKED FIRST. Every count below is a grep over this
+  # list, so a reader that returned nothing would make all of them pass
+  # vacuously -- exactly the shape of defect this project keeps finding in its
+  # own guards. An empty list is not "no forbidden symbols", it is no evidence.
+  NSYM=$(syms | grep -c .)
+  [ "$NSYM" -gt 0 ] || fail "the symbol reader returned NOTHING for $OCLJ_OS.
+       Every assertion below would have passed vacuously.  Check that objdump/nm
+       understand this object format before trusting any result from this build."
+
+  EXPORTS=$(syms | grep -c '^Java_')
+  ONLOAD=$(syms | grep -cx 'JNI_OnLoad')
+  PKG=$(syms | grep -m1 '^Java_li_cil_repack_')
+  say "    reader = $OCLJ_OS   total exports = $NSYM   Java_* = $EXPORTS   JNI_OnLoad = $ONLOAD"
   say "    e.g. $PKG"
   [ "$EXPORTS" -gt 50 ] || fail "only $EXPORTS Java_* exports; jnlua did not link in"
   [ -n "$PKG" ] || fail "no Java_li_cil_repack_* export: this is upstream naef/jnlua, not OC's repack.
@@ -482,8 +594,8 @@ if command -v objdump >/dev/null 2>&1; then
   # harness, and an additive exporting LuaState_* COLLIDES with OpenComputers'
   # own 5.2 native in a real game -- the exact thing this variant prevents.
   # Both would look like a perfectly successful build.
-  OWN=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_')
-  OCS=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaState_[a-z]')
+  OWN=$(syms | grep -c '^Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_')
+  OCS=$(syms | grep -cE '^Java_li_cil_repack_com_naef_jnlua_LuaState_[a-z]')
   say "    symbol family: LuaStateLuaJIT_*=$OWN  LuaState_*=$OCS   (variant=$OCLJ_VARIANT)"
   if [ "$OCLJ_VARIANT" = additive ]; then
     [ "$OWN" -gt 50 ] || fail "additive exports only $OWN LuaStateLuaJIT_* symbols: the repack did not take"
@@ -492,21 +604,32 @@ if command -v objdump >/dev/null 2>&1; then
     [ "$OCS" -gt 50 ] || fail "dropin exports only $OCS LuaState_* symbols: it cannot stand in for OC native"
     [ "$OWN" = "0" ]  || fail "dropin exports $OWN LuaStateLuaJIT_* symbols: the harness would bind nothing"
   fi
-  # ABI SURFACE, pinned.  ocelot-brain resolves every LuaState native method
-  # by JNI name, so the DLL is ABI-compatible iff the exported NAME SET is the
+
+  # ABI SURFACE, pinned.  ocelot-brain resolves every LuaState native method by
+  # JNI name, so the library is ABI-compatible iff the exported NAME SET is the
   # one OC-JNLua declares.  jnlua.c at da3d4d45 exports 87 Java_* methods plus
-  # JNI_OnLoad and JNI_OnUnload = 89.  Verified equal, name for name, to the
-  # export table of the arm7 DLL behind the original passing OpenOS runs.
-  ALL=$(objdump -p "$OCLJ_OUT/$DLL_NAME" | grep -E '[+]base[[][ 0-9]+[]][ ]+[0-9a-f]{4} ' \
-    | sed 's/.*[0-9a-f][0-9a-f][0-9a-f][0-9a-f] //' | sort -u)
-  NALL=$(printf %s"\n" "$ALL" | grep -c .)
-  say "    total exports  = $NALL  (87 Java_* + JNI_OnLoad + JNI_OnUnload)"
-  [ "$NALL" = "89" ] || fail "export count is $NALL, expected 89.  The DLL's ABI surface
-         no longer matches OC-JNLua da3d4d45.  Either jnlua.c was bumped (update
-         this number deliberately) or a translation unit failed to link in."
-  printf %s"\n" "$ALL" | grep -qx JNI_OnLoad   || fail "no JNI_OnLoad export"
-  printf %s"\n" "$ALL" | grep -qx JNI_OnUnload || fail "no JNI_OnUnload export"
+  # JNI_OnLoad and JNI_OnUnload = 89.
+  #
+  # THE EXPECTED TOTAL IS PER-FORMAT, and that is not a fudge. A PE DLL exports
+  # exactly what is declared JNIEXPORT; an ELF shared object's dynamic symbol
+  # table also carries what the C runtime and the linker put there, so the
+  # count is not 89 and pinning it to 89 would fail every Linux build. What is
+  # invariant across both -- and what actually matters -- is the JNI surface:
+  # the 87 Java_* names plus the two JNI_On* hooks. That is asserted on both.
+  [ "$EXPORTS" = "87" ] || fail "Java_* export count is $EXPORTS, expected 87.  The ABI surface no
+         longer matches OC-JNLua da3d4d45.  Either jnlua.c was bumped (update this
+         number deliberately) or a translation unit failed to link in."
+  syms | grep -qx JNI_OnLoad   || fail "no JNI_OnLoad export"
+  syms | grep -qx JNI_OnUnload || fail "no JNI_OnUnload export"
+  if [ "$OCLJ_OS" = windows ]; then
+    [ "$NSYM" = "89" ] || fail "PE export table holds $NSYM names, expected exactly 89
+         (87 Java_* + JNI_OnLoad + JNI_OnUnload).  Something else became visible."
+  fi
+else
+  say "    SKIPPED: objdump and nm are both needed to verify the symbol surface"
+  say "    (this build has NOT been checked for the dropin/additive mix-up)"
 fi
+
 SZ=$(wc -c < "$OCLJ_OUT/$DLL_NAME")
 SHA=$(sha256sum "$OCLJ_OUT/$DLL_NAME" 2>/dev/null | cut -c1-16)
 stamp "OK  $OCLJ_OUT/$DLL_NAME  ${SZ} bytes  sha256:${SHA}..."
