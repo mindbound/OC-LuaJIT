@@ -1,7 +1,7 @@
 # Shell-fill: the persistence protocol for `__persist` specials
 
-*Implementation specification. Status: step 0 done (failing test landed and
-shown red), steps 1–4 pending. Written so that a fresh session can execute it
+*Implementation specification. Status: steps 0–2 done (serializer converted,
+all suites green on binary `9c64817a`), steps 3–5 pending. Written so that a fresh session can execute it
 without the conversation that produced it. The reasoning behind the design is
 in [research/persistence-clean-slate.md](research/persistence-clean-slate.md);
 this document is the what and the how.*
@@ -355,8 +355,8 @@ would have merged them, and `h1 == h2` would silently differ from stock;
 | step | work | accepted when |
 |---|---|---|
 | **0** ✓ | land `tests/shell.lua` | 6/6 red on the shipping binary, 0/6 on `SHELL.exe` — **done 2026-09-17** |
-| 1 | apply §3 to `eris_lj.c` (start from `mkshell.py`), bump format | `shell.lua` 0/6; M1 82, M3 75, for-in 19 exact; **m2 and contract red only at their legacy recipes** |
-| 2 | rewrite m2's four spkey cases and contract's one to the shell form | all suites green |
+| **1** ✓ | apply §3 to `eris_lj.c` (start from `mkshell.py`), bump format | `shell.lua` 0/6; M1 82, M3 75, for-in 19 exact; **m2 and contract red only at their legacy recipes** — **done 2026-09-17**, binary `9c64817a`, m2 aborted at :200 and contract failed its one special case, both with "instead of filling its argument" |
+| **2** ✓ | rewrite m2's four spkey cases and contract's one to the shell form | all suites green — **done 2026-09-17**: shell 0/6, stress 0/9, M1 82, M2 **56** (one inert-recipe case added), M3 75, contract all-pass, for-in 19 exact; a format-2 blob is refused with `format version mismatch (expected 3)` |
 | 3 | apply §4 to the kernel patcher; by-name assertion; rebuild kernel and native with distinct binaries and md5s | `build-kernel.sh` postflight names `wrapUserdataInto`; `wd_test` 32/0 |
 | 4 | walker graft (§5.4) with its negative control | new refusal shown to fire; suites green |
 | 5 | in-game gate (§5.3) | `f1b` PASS, `f7` PASS with seq advanced; negative control comes back Stopped with the refusal in the log |

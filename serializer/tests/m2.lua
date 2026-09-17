@@ -189,11 +189,15 @@ end
 --------------------------------------------------- spkey function protocol
 
 print("-- spkey function protocol")
+-- SHELL-FILL (docs/shell-fill.md): the reader creates the special's FINAL
+-- table when its record is read, and calls the recipe as recipe(shell) once
+-- the whole graph exists. A recipe fills its argument in place and must leave
+-- it with a metatable; returning a fresh table is refused.
 do
   local t = setmetatable({ volatile = "not saved" }, {
     __persist = function(obj)
       local kept = obj.keep
-      return function() return { keep = kept, rebuilt = true } end
+      return function(s) s.keep = kept; s.rebuilt = true; setmetatable(s, {}) end
     end
   })
   t.keep = "saved"
@@ -207,7 +211,7 @@ do -- the object appears twice: the reconstruction must happen once
   local t = setmetatable({}, {
     __persist = function()
       calls = calls + 1
-      return function() return { made = true } end
+      return function(s) s.made = true; setmetatable(s, {}) end
     end
   })
   local g = roundtrip({ a = t, b = t })
@@ -223,8 +227,14 @@ end
 do -- a closure that returns the wrong type on load must be refused
   local t = setmetatable({}, { __persist = function() return function() return 42 end end })
   local ok_, err = pcall(roundtrip, t)
-  ok(not ok_ and tostring(err):find("expected a table"),
-     "spkey closure returning a non-table is refused", err)
+  ok(not ok_ and tostring(err):find("instead of filling its argument"),
+     "spkey closure returning a value instead of filling its argument is refused", err)
+end
+do -- an inert recipe (fills nothing, sets no metatable) must be refused
+  local t = setmetatable({}, { __persist = function() return function(s) end end })
+  local ok_, err = pcall(roundtrip, t)
+  ok(not ok_ and tostring(err):find("without a metatable"),
+     "inert spkey recipe is refused", err)
 end
 
 ------------------------------------------------------------- C functions

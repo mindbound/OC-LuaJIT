@@ -88,7 +88,8 @@ ok(cycle(1), "configure->persist->configure->unpersist, pass 1")
 ok(cycle(2), "and pass 2 (the case a one-shot setting would break)")
 
 -- machine.lua's only two eris sites use spkey the same way: a metafield
--- returning a closure, persisted with its upvalues, called on restore.
+-- returning a closure, persisted with its upvalues, called on restore
+-- as recipe(shell) once the whole graph exists.
 -- The closure must NOT capture the object it rebuilds -- that cycle is
 -- deliberately rejected, and machine.lua does not write one.
 eris.settings("spkey", key2)
@@ -96,7 +97,8 @@ local handlemt = {}
 local captured = "device-handle-7"
 local wrapped = setmetatable({}, { [key2] = function()
   local c = captured
-  return function() return setmetatable({ restored = c }, handlemt) end
+  -- SHELL-FILL: fill the argument in place (docs/shell-fill.md).
+  return function(s) s.restored = c; setmetatable(s, handlemt) end
 end })
 local okp, blob = pcall(eris.persist, perms, wrapped)
 ok(okp, "spkey metafield under a randomised per-machine key", blob)
