@@ -1,7 +1,8 @@
 # Shell-fill: the persistence protocol for `__persist` specials
 
-*Implementation specification. Status: steps 0–2 done (serializer converted,
-all suites green on binary `9c64817a`), steps 3–5 pending. Written so that a fresh session can execute it
+*Implementation specification. Status: steps 0–3 done (serializer converted,
+kernel patched, both natives rebuilt additive — DLL `a3b64511`, so `d3768017` — and
+the jar build now refuses a native from a different serializer), steps 4–5 pending. Written so that a fresh session can execute it
 without the conversation that produced it. The reasoning behind the design is
 in [research/persistence-clean-slate.md](research/persistence-clean-slate.md);
 this document is the what and the how.*
@@ -339,6 +340,9 @@ would have merged them, and `h1 == h2` would silently differ from stock;
 
 ## 7. Build discipline
 
+- **The jar ships the ADDITIVE native, and `build-native.sh` does not build it by
+  default.** `OCLJ_VARIANT=additive sh native/build-native.sh` (and the WSL wrapper
+  for Linux) is what refreshes `dist/`. `verifyModAssets` now refuses a stale one.
 - `cd serializer && rm -f erislj_test.exe && make CC=gcc` — **always remove the
   exe first.** `make` will not rebuild if the `.c` and `.exe` land in the same
   second; this produced a "fixed" measurement that was actually the control.
@@ -357,7 +361,7 @@ would have merged them, and `h1 == h2` would silently differ from stock;
 | **0** ✓ | land `tests/shell.lua` | 6/6 red on the shipping binary, 0/6 on `SHELL.exe` — **done 2026-09-17** |
 | **1** ✓ | apply §3 to `eris_lj.c` (start from `mkshell.py`), bump format | `shell.lua` 0/6; M1 82, M3 75, for-in 19 exact; **m2 and contract red only at their legacy recipes** — **done 2026-09-17**, binary `9c64817a`, m2 aborted at :200 and contract failed its one special case, both with "instead of filling its argument" |
 | **2** ✓ | rewrite m2's four spkey cases and contract's one to the shell form | all suites green — **done 2026-09-17**: shell 0/6, stress 0/9, M1 82, M2 **56** (one inert-recipe case added), M3 75, contract all-pass, for-in 19 exact; a format-2 blob is refused with `format version mismatch (expected 3)` |
-| 3 | apply §4 to the kernel patcher; by-name assertion; rebuild kernel and native with distinct binaries and md5s | `build-kernel.sh` postflight names `wrapUserdataInto`; `wd_test` 32/0 |
+| **3** ✓ | apply §4 to the kernel patcher; by-name assertion; rebuild kernel and native with distinct binaries and md5s | `build-kernel.sh` postflight names `wrapUserdataInto`; `wd_test` 32/0 — **done 2026-09-17**: 9 sites, kernel 48608 bytes with sites at `:1077/:1089/:1164/:1215` and zero legacy shapes; postflight proven to fail (site 8 neutered → exit 1 naming site 8); native serializer hash `25471fb0`; `wd_test` 32/0. **Then the jar shipped the wrong DLL** — `build-native.sh` defaults to the dropin variant, so `dist/` still held the 09-16 additive. Both platforms rebuilt with `OCLJ_VARIANT=additive`: Windows `a3b64511`, Linux `d3768017` (WSL). `verifyModAssets` now refuses a native whose bytes lack the current serializer hash (proven: stale DLL → BUILD FAILED naming it). Jar `ocluajit-0280593-…-dirty.jar` verified: kernel 48608 + `wrapUserdataInto`, DLL `a3b64511`, so `d3768017`, hash embedded |
 | 4 | walker graft (§5.4) with its negative control | new refusal shown to fire; suites green |
 | 5 | in-game gate (§5.3) | `f1b` PASS, `f7` PASS with seq advanced; negative control comes back Stopped with the refusal in the log |
 | — | `_stack` universe fix (§6.3) | scheduled separately, before any dispose work |

@@ -4,14 +4,15 @@
 --   luajit patch-machine-lua.lua <in: OC machine.lua> <out: patched machine.lua>
 --
 -- WHY A PATCH AND NOT A FORK.  The census argument stands: we run OC's real
--- kernel semantics and couple to no particular OS.  This script changes six
+-- kernel semantics and couple to no particular OS.  This script changes nine
 -- places and refuses to run if any anchor does not match EXACTLY ONCE -- so an
 -- OpenComputers bump that moves or rewords a site fails loudly at build time
 -- rather than shipping a kernel that arms the old hook somewhere.
 --
--- The six are TWO changes, not one.  Sites 0-3 replace the standing deadline
+-- The nine are THREE changes, not one.  Sites 0-3 replace the standing deadline
 -- hook with the watchdog.  Sites 4-5 bind the name _ENV, which LuaJIT does not
--- provide at all; see THE SECOND CHANGE below.
+-- provide at all; see THE SECOND CHANGE below.  Sites 6-9 convert the kernel's
+-- two __persist recipes to the shell-fill protocol; see THE THIRD CHANGE.
 --
 -- THE CHANGE.  OC enforces its per-resume timeout by arming
 --     debug.sethook(co, checkDeadline, "", hookInterval)
@@ -64,6 +65,26 @@
 -- OpenOS does neither (zero hits), but third-party code might, silently.
 -- Divergences we accept: pairs(env) now yields _ENV where 5.2 yields nothing,
 -- and rawget(_G, "_ENV") is non-nil for us and nil on stock OC.
+
+-- THE THIRD CHANGE: SHELL-FILL (docs/shell-fill.md).  Eris, and our fork until
+-- 2026-09-17, called a __persist recipe the instant its record was read --
+-- partway through rebuilding the graph, so anything not yet restored read as
+-- nil.  In-game: "machine:1162: attempt to call upvalue 'wrapSingleUserdata'
+-- (a nil value)" on any save holding an open file handle.  The serializer now
+-- creates the special's FINAL table when its record is read and calls the
+-- recipe as recipe(shell) once, after the whole graph exists; the recipe fills
+-- its argument in place and must leave it with a metatable.  A recipe of the
+-- old shape -- returning a fresh table -- is refused at load by name.
+--
+-- The kernel's two recipes are the ONLY recipe authors (persistKey is absent
+-- from the sandbox), so this is the whole migration: the registry recipe sets
+-- its metatable on the shell it is handed; the proxy recipe fills the shell
+-- through wrapUserdataInto, a helper that is wrapSingleUserdata minus the
+-- reuse scan -- not needed on the restore path, because persist-time dedup by
+-- the reftable already collapsed every reference to one record, and a restored
+-- Value is a fresh Java object that can never compare equal to another.
+-- Fields are written BEFORE setmetatable because userdataWrapper.__newindex
+-- routes writes to udinvoke.
 
 -- Left alone on purpose:
 --   * calcHookInterval (the bogomips loop at the top) still arms a hook for
@@ -206,6 +227,64 @@ src = replace_once(src, "sandbox _ENV base case",
 sandbox._ENV = sandbox
 ]==])
 
+-- 6. wrapUserdataInto joins the forward declarations, so it is an open upvalue
+-- of the kernel chunk frame exactly like wrapSingleUserdata -- and under
+-- shell-fill every thread slot is written before any recipe runs.
+src = replace_once(src, "wrapUserdataInto declaration",
+[==[local wrapUserdata, wrapSingleUserdata, unwrapUserdata, wrappedUserdataMeta
+]==],
+[==[local wrapUserdata, wrapSingleUserdata, unwrapUserdata, wrappedUserdataMeta, wrapUserdataInto
+]==])
+
+-- 7. The registry recipe fills the shell it is handed.
+src = replace_once(src, "registry recipe",
+[==[    return function()
+      -- When using special persistence we have to manually reassign the
+      -- metatable of the persisted value.
+      return setmetatable({}, wrappedUserdataMeta)
+    end
+]==],
+[==[    return function(self)
+      -- SHELL-FILL: the serializer hands us our own final table. Give it its
+      -- metatable in place; each proxy's fill repopulates the contents.
+      setmetatable(self, wrappedUserdataMeta)
+    end
+]==])
+
+-- 8. The proxy recipe fills the shell it is handed.
+src = replace_once(src, "proxy recipe",
+[==[    return function()
+      return wrapSingleUserdata(userdata.load(className, nbt))
+    end
+]==],
+[==[    return function(proxy)
+      wrapUserdataInto(proxy, userdata.load(className, nbt))
+    end
+]==])
+
+-- 9. The helper, immediately before wrapUserdata.
+src = replace_once(src, "wrapUserdataInto helper",
+[==[
+function wrapUserdata(values)
+]==],
+[==[
+-- SHELL-FILL: fill an EXISTING table as a userdata proxy (docs/shell-fill.md).
+-- Fields first, metatable last: userdataWrapper.__newindex routes writes to
+-- udinvoke.  No reuse scan: persist-time dedup already collapsed every
+-- reference to one record, and a restored Value is a fresh Java object.
+function wrapUserdataInto(proxy, data)
+  proxy.type = "userdata"
+  local methods = spcall(userdata.methods, data)
+  for method in pairs(methods) do
+    proxy[method] = setmetatable({name=method, proxy=proxy}, userdataCallback)
+  end
+  wrappedUserdata[proxy] = data
+  return setmetatable(proxy, userdataWrapper)
+end
+
+function wrapUserdata(values)
+]==])
+
 -- What must remain: exactly the three debug.sethook calls we leave alone
 -- (two in calcHookInterval, one in checkDeadline).  Anything else means OC
 -- grew a fourth arm site this patch does not know about.
@@ -216,9 +295,11 @@ assert(remaining == 3,
 local banner = [==[-- =====================================================================
 -- OC-LuaJIT KERNEL VARIANT -- generated by native/kernel/patch-machine-lua.lua
 -- from OpenComputers' machine.lua.  Do not edit; edit the patcher.
--- Six sites changed: the standing deadline hook is replaced by the native's
--- asynchronous watchdog (4), and the name _ENV is bound per chunk, which
--- LuaJIT does not do (2).  Everything else is OpenComputers' own kernel.
+-- Nine sites changed: the standing deadline hook is replaced by the native's
+-- asynchronous watchdog (4), the name _ENV is bound per chunk, which LuaJIT
+-- does not do (2), and the two __persist recipes fill the shell the serializer
+-- hands them instead of returning a fresh table (3).  Everything else is
+-- OpenComputers' own kernel.
 -- =====================================================================
 ]==]
 
@@ -227,5 +308,5 @@ if crlf then out = out:gsub(LF, CR .. LF) end
 local g = assert(io.open(outpath, "wb"))
 g:write(out)
 g:close()
-io.write(("patch-machine-lua: ok  %d -> %d bytes, 6 sites, 3 debug.sethook left, %s endings"):format(
+io.write(("patch-machine-lua: ok  %d -> %d bytes, 9 sites, 3 debug.sethook left, %s endings"):format(
   srcbytes, #out, crlf and "CRLF" or "LF") .. LF)

@@ -125,7 +125,19 @@ ENVS=$(grep -c '_ENV' "$OUT")
 [ "$ENVS" = "4" ] || fail "expected exactly 4 _ENV mentions (1 banner, 2 per-chunk, 1 base case),
        found $ENVS -- OpenComputers may have grown an _ENV of its own"
 
-say "    arms=$ARMS  surviving debug.sethook=$LEFT  _ENV sites=2"
+# SHELL-FILL (docs/shell-fill.md): all three recipe sites, each by name.  A
+# kernel that declares the helper but still ships a legacy recipe would be
+# refused at LOAD by the serializer ("instead of filling its argument") with
+# the computer coming back Stopped -- correct, but this is the cheaper place
+# to catch it.
+grep -q '^function wrapUserdataInto(proxy, data)$' "$OUT"   || fail "patched kernel has no wrapUserdataInto helper: shell-fill site 9 did not apply"
+grep -q 'wrapUserdataInto(proxy, userdata.load(className, nbt))' "$OUT"   || fail "the proxy __persist recipe still returns a fresh table (site 8): the serializer will
+       refuse every save holding a userdata with 'instead of filling its argument'"
+grep -q 'setmetatable(self, wrappedUserdataMeta)' "$OUT"   || fail "the registry __persist recipe still returns a fresh table (site 7)"
+LEGACY=$(grep -c 'return setmetatable({}, wrappedUserdataMeta)' "$OUT")
+[ "$LEGACY" = "0" ] || fail "a legacy-shape registry recipe survived patching"
+
+say "    arms=$ARMS  surviving debug.sethook=$LEFT  _ENV sites=2  shell-fill sites=3"
 say "    out     = $OUT  ($(wc -c < "$OUT") bytes)"
 echo
 echo "NEXT: package it."

@@ -1,3 +1,4 @@
+import java.security.MessageDigest
 
 plugins {
     id("com.gtnewhorizons.gtnhconvention")
@@ -88,6 +89,8 @@ val verifyModAssets by tasks.registering {
     val glob = ourNativeGlob
     val forbidden = ocOwnNativeRegex
     val oursPrefix = ourNativeGlob.removeSuffix("*")
+    val serC = project.file("serializer/eris_lj.c")
+    val serH = project.file("serializer/eris_lj.h")
 
     doLast {
         val present = (nativesFile.listFiles() ?: emptyArray()).sortedBy { it.name }
@@ -115,6 +118,34 @@ val verifyModAssets by tasks.registering {
                 "OC-LuaJIT: packaging ${ours.size} native(s): " +
                     ours.joinToString { "${it.name} (${it.length()} bytes)" }
             )
+        }
+
+        // THE NATIVE MUST HAVE BEEN BUILT FROM THE SERIALIZER IN THIS TREE.  The
+        // blob fingerprint embeds ERIS_LJ_SERHASH -- the first 8 hex digits of
+        // sha1 over serializer/eris_lj.c + eris_lj.h at build time -- so a DLL
+        // whose bytes do not contain the hash of the sources AS THEY ARE NOW was
+        // built from a different serializer.  That happened on 2026-09-17: two
+        // native builds ran the DROPIN variant (the default), the additive DLL in
+        // dist/ stayed at a build from the day before, and a jar was assembled
+        // that paired this tree's shell-fill kernel with a serializer that calls
+        // its recipes with no argument.  Skipped when no native is present (CI);
+        // fatal when one is.
+        if (ours.isNotEmpty() && serC.isFile && serH.isFile) {
+            val md = MessageDigest.getInstance("SHA-1")
+            md.update(serC.readBytes())
+            md.update(serH.readBytes())
+            val want = md.digest().joinToString("") { b -> "%02x".format(b) }.take(8)
+            val stale = ours.filter { f -> !String(f.readBytes(), Charsets.ISO_8859_1).contains(want) }
+            if (stale.isNotEmpty()) {
+                throw GradleException(
+                    "OC-LuaJIT: " + stale.joinToString { it.name } + " was NOT built from the " +
+                        "serializer in this tree (expected fingerprint fragment '" + want + "', " +
+                        "the sha1 of serializer/eris_lj.c + eris_lj.h). A jar built now would " +
+                        "pair this tree's kernel with a native from a different serializer. " +
+                        "Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh"
+                )
+            }
+            logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources (" + want + ")")
         }
 
         if (!kernelFile.isFile) {
