@@ -1,0 +1,11 @@
+--- eris_lj_WALKER.c	2026-09-17 11:27:33.993992000 +0300
++++ eris_lj_NOEDGE.c	2026-09-17 11:28:48.501723600 +0300
+@@ -2010,7 +2010,7 @@
+       GCupval *uv = &gcref(fn->l.uvptr[i])->uv;
+       /* Open or closed, uvval() is the value the recipe would read: under
+        * shell-fill an open upvalue over a restored slot holds the shell. */
+-      reach_push(R, uvval(uv));
++      if (uv->closed) reach_push(R, uvval(uv));  /* NEGATIVE CONTROL: open-upvalue edge deleted */
+     }
+     settabV(L, &tmp, tabref(fn->l.env));
+     reach_push(R, &tmp);

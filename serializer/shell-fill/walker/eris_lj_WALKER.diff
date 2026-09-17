@@ -1,0 +1,428 @@
+diff --git a/serializer/eris_lj.c b/serializer/eris_lj.c
+index b26632e..c28045f 100644
+--- a/serializer/eris_lj.c
++++ b/serializer/eris_lj.c
+@@ -49,6 +49,8 @@
+ #include <stddef.h>
+ #include <stdint.h>
+ #include <string.h>
++#include <stdio.h>
++#include <stdlib.h>
+ 
+ #include "lua.h"
+ #include "lauxlib.h"
+@@ -1871,60 +1873,369 @@ static void u_table(Info *I)
+   }
+ }
+ 
+-/* SHELL-FILL drain: after the whole graph exists, call recipe(shell) once per
+- * special, descending id, each under pcall; refuse loudly on any deviation. */
++/* ------------------------------------------ SHELL-FILL: the fill order */
++
++/* Dependency-ordered fill (docs/shell-fill.md step 4; grafted from the D3
++ * reachability walker preserved in shell-fill/walker/once_drain.inc).
++ *
++ * When elj_fill starts the whole graph exists and is FINAL: every reference
++ * to a special already points at its shell, and no recipe has run yet. A
++ * recipe can only read what it reaches from its own closure (upvalues,
++ * environment, and everything below them), so the set of UNFILLED shells
++ * reachable from the closure on the load-time heap is a sound
++ * over-approximation of the shells whose contents it could observe. The
++ * recipes run in an order where every reachable shell is already filled;
++ * if no such order exists the restore is refused naming both recipes.
++ * Nothing is retried, ever.
++ *
++ * What is walked: tables (array part, hash part, metatable), Lua closures
++ * (upvalue values, environment) and coroutines (live slots, environment).
++ * Leaves: strings, numbers, C functions, userdata, cdata, and every object
++ * in the uperms table -- host objects the reader did not build; PERMSET is
++ * the inverse of uperms, built once per fill. A hash node whose VALUE is
++ * nil is skipped: its key may be dangling (the ghost-node hazard, L5). An
++ * open upvalue needs no slot arithmetic: under shell-fill uvval() already
++ * holds the shell itself. The running thread is never walked: the walker's
++ * scratch tables are anchored only on its stack, and a walk must never
++ * iterate a table it mutates.
++ *
++ * GC / stack safety. Every raw pointer (GCtab*, GCfunc*, lua_State*) is
++ * read ONCE, from a value anchored on the Lua stack, before the first API
++ * call of that visit, and is never re-derived from a cached TValue*: the
++ * GC does not move objects, so an anchored GCobj pointer is stable, but a
++ * pointer INTO a stack dangles across any API call that grows the stack.
++ * The only TValue* handed around is the argument of reach_push, which
++ * copies it into a C local before it calls anything. Table storage and
++ * coroutine stacks are re-derived from the anchored object on every access.
++ *
++ * The walk is a worklist with a per-recipe visited stamp, so it is linear
++ * in the reachable heap and never recurses on the C stack.
++ * ERIS_LJ_REACH_BUDGET bounds the total visits of one fill as the backstop
++ * against a crafted blob. */
++
++#ifndef ERIS_LJ_REACH_BUDGET
++#define ERIS_LJ_REACH_BUDGET 1000000L
++#endif
++
++typedef struct {
++  lua_State *L;
++  int self;               /* stack index of the shell being analysed */
++  int k, n, ofs;          /* its ordinal, the count, its byte offset */
++  int serial;             /* visited stamp of the current walk */
++  int deps, visited, permset, work;   /* absolute stack indices */
++  int nwork;
++  long visits;            /* total across the fill: the budget */
++  long walk_visits;       /* this walk only: the trace */
++} Reach;
++
++/* Push a walkable, not-yet-visited object onto the worklist, recording it
++ * as a dependency first if it is an unfilled shell other than our own. tv
++ * may point into a table's storage, an upvalue or a coroutine stack: it is
++ * copied into a C local before any API call and is dead after that. */
++static void reach_push(Reach *R, const TValue *tv)
++{
++  lua_State *L = R->L;
++  TValue v;
++  if (!tvisgcv(tv)) return;
++  if (!(tvistab(tv) || tvisthread(tv) ||
++        (tvisfunc(tv) && isluafunc(funcV(tv)))))
++    return;
++  if (tvisthread(tv) && threadV(tv) == L) return;   /* never walk ourselves */
++  copyTV(L, &v, tv);                    /* tv is dead from here on */
++  luaL_checkstack(L, 4, "eris-lj reach");
++  copyTV(L, L->top, &v);
++  L->top++;                             /* obj */
++  lua_pushvalue(L, -1);
++  lua_rawget(L, R->permset);            /* obj perm? */
++  if (!lua_isnil(L, -1)) { lua_pop(L, 2); return; }   /* host object: leaf */
++  lua_pop(L, 1);                        /* obj */
++  if (tvistab(&v)) {
++    lua_pushvalue(L, -1);
++    lua_rawget(L, FILLIDX);             /* obj rec? (non-nil: unfilled shell) */
++    if (!lua_isnil(L, -1) && !lua_rawequal(L, -2, R->self)) {
++      lua_pushvalue(L, -2);
++      lua_pushboolean(L, 1);
++      lua_rawset(L, R->deps);           /* deps[shell] = true */
++    }
++    lua_pop(L, 1);                      /* obj */
++  }
++  lua_pushvalue(L, -1);
++  lua_rawget(L, R->visited);            /* obj stamp? */
++  if (lua_isnumber(L, -1) && lua_tointeger(L, -1) == R->serial) {
++    lua_pop(L, 2);
++    return;
++  }
++  lua_pop(L, 1);                        /* obj */
++  lua_pushvalue(L, -1);
++  lua_pushinteger(L, R->serial);
++  lua_rawset(L, R->visited);            /* visited[obj] = serial */
++  lua_rawseti(L, R->work, ++R->nwork);  /* work[n] = obj (pops) */
++}
++
++/* Visit the object on top of the stack: push everything it references.
++ * The raw object pointer is read once, up front, from the anchored value;
++ * the TValue* itself is not used after the first reach_push. */
++static void reach_visit(Reach *R)               /* ... obj */
++{
++  lua_State *L = R->L;
++  const TValue *o = L->top - 1;
++  if (++R->visits > ERIS_LJ_REACH_BUDGET)
++    luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d): "
++                  "dependency analysis exceeded its budget (%d objects "
++                  "visited in this restore)", lua_tostring(L, SPKIDX),
++               R->k, R->n, R->ofs, (int)R->visits);
++  R->walk_visits++;
++  if (tvistab(o)) {
++    GCtab *t = tabV(o);                 /* anchored at obj: stable */
++    uint32_t i;
++    TValue tmp;
++    if (tabref(t->metatable)) {
++      settabV(L, &tmp, tabref(t->metatable));
++      reach_push(R, &tmp);
++    }
++    for (i = 0; i < t->asize; i++)
++      reach_push(R, arrayslot(t, i));   /* storage re-derived from t */
++    for (i = 0; i <= t->hmask; i++) {
++      /* A node whose value is nil may hold a dangling key (the ghost-node
++       * hazard, L5): the key is only marked while the value is non-nil. */
++      if (tvisnil(&noderef(t->node)[i].val)) continue;
++      reach_push(R, &noderef(t->node)[i].key);
++      reach_push(R, &noderef(t->node)[i].val);
++    }
++  } else if (tvisfunc(o)) {
++    GCfunc *fn = funcV(o);              /* a Lua function: reach_push filtered */
++    uint32_t i;
++    TValue tmp;
++    for (i = 0; i < fn->l.nupvalues; i++) {
++      GCupval *uv = &gcref(fn->l.uvptr[i])->uv;
++      /* Open or closed, uvval() is the value the recipe would read: under
++       * shell-fill an open upvalue over a restored slot holds the shell. */
++      reach_push(R, uvval(uv));
++    }
++    settabV(L, &tmp, tabref(fn->l.env));
++    reach_push(R, &tmp);
++  } else if (tvisthread(o)) {
++    lua_State *co = threadV(o);         /* not L: reach_push filtered */
++    ptrdiff_t i, top = co->top - tvref(co->stack);
++    TValue tmp;
++    /* Live slots [1+LJ_FR2, top), as gc_traverse_thread marks them; frame
++     * links are not GC values and fall out of tvisgcv. co->top is final:
++     * every u_thread has returned before elj_fill runs. */
++    for (i = 1 + LJ_FR2; i < top; i++)
++      reach_push(R, tvref(co->stack) + i);
++    settabV(L, &tmp, tabref(co->env));
++    reach_push(R, &tmp);
++  }
++}
++
++/* deps <- every unfilled shell, other than its own, that recipe k's closure
++ * reaches. Runs BEFORE any recipe: the heap is the load-time heap. */
++static void reach_from(Reach *R, int k)
++{
++  lua_State *L = R->L;
++  luaL_checkstack(L, 6, "eris-lj reach from");
++  lua_rawgeti(L, FILLIDX, k);           /* shell */
++  R->self = lua_gettop(L);
++  R->k = k;
++  lua_pushvalue(L, -1);
++  lua_rawget(L, FILLIDX);               /* shell rec */
++  if (!lua_istable(L, -1))
++    luaL_error(L, "eris-lj: fill record %d is missing", k);
++  lua_rawgeti(L, -1, 2);                /* shell rec ofs */
++  R->ofs = (int)lua_tointeger(L, -1);
++  lua_pop(L, 1);
++  lua_rawgeti(L, -1, 1);                /* shell rec closure */
++  R->serial++;
++  R->nwork = 0;
++  R->walk_visits = 0;
++  reach_push(R, L->top - 1);
++  lua_pop(L, 2);                        /* shell */
++  while (R->nwork > 0) {
++    luaL_checkstack(L, 4, "eris-lj reach work");
++    lua_rawgeti(L, R->work, R->nwork);  /* shell obj */
++    lua_pushnil(L);
++    lua_rawseti(L, R->work, R->nwork);  /* release the slot */
++    R->nwork--;
++    reach_visit(R);
++    lua_pop(L, 1);                      /* shell */
++  }
++  lua_pop(L, 1);
++}
++
++/* One recipe, k of n: the per-recipe body of the original descending-id
++ * loop, unchanged (tests assert on these messages). Marks the shell filled
++ * before the call; refuses loudly on any deviation. */
++static void elj_fill_one(Info *I, int k, int n)
++{
++  lua_State *L = I->L;
++  int shell, ofs;
++  luaL_checkstack(L, 8, "eris-lj fill");
++  lua_rawgeti(L, FILLIDX, k);           /* shell */
++  shell = lua_gettop(L);
++  lua_pushvalue(L, shell);
++  lua_rawget(L, FILLIDX);               /* shell rec */
++  if (!lua_istable(L, -1))
++    luaL_error(L, "eris-lj: fill record %d is missing", k);
++  lua_rawgeti(L, -1, 1);                /* shell rec closure */
++  lua_rawgeti(L, -2, 2);                /* shell rec closure ofs */
++  ofs = (int)lua_tointeger(L, -1);
++  lua_pop(L, 1);
++  lua_remove(L, -2);                    /* shell closure */
++  lua_pushvalue(L, shell);
++  lua_pushnil(L);
++  lua_rawset(L, FILLIDX);               /* mark filled: FILL[shell] = nil */
++  lua_getfenv(L, -1);                   /* shell closure fenv */
++  lua_rawget(L, FILLIDX);
++  if (!lua_isnil(L, -1))
++    luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d): its "
++                  "environment is an unfilled special table",
++               lua_tostring(L, SPKIDX), k, n, ofs);
++  lua_pop(L, 1);                        /* shell closure */
++  lua_pushvalue(L, shell);              /* shell closure shell */
++  if (lua_pcall(L, 1, 1, 0) != 0) {
++    const char *msg = lua_tostring(L, -1);
++    luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d) "
++                  "failed: %s", lua_tostring(L, SPKIDX), k, n, ofs,
++               msg ? msg : "(non-string error)");
++  }
++  if (!lua_isnil(L, -1) && !lua_rawequal(L, -1, shell))
++    luaL_error(L, "eris-lj: '%s' recipe %d of %d returned a %s instead of "
++                  "filling its argument (references to this object were "
++                  "already resolved to the argument; a fresh table cannot "
++                  "be honoured)", lua_tostring(L, SPKIDX), k, n,
++               luaL_typename(L, -1));
++  lua_pop(L, 1);                        /* shell */
++  if (!lua_getmetatable(L, shell))
++    luaL_error(L, "eris-lj: '%s' recipe %d of %d left its object without a "
++                  "metatable (an inert or legacy recipe)",
++               lua_tostring(L, SPKIDX), k, n);
++  lua_pop(L, 2);                        /* mt shell */
++}
++
++/* SHELL-FILL drain: after the whole graph exists, call recipe(shell) once
++ * per special in dependency order -- descending ordinal among the ready, so
++ * independent recipes keep the documented order -- and refuse loudly when
++ * no order runs every reachable shell first. ELJ_FILL_TRACE=1 prints the
++ * dependencies and the order to stderr. */
+ static void elj_fill(Info *I)
+ {
+   lua_State *L = I->L;
+   int n = (int)lua_objlen(L, FILLIDX);
+-  int k;
+-  luaL_checkstack(L, 8, "eris-lj fill");
+-  for (k = n; k >= 1; k--) {
+-    int shell, ofs;
+-    lua_rawgeti(L, FILLIDX, k);         /* shell */
+-    shell = lua_gettop(L);
+-    lua_pushvalue(L, shell);
+-    lua_rawget(L, FILLIDX);             /* shell rec */
+-    if (!lua_istable(L, -1))
+-      luaL_error(L, "eris-lj: fill record %d is missing", k);
+-    lua_rawgeti(L, -1, 1);              /* shell rec closure */
+-    lua_rawgeti(L, -2, 2);              /* shell rec closure ofs */
+-    ofs = (int)lua_tointeger(L, -1);
+-    lua_pop(L, 1);
+-    lua_remove(L, -2);                  /* shell closure */
+-    lua_pushvalue(L, shell);
+-    lua_pushnil(L);
+-    lua_rawset(L, FILLIDX);             /* mark filled: FILL[shell] = nil */
+-    lua_getfenv(L, -1);                 /* shell closure fenv */
+-    lua_rawget(L, FILLIDX);
+-    if (!lua_isnil(L, -1))
+-      luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d): its "
+-                    "environment is an unfilled special table",
+-                 lua_tostring(L, SPKIDX), k, n, ofs);
+-    lua_pop(L, 1);                      /* shell closure */
+-    lua_pushvalue(L, shell);            /* shell closure shell */
+-    if (lua_pcall(L, 1, 1, 0) != 0) {
+-      const char *msg = lua_tostring(L, -1);
++  int k, filled = 0, trace;
++  int permset, visited, work, deps, ord;
++  const char *tr;
++  Reach R;
++  if (n == 0) return;
++  tr = getenv("ELJ_FILL_TRACE");
++  trace = tr != NULL && *tr != 0 && *tr != '0';
++  luaL_checkstack(L, 16, "eris-lj fill");
++  lua_newtable(L); permset = lua_gettop(L);   /* host object -> true */
++  lua_newtable(L); visited = lua_gettop(L);   /* object -> serial */
++  lua_newtable(L); work = lua_gettop(L);      /* the worklist */
++  lua_newtable(L); deps = lua_gettop(L);      /* k -> {shell -> true} */
++  lua_newtable(L); ord = lua_gettop(L);       /* shell -> k */
++  /* PERMSET: the inverse of uperms (name -> object). Values that cannot
++   * hold a reference are leaves anyway and are not worth a key. */
++  lua_pushnil(L);
++  while (lua_next(L, PERMIDX)) {              /* name obj */
++    int t = lua_type(L, -1);
++    if (t == LUA_TTABLE || t == LUA_TFUNCTION || t == LUA_TTHREAD) {
++      lua_pushvalue(L, -1);
++      lua_pushboolean(L, 1);
++      lua_rawset(L, permset);
++    }
++    lua_pop(L, 1);                            /* name */
++  }
++  for (k = 1; k <= n; k++) {
++    lua_rawgeti(L, FILLIDX, k);
++    lua_pushinteger(L, k);
++    lua_rawset(L, ord);
++  }
++  memset(&R, 0, sizeof(R));
++  R.L = L; R.n = n;
++  R.visited = visited; R.permset = permset; R.work = work;
++
++  /* Phase 1: dependencies, on the load-time heap, before any recipe runs. */
++  for (k = 1; k <= n; k++) {
++    lua_newtable(L);
++    R.deps = lua_gettop(L);
++    reach_from(&R, k);
++    if (trace) {
++      int j;
++      fprintf(stderr, "[fill] recipe %d of %d (record at byte %d) reaches"
++                      " unfilled:", k, n, R.ofs);
++      for (j = 1; j <= n; j++) {
++        lua_rawgeti(L, FILLIDX, j);
++        lua_rawget(L, R.deps);
++        if (!lua_isnil(L, -1)) fprintf(stderr, " %d", j);
++        lua_pop(L, 1);
++      }
++      fprintf(stderr, "  (%ld visits)\n", R.walk_visits);
++    }
++    lua_rawseti(L, deps, k);                  /* deps[k] = set (pops) */
++  }
++  if (trace)
++    fprintf(stderr, "[fill] analysis: %d recipe(s), %ld visits in total\n",
++            n, R.visits);
++
++  /* Phase 2: one pass in dependency order; highest ordinal among the ready. */
++  while (filled < n) {
++    int pick = 0, first_blocked = 0, blocked_on = 0;
++    for (k = n; k >= 1 && pick == 0; k--) {
++      int ready = 1;
++      lua_rawgeti(L, FILLIDX, k);
++      lua_rawget(L, FILLIDX);                 /* rec? nil once filled */
++      if (lua_isnil(L, -1)) { lua_pop(L, 1); continue; }
++      lua_pop(L, 1);
++      lua_rawgeti(L, deps, k);                /* set */
++      lua_pushnil(L);
++      while (lua_next(L, -2)) {               /* set shell true */
++        lua_pop(L, 1);                        /* set shell */
++        lua_pushvalue(L, -1);
++        lua_rawget(L, FILLIDX);               /* set shell rec? */
++        if (lua_isnil(L, -1)) { lua_pop(L, 1); continue; }   /* filled */
++        ready = 0;
++        lua_pop(L, 1);                        /* set shell */
++        if (first_blocked == 0 || first_blocked == k) {
++          /* The recipe we will NAME is the first blocked one in ordinal
++           * order (deterministic). Which of ITS unfilled dependencies we name
++           * must be deterministic too, and deps is keyed by shell address, so
++           * lua_next order is not: scan them all and take the lowest ordinal. */
++          int o;
++          first_blocked = k;
++          lua_pushvalue(L, -1);               /* set shell shell */
++          lua_rawget(L, ord);                 /* set shell ordinal */
++          o = (int)lua_tointeger(L, -1);
++          lua_pop(L, 1);                      /* set shell -- the KEY stays for lua_next */
++          if (blocked_on == 0 || o < blocked_on) blocked_on = o;
++          continue;
++        }
++        lua_pop(L, 1);                        /* set */
++        break;
++      }
++      lua_pop(L, 1);                          /* deps set */
++      if (ready) pick = k;
++    }
++    if (pick == 0) {
++      int ofs;
++      lua_rawgeti(L, FILLIDX, first_blocked);
++      lua_rawget(L, FILLIDX);                 /* rec */
++      lua_rawgeti(L, -1, 2);
++      ofs = (int)lua_tointeger(L, -1);
++      lua_pop(L, 2);
+       luaL_error(L, "eris-lj: '%s' recipe %d of %d (record at byte %d) "
+-                    "failed: %s", lua_tostring(L, SPKIDX), k, n, ofs,
+-                 msg ? msg : "(non-string error)");
++                    "reaches the unfilled special table of recipe %d of %d, "
++                    "and no fill order runs every reachable special first "
++                    "(%d recipe(s) remain unfilled)", lua_tostring(L, SPKIDX),
++                 first_blocked, n, ofs, blocked_on, n, n - filled);
+     }
+-    if (!lua_isnil(L, -1) && !lua_rawequal(L, -1, shell))
+-      luaL_error(L, "eris-lj: '%s' recipe %d of %d returned a %s instead of "
+-                    "filling its argument (references to this object were "
+-                    "already resolved to the argument; a fresh table cannot "
+-                    "be honoured)", lua_tostring(L, SPKIDX), k, n,
+-                 luaL_typename(L, -1));
+-    lua_pop(L, 1);                      /* shell */
+-    if (!lua_getmetatable(L, shell))
+-      luaL_error(L, "eris-lj: '%s' recipe %d of %d left its object without a "
+-                    "metatable (an inert or legacy recipe)",
+-                 lua_tostring(L, SPKIDX), k, n);
+-    lua_pop(L, 2);                      /* mt shell */
++    elj_fill_one(I, pick, n);
++    filled++;
++    if (trace) fprintf(stderr, "[fill] filled recipe %d of %d\n", pick, n);
+   }
++  lua_pop(L, 5);                              /* ord deps work visited permset */
+ }
+ 
+-
+ /* ------------------------------------------------------------- u_thread */
+ 
+ /* One decoded frame record. Positions are DERIVED from the links, never read

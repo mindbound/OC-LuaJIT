@@ -1,8 +1,9 @@
 # Shell-fill: the persistence protocol for `__persist` specials
 
 *Implementation specification. Status: steps 0–3 done (serializer converted,
-kernel patched, both natives rebuilt additive — DLL `a3b64511`, so `d3768017` — and
-the jar build now refuses a native from a different serializer), steps 4–5 pending. Written so that a fresh session can execute it
+kernel patched, walker landed), step 5 pending. **Natives must be rebuilt additive
+on both platforms after step 4 — the serializer hash moved; `verifyModAssets`
+refuses the jar until they are.** Written so that a fresh session can execute it
 without the conversation that produced it. The reasoning behind the design is
 in [research/persistence-clean-slate.md](research/persistence-clean-slate.md);
 this document is the what and the how.*
@@ -56,9 +57,13 @@ A recipe is `function(shell) ... end`. It must:
 2. **Leave the shell with a metatable.** A shell without one after fill is
    refused as inert or legacy.
 3. **Read only immediate data captured in the closure, and the *identities* of
-   other objects.** Do not read another special's *contents*: fill order is
-   descending reference id, which is a hint, not a guarantee (§6).
-4. Not have an unfilled special as its environment — refused.
+   other objects.** Reading another special's *contents* is now safe when the
+   walker (§3.6) can see the path — the reader fills in dependency order — but
+   a path the walker cannot model (e.g. through `debug.*`) is still the recipe's
+   own responsibility.
+4. Its environment may be another special: the walker treats the env as an
+   edge, so that special is filled first. (The refusal from step 1 is kept as a
+   belt-and-braces assert; it can no longer fire.)
 5. Not call `eris.persist` on the graph from inside a fill: unfilled shells
    would serialize as empty literal tables, silently.
 
@@ -146,7 +151,9 @@ special-typed, and neither is anything's metatable), so refusing costs nothing.
 ### 3.4 The fill loop
 
 `static void elj_fill(Info *I)`, called in `l_unpersist` **immediately after**
-the trailing-bytes check and before `return 1`. For `k = #FILL down to 1`:
+the trailing-bytes check and before `return 1`. Since step 4 the order is
+computed by the walker (§3.6); the per-recipe body below is `elj_fill_one`
+and is unchanged. For each shell, in dependency order:
 
 1. `shell = FILL[k]`; `rec = FILL[shell]`; error "fill record %d is missing" if
    absent.
@@ -166,6 +173,38 @@ the trailing-bytes check and before `return 1`. For `k = #FILL down to 1`:
    object without a metatable (an inert or legacy recipe)"*.
 
 Tests assert on these strings; keep them stable.
+
+### 3.6 The walker (step 4): fill in dependency order
+
+A recipe can only read what it can reach from its own upvalues and environment.
+So, **before any recipe runs**, for each unfilled shell `k` the reader walks the
+object graph from its closure — upvalues (open and closed), env, table array
+and hash parts, metatables, thread slots and envs — and records every *other*
+unfilled shell it reaches as a dependency. Leaves: strings, numbers, C
+functions, userdata, cdata, and every **permanent** (`PERMSET`, the inverse of
+`UPERMS`, built once per fill). Hash nodes whose value is nil are skipped (the
+L5 ghost-key rule). The walk is a worklist with a per-recipe visited stamp —
+linear, no C recursion — bounded by `ERIS_LJ_REACH_BUDGET` (10⁶ visits per
+restore; exceeding it is a named refusal).
+
+Phase 2 repeatedly fills a shell whose dependencies are all filled, taking the
+**highest ordinal among the ready** for determinism. If none is ready while
+some remain, it refuses, naming both ordinals and the byte offset. Nothing is
+retried.
+
+GC/stack discipline, preserved from D3 and reviewed line by line: every object
+is copied to a C local before the first API call; the raw `GCtab*`/`GCfunc*`/
+`lua_State*` is read from the anchored stack value once, before the first push
+in its branch; no walk call site can trigger a GC step. Measured on the verbatim
+kernel block (`machine.lua:709-716` + `:1077-1260`): **20 visits per proxy,
+linear in the number of proxies.**
+
+The walker is conservative: it cannot tell identity use from content use, so
+mutual *identity* reach (A stores B, B stores A) is refused too. That is the
+safe side; `tests/shell-order.lua` case C2 documents the cost.
+
+`ELJ_FILL_TRACE=1` prints each recipe's dependencies and the fill order to
+stderr; one `getenv` per fill, nothing otherwise.
 
 ### 3.5 Format bump
 
@@ -247,6 +286,21 @@ The kernel banner and `build-kernel.sh`'s postflight (`_ENV sites=2`) gain a
 
 ## 5. Tests
 
+### 5.0 `serializer/tests/shell-order.lua` — the walker's discriminators (step 4)
+
+Eight cases. D1 (closed upvalue), D1n (nested KIND-1 capture, which descending
+post-order gets wrong), D2 (open upvalue, the OC shape): recipe A reads B's
+contents tolerating nil, container shaped so A has the higher ordinal. **On the
+step-3 binary all three come back `ok=true, A.y=nil` — a silent wrong
+restore.** With the walker: `A.y=42, order=B A`. C1 (content cycle) and C2
+(identity cycle) are refused naming both ordinals. P1: a permanent is a leaf.
+B1: a 2000-table chain fills within budget. Negative control: delete the
+open-upvalue edge (`if (uv->closed) reach_push(...)`) and D2 alone goes silent
+again; delete the env edge and C1/C2/B1 change instead. Each edge is shown to
+be load-bearing for exactly the cases its medium predicts.
+`shell-fill/walker/order.lua` is the implementer's earlier discriminator, kept
+as an artifact; `tests/shell-order.lua` is canonical.
+
 ### 5.1 `serializer/tests/shell.lua` — the test that must fail first (LANDED)
 
 Six cases. Against the shipping binary (md5 `16e4f73c`) on 2026-09-17:
@@ -310,11 +364,12 @@ real host and that the kernel patch is load-bearing.
 
 ## 6. Known limits — silent modes, stated so they are not rediscovered
 
-1. **Content dependency between specials.** Recipe A reads shell B's *fields*
-   and tolerates nil → A completes wrong, no error. Descending id order handles
-   the nested KIND-1 capture only. OC: impossible (the registry is written
-   into, never read; a proxy reads only `className`/`nbt`). Closed by the
-   walker graft; until then, an OC-kernel invariant.
+1. ~~Content dependency between specials.~~ **Closed in step 4 by the walker
+   (§3.6).** What remains: a dependency reached through an edge the walker
+   does not model (`debug.getupvalue`, `debug.getlocal`, a C function's
+   captured state). `tests/shell-order.lua` D1/D1n/D2 are the discriminators:
+   `ok=true, A.y=nil` on the step-3 binary, `A.y=42` with the walker, silent
+   again with the upvalue edge deleted.
 2. A recipe that sets a metatable but fills the wrong fields (a future kernel
    edit forgetting `proxy.type = "userdata"`). Contract; `f7`'s live-proxy
    probe is the mitigation.
@@ -362,7 +417,7 @@ would have merged them, and `h1 == h2` would silently differ from stock;
 | **1** ✓ | apply §3 to `eris_lj.c` (start from `mkshell.py`), bump format | `shell.lua` 0/6; M1 82, M3 75, for-in 19 exact; **m2 and contract red only at their legacy recipes** — **done 2026-09-17**, binary `9c64817a`, m2 aborted at :200 and contract failed its one special case, both with "instead of filling its argument" |
 | **2** ✓ | rewrite m2's four spkey cases and contract's one to the shell form | all suites green — **done 2026-09-17**: shell 0/6, stress 0/9, M1 82, M2 **56** (one inert-recipe case added), M3 75, contract all-pass, for-in 19 exact; a format-2 blob is refused with `format version mismatch (expected 3)` |
 | **3** ✓ | apply §4 to the kernel patcher; by-name assertion; rebuild kernel and native with distinct binaries and md5s | `build-kernel.sh` postflight names `wrapUserdataInto`; `wd_test` 32/0 — **done 2026-09-17**: 9 sites, kernel 48608 bytes with sites at `:1077/:1089/:1164/:1215` and zero legacy shapes; postflight proven to fail (site 8 neutered → exit 1 naming site 8); native serializer hash `25471fb0`; `wd_test` 32/0. **Then the jar shipped the wrong DLL** — `build-native.sh` defaults to the dropin variant, so `dist/` still held the 09-16 additive. Both platforms rebuilt with `OCLJ_VARIANT=additive`: Windows `a3b64511`, Linux `d3768017` (WSL). `verifyModAssets` now refuses a native whose bytes lack the current serializer hash (proven: stale DLL → BUILD FAILED naming it). Jar `ocluajit-0280593-…-dirty.jar` verified: kernel 48608 + `wrapUserdataInto`, DLL `a3b64511`, so `d3768017`, hash embedded |
-| 4 | walker graft (§5.4) with its negative control | new refusal shown to fire; suites green |
+| **4** ✓ | walker graft (§3.6) with its negative control | new refusal shown to fire; suites green — **done 2026-09-17**: `tests/shell-order.lua` 0/8 on the walker build, 6 red on the step-3 control (D1/D1n/D2 silent-wrong, C1 silently succeeds), D2 alone silent under the open-upvalue negative control; 20 visits/proxy on the verbatim kernel block; all existing suites green; C review: no raw-pointer use after a stack-growing call, no ghost-node read, no C recursion. Three minor fixes applied after review: deterministic blocked-on ordinal (proven 5/5), honest refusal count, env case documented as ordered. The blocked-on fix consumed the `lua_next` key before `continue` — `invalid key to 'next'` on all six walker cases, caught by `shell-order` on the first run and fixed. Final binary `1a9e8e17`, serializer hash `c945e096` |
 | 5 | in-game gate (§5.3) | `f1b` PASS, `f7` PASS with seq advanced; negative control comes back Stopped with the refusal in the log |
 | — | `_stack` universe fix (§6.3) | scheduled separately, before any dispose work |
 
