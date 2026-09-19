@@ -72,7 +72,12 @@ OC's sanctioned degraded path).
   upvalues; both round-trip. A consequence worth knowing: persisting a closure
   reaches the globals it can see, so hosts must flatten `_G` into perms (OC's
   `PersistenceAPI` does exactly this) or a one-line closure drags in the whole
-  standard library.
+  standard library. This is deliberate and will stay so (roadmap M4.4): stock
+  Eris on 5.2 omits the environment only for a closure whose whole lexical
+  subtree references no global, but in LuaJIT the fenv is live state — every
+  closure `f` creates inherits `f`'s fenv at that moment (`lj_func_newL_gc`),
+  and `getfenv`/`setfenv` observe it — so substituting a "default" on restore
+  would rebind implicitly what perms rebinds explicitly and by name.
 - **Dumps are deterministic** (`BCDUMP_F_DETERMINISTIC` via `lj_bcwrite`, since
   the public `lua_dump` cannot ask for it) so blob sizes are stable and the
   idempotence oracle is meaningful. `eris.settings("debug", false)` strips debug

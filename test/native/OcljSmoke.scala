@@ -3001,6 +3001,125 @@ object Smoke {
     val udBefore = parse(nonEmptyScreen(screen), "OCLJUD")
     val ctrBeforeRestore = try parse(nonEmptyScreen(screen), "OCLJCTR").toInt catch { case _: Throwable => -1 }
 
+    // --- (m4) persist-and-continue under load: what an autosave costs ---
+    // m2 shows that one save flushes every trace; m3 (below) measures the
+    // cold run in a FRESH VM after a restore.  Neither is the steady state of
+    // a busy computer on a server: Minecraft autosaves every 900 ticks (45 s)
+    // and OpenComputers persists a machine on every chunk save, so the machine
+    // that matters is one that is mid-workload, gets flushed, and KEEPS
+    // RUNNING in the same VM -- again and again.  So: K in-place saves on the
+    // running machine, and for each the first encore run after the flush
+    // (cold) and the one after that (re-warmed).
+    //
+    // Placed AFTER the f3/f7 baselines above are read, because the restore
+    // below resumes from the `nbt` taken at f1 and those baselines must not
+    // include the minute this block keeps the original machine running.  The
+    // extra saves go into fresh compounds; `nbt` is untouched.
+    //
+    // Every save is taken RIGHT AFTER a fresh encore sample, so it lands in
+    // the idle 5 s window rather than blocking behind a running encore (a
+    // save that waited for the encore would make that encore's warm number
+    // read as "cold").  The ratios are REPORTED, never asserted -- the player
+    // picks both the workload and the limit.  The PASS condition is only that
+    // the instrument worked: every save succeeded, the flush was observed
+    // after each one (mcode == 0, the signature _OCLJ_JITSTATS documents) on
+    // the JIT-on arm, and both samples arrived every time.  On the JIT-off arm
+    // there is nothing to flush, so the same lines are the control: a delta
+    // that shows up there too is not the flush.
+    if (nativeMode != "stock" && kernelMode == "watchdog") {
+      if (suiteNames.isEmpty || encSeqBefore <= 0) {
+        p("m4-persist-and-continue-under-load: SKIP -- no encore workload is running" +
+          " (suite=" + (if (suiteNames.isEmpty) "<none>" else suiteNames.mkString(",")) +
+          ", encore samples seen=" + encSeqBefore + "), nothing to measure a flush against")
+      } else {
+        val K = 5
+        p("--- (m4) " + K + " in-place saves on the RUNNING machine; encore " + encName +
+          " sampled cold and re-warmed after each (warm best = " + encWarm + " s) ---")
+        var seqSeen = encSeqBefore
+        // Poll for the next encore sample newer than `seqSeen`; returns (secs, seq)
+        // or (-1, -1) after the budget.  100 ms cadence against a 5 s period.
+        def nextSample(budgetPolls: Int): (Double, Int) = {
+          var polls = 0
+          var out = (-1.0, -1)
+          while (out._2 < 0 && polls < budgetPolls && computer.machine.isRunning) {
+            ws.update(); Thread.sleep(25); polls += 1
+            if (polls % 4 == 0) {
+              val f = parse(nonEmptyScreen(screen), "OCLJENCORE").split("/")
+              if (f.length >= 5 && f(1) == "ok") {
+                val sq = try f(4).toInt catch { case _: Throwable => -1 }
+                val sc = try f(3).toDouble catch { case _: Throwable => -1.0 }
+                if (sq > seqSeen) { seqSeen = sq; out = (sc, sq) }
+              }
+            }
+          }
+          out
+        }
+        val persistMsArr = new Array[Long](K)
+        val mcBeforeSave = Array.fill(K)(-1L)
+        val mcAfterSave = Array.fill(K)(-1L); val trAfterSave = Array.fill(K)(-1)
+        val mcAfterWarm = Array.fill(K)(-1L); val trAfterWarm = Array.fill(K)(-1)
+        val cold = Array.fill(K)(-1.0); val rewarm = Array.fill(K)(-1.0)
+        val seqGap = Array.fill(K)(0)
+        var savesOk = 0
+        var samples = 0
+        // line up on a fresh sample so save 1 lands in the idle window
+        nextSample(400)
+        for (i <- 0 until K) {
+          val nbtK = new NBTTagCompound()
+          val (mcPre, _, trPre, _) = jitStatsLocked(computer.machine, mLua)
+          mcBeforeSave(i) = mcPre
+          val t0 = System.currentTimeMillis()
+          val ok = try { ws.save(nbtK); true } catch {
+            case t: Throwable => p("m4 save " + (i + 1) + " threw " + t); false
+          }
+          persistMsArr(i) = System.currentTimeMillis() - t0
+          if (ok) savesOk += 1
+          val (mc1, _, tr1, _) = jitStatsLocked(computer.machine, mLua)
+          mcAfterSave(i) = mc1; trAfterSave(i) = tr1
+          val seqAtSave = seqSeen
+          val c = nextSample(600)              // 15 s budget for a 5 s period
+          if (c._2 > 0) { cold(i) = c._1; samples += 1; seqGap(i) += c._2 - seqAtSave - 1 }
+          val w = nextSample(600)
+          if (w._2 > 0) { rewarm(i) = w._1; samples += 1; seqGap(i) += w._2 - c._2 - 1 }
+          val (mc2, _, tr2, _) = jitStatsLocked(computer.machine, mLua)
+          mcAfterWarm(i) = mc2; trAfterWarm(i) = tr2
+          p("m4 save " + (i + 1) + ": before mcode=" + mcPre + " B traces=" + trPre +
+            "; persist " + persistMsArr(i) + " ms; right after: mcode=" + mc1 + " B traces=" + tr1 +
+            (if (mcPre > 0 && mc1 == 0) " (FLUSHED)" else if (mcPre > 0) " (traces survived)" else "") +
+            "; cold=" + cold(i) + " s, re-warmed=" + rewarm(i) + " s" +
+            "; after re-warm: mcode=" + mc2 + " B traces=" + tr2 +
+            (if (seqGap(i) != 0) "   <- " + seqGap(i) + " sample(s) skipped by the screen poll" else "") +
+            (if (c._2 < 0 || w._2 < 0) "   <- a sample did not arrive within budget" else ""))
+        }
+        val colds = cold.filter(_ > 0); val warms = rewarm.filter(_ > 0)
+        def mean(a: Array[Double]) = if (a.isEmpty) -1.0 else a.sum / a.length
+        val coldMean = mean(colds); val coldMax = if (colds.isEmpty) -1.0 else colds.max
+        val warmMean = mean(warms)
+        val persistMean = persistMsArr.sum.toDouble / K
+        def r(x: Double) = if (encWarm > 0 && x > 0) f"${x / encWarm}%.2fx" else "n/a"
+        val flushEveryTime = (0 until K).forall(i => mcAfterSave(i) == 0L)
+        val tracesBack = (0 until K).forall(i => trAfterWarm(i) > 0)
+        // mcode == 0 after a save is only a flush SIGNATURE when there was
+        // something to flush; on the jit=off arm it is 0 before and after.
+        val hadTraces = (0 until K).exists(i => mcBeforeSave(i) > 0L)
+        val flushWord =
+          if (!hadTraces) "nothing to flush (mcode 0 before every save)"
+          else "flush seen after every save=" + flushEveryTime
+        p("m4 summary: warm best " + encWarm + " s; cold mean " + f"$coldMean%.4f" + " s (" + r(coldMean) +
+          "), cold max " + f"$coldMax%.4f" + " s (" + r(coldMax) + "); re-warmed mean " + f"$warmMean%.4f" +
+          " s (" + r(warmMean) + "); persist mean " + f"$persistMean%.1f" + " ms; " + flushWord +
+          "; traces back after the re-warm run every time=" + tracesBack +
+          "; cost per save on this encore ~" + f"${(coldMean - encWarm) * 1000}%.1f" + " ms beyond a warm run" +
+          " (jit=" + jitMode + ")")
+        val instrumentOk = savesOk == K && samples == 2 * K && (jitMode != "on" || flushEveryTime)
+        milestone("m4-persist-and-continue-under-load", instrumentOk,
+          "jit=" + jitMode + ": " + savesOk + "/" + K + " saves, " + samples + "/" + (2 * K) +
+            " samples; " + flushWord +
+            "; warm " + encWarm + " s -> cold mean " + f"$coldMean%.4f" + " s (" + r(coldMean) +
+            "), re-warmed mean " + f"$warmMean%.4f" + " s (" + r(warmMean) + ")   (ratios REPORTED, not asserted)")
+      }
+    }
+
     // --- (f2) restore into a FRESH workspace and resume ----------------
     p("--- restoring into a fresh workspace ---")
     var ws2: Workspace = null
