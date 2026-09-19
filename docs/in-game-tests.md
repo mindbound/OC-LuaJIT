@@ -24,7 +24,9 @@ fix; each is run once after the fix ships and recorded here with its result.
    that proved every defect so far and is what the results below refer to.)
 6. Afterwards, read the client log
    (`D:/Minecraft/instances/Main/minecraft/logs/latest.log` or `fml-client-latest.log`):
-   - expected: an `[ocljit]` line at load naming the native and `bundled roots ON`;
+   - expected: `[ocluajit/ocluajit]: Registered the LuaJIT architecture with
+     OpenComputers.` once at startup (the mod prints nothing per save; the
+     `bundled roots ON` banner is the harness adapter's);
    - a failure is any `eris-lj:` text, any `Unexpected error loading a state
      of computer`, or the machine coming back `Stopped`.
 
@@ -103,7 +105,12 @@ n = 0 for k in pairs(component.proxy(component.list("gpu")())) do n = n + 1 prin
 Save & Quit mid-walk, reload. Same signals: resumes, every key once, finishes
 at the same count as an uninterrupted walk.
 
-**Result: pending.** Jar to use: `b67a73b` (kernel 51147 B, 11 sites; the
-native is unchanged from `c9c5cd8`, DLL `49ead6cc`). Harness equivalent:
-`fi-1/2/3`, 45/0, and the negative control with sites 10–11 removed fails
-`fi-2`/`fi-3` with the wrong-sequence symptom.
+**Result: PASS, 2026-09-19, jar `b67a73b`** (kernel 51147 B, 11 sites; native
+unchanged from `c9c5cd8`, DLL `49ead6cc`). Both walks were saved mid-loop and
+reloaded (server stop/start at 15:34:26/15:34:33 and 15:35:10/15:35:17 in
+`fml-client-latest.log`). `component.list`: 7 components, numbered 1–7, each
+address once (computer, filesystem x2, screen, keyboard, gpu, eeprom).
+`pairs(gpu proxy)`: 33 keys, numbered 1–33, each once, `allocateBuffer` through
+`setPaletteColor`. Log clean: no `eris-lj:` text, no state-load error, no
+exception. Harness equivalent: `fi-1/2/3`, 45/0, with the negative control
+(sites 10–11 removed) failing `fi-2`/`fi-3` on the wrong-sequence symptom.
