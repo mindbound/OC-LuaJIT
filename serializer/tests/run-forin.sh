@@ -9,7 +9,7 @@
 # turns an intermittent failure (the keyindex design was correct in 4 runs
 # out of 20) into a deterministic matrix: every pad must pass.
 #
-#   sh tests/run-forin.sh            # 15 cases x pads 0..19
+#   sh tests/run-forin.sh            # 22 cases x pads 0..19
 #   PADS="$(seq 0 63)" sh tests/run-forin.sh   # the deep sweep
 #
 # Exit status is the number of failing cases.
@@ -18,12 +18,14 @@ set -u
 BIN=${BIN:-./erislj_test.exe}
 DIR=${DIR:-./.forin}
 PADS=${PADS:-"0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19"}
-CASES=${CASES:-"strings mixed array big falsevals nested sequential delcurrent nextlocal nextdel despec foreach oclist_fixed jitwarm deep perms permsfn control_naive oclist"}
+CASES=${CASES:-"strings mixed array big falsevals nested sequential delcurrent nextlocal nextdel despec foreach oclist_fixed oclist_snap ocpairs_snap jitwarm deep perms permsfn control_naive oclist ocpairs"}
 # Cases that additionally go through a middle process which loads and re-saves,
 # so the third process restores a loop that is ALREADY in replay form. Without
 # this the suite round-trips once and cannot see a defect that only appears on
-# the second save -- which is exactly how one got through.
-RELAY=${RELAY:-"strings mixed big nextlocal despec foreach perms permsfn deep"}
+# the second save -- which is exactly how one got through.  The two snapshot
+# walkers (kernel sites 10 and 11) relay too: their integer cursor has to
+# survive a second hop as plainly as the first.
+RELAY=${RELAY:-"strings mixed big nextlocal despec foreach perms permsfn deep oclist_snap ocpairs_snap"}
 
 mkdir -p "$DIR"
 fails=0
@@ -64,10 +66,12 @@ for case in $CASES; do
   done
 
   total=$((ok + bad))
-  if [ "$case" = "control_naive" ] || [ "$case" = "oclist" ]; then
+  if [ "$case" = "control_naive" ] || [ "$case" = "oclist" ] || [ "$case" = "ocpairs" ]; then
     # NEGATIVE CONTROL: this case deliberately does NOT go through the replay
     # path -- it resumes `next` from a saved key, which is what the code did
-    # before A'. If it passes every pad, the harness cannot see the defect it
+    # before A' (control_naive), and what OpenComputers' own component.list
+    # (oclist) and componentProxy.__pairs (ocpairs) still do in a closure
+    # upvalue. If it passes every pad, the harness cannot see the defect it
     # was built to catch, and every green result above is meaningless.
     if [ "$bad" -gt 0 ]; then
       echo "OK   $case: $bad/$total pads diverge as they must (${bytes}B)"

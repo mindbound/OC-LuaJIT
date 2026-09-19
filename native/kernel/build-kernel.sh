@@ -137,7 +137,41 @@ grep -q 'setmetatable(self, wrappedUserdataMeta)' "$OUT"   || fail "the registry
 LEGACY=$(grep -c 'return setmetatable({}, wrappedUserdataMeta)' "$OUT")
 [ "$LEGACY" = "0" ] || fail "a legacy-shape registry recipe survived patching"
 
-say "    arms=$ARMS  surviving debug.sethook=$LEFT  _ENV sites=2  shell-fill sites=3"
+# SNAPSHOT WALKS (docs/forin-iterator-gap.md; os-shape-census.md #1 and #3):
+# the two kernel iterators that wrapped next in a closure -- and so restored
+# at the wrong key after a save, silently -- are snapshot walks now.  Each site
+# is named by its own snapshot loop, and then each BLOCK is cut out between
+# OC's neighbouring definitions and searched for a call to next, because a
+# block could carry the snapshot loop and still advance with next(...) one
+# line lower, which is the exact defect.  An empty cut fails rather than
+# passing vacuously.  Last, the whole kernel: OC called next exactly three
+# times, all inside these two blocks, so a survivor anywhere is an iterator
+# this patch does not know about.
+grep -q '^    for k in pairs(list) do$' "$OUT" \
+  || fail "component.list (site 10) does not snapshot its keys: a save taken mid-iteration
+       restores the walk at the key's position in a DIFFERENT hash layout and visits the
+       wrong components with nothing raised (os-shape-census.md #1)"
+grep -q '^    for k, v in next, self.fields do$' "$OUT" \
+  || fail "componentProxy.__pairs (site 11) does not snapshot its fields phase: pairs(proxy)
+       across a save loses and repeats keys (os-shape-census.md #3)"
+SITE10=$(sed -n '/^  list = function(filter, exact)$/,/^  methods = function(address)$/p' "$OUT")
+[ -n "$SITE10" ] || fail "cannot cut the component.list block out of the patched kernel: its bounds moved"
+if printf '%s\n' "$SITE10" | grep -q 'next('; then
+  fail "component.list (site 10) still calls next( inside its block: the snapshot loop is there
+       but the walk would still restore at the wrong key.  Site 10 did not fully apply"
+fi
+SITE11=$(sed -n '/^  __pairs = function(self)$/,/^local componentCallback = {$/p' "$OUT")
+[ -n "$SITE11" ] || fail "cannot cut the componentProxy.__pairs block out of the patched kernel: its bounds moved"
+if printf '%s\n' "$SITE11" | grep -q 'next('; then
+  fail "componentProxy.__pairs (site 11) still calls next( inside its block.  Site 11 did not
+       fully apply"
+fi
+NEXTS=$(grep -c 'next(' "$OUT")
+[ "$NEXTS" = "0" ] || fail "expected no next( call anywhere in the patched kernel (OC's three were all inside
+       sites 10-11), found $NEXTS -- OpenComputers may have grown an iterator this patch does
+       not know about, and a closure over next is the shape that restores wrong"
+
+say "    arms=$ARMS  surviving debug.sethook=$LEFT  _ENV sites=2  shell-fill sites=3  snapshot walks=2  next( calls=$NEXTS"
 say "    out     = $OUT  ($(wc -c < "$OUT") bytes)"
 echo
 echo "NEXT: package it."

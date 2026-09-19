@@ -4,15 +4,17 @@
 --   luajit patch-machine-lua.lua <in: OC machine.lua> <out: patched machine.lua>
 --
 -- WHY A PATCH AND NOT A FORK.  The census argument stands: we run OC's real
--- kernel semantics and couple to no particular OS.  This script changes nine
+-- kernel semantics and couple to no particular OS.  This script changes eleven
 -- places and refuses to run if any anchor does not match EXACTLY ONCE -- so an
 -- OpenComputers bump that moves or rewords a site fails loudly at build time
 -- rather than shipping a kernel that arms the old hook somewhere.
 --
--- The nine are THREE changes, not one.  Sites 0-3 replace the standing deadline
--- hook with the watchdog.  Sites 4-5 bind the name _ENV, which LuaJIT does not
--- provide at all; see THE SECOND CHANGE below.  Sites 6-9 convert the kernel's
--- two __persist recipes to the shell-fill protocol; see THE THIRD CHANGE.
+-- The eleven are FOUR changes, not one.  Sites 0-3 replace the standing
+-- deadline hook with the watchdog.  Sites 4-5 bind the name _ENV, which LuaJIT
+-- does not provide at all; see THE SECOND CHANGE below.  Sites 6-9 convert the
+-- kernel's two __persist recipes to the shell-fill protocol; see THE THIRD
+-- CHANGE.  Sites 10-11 replace the kernel's two iterators that wrap next in a
+-- closure with snapshot walks that survive a save; see THE FOURTH CHANGE.
 --
 -- THE CHANGE.  OC enforces its per-resume timeout by arming
 --     debug.sethook(co, checkDeadline, "", hookInterval)
@@ -85,6 +87,51 @@
 -- Value is a fresh Java object that can never compare equal to another.
 -- Fields are written BEFORE setmetatable because userdataWrapper.__newindex
 -- routes writes to udinvoke.
+--
+-- THE FOURTH CHANGE: SNAPSHOT WALKS (docs/forin-iterator-gap.md,
+-- docs/research/os-shape-census.md #1 and #3).  A coroutine suspended inside
+-- "for k, v in pairs(t)" is restored EXACTLY: the replay iterator (M3.1)
+-- recognises the loop by the real next in its func slot and re-walks the
+-- rebuilt table to the same key.  A Lua closure that WRAPS next has no such
+-- marker.  It persists like any closure, its position key round-trips
+-- perfectly, and on restore next(t, k) continues from wherever k now sits in
+-- the rebuilt table's hash layout -- a different layout, because the table
+-- was rebuilt by insertion in record order -- visiting the wrong keys with
+-- nothing raised.  No serializer change can reach it: the position is an
+-- upvalue, not a control slot, and its meaning IS the layout.
+--
+-- OC's own kernel writes that shape twice, and both shipped in our kernel
+-- until 2026-09-19.  component.list (site 10) returns a table that is ALSO
+-- callable as an iterator, its __call advancing a key upvalue by next; the
+-- census put it on every OS's boot path at probability ~1 and measured 18 and
+-- 20 of 20 rotated layouts visiting the wrong key multiset -- one of them the
+-- RIGHT COUNT, having dropped three components and repeated three
+-- (os-shape-census.md:37, :80).  componentProxy.__pairs (site 11), live
+-- because we build LUA52COMPAT, walks the proxy and then its fields with a
+-- phase flag between them; worse: most layouts both lose keys and repeat
+-- them, the flag flipping wherever the first walk happens to end (:38, :82).
+--
+-- THE FIX, at both sites: take the keys NOW, at list()/pairs() time, into an
+-- array, in a loop that finishes before the function returns and so can
+-- never be inside a save; then walk that array by an integer upvalue.  An
+-- integer into an array means the same thing in every layout -- keys[i+1] is
+-- the right next key however the nodes are ordered -- which is why the design
+-- doc calls this (the sorted() shape) the one shape the replay scan does NOT
+-- need to see, and why the diagnostic planned for OS-authored wrappers must
+-- not flag it: its criterion is a closure whose body reaches next on its own
+-- loop state, and a snapshot walker's body reaches no such thing.
+--
+-- WHY NOT "return next, list, nil".  That is tests/forin.lua's oclist_fixed
+-- and it is exact, 20 pads of 20 -- and it is not this API.  Callers index
+-- the result (component.list("filesystem")[addr], OpenOS
+-- lib/filesystem.lua:206) and call it once for the first pair
+-- (component.list("eeprom")(): this kernel's own boot, OpenOS
+-- boot/04_component.lua:51), and a raw triple does neither.  So the table
+-- stays the very table spcall returned, with the same metatable shape; order
+-- was never promised and remains hash order, now as of the snapshot.  For
+-- __pairs the triple would also drop the whole second phase, the fields.
+-- After this change the kernel calls next nowhere, and the patcher asserts
+-- that, the same way it asserts the surviving debug.sethook count.
 
 -- Left alone on purpose:
 --   * calcHookInterval (the bogomips loop at the top) still arms a hook for
@@ -285,6 +332,117 @@ end
 function wrapUserdata(values)
 ]==])
 
+-- 10. component.list: the keys are taken into an array before the function
+-- returns; __call walks the array by an integer.  The comment inside is the
+-- one a reader of the shipped kernel sees, so it carries the why on its own.
+-- The value is still read from the table at call time, as OC's was, so a
+-- value overwritten mid-walk is seen and a key cleared mid-walk is skipped --
+-- the one mutation Lua permits during a next traversal keeps its meaning.
+src = replace_once(src, "component.list snapshot walk",
+[==[  list = function(filter, exact)
+    checkArg(1, filter, "string", "nil")
+    local list = spcall(component.list, filter, not not exact)
+    local key = nil
+    return setmetatable(list, {__call=function()
+      key = next(list, key)
+      if key then
+        return key, list[key]
+      end
+    end})
+  end,
+]==],
+[==[  list = function(filter, exact)
+    checkArg(1, filter, "string", "nil")
+    local list = spcall(component.list, filter, not not exact)
+    -- OC-LuaJIT: SNAPSHOT WALK (THE FOURTH CHANGE in patch-machine-lua.lua).
+    -- OC's __call kept its position as a KEY upvalue and advanced it with the
+    -- real next.  Persisted mid-walk and restored, that key is looked up in
+    -- the rebuilt table's hash layout, which is a different one, and the walk
+    -- goes on from wherever the key now sits: wrong keys, nothing raised
+    -- (os-shape-census.md #1: 18 and 20 of 20 rotated layouts wrong, one of
+    -- them the right COUNT with three dropped and three repeated).  Here the
+    -- position is an integer into an array of the keys taken now, in a loop
+    -- that finishes before this function returns and so can never be inside
+    -- a save; keys[i + 1] is the right next key in every layout.  Returning
+    -- the raw triple instead would break both indexing the result and the
+    -- component.list("eeprom")() idiom, so the table stays the one spcall
+    -- returned, with the same metatable shape and the same hash order.
+    local keys, i = {}, 0
+    for k in pairs(list) do
+      keys[#keys + 1] = k
+    end
+    return setmetatable(list, {__call=function()
+      while true do
+        i = i + 1
+        local key = keys[i]
+        if key == nil then
+          i = 0 -- exhausted: the following call starts over, as OC's did
+          return
+        end
+        local value = list[key]
+        if value ~= nil then -- a key cleared mid-walk is skipped, as next skips it
+          return key, value
+        end
+      end
+    end})
+  end,
+]==])
+
+-- 11. componentProxy.__pairs: both phases are taken into ONE array of
+-- {key, value} before the metamethod returns, and the closure walks it by an
+-- integer.  The snapshot loops go through the raw next triple, not pairs --
+-- pairs(self) would call this very metamethod -- and they are the sound
+-- shape: synchronous, finished before anything can yield.
+src = replace_once(src, "componentProxy.__pairs snapshot walk",
+[==[  __pairs = function(self)
+    local keyProxy, keyField, value
+    return function()
+      if not keyField then
+        repeat
+          keyProxy, value = next(self, keyProxy)
+        until not keyProxy or keyProxy ~= "fields"
+      end
+      if not keyProxy then
+        keyField, value = next(self.fields, keyField)
+      end
+      return keyProxy or keyField, value
+    end
+  end
+]==],
+[==[  __pairs = function(self)
+    -- OC-LuaJIT: SNAPSHOT WALK (THE FOURTH CHANGE in patch-machine-lua.lua).
+    -- OC's walker advanced two key upvalues with the real next, one per
+    -- phase -- the proxy's own keys minus "fields", then the names in fields
+    -- -- with a phase flag between them.  Persisted mid-walk and restored,
+    -- each key is looked up in a rebuilt hash layout and the flag flips
+    -- wherever the first walk now happens to end: most rotated layouts both
+    -- lose keys and repeat them (os-shape-census.md #3).  Here both phases
+    -- are taken now into one array of {key, value}, in loops that finish
+    -- before pairs() returns and so can never be inside a save, and the
+    -- closure walks it by an integer, which means the same thing in every
+    -- layout.  The loops use the raw next triple, not pairs: pairs(self)
+    -- would call this metamethod.  "return next, self, nil" would be exact
+    -- too, and would drop the whole second phase.
+    local entries, i = {}, 0
+    for k, v in next, self do
+      if k ~= "fields" then
+        entries[#entries + 1] = {k, v}
+      end
+    end
+    for k, v in next, self.fields do
+      entries[#entries + 1] = {k, v}
+    end
+    return function()
+      i = i + 1
+      local entry = entries[i]
+      if entry then
+        return entry[1], entry[2]
+      end
+      i = 0 -- exhausted: the following call starts over, as OC's did
+    end
+  end
+]==])
+
 -- What must remain: exactly the three debug.sethook calls we leave alone
 -- (two in calcHookInterval, one in checkDeadline).  Anything else means OC
 -- grew a fourth arm site this patch does not know about.
@@ -292,14 +450,25 @@ local remaining = count(src, "debug.sethook(")
 assert(remaining == 3,
   ("patch-machine-lua: %d debug.sethook( calls remain after patching, expected 3"):format(remaining))
 
+-- And no call to next at all.  OC's kernel called it exactly three times, all
+-- inside the two blocks sites 10-11 replace (the synchronous snapshot loops
+-- name it as a for-in triple, which is not a call).  A fourth means OC grew
+-- an iterator this patch does not know about, and it must be looked at
+-- before it ships: a closure over next is the shape that restores wrong.
+local nextcalls = count(src, "next(")
+assert(nextcalls == 0,
+  ("patch-machine-lua: %d next( calls remain after patching, expected 0"):format(nextcalls))
+
 local banner = [==[-- =====================================================================
 -- OC-LuaJIT KERNEL VARIANT -- generated by native/kernel/patch-machine-lua.lua
 -- from OpenComputers' machine.lua.  Do not edit; edit the patcher.
--- Nine sites changed: the standing deadline hook is replaced by the native's
+-- Eleven sites changed: the standing deadline hook is replaced by the native's
 -- asynchronous watchdog (4), the name _ENV is bound per chunk, which LuaJIT
--- does not do (2), and the two __persist recipes fill the shell the serializer
--- hands them instead of returning a fresh table (3).  Everything else is
--- OpenComputers' own kernel.
+-- does not do (2), the two __persist recipes fill the shell the serializer
+-- hands them instead of returning a fresh table (3), and component.list and
+-- componentProxy.__pairs walk a snapshot of their keys by an integer instead
+-- of wrapping next in a closure, which restores wrong (2).  Everything else
+-- is OpenComputers' own kernel.
 -- =====================================================================
 ]==]
 
@@ -308,5 +477,5 @@ if crlf then out = out:gsub(LF, CR .. LF) end
 local g = assert(io.open(outpath, "wb"))
 g:write(out)
 g:close()
-io.write(("patch-machine-lua: ok  %d -> %d bytes, 9 sites, 3 debug.sethook left, %s endings"):format(
-  srcbytes, #out, crlf and "CRLF" or "LF") .. LF)
+io.write(("patch-machine-lua: ok  %d -> %d bytes, 11 sites, %d debug.sethook left, %d next( left, %s endings"):format(
+  srcbytes, #out, remaining, nextcalls, crlf and "CRLF" or "LF") .. LF)

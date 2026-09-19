@@ -1,8 +1,15 @@
 # Closing the for-in iterator gap
 
-Status: **design, not implemented.** Written 2026-09-01, after the replay
-iterator (M3.1) landed and the bridge spike surfaced a conflict with the
-`LUA52COMPAT` build flag.
+Status: **design; the kernel half is implemented.** Written 2026-09-01, after
+the replay iterator (M3.1) landed and the bridge spike surfaced a conflict with
+the `LUA52COMPAT` build flag. Updated 2026-09-19: the two platform instances
+(`component.list`, census #1, and `componentProxy.__pairs`, census #3) are
+closed by kernel sites 10–11 in `native/kernel/patch-machine-lua.lua` — T1 in
+its snapshot form (walk an array by integer index; see "Recommended
+sequencing"). T2 and T3 are not built. The residual is the OS-authored wrapper
+(census #9; OpenOS's own `boot/04_component.lua` installs one on the `component`
+library table), and the planned answer is the save-time diagnostic under "Open
+questions", not another rewrite.
 
 This note exists because the reasoning is easy to lose and expensive to redo.
 The gap itself is documented in [../serializer/README.md](../serializer/README.md);
@@ -239,9 +246,24 @@ probably an explicit opt-in. It is a last resort, not a default.
 
 ## Recommended sequencing
 
-1. **Settle `componentProxy.__pairs`.** Five-minute question; decides whether
-   T1 alone covers the case we actually know about.
-2. **T1** if it fits — free, and it shrinks the surface even if T2/T3 ship.
+1. ~~**Settle `componentProxy.__pairs`.**~~ **Settled 2026-09-19.** It exists
+   to present the proxy's own keys and then its `fields` sub-table as one flat
+   walk, and it returns a Lua closure over `next` with a phase flag. Returning
+   the raw `next` cannot express the second phase, and `component.list` must
+   stay a callable table (`component.list("gpu")()` is idiomatic), so T1 took
+   its snapshot form rather than the `return next, t, nil` form.
+2. ~~**T1** if it fits~~ **Done 2026-09-19 as kernel sites 10–11:** each walk
+   is snapshotted into an array walked by integer index — the position is a
+   plain integer the replay never needs to see, and the walker's upvalues are
+   an integer plus arrays, no function. `component.list` re-reads `list[key]`
+   per step so a key cleared mid-walk is skipped as `next` would;
+   `componentProxy.__pairs` snapshots both phases into one `{k, v}` array
+   through the raw `next, self` triple (`pairs(self)` would recurse into the
+   metamethod). `build-kernel.sh` asserts `snapshot walks=2` and
+   `next( calls=0`. Gated by `fi-1/2/3` in the harness, fail-first with the
+   sites cut out (restored walks 6/7 with a duplicate and 24/33, versus 7/7
+   and 33/33 element-wise equal with them in), and by `oclist_snap` /
+   `ocpairs_snap` in `run-forin.sh` (20/20 pads exact).
 3. **T2** as the general answer for host-installed iterators.
 4. **T3** only if the OS shape census turns up real iterators that need it.
 5. **Refuse** as the fallback for anything still unhandled, so the residual is
@@ -253,7 +275,10 @@ C.** Constraining the sandbox beats teaching the serializer another shape.
 
 ## Open questions
 
-- What does OC's `componentProxy.__pairs` return, and why does it exist?
+- ~~What does OC's `componentProxy.__pairs` return, and why does it exist?~~
+  **Answered** — see sequencing step 1: a two-phase closure over `next`, own
+  keys then `fields`, so the proxy's methods and its field descriptors read as
+  one table.
 - ~~Do real OSes actually write `next`-wrappers?~~ **Answered: yes.** Both the
   platform (twice) and an OS (QuickOS's `lua_shell`) do. See the census.
 - Given Tier 1 handles the platform, is Tier 2 worth building at all, or is

@@ -686,6 +686,235 @@ object Smoke {
     try m3.stop() catch { case _: Throwable => }
   }
 
+  /**
+   * THE FOR-IN SAVE (fi-*).
+   *
+   * f1/f7 and stk save while the sandbox is idle or inside a sync call; none
+   * of them saves while a program is suspended INSIDE a for-in loop over the
+   * kernel's own component iterators, which is the shape every OS's boot path
+   * produces (`for addr in component.list() do ... end` with an indirect
+   * call, i.e. a yield, in the body).  The census measured those two
+   * iterators -- component.list's __call-over-next and componentProxy's
+   * two-phase __pairs -- restoring the wrong key multiset on nearly every
+   * hash-layout rotation, silently (os-shape-census.md #1, #3).  The
+   * serializer's replay iterator cannot reach them: the cursor is a plain key
+   * in a closure upvalue and round-trips perfectly; only its POSITION in the
+   * rebuilt table changes.  The fix is the kernel's (patch-machine-lua.lua
+   * sites 10 and 11: snapshot the keys, walk by an integer), and this is the
+   * in-machine gate for it, over the real component set.
+   *
+   * How the save lands mid-loop: the sandbox half (see OCLJFI in AutorunLua)
+   * walks both loops one key per timer step and PARKS each strictly inside
+   * its loop, with nothing pending, until a second signal.  The harness polls
+   * the row for "held", saves, restores the blob into a fresh workspace (a
+   * fresh LuaJIT state, the blob's own interning order), then sends the
+   * second signal to BOTH machines -- the restored one and the one that was
+   * never saved -- and compares the completed sequences.
+   *
+   * Three milestones, each with its anti-vacuity gate:
+   *   fi-1  the pre-save row says held, with both positions STRICTLY inside
+   *         their ranges (1 <= pos < n, n >= 3), the screen rows carry
+   *         exactly pos recorded tokens each, and the save produced a real
+   *         kernel blob.  The loops are parked, so the position read is the
+   *         position saved, not a sample of a moving loop.
+   *   fi-2  component.list walk: the restored machine's completed sequence
+   *         equals the never-saved machine's, element for element.  Gates:
+   *         both machines report "done" with the sequence number advanced
+   *         past the saved row (a dead restored machine shows the painted-
+   *         back held/0 row), and the never-saved walk is a proper walk (n
+   *         distinct keys), so the comparison has a real reference.
+   *   fi-3  the same for `for k, v in pairs(component.proxy(gpu))`, i.e.
+   *         componentProxy.__pairs, live under LUA52COMPAT.
+   * THE EXPECTATION IS KEYED ON THE KERNEL.  The watchdog kernel is ours and
+   * must be exact once sites 10/11 ship (and FAILS here before they do --
+   * that failure was observed, on the 9-site kernel, before this gate was
+   * trusted).  The stock kernel is OpenComputers' own, whose iterators have
+   * the defect by construction and whose outcome per run is a coin the hash
+   * layout tosses; there the two walks are asserted for liveness only and
+   * their exactness is REPORTED, because a gate that fails on every stock run
+   * for the rest of the project's life is read once and ignored.
+   */
+  def forInSave(ws: Workspace, computer: Case, screen: Screen, kernelMode: String): Unit = {
+    val m = computer.machine
+    val expectExact = kernelMode == "watchdog"
+    p("--- (fi) saving WHILE two for-in loops over the kernel's own component iterators are suspended mid-walk (kernel=" +
+      kernelMode + ", expecting " +
+      (if (expectExact) "EXACT sequences after the restore: sites 10/11"
+       else "OpenComputers' own iterators: exactness reported, liveness asserted") + ") ---")
+    val idL = if (expectExact) "fi-2-component-list-walk-exact" else "fi-2-stock-control-component-list-walk"
+    val idP = if (expectExact) "fi-3-proxy-pairs-walk-exact" else "fi-3-stock-control-proxy-pairs-walk"
+    def field(row: String, i: Int): String = { val f = row.split("/"); if (f.length > i) f(i) else "<missing>" }
+    def num(row: String, i: Int): Int = try field(row, i).toInt catch { case _: Throwable => -1 }
+    def toks(s: String): Seq[String] = if (s == "<missing>" || s.isEmpty) Seq.empty else s.split(",").toSeq
+    def listOf(txt: String): Seq[String] = toks(parse(txt, "OCLJFIL"))
+    def pairsOf(txt: String): Seq[String] = {
+      val sb = new StringBuilder
+      var i = 1
+      var chunk = parse(txt, "OCLJFIP" + i)
+      while (chunk != "<missing>") { sb.append(chunk); i += 1; chunk = parse(txt, "OCLJFIP" + i) }
+      toks(sb.toString)
+    }
+    def diff(ref: Seq[String], got: Seq[String]): String = {
+      val cr = ref.groupBy(identity).map { case (k, v) => k -> v.size }
+      val cg = got.groupBy(identity).map { case (k, v) => k -> v.size }
+      val missing = ref.distinct.filter(k => cg.getOrElse(k, 0) < cr(k))
+      val extra = got.distinct.filter(k => cg(k) > cr.getOrElse(k, 0))
+      "missing=[" + missing.mkString(" ") + "] duplicated/alien=[" + extra.mkString(" ") + "]"
+    }
+    if (!m.isRunning) {
+      val why = "no running machine to save: running=" + m.isRunning + " lastError=" + m.lastError
+      milestone("fi-1-save-landed-mid-loop", ok = false, why)
+      milestone(idL, ok = false, why)
+      milestone(idP, ok = false, why)
+      return
+    }
+    val queued = m.signal("ocljfi")
+    var row0 = "<missing>"
+    var polls = 0
+    val tPoll = System.currentTimeMillis()
+    while (!row0.startsWith("held/") && !row0.startsWith("ERR/") && polls < 1200 && m.isRunning) {
+      ws.update(); Thread.sleep(25); polls += 1
+      if (polls % 2 == 0) row0 = parse(nonEmptyScreen(screen), "OCLJFI")
+    }
+    // The loops are parked, so nothing below changes any more -- but the
+    // status row is painted before the sequence rows, and a gpu.set over the
+    // tick budget yields between them.  A few more ticks let the paint land.
+    var settle = 0
+    while (settle < 8 && m.isRunning) { ws.update(); Thread.sleep(25); settle += 1 }
+    val scr0 = nonEmptyScreen(screen)
+    row0 = parse(scr0, "OCLJFI")
+    val held = field(row0, 0) == "held"
+    val seq0 = num(row0, 1)
+    val posL = num(row0, 2); val nL = num(row0, 3)
+    val posP = num(row0, 4); val nP = num(row0, 5)
+    val preL = listOf(scr0); val preP = pairsOf(scr0)
+    p("fi: signal queued=" + queued + "; " + polls + " polls in " + (System.currentTimeMillis() - tPoll) +
+      " ms; row at save = " + row0 + "  (state/seq/posL/nL/posP/nP/gpu/err)")
+    p("fi: recorded before the save: list " + preL.mkString(",") + "  pairs " + preP.mkString(","))
+    val inside = held && nL >= 3 && nP >= 3 && posL >= 1 && posL < nL && posP >= 1 && posP < nP
+    val rowsOk = preL.size == posL && preP.size == posP
+    if (!held) {
+      val why = "the loops never parked: row=" + row0 + " after " + polls + " polls; running=" + m.isRunning +
+        " lastError=" + m.lastError
+      milestone("fi-1-save-landed-mid-loop", ok = false, why)
+      milestone(idL, ok = false, why)
+      milestone(idP, ok = false, why)
+      return
+    }
+
+    val nbt = new NBTTagCompound()
+    var saveOk = true
+    var saveErr = ""
+    val tSave = System.currentTimeMillis()
+    try ws.save(nbt) catch { case t: Throwable => saveOk = false; saveErr = " " + t.toString }
+    val saveMs = System.currentTimeMillis() - tSave
+    val kBlob = findBlob(nbt, m.node.address + "_kernel")
+    val k = if (kBlob == null) 0 else kBlob.length
+    milestone("fi-1-save-landed-mid-loop", saveOk && inside && rowsOk && k > 10000,
+      "save ok=" + saveOk + saveErr + " in " + saveMs + " ms; both loops parked: list at " + posL + "/" + nL +
+        ", pairs at " + posP + "/" + nP + " (strictly inside=" + inside + "); screen rows carry " + preL.size +
+        "/" + preP.size + " recorded tokens (=" + rowsOk + "); _kernel=" + k + " B" +
+        (if (!inside) "   <- a position at an end of its range proves nothing about a suspended loop"
+         else if (!rowsOk) "   <- the rows do not carry the recorded prefix: a harness fault, not the defect"
+         else ""))
+    if (!(saveOk && inside && rowsOk && k > 10000)) {
+      milestone(idL, ok = false, "fi-1 did not hold; nothing below is a mid-loop measurement")
+      milestone(idP, ok = false, "fi-1 did not hold; nothing below is a mid-loop measurement")
+      return
+    }
+
+    p("--- (fi) restoring the mid-loop save into a fresh workspace, then completing both walks on BOTH machines ---")
+    var ws4: Workspace = null
+    var c4: Case = null
+    var sc4: Screen = null
+    var rerr = ""
+    try {
+      ws4 = new Workspace(Files.createTempDirectory("ocljit-smoke-fi"))
+      ws4.load(nbt)
+      val it = ws4.getEntitiesIter
+      while (it.hasNext) it.next() match {
+        case c: Case => c4 = c
+        case sc: Screen => sc4 = sc
+        case _ =>
+      }
+    } catch { case t: Throwable => rerr = t.toString; t.printStackTrace() }
+    val m4 = if (c4 == null) null else c4.machine
+    if (m4 == null || sc4 == null || !m4.isRunning) {
+      val why = "the restored machine is " +
+        (if (m4 == null) "missing: " + rerr else if (sc4 == null) "without a screen" else "not running: lastError=" + m4.lastError)
+      milestone(idL, ok = false, why)
+      milestone(idP, ok = false, why)
+      return
+    }
+    // The second signal to both: the never-saved machine's completion is the
+    // reference, the restored machine's is the measurement.
+    val goA = m.signal("ocljfigo")
+    val goB = m4.signal("ocljfigo")
+    var rowA = row0
+    var rowB = "<missing>"
+    def fin(row: String): Boolean = field(row, 0) == "done" && num(row, 1) == seq0 + 1
+    var t = 0
+    while (t < 1600 && !(fin(rowA) && fin(rowB)) && (m.isRunning || m4.isRunning)) {
+      ws.update(); ws4.update(); Thread.sleep(25); t += 1
+      if (t % 4 == 0) {
+        rowA = parse(nonEmptyScreen(screen), "OCLJFI")
+        rowB = parse(nonEmptyScreen(sc4), "OCLJFI")
+      }
+    }
+    // Same settling as before the save: "done" is painted before the rows
+    // that carry the sequences.
+    settle = 0
+    while (settle < 8) { ws.update(); ws4.update(); Thread.sleep(25); settle += 1 }
+    val txtA = nonEmptyScreen(screen)
+    val txtB = nonEmptyScreen(sc4)
+    rowA = parse(txtA, "OCLJFI"); rowB = parse(txtB, "OCLJFI")
+    val aL = listOf(txtA); val bL = listOf(txtB)
+    val aP = pairsOf(txtA); val bP = pairsOf(txtB)
+    val liveA = fin(rowA)
+    val liveB = fin(rowB)
+    p("fi: go queued A=" + goA + " B=" + goB + "; after " + t + " ticks: never-saved row=" + rowA +
+      " (running=" + m.isRunning + ")  restored row=" + rowB + " (running=" + m4.isRunning +
+      " lastError=" + m4.lastError + ")")
+    p("fi: list  never-saved (" + aL.size + "): " + aL.mkString(","))
+    p("fi: list  restored    (" + bL.size + "): " + bL.mkString(","))
+    p("fi: pairs never-saved (" + aP.size + "): " + aP.mkString(","))
+    p("fi: pairs restored    (" + bP.size + "): " + bP.mkString(","))
+    val refL = aL.size == nL && aL.distinct.size == nL
+    val refP = aP.size == nP && aP.distinct.size == nP
+    val exactL = aL == bL
+    val exactP = aP == bP
+    def gateWhy(ref: Boolean, which: String): String =
+      if (!liveB) "   <- STALE or dead: the restored machine never reported done/" + (seq0 + 1) + ", so its rows are the painted-back pre-save screen"
+      else if (!liveA) "   <- the never-saved machine never completed, so there is no reference walk"
+      else if (!ref) "   <- the never-saved " + which + " walk is not a proper walk of n distinct keys; the reference is broken"
+      else ""
+    val detailL = "saved at " + posL + "/" + nL + "; never-saved walk " + aL.size + " keys, restored walk " +
+      bL.size + " keys, element-wise equal=" + exactL + "; " + diff(aL, bL)
+    val detailP = "saved at " + posP + "/" + nP + " over the gpu proxy " + field(row0, 6) +
+      "; never-saved walk " + aP.size + " keys, restored walk " + bP.size + " keys, element-wise equal=" + exactP +
+      "; " + diff(aP, bP)
+    if (expectExact) {
+      milestone(idL, liveA && liveB && refL && exactL,
+        detailL + gateWhy(refL, "list") +
+          (if (liveA && liveB && refL && !exactL)
+             "   <- the restored loop resumed next() from its saved key in a DIFFERENT hash layout: the wrong components, silently (census #1)"
+           else ""))
+      milestone(idP, liveA && liveB && refP && exactP,
+        detailP + gateWhy(refP, "pairs") +
+          (if (liveA && liveB && refP && !exactP)
+             "   <- componentProxy.__pairs resumed next() from its saved key in a DIFFERENT hash layout: the wrong keys, silently (census #3)"
+           else ""))
+    } else {
+      milestone(idL, liveA && liveB && refL,
+        detailL + gateWhy(refL, "list") +
+          (if (liveA && liveB && refL) "   (OpenComputers' own iterator: exactness REPORTED, not asserted)" else ""))
+      milestone(idP, liveA && liveB && refP,
+        detailP + gateWhy(refP, "pairs") +
+          (if (liveA && liveB && refP) "   (OpenComputers' own iterator: exactness REPORTED, not asserted)" else ""))
+    }
+    try m4.stop() catch { case _: Throwable => }
+  }
+
   /** Which native this run is driven by: luajit (dropin) | additive | stock. */
   val nativeMode: String = System.getProperty("ocljit.native", "luajit")
 
@@ -1115,6 +1344,120 @@ object Smoke {
       |  event.timer(0, stkBurst)
       |  return false   -- one-shot: OpenOS drops a listener that returns false
       |end)
+      |
+      |-- THE FOR-IN PROBE, sandbox half (the fi-* milestones on the Java side).
+      |-- The two iterators OpenComputers' own kernel hands every program --
+      |-- component.list()'s __call table (libcomponent.list) and
+      |-- componentProxy.__pairs -- keep their traversal cursor in a closure
+      |-- upvalue as a plain KEY.  A loop suspended across a save therefore
+      |-- resumes `next` from that key inside the RESTORED table's hash layout,
+      |-- a different one, and visits the wrong keys with no error anywhere
+      |-- (docs/research/os-shape-census.md #1 and #3; docs/forin-iterator-gap.md).
+      |-- The serializer cannot see it: the key round-trips perfectly.  The fix
+      |-- is the kernel's (sites 10 and 11 of patch-machine-lua.lua: snapshot
+      |-- the keys, walk by an integer), and this probe is what proves it on a
+      |-- real machine over the real component set.
+      |--
+      |-- Two coroutines, one per loop, advanced one key per step from a timer:
+      |--     for addr in component.list() do record(addr) yield end
+      |--     for k in pairs(component.proxy(gpu)) do record(k) yield end
+      |-- Each is PARKED strictly inside its loop once it has walked half its
+      |-- keys, and stays parked -- no timer pending -- until a second signal.
+      |-- So the position at save time is a fact read off the screen, not a
+      |-- race against the wall clock, and the same second signal sent to the
+      |-- machine that was never saved yields the reference sequence the
+      |-- restored machine is held to.  The sequence number advances only when
+      |-- both loops COMPLETE, so a restored machine that died shows the
+      |-- painted-back "held/0" row and never "done/1".
+      |--
+      |-- Tokens instead of names where names would not fit on the screen: an
+      |-- address is its first 8 hex digits; a proxy key is the key itself.
+      |local fiState, fiSeq, fiErr = "idle", 0, "none"
+      |local fiL, fiP = {}, {}                   -- the recorded sequences
+      |local fiPosL, fiNL, fiPosP, fiNP = 0, 0, 0, 0
+      |local fiHoldL, fiHoldP = 0, 0             -- 0: park at half; -1: run free
+      |local fiCoL, fiCoP = nil, nil
+      |local fiAddr = "-"
+      |local fiDirty = false
+      |local function fiListLoop()
+      |  local list = component.list()
+      |  local n = 0
+      |  for _ in next, list do n = n + 1 end    -- raw count of the API's own table
+      |  fiNL = n
+      |  if fiHoldL == 0 then fiHoldL = math.max(1, math.floor(n / 2)) end
+      |  for addr in list do                     -- the canonical OC idiom
+      |    fiL[#fiL + 1] = addr:sub(1, 8)
+      |    fiPosL = fiPosL + 1
+      |    coroutine.yield()
+      |  end
+      |end
+      |local function fiPairsLoop()
+      |  local proxy = component.proxy(fiAddr)
+      |  local n = 0
+      |  for k in next, proxy do if k ~= "fields" then n = n + 1 end end
+      |  for _ in next, proxy.fields do n = n + 1 end
+      |  fiNP = n
+      |  if fiHoldP == 0 then fiHoldP = math.max(1, math.floor(n / 2)) end
+      |  for k in pairs(proxy) do                -- componentProxy.__pairs
+      |    fiP[#fiP + 1] = tostring(k)
+      |    fiPosP = fiPosP + 1
+      |    coroutine.yield()
+      |  end
+      |end
+      |local function fiStep(co, which)
+      |  local ok, err = coroutine.resume(co)
+      |  if not ok then fiErr = which .. ":" .. tostring(err):gsub("[ /]", "_"):sub(1, 40) end
+      |  return coroutine.status(co) == "dead"
+      |end
+      |local function fiDrive()
+      |  local doneL = coroutine.status(fiCoL) == "dead"
+      |  local doneP = coroutine.status(fiCoP) == "dead"
+      |  local parkedL = fiHoldL > 0 and fiPosL >= fiHoldL
+      |  local parkedP = fiHoldP > 0 and fiPosP >= fiHoldP
+      |  if not doneL and not parkedL then doneL = fiStep(fiCoL, "list") end
+      |  if not doneP and not parkedP then doneP = fiStep(fiCoP, "pairs") end
+      |  parkedL = fiHoldL > 0 and fiPosL >= fiHoldL
+      |  parkedP = fiHoldP > 0 and fiPosP >= fiHoldP
+      |  fiDirty = true
+      |  if fiErr ~= "none" then fiState = "ERR" return end
+      |  if doneL and doneP then fiSeq = fiSeq + 1 fiState = "done" return end
+      |  if (doneL or parkedL) and (doneP or parkedP) then fiState = "held" return end
+      |  event.timer(0.1, fiDrive)
+      |end
+      |event.listen("ocljfi", function()
+      |  fiL, fiP = {}, {}
+      |  fiPosL, fiNL, fiPosP, fiNP = 0, 0, 0, 0
+      |  fiHoldL, fiHoldP = 0, 0
+      |  fiErr, fiState = "none", "run"
+      |  fiAddr = component.list("gpu")() or "-"   -- the () idiom, kernel :1532's own
+      |  fiCoL = coroutine.create(fiListLoop)
+      |  fiCoP = coroutine.create(fiPairsLoop)
+      |  fiDirty = true
+      |  event.timer(0, fiDrive)
+      |  return false
+      |end)
+      |event.listen("ocljfigo", function()
+      |  fiHoldL, fiHoldP = -1, -1
+      |  -- Parked means nothing is pending, so the driver has to be re-armed;
+      |  -- while still stepping towards the park it already is.
+      |  if fiState == "held" then fiState = "go" fiDirty = true event.timer(0, fiDrive) end
+      |  return false
+      |end)
+      |local function fiPaint()
+      |  local function row(r, s)
+      |    component.gpu.set(1, r, s .. string.rep(" ", math.max(0, 150 - #s)))
+      |  end
+      |  row(43, string.format("OCLJFI=%s/%d/%d/%d/%d/%d/%s/%s", fiState, fiSeq,
+      |    fiPosL, fiNL, fiPosP, fiNP, fiAddr:sub(1, 8), fiErr))
+      |  row(44, "OCLJFIL=" .. table.concat(fiL, ","))
+      |  local s = table.concat(fiP, ",")
+      |  local r = 45
+      |  for i = 1, math.max(1, #s), 140 do
+      |    if r > 49 then fiErr = "pairs-rows-overflow" break end
+      |    row(r, "OCLJFIP" .. (r - 44) .. "=" .. s:sub(i, i + 139))
+      |    r = r + 1
+      |  end
+      |end
       |
       |-- The computer.lua.allowBytecode gate, probed from INSIDE the real
       |-- machine.lua sandbox.  This `load` is the sandbox wrapper at
@@ -1588,6 +1931,10 @@ object Smoke {
       |  if dirty or n % 20 == 0 then
       |    dirty = false
       |    paintSuite()
+      |  end
+      |  if fiDirty or n % 20 == 0 then
+      |    fiDirty = false
+      |    fiPaint()
       |  end
       |  end)
       |  if not pok then
@@ -2870,6 +3217,11 @@ object Smoke {
       milestone("f4-restore-no-error", computer2.machine.lastError == null,
         "restored lastError=" + computer2.machine.lastError)
     }
+
+    // --- (fi) a save that lands MID-FOR-IN over the kernel's iterators ----
+    // On the ORIGINAL machine too, before stk starts its endless fs.open
+    // burst chain on it.  See forInSave for what is asserted and why.
+    forInSave(ws, computer, screen, kernelMode)
 
     // --- (stk) a save that lands MID-SYNC-CALL ------------------------
     // On the ORIGINAL machine, which f1 left running; ws2's copy shares the

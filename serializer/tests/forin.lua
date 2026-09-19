@@ -118,13 +118,75 @@ RECIPES.falsevals = function()
   return t
 end
 
+-- machine.lua's component proxy shape (kernel :1397-1406 in the patched
+-- kernel): {address, type, slot, fields = {...}, <method> = ...}.  Twenty
+-- methods and four fields, hash-keyed like a real gpu proxy; "fields" is the
+-- one key componentProxy.__pairs hides, and its members are the second phase.
+RECIPES.proxy = function()
+  local t = { address = "0a1b2c3d-0000-4000-8000-0123456789ab", type = "gpu",
+              slot = 1, fields = {} }
+  local methods = { "bind", "getScreen", "getBackground", "setBackground",
+    "getForeground", "setForeground", "getPaletteColor", "setPaletteColor",
+    "maxDepth", "getDepth", "setDepth", "maxResolution", "getResolution",
+    "setResolution", "getViewport", "setViewport", "get", "set", "copy", "fill" }
+  for _, m in ipairs(methods) do t[m] = { address = t.address, name = m } end
+  for _, f in ipairs { "fieldA", "fieldB", "fieldC", "fieldD" } do
+    t.fields[f] = { getter = true, setter = (f == "fieldB") }
+  end
+  return t
+end
+
 local function recipe_for(c)
   if c == "array" or c == "jitwarm" then return RECIPES.array end
   if c == "mixed" or c == "sequential" then return RECIPES.mixed end
   if c == "big" then return RECIPES.big end
   if c == "falsevals" then return RECIPES.falsevals end
+  if c == "ocpairs" or c == "ocpairs_snap" then return RECIPES.proxy end
   return RECIPES.strings
 end
+
+-- componentProxy.__pairs as OpenComputers ships it (kernel :1306-1319): a
+-- two-phase closure over next with three mutable upvalues -- the proxy's own
+-- keys except "fields", then the names in fields.  Both cursors are plain
+-- keys held in upvalues, which is the oclist mechanism twice over, plus a
+-- phase flag that flips at the wrong moment when the rebuilt layout runs the
+-- first phase out early (os-shape-census.md #3: most pads lose AND
+-- duplicate).  Kept as a known-DIVERGENT control, like oclist.
+local OCPAIRS_CURRENT = {
+  __pairs = function(self)
+    local keyProxy, keyField, value
+    return function()
+      if not keyField then
+        repeat
+          keyProxy, value = next(self, keyProxy)
+        until not keyProxy or keyProxy ~= "fields"
+      end
+      if not keyProxy then
+        keyField, value = next(self.fields, keyField)
+      end
+      return keyProxy or keyField, value
+    end
+  end,
+}
+
+-- What kernel site 11 ships: both phases snapshotted into one array at
+-- __pairs time (a synchronous loop, cannot be suspended) and walked by an
+-- integer upvalue.  Same key set, same values, "fields" still hidden; no
+-- next after the snapshot, so nothing depends on the hash layout.
+local OCPAIRS_SNAP = {
+  __pairs = function(self)
+    local ks, vs, n = {}, {}, 0
+    for k, v in next, self do
+      if k ~= "fields" then n = n + 1; ks[n] = k; vs[n] = v end
+    end
+    for k, v in next, self.fields do n = n + 1; ks[n] = k; vs[n] = v end
+    local i = 0
+    return function()
+      i = i + 1
+      return ks[i], vs[i]
+    end
+  end,
+}
 
 -- Each body is a coroutine function that iterates `t` with pairs (or a
 -- variant), yielding each key. Extra behaviours are folded in per case.
@@ -244,6 +306,62 @@ BODIES.oclist_fixed = function(t)
   end
 end
 
+-- What kernel site 10 ships.  oclist_fixed proves the raw triple, but the
+-- kernel cannot return that: component.list's value must stay a TABLE that
+-- callers index (list[addr] -> type) and that is ALSO callable, including the
+-- `component.list("eeprom")()` idiom the kernel itself uses at :1532.  So the
+-- keys are snapshotted into an array at list() time and __call walks that
+-- array by an integer upvalue.  The loop's func slot then holds a callable
+-- table the replay scan never sees -- and it must not need to: keys[i+1] is
+-- the right next key whatever the rebuilt node order.  Exact on the shipping
+-- serializer with NO serializer change is the whole claim.
+BODIES.oclist_snap = function(t)
+  local function mklist(tbl)
+    local keys, n = {}, 0
+    for k in next, tbl do n = n + 1; keys[n] = k end
+    local i = 0
+    return setmetatable(tbl, { __call = function()
+      i = i + 1
+      local key = keys[i]
+      if key ~= nil then return key, tbl[key] end
+    end })
+  end
+  return function()
+    -- The API constraint, asserted: still a table, still indexable, and the
+    -- () idiom still hands back a key.
+    local probe = mklist(t)
+    local k1, v1 = probe()
+    assert(type(probe) == "table" and k1 ~= nil and probe[k1] == v1,
+           "component.list API broke: () idiom or indexing")
+    for k in mklist(t) do coroutine.yield(k) end
+    return "DONE"
+  end
+end
+
+-- componentProxy.__pairs, current (divergent control) and snapshot (site 11).
+-- The loop is `for k in pairs(proxy)`: ISNEXT's guard fails on the closure
+-- __pairs returns and the loop despecialises to ITERC over a Lua closure,
+-- exactly as in the kernel.
+BODIES.ocpairs = function(t)
+  setmetatable(t, OCPAIRS_CURRENT)
+  return function()
+    for k in pairs(t) do coroutine.yield(k) end
+    return "DONE"
+  end
+end
+
+BODIES.ocpairs_snap = function(t)
+  setmetatable(t, OCPAIRS_SNAP)
+  return function()
+    for k in pairs(t) do coroutine.yield(k) end
+    return "DONE"
+  end
+end
+
+-- The snapshot cases assert the SEQUENCE, not just the multiset: the save
+-- side records what the same body yields when never saved.
+local function is_snap(c) return c == "oclist_snap" or c == "ocpairs_snap" end
+
 BODIES.despec = function(t)
   -- Make BC_ISNEXT's guard fail once so it rewrites the PROTOTYPE in place
   -- (ISNEXT->JMP, ITERN->ITERC) before the real run. This is the shape a
@@ -319,6 +437,21 @@ if mode == "save" then
   if case == "perms" or case == "permsfn" then P[t] = "THE_TABLE" end
 
   local mk = body_for(case)
+  if is_snap(case) then
+    -- The never-saved reference: the same body over the same table in this
+    -- process, run to completion before the real coroutine is created.  The
+    -- snapshot both take is of the same layout, so the load side can demand
+    -- the identical sequence, not merely the same multiset.
+    local ref = coroutine.create(mk(t))
+    local full = {}
+    while coroutine.status(ref) ~= "dead" do
+      local okr, v = coroutine.resume(ref)
+      assert(okr, v)
+      if v == "DONE" then break end
+      full[#full + 1] = v
+    end
+    write_file(path .. ".full", serialize_keys(full))
+  end
   local fn = mk(t)
   if case == "permsfn" then
     -- The loop lives in a closure the loader gets from uperms, so its
@@ -407,7 +540,29 @@ local _, U = build_perms()
 if case == "perms" or case == "permsfn" then U["THE_TABLE"] = t end
 if case == "permsfn" then U["THE_BODY"] = body_for(case)(t) end
 
-local expected = keyset(t)
+-- What a complete walk must yield.  For the proxy cases that is NOT keyset(t):
+-- the reference semantics are the CURRENT two-phase __pairs, run to
+-- completion in this process and never saved -- the proxy's own keys except
+-- "fields", then the names in fields.  ocpairs_snap is held to exactly this
+-- multiset, which is the "same as ocpairs's never-saved run" claim; the two
+-- asserts keep the reference honest (a plain pairs walk would show "fields"
+-- and no field names).
+local function expected_for(c, tbl)
+  if c == "ocpairs" or c == "ocpairs_snap" then
+    local ref = setmetatable(recipe_for(c)(), OCPAIRS_CURRENT)
+    local s = {}
+    for k in pairs(ref) do
+      assert(s[k] == nil, "the reference walk repeated " .. tostring(k))
+      s[k] = true
+    end
+    assert(s.fields == nil and s.fieldA == true and s.bind == true,
+           "the reference walk is not the two-phase walk")
+    return s
+  end
+  return keyset(tbl)
+end
+
+local expected = expected_for(case, t)
 local consumed = parse_keys(read_file(path .. ".keys"))
 local blob = read_file(path .. ".blob")
 
@@ -453,6 +608,22 @@ end
 table.sort(dup); table.sort(missing)
 if #dup > 0 then fail("DUP=[" .. table.concat(dup, " ") .. "]") end
 if #missing > 0 then fail("MISSING=[" .. table.concat(missing, " ") .. "]") end
+
+-- The snapshot cases must reproduce the never-saved SEQUENCE: an integer
+-- cursor over an array has no other correct answer.
+if is_snap(case) then
+  local full = parse_keys(read_file(path .. ".full"))
+  local where = (#full == #visited) and 0 or -1
+  if where == 0 then
+    for i = 1, #full do
+      if full[i] ~= visited[i] then where = i; break end
+    end
+  end
+  if where ~= 0 then
+    fail(string.format("ORDER differs from the never-saved run at %s (ref %d keys, got %d)",
+                       where < 0 and "length" or tostring(where), #full, #visited))
+  end
+end
 
 io.write(string.format("%s case=%s pad=%d visited=%d/%d%s\n",
   #failures == 0 and "OK  " or "FAIL", case, pad, #visited,

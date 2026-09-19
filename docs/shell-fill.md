@@ -283,6 +283,9 @@ lands — a one-cycle delay, not a leak.
 
 The kernel banner and `build-kernel.sh`'s postflight (`_ENV sites=2`) gain a
 `wrapUserdataInto` assertion and the site count becomes 9 / three changes.
+(Sites 10–11, the for-in snapshot walks of 2026-09-19, later raised it to
+11 / four changes with `snapshot walks=2` and `next( calls=0` assertions; they
+are not part of shell-fill — see [forin-iterator-gap.md](forin-iterator-gap.md).)
 
 ## 5. Tests
 
