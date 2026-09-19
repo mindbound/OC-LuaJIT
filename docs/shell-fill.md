@@ -1,7 +1,7 @@
 # Shell-fill: the persistence protocol for `__persist` specials
 
-*Implementation specification. Status: steps 0–3 done (serializer converted,
-kernel patched, walker landed), step 5 pending. **Natives must be rebuilt additive
+*Implementation specification. Status: **COMPLETE, 2026-09-17** — all steps done and
+verified in the harness and in-game. **Natives must be rebuilt additive
 on both platforms after step 4 — the serializer hash moved; `verifyModAssets`
 refuses the jar until they are.** Written so that a fresh session can execute it
 without the conversation that produced it. The reasoning behind the design is
@@ -373,15 +373,11 @@ real host and that the kernel patch is load-bearing.
 2. A recipe that sets a metatable but fills the wrong fields (a future kernel
    edit forgetting `proxy.type = "userdata"`). Contract; `f7`'s live-proxy
    probe is the mitigation.
-3. **The `_stack` blob is a second kernel universe** (pre-existing, every
-   design): the sync-call closure at `machine.lua:1116-1122` captures
-   `args`/`target` as open upvalues of `invoke`'s frame, so `persist(2)` pulls
-   the whole kernel thread — measured stack blob == kernel blob and two extra
-   `userdata.load` per restore whenever a save lands mid-sync-call (routine
-   under `cat`; `FileSystem.read` yields a SynchronizedCall on the 16th read).
-   **Own fix, scheduled before any dispose mechanism.** And: never dispose a
-   duplicate `HandleValue` — `dispose` is `fs.close`, which closes the file the
-   surviving proxy still holds. Drop duplicates, never dispose them.
+3. ~~The `_stack` blob is a second kernel universe.~~ **Closed 2026-09-17**: the
+   Architecture subclasses persist both roots in one reference space (roadmap
+   entry). The dispose caution stands on its own: never dispose a duplicate
+   `HandleValue` — `dispose` is `fs.close`, which closes the file the surviving
+   proxy still holds.
 4. Weak-key timing on the registry (§4, site 9): one GC cycle, not a leak.
 5. `u_permanent`'s `lua_gettable` on uperms honours `__index`; OC's uperms is a
    plain table. Flagged, left as is.
@@ -418,8 +414,9 @@ would have merged them, and `h1 == h2` would silently differ from stock;
 | **2** ✓ | rewrite m2's four spkey cases and contract's one to the shell form | all suites green — **done 2026-09-17**: shell 0/6, stress 0/9, M1 82, M2 **56** (one inert-recipe case added), M3 75, contract all-pass, for-in 19 exact; a format-2 blob is refused with `format version mismatch (expected 3)` |
 | **3** ✓ | apply §4 to the kernel patcher; by-name assertion; rebuild kernel and native with distinct binaries and md5s | `build-kernel.sh` postflight names `wrapUserdataInto`; `wd_test` 32/0 — **done 2026-09-17**: 9 sites, kernel 48608 bytes with sites at `:1077/:1089/:1164/:1215` and zero legacy shapes; postflight proven to fail (site 8 neutered → exit 1 naming site 8); native serializer hash `25471fb0`; `wd_test` 32/0. **Then the jar shipped the wrong DLL** — `build-native.sh` defaults to the dropin variant, so `dist/` still held the 09-16 additive. Both platforms rebuilt with `OCLJ_VARIANT=additive`: Windows `a3b64511`, Linux `d3768017` (WSL). `verifyModAssets` now refuses a native whose bytes lack the current serializer hash (proven: stale DLL → BUILD FAILED naming it). Jar `ocluajit-0280593-…-dirty.jar` verified: kernel 48608 + `wrapUserdataInto`, DLL `a3b64511`, so `d3768017`, hash embedded |
 | **4** ✓ | walker graft (§3.6) with its negative control | new refusal shown to fire; suites green — **done 2026-09-17**: `tests/shell-order.lua` 0/8 on the walker build, 6 red on the step-3 control (D1/D1n/D2 silent-wrong, C1 silently succeeds), D2 alone silent under the open-upvalue negative control; 20 visits/proxy on the verbatim kernel block; all existing suites green; C review: no raw-pointer use after a stack-growing call, no ghost-node read, no C recursion. Three minor fixes applied after review: deterministic blocked-on ordinal (proven 5/5), honest refusal count, env case documented as ordered. The blocked-on fix consumed the `lua_next` key before `continue` — `invalid key to 'next'` on all six walker cases, caught by `shell-order` on the first run and fixed. Final binary `1a9e8e17`, serializer hash `c945e096` |
-| 5 | in-game gate (§5.3) | `f1b` PASS, `f7` PASS with seq advanced; negative control comes back Stopped with the refusal in the log |
-| — | `_stack` universe fix (§6.3) | scheduled separately, before any dispose work |
+| **5a** ✓ | harness gate (§5.3) | `f1b` PASS, `f7` PASS with seq advanced; negative control comes back Stopped with the refusal in the log — **done 2026-09-17** on dropin `abc9e41d` (hash `c945e096`): `f1b` PASS (blob 161909 bytes carries `HandleValue`), **`f7` PASS `before=…/8/71 after=…/8/86`** (a live post-restore sample, not a repaint), 38 checks / 0 failures. Negative control (stock kernel = OC's unpatched recipes, same serializer): `'__persist78b9…' recipe 2 of 2 returned a table instead of filling its argument` in ocelot-brain's log, machine dead, `f7` FAIL STALE 25→25 — the refusal fires in a real host and the kernel patch is load-bearing |
+| **5b** ✓ | in-game gate | the same shape in Minecraft: `lua` open with an explicit `io.open` handle, save-and-quit, reload; REPL resumes, marker survives, `f:read` continues at the saved position — **done 2026-09-17** on OC 1.12.61-GTNH with jar `cefe308` (dll `49ead6cc`, so `6659e5bb`): REPL resumed at `lua>`, `persist_marker` = `shell-fill-1`, **`f:read(20)` returned bytes 21–40 of `bench2.lua`** (`"local computer = req"` before, `"uire(\"computer\")\nloc"` after — the host-side file position survived), `f:close()` clean, and `fml-client-latest.log` carries zero `eris-lj` lines and no state-load error |
+| **—** ✓ | `_stack` universe fix (§6.3) | scheduled separately, before any dispose work — **done 2026-09-17**, in the Architecture subclasses (no serializer change): both roots in one reference space; harness `stk-1..4` 42/0 on, 42/3 off; see roadmap |
 
 ## 9. File inventory
 

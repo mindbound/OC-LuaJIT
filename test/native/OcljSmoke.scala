@@ -219,6 +219,473 @@ object Smoke {
     }
   }
 
+  // ------------------------------------------------------------------ //
+  // The sync-call save (stk-*): reads that need the TWO-value stack shape
+  // ------------------------------------------------------------------ //
+
+  /**
+   * A raw-state read for the sync-call shape.  While the machine is in
+   * SynchronizedCall the main stack holds the kernel thread at 1 and the
+   * pending invoke closure at 2 (NativeLuaArchitecture.runSynchronized asserts
+   * exactly that), and the chunk gets both as its arguments.  Under the
+   * machine's monitor for the same reason as evalStrLocked, and it REFUSES
+   * rather than guesses when the stack is not in that shape: a read on the
+   * wrong shape is the class of fault the locked readers exist to prevent.
+   */
+  def evalSyncLocked(machine: totoro.ocelot.brain.entity.machine.Machine,
+                     lua: LuaState, code: String): String =
+    machine.synchronized {
+      var base = -1
+      try {
+        base = lua.getTop
+        if (base != 2 || !lua.isThread(1)) "<shape: top=" + base + ">"
+        else {
+          lua.load(new ByteArrayInputStream(code.getBytes(StandardCharsets.UTF_8)), "=stkprobe", "t")
+          lua.pushValue(1)
+          lua.pushValue(2)
+          lua.call(2, 1)
+          val r = if (lua.isNil(-1)) "<nil>" else lua.toString(-1)
+          lua.setTop(base)
+          r
+        }
+      } catch {
+        case t: Throwable =>
+          if (base >= 0) try lua.setTop(base) catch { case _: Throwable => }
+          "<error: " + t.getMessage + ">"
+      }
+    }
+
+  /**
+   * Machine.state's top, by reflection.  The field is private[machine]: public
+   * in bytecode (javap: `public Stack<Enumeration$Value> state()`), invisible
+   * to scalac from this package -- the same reach luaOf makes for `lua`.  Read
+   * under the stack's own monitor, the one Machine.update/run/save take
+   * (state.synchronized).
+   */
+  def stateTop(machine: totoro.ocelot.brain.entity.machine.Machine): String = {
+    val st = classOf[totoro.ocelot.brain.entity.machine.Machine].getMethod("state").invoke(machine)
+      .asInstanceOf[scala.collection.mutable.Stack[AnyRef]]
+    st.synchronized { if (st.isEmpty) "<empty>" else st.top.toString }
+  }
+
+  /** id -> name for every state on the live stack.  MachineAPI.State is
+    * private[machine] too, so the saved IntArray is translated through the
+    * values the live stack holds at the same moment (the save copies them). */
+  def stateNames(machine: totoro.ocelot.brain.entity.machine.Machine): Map[Int, String] = {
+    val st = classOf[totoro.ocelot.brain.entity.machine.Machine].getMethod("state").invoke(machine)
+      .asInstanceOf[scala.collection.mutable.Stack[AnyRef]]
+    st.synchronized { st.toSeq.map(v => v.asInstanceOf[Enumeration#Value].id -> v.toString).toMap }
+  }
+
+  /** What the closure at stack index 2 is about to call, from its `args`
+    * upvalue (machine.lua:1097): "open(manifest.lua)". */
+  val PendingProbeLua: String =
+    """local co, fn = ...
+      |if type(fn) ~= "function" then return "not-a-function:" .. type(fn) end
+      |for i = 1, 60 do
+      |  local n, v = debug.getupvalue(fn, i)
+      |  if n == nil then break end
+      |  if n == "args" and type(v) == "table" then return tostring(v[2]) .. "(" .. tostring(v[3]) .. ")" end
+      |end
+      |return "no-args-upvalue"
+      |""".stripMargin
+
+  /**
+   * The registries.  The kernel's is the chunk-local `wrappedUserdata`
+   * (machine.lua:1091), found by walking the kernel thread's frames -- the
+   * chunk frame stays live for the machine's life (:1571).  The closure's is
+   * reached the way the closure itself reaches it: its `unwrapUserdata`
+   * upvalue, then that function's `wrappedUserdata` upvalue.  `same` says
+   * whether the two are one table; `values` counts DISTINCT host userdata
+   * across both, i.e. how many host Values exist for the proxies.  Two full
+   * collects first: a weak-keyed registry counts uncollected garbage
+   * otherwise, and one cycle is not a full sweep on LuaJIT.
+   */
+  val RegistryProbeLua: String =
+    """local co, fn = ...
+      |local function frame_local(th, name)
+      |  for level = 0, 100 do
+      |    if not debug.getinfo(th, level, "S") then return nil end
+      |    local i = 1
+      |    while true do
+      |      local n, v = debug.getlocal(th, level, i)
+      |      if n == nil then break end
+      |      if n == name then return v end
+      |      i = i + 1
+      |    end
+      |  end
+      |end
+      |local function upvalue(f, name)
+      |  if type(f) ~= "function" then return nil end
+      |  for i = 1, 60 do
+      |    local n, v = debug.getupvalue(f, i)
+      |    if n == nil then return nil end
+      |    if n == name then return v end
+      |  end
+      |end
+      |local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+      |collectgarbage("collect") collectgarbage("collect")
+      |local kreg = frame_local(co, "wrappedUserdata")
+      |if type(kreg) ~= "table" then return "kreg=noreg creg=nil same=false values=-1 pending=nil" end
+      |local uw = upvalue(fn, "unwrapUserdata")
+      |local creg = upvalue(uw, "wrappedUserdata")
+      |local args = upvalue(fn, "args")
+      |local seen, nvals = {}, 0
+      |for _, v in pairs(kreg) do if not seen[v] then seen[v] = true nvals = nvals + 1 end end
+      |if type(creg) == "table" then
+      |  for _, v in pairs(creg) do if not seen[v] then seen[v] = true nvals = nvals + 1 end end
+      |end
+      |return string.format("kreg=%d creg=%s same=%s values=%d pending=%s", count(kreg),
+      |  type(creg) == "table" and tostring(count(creg)) or "nil", tostring(rawequal(kreg, creg)), nvals,
+      |  type(args) == "table" and (tostring(args[2]) .. "(" .. tostring(args[3]) .. ")") or "nil")
+      |""".stripMargin
+
+  def stkField(row: String, i: Int): Int = {
+    val f = row.split("/")
+    if (f.length > i) try f(i).trim.toInt catch { case _: Throwable => -1 } else -1
+  }
+
+  /**
+   * How many userdata recipes a blob carries.  machine.lua's proxy recipe
+   * (:1156-1164) closes over what userdata.save returned: the class name and
+   * the Value's NBT, written UNCOMPRESSED (UserdataAPI.scala:23,
+   * CompressedStreamTools.write -> writeTag).  Each recipe calls userdata.load
+   * exactly once when the reader fills it, so recipes across every blob a save
+   * wrote = host Values the restore mints.  That is what the restored
+   * registries cannot show: on LuaJIT a table has no __gc, so a second
+   * universe's copies vanish at the load's own full collect and leave nothing
+   * to count.
+   *
+   * THE NEEDLE IS THE NBT, NOT THE CLASS NAME.  eris-lj keys every collectable
+   * object in its reference table, strings included (eris_lj.c:1538,
+   * persist_keyed: "refkey == obj for every M1 type"), so the one interned
+   * class-name string is written once per blob and referenced after -- the
+   * first version of this counted it and read 1 for 7 proxies.  A
+   * HandleValue's NBT differs per handle id, so it is a distinct string per
+   * proxy, written by value once per blob each; its `handle` int tag is
+   * encoded as TAG_Int(3), name length 0x0006, "handle" -- control bytes no
+   * Lua source or screen text contains.
+   */
+  val RecipeNeedle: String = new String(Array[Byte](3, 0, 6), StandardCharsets.ISO_8859_1) + "handle"
+
+  def countOccurrences(blob: Array[Byte], needle: String): Int = {
+    if (blob == null) return 0
+    val hay = new String(blob, StandardCharsets.ISO_8859_1)
+    var n = 0
+    var i = hay.indexOf(needle)
+    while (i >= 0) { n += 1; i = hay.indexOf(needle, i + needle.length) }
+    n
+  }
+
+  /** The compound that holds `key`, found the way findBlob finds the blob. */
+  def findCompoundWith(nbt: NBTTagCompound, key: String): NBTTagCompound = {
+    if (nbt.hasKey(key)) return nbt
+    val it = new java.util.ArrayList[String](nbt.getKeySet).iterator
+    while (it.hasNext) {
+      nbt.getTag(it.next()) match {
+        case c: NBTTagCompound =>
+          val r = findCompoundWith(c, key)
+          if (r != null) return r
+        case l: totoro.ocelot.brain.nbt.NBTTagList =>
+          var i = 0
+          while (i < l.tagCount) {
+            l.getCompoundTagAt(i) match {
+              case c: NBTTagCompound =>
+                val r = findCompoundWith(c, key)
+                if (r != null) return r
+              case _ =>
+            }
+            i += 1
+          }
+        case _ =>
+      }
+    }
+    null
+  }
+
+  /**
+   * THE SYNC-CALL SAVE (stk-*).
+   *
+   * f1/f7 save at a moment the harness chooses, and that moment is never
+   * inside a SynchronizedCall, so they never exercise OC's SECOND root: while
+   * the state stack holds SynchronizedCall / SynchronizedReturn,
+   * NativeLuaArchitecture.save persists stack index 2 -- the closure
+   * machine.lua's invoke yielded (:1097-1104) -- in a SEPARATE eris.persist
+   * call with its own reference space, as "_stack".  That closure holds four
+   * OPEN upvalues into the kernel coroutine's stack (args, target,
+   * unwrapUserdata, wrapUserdata).  Persisted on its own under our serializer,
+   * an open upvalue whose owner is not in the reference table is chased to its
+   * thread (eris_lj.c:543) and the WHOLE kernel is written into "_stack": a
+   * second kernel universe, a second registry, a second host Value per proxy,
+   * and a sync result the real kernel's registry has never seen.
+   * serializer/tests/stack-universe.lua measures it on a kernel mirror (U1);
+   * this is the same measurement on the real machine, and it is the gate for
+   * the Architecture's fix (persist {thread, closure} as ONE root).
+   *
+   * How the save lands mid-call: the sandbox half (see OCLJSTK in AutorunLua)
+   * bursts fs.open past its per-tick limit, and Machine.update() is what
+   * performs a pending sync call -- so a machine observed in SynchronizedCall
+   * between two update() calls STAYS there until the next one.  The harness
+   * polls for that state, confirms the pending closure is an fs.open (its
+   * result is a HandleValue, a host Value), and saves before updating again.
+   *
+   * Four milestones, each with its anti-vacuity gate:
+   *   stk-1  the persisted state stack SAYS SynchronizedCall, and the pending
+   *          closure was an fs.open.  Gate for all of the below; also OC's
+   *          failure protocol removes the "state" tag when a persist throws,
+   *          so a failed persist cannot pass.
+   *   stk-2  "_stack" is small against "_kernel" (absent counts as 0).  Gate:
+   *          stk-1 and a real kernel blob; a save that dropped the closure
+   *          altogether fails stk-3/4, so "absent" cannot pass on its own.
+   *   stk-3  the userdata recipes across every blob the save wrote (one
+   *          userdata.load each on restore; see countOccurrences) equal the
+   *          proxies persisted, and, read after the restore BEFORE the first
+   *          update() (the closure is still at index 2), the closure's
+   *          registry IS the kernel's.  Gate: at least two proxies persisted
+   *          (udh and stkHeld), and the restored closure still names fs.open.
+   *          The registries alone cannot carry the count: LuaJIT never
+   *          finalises a table, so a second universe's copies are gone at the
+   *          load's own full collect (measured: closure's registry = 0
+   *          entries, same table = false), which is why the blobs are counted.
+   *   stk-4  the restored machine runs the closure; the burst that spanned
+   *          the save reads and closes the handle it returned; no failure is
+   *          added.  Gate: the OCLJSTK sequence number advanced past the
+   *          pre-save row (the restore paints the old screen back, so a dead
+   *          machine shows exactly the old number).
+   * THE EXPECTATION IS KEYED ON THE ARM, because only one arm can pass the
+   * bundle shape at all.  The Architecture override lives in
+   * OCLuaJITArchitecture, and that class drives the machine ONLY in the
+   * additive arm; the dropin arm (OCLJ_NATIVE=luajit, the default) runs
+   * OpenComputers' own NativeLua52Architecture over our native, so its save is
+   * OC's two-call save, forever -- there is nothing there to fix.  A bundle
+   * assertion in that arm would fail on every run for the rest of the
+   * project's life, and a gate that always fails is read once and ignored.
+   * So each arm asserts what IT must show, two-sided, so a baseline that
+   * silently ran on the fix, or a fix that silently did nothing, both fail:
+   *   additive  "bundle": no second blob, one recipe per proxy, one registry,
+   *             no failure added -- the shipped shape.
+   *   luajit    "dropin": OC's two-call save over OUR serializer -- the
+   *             second blob carries the kernel, two recipes per proxy, a
+   *             second registry, the silent mode.  stack-universe.lua U1 on a
+   *             real machine, kept as the documented-defect control.
+   *   stock     "stock": OC's own Eris.  The second blob is small (upvalues
+   *             by value), and it carries NO recipes, because stock
+   *             machine.lua:1061-1066 persists the registry as an EMPTY table
+   *             by design -- so no second Value per proxy, but a second
+   *             (empty) registry and the same silent mode.  Measured, not
+   *             taken from the U4 mirror, whose closure holds a proxy in args.
+   */
+  def syncCallSave(ws: Workspace, computer: Case, screen: Screen, expect: String): Unit = {
+    val m = computer.machine
+    val bundle = expect == "bundle"
+    p("--- (stk) saving WHILE the machine is in SynchronizedCall (expecting " +
+      (expect match {
+        case "bundle" => "ONE reference space: the roots bundled"
+        case "dropin" => "OC's two-call save over our serializer: the second universe, U1's shape"
+        case _ => "stock Eris's two-call save: by-value upvalues, an empty second registry, the silent mode"
+      }) + ") ---")
+    val arch = m.architecture
+    val lua = if (arch == null) null else luaOf(arch)
+    if (lua == null || !m.isRunning) {
+      milestone("stk-1-save-landed-in-synccall", ok = false,
+        "no running machine to save: running=" + m.isRunning + " lastError=" + m.lastError)
+      return
+    }
+    // The signal starts the burst chain (sandbox half).
+    val queued = m.signal("ocljstk")
+    // Poll for the shape.  ws.update() PERFORMS a pending sync call
+    // (Machine.update, case SynchronizedCall), so the check comes after the
+    // sleep and the save comes before the next update.
+    var caught = false
+    var polls = 0
+    var seenSync = 0
+    var pending = "-"
+    val tPoll = System.currentTimeMillis()
+    while (!caught && polls < 3000 && m.isRunning) {
+      ws.update(); Thread.sleep(10); polls += 1
+      if (stateTop(m) == "SynchronizedCall") {
+        seenSync += 1
+        pending = evalSyncLocked(m, lua, PendingProbeLua)
+        if (pending.startsWith("open(")) caught = true
+      }
+    }
+    p("stk: signal queued=" + queued + "; " + polls + " polls in " + (System.currentTimeMillis() - tPoll) +
+      " ms, SynchronizedCall seen " + seenSync + " times, last pending call = " + pending +
+      (if (caught) "   <- caught on an fs.open" else "   <- NOT caught"))
+    if (!caught) {
+      milestone("stk-1-save-landed-in-synccall", ok = false,
+        "never observed the machine in SynchronizedCall on an fs.open after " + polls + " polls (" +
+          seenSync + " sync-call sightings, last=" + pending + "); running=" + m.isRunning +
+          " lastError=" + m.lastError + " OCLJSTK=" + parse(nonEmptyScreen(screen), "OCLJSTK"))
+      return
+    }
+    // Pre-save reads, on the caught shape, executor idle, under the monitor.
+    val regBefore = evalSyncLocked(m, lua, RegistryProbeLua)
+    val scrBefore = nonEmptyScreen(screen)
+    val stkBefore = parse(scrBefore, "OCLJSTK")
+    val udBefore = parse(scrBefore, "OCLJUD")
+    p("stk: before the save: registries " + regBefore + "; OCLJSTK=" + stkBefore + "; OCLJUD=" + udBefore)
+
+    val nbt = new NBTTagCompound()
+    var saveOk = true
+    var saveErr = ""
+    val tSave = System.currentTimeMillis()
+    try ws.save(nbt) catch { case t: Throwable => saveOk = false; saveErr = " " + t.toString }
+    val saveMs = System.currentTimeMillis() - tSave
+    val addr = m.node.address
+    val mnbt = findCompoundWith(nbt, addr + "_kernel")
+    val names = stateNames(m)
+    val savedStates: Seq[String] =
+      if (mnbt == null || !mnbt.hasKey("state")) Seq.empty
+      else mnbt.getIntArray("state").toSeq.map(i => names.getOrElse(i, "#" + i))
+    val kBlob = findBlob(nbt, addr + "_kernel")
+    val sBlob = findBlob(nbt, addr + "_stack")
+    val k = if (kBlob == null) 0 else kBlob.length
+    val s = if (sBlob == null) 0 else sBlob.length
+    val recK = countOccurrences(kBlob, RecipeNeedle)
+    val recS = countOccurrences(sBlob, RecipeNeedle)
+    val recipes = recK + recS
+    val landed = savedStates.contains("SynchronizedCall")
+    p("stk: blobs: _kernel=" + k + " B carrying " + recK + " userdata recipes (HandleValue NBT payloads), _stack=" +
+      (if (sBlob == null) "absent" else s + " B carrying " + recS + " userdata recipes") +
+      "; class-name string occurrences " + countOccurrences(kBlob, "HandleValue") + "/" +
+      countOccurrences(sBlob, "HandleValue") + " (interned: once per blob, not a count)")
+    milestone("stk-1-save-landed-in-synccall", saveOk && landed && k > 10000,
+      "save ok=" + saveOk + saveErr + " in " + saveMs + " ms; persisted state stack = " +
+        (if (savedStates.isEmpty) "<no state tag: the persist failed>" else savedStates.mkString("/")) +
+        "; pending call = " + pending + "; _kernel=" + k + " B")
+    val ratio = if (k > 0) s.toDouble / k else -1.0
+    val detail2 = "_kernel=" + k + " B, _stack=" + (if (sBlob == null) "absent" else s + " B") +
+      f", ratio $ratio%.2f"
+    expect match {
+      case "bundle" =>
+        milestone("stk-2-one-reference-space", landed && k > 10000 && s < k / 4,
+          detail2 + (if (s >= k / 4) "   <- the index-2 root pulled the whole kernel into a SECOND blob: two reference spaces, two universes"
+                     else if (sBlob == null) "   (no second root: the closure rode in the kernel's reference space)"
+                     else "   (a small second root was written: not the bundle, but not the second universe either)"))
+      case "dropin" =>
+        milestone("stk-2-dropin-control-second-blob-carries-kernel", landed && k > 10000 && s > k / 2,
+          detail2 + (if (s > k / 2) "   (OC's own save, our serializer: the index-2 root chased its open upvalues and wrote the kernel again -- the documented defect)"
+                     else "   <- the second blob no longer carries the kernel: the two-call shape stopped producing the second universe"))
+      case _ =>
+        milestone("stk-2-stock-control-small-second-blob", landed && k > 10000 && sBlob != null && s < k / 4,
+          detail2 + (if (sBlob != null && s < k / 4) "   (stock Eris: the closure's upvalues by value, no thread chase)"
+                     else "   <- not stock Eris's shape"))
+    }
+
+    p("--- (stk) restoring the sync-call save into a fresh workspace ---")
+    var ws3: Workspace = null
+    var c3: Case = null
+    var sc3: Screen = null
+    var rerr = ""
+    try {
+      ws3 = new Workspace(Files.createTempDirectory("ocljit-smoke-stk"))
+      ws3.load(nbt)
+      val it = ws3.getEntitiesIter
+      while (it.hasNext) it.next() match {
+        case c: Case => c3 = c
+        case sc: Screen => sc3 = sc
+        case _ =>
+      }
+    } catch { case t: Throwable => rerr = t.toString; t.printStackTrace() }
+    val m3 = if (c3 == null) null else c3.machine
+    val id3 = expect match {
+      case "bundle" => "stk-3-one-value-per-proxy"
+      case "dropin" => "stk-3-dropin-control-two-universes"
+      case _ => "stk-3-stock-control-empty-second-registry"
+    }
+    val id4 = expect match {
+      case "bundle" => "stk-4-sync-result-recognised"
+      case "dropin" => "stk-4-dropin-control-silent-mode"
+      case _ => "stk-4-stock-control-silent-mode"
+    }
+    if (m3 == null || !m3.isRunning) {
+      val why = "the restored machine is " +
+        (if (m3 == null) "missing: " + rerr else "not running: lastError=" + m3.lastError)
+      milestone(id3, ok = false, why)
+      milestone(id4, ok = false, why)
+      return
+    }
+    // BEFORE the first update(): the restored closure is still at index 2.
+    val a3 = m3.architecture
+    val lua3 = if (a3 == null) null else luaOf(a3)
+    val regAfter = if (lua3 == null) "<no LuaState>" else evalSyncLocked(m3, lua3, RegistryProbeLua)
+    p("stk: restored: running=" + m3.isRunning + " state=" + stateTop(m3) + " lastError=" + m3.lastError +
+      "; registries " + regAfter)
+    def num(row: String, key: String): Int = try parse(row, key).toInt catch { case _: Throwable => -1 }
+    val kb = num(regBefore, "kreg")
+    val ka = num(regAfter, "kreg")
+    val same = parse(regAfter, "same") == "true"
+    val values = num(regAfter, "values")
+    val pend3 = parse(regAfter, "pending")
+    val creg = parse(regAfter, "creg")
+    val detail3 = "proxies persisted (kernel registry after a full GC) = " + kb +
+      "; userdata recipes across the blobs written (= host Values the restore mints) = " + recipes +
+      " (" + recK + " in _kernel, " + recS + " in _stack); after the restore: kernel registry = " + ka +
+      ", closure's registry = " + creg + " entries, same table = " + same +
+      ", distinct host userdata across both = " + values + "; pending = " + pend3
+    // recK == kb is the count's own calibration: the kernel blob must carry
+    // exactly one payload per proxy the registry held, under EITHER shape.
+    // If it does not, the needle is not counting recipes and nothing built on
+    // it is believed.
+    val countOk = recK == kb
+    val gate3 = kb >= 2 && countOk && pend3.startsWith("open(")
+    val gateWhy =
+      if (kb < 2) "   <- fewer than two proxies persisted: nothing to count (vacuous)"
+      else if (!countOk) "   <- _kernel carries " + recK + " payloads for " + kb + " proxies: the recipe count is not measuring recipes"
+      else if (!pend3.startsWith("open(")) "   <- the restored closure is not the fs.open that was pending"
+      else ""
+    expect match {
+      case "bundle" =>
+        milestone(id3, gate3 && recipes == kb && ka == kb && same,
+          detail3 + (if (!gate3) gateWhy
+                     else if (recipes != kb) "   <- " + recipes + " recipes for " + kb + " proxies: every proxy restores TWICE, once per blob (a second kernel universe)"
+                     else if (!same) "   <- the restored closure's registry is not the kernel's: a second universe"
+                     else if (ka != kb) "   <- the kernel registry did not come back with the proxies it had"
+                     else ""))
+      case "dropin" =>
+        milestone(id3, gate3 && recipes == 2 * kb && !same,
+          detail3 + (if (!gate3) gateWhy
+                     else if (recipes == 2 * kb && !same) "   (OC's save over our serializer: every proxy restores twice and the closure holds a second registry -- U1 on a real machine)"
+                     else "   <- not the documented two-universe shape any more"))
+      case _ =>
+        milestone(id3, gate3 && recipes == kb && !same,
+          detail3 + (if (!gate3) gateWhy
+                     else if (recipes == kb && !same) "   (stock Eris: the copied registry is EMPTY by machine.lua's own design, :1061-1066, so no second Value -- but a second registry)"
+                     else "   <- not stock Eris's shape"))
+    }
+
+    val seqBefore = stkField(stkBefore, 1)
+    val failsBefore = stkField(stkBefore, 2)
+    var stkAfter = "<missing>"
+    var seqAfter = -1
+    var t = 0
+    while (t < 800 && m3.isRunning && seqAfter < seqBefore + 3) {
+      ws3.update(); Thread.sleep(25); t += 1
+      if (t % 4 == 0) { stkAfter = parse(nonEmptyScreen(sc3), "OCLJSTK"); seqAfter = stkField(stkAfter, 1) }
+    }
+    val failsAfter = stkField(stkAfter, 2)
+    val fresh = seqBefore >= 0 && seqAfter >= seqBefore + 2
+    val txt3 = nonEmptyScreen(sc3)
+    p("stk: restored machine after " + t + " ticks: running=" + m3.isRunning + " lastError=" + m3.lastError +
+      " OCLJSTK=" + stkAfter + " OCLJUD=" + parse(txt3, "OCLJUD") + " (was " + udBefore + ")")
+    val detail4 = "OCLJSTK before=" + stkBefore + " after=" + stkAfter + " (bursts completed after the restore: " +
+      (if (fresh) (seqAfter - seqBefore).toString else "NONE") + "; read/close failures " + failsBefore +
+      " -> " + failsAfter + ")"
+    if (bundle)
+      milestone(id4, fresh && failsBefore >= 0 && failsAfter == failsBefore,
+        detail4 + (if (!fresh) "   <- STALE or dead: no burst completed after the restore, so this row is not a post-restore measurement"
+                   else if (failsAfter != failsBefore) "   <- the handle the restored sync call returned is NOT in this kernel's registry: the silent mode"
+                   else ""))
+    else
+      milestone(id4, fresh && failsAfter > failsBefore && stkAfter.contains("bad_file_descriptor"),
+        detail4 + (if (!fresh) "   <- STALE or dead: no burst completed after the restore, so this row is not a post-restore measurement"
+                   else if (failsAfter > failsBefore && stkAfter.contains("bad_file_descriptor"))
+                     "   (the result proxy lives in the second registry, so the kernel hands the host a plain table: the silent mode, as documented)"
+                   else "   <- the silent mode did not show: the two-call shape no longer loses the sync result"))
+    try m3.stop() catch { case _: Throwable => }
+  }
+
   /** Which native this run is driven by: luajit (dropin) | additive | stock. */
   val nativeMode: String = System.getProperty("ocljit.native", "luajit")
 
@@ -591,6 +1058,63 @@ object Smoke {
       |    tostring(okr and chunk and #chunk or chunk):gsub("[ /]", "_"), udSeq)
       |end
       |udProbe()
+      |
+      |-- THE SYNC-CALL SAVE PROBE, sandbox half (the stk-* milestones on the
+      |-- Java side).  That save has to land while the machine is in
+      |-- SynchronizedCall, and the call pending at that moment has to be one
+      |-- whose RESULT is a host Value.  fs.open is direct with limit = 4 per
+      |-- tick (ocelot-brain FileSystem.scala:150) against a Tier-3 budget of
+      |-- 1.5, so a burst of eight opens in one callback pushes at least two of
+      |-- them past the budget and down machine.lua's synchronized path
+      |-- (invoke :1080-1106): the LimitReachedException comes back as zero
+      |-- results, invoke yields a closure, and that closure is what OC files
+      |-- at stack index 2 and persists as "_stack".
+      |--
+      |-- Every handle is then read and closed at once, and THAT is the
+      |-- measurement.  A handle whose proxy was made by a closure restored into
+      |-- a second kernel universe is registered in that universe's registry,
+      |-- not this kernel's; unwrapUserdata (:1080, the direct path) finds no
+      |-- entry, hands the host a plain table, and FileSystem.checkHandle
+      |-- (:232) answers nil, "bad file descriptor".  Failures are COUNTED with
+      |-- the last message, and the sequence number advances once per burst so
+      |-- the Java side can tell a burst that ran AFTER the restore from the
+      |-- row the restore painted back (the same gate f7 and the encore use).
+      |--
+      |-- Started by a SIGNAL from the harness, not by a timer: nothing of this
+      |-- is pending while the deadline probe runs (see the k4 note below), and
+      |-- the chain re-arms itself from the callback that finished, as
+      |-- everything here does.
+      |local stkSeq, stkFails, stkLast, stkHeld = 0, 0, "none", nil
+      |local stkRow = "OCLJSTK=idle/0/0/none"
+      |local function stkFail(what)
+      |  stkFails = stkFails + 1
+      |  stkLast = tostring(what):gsub("[ /]", "_"):sub(1, 40)
+      |end
+      |local function stkBurst()
+      |  local hs = {}
+      |  for i = 1, 8 do
+      |    local h, e = fsproxy.open("manifest.lua", "r")
+      |    if h then hs[#hs + 1] = h else stkFail("open:" .. tostring(e)) end
+      |  end
+      |  for i = 1, #hs do
+      |    local r, e = fsproxy.read(hs[i], 8)
+      |    if type(r) ~= "string" then stkFail("read:" .. tostring(e)) end
+      |    local _, ce = fsproxy.close(hs[i])
+      |    if ce ~= nil then stkFail("close:" .. tostring(ce)) end
+      |  end
+      |  stkSeq = stkSeq + 1
+      |  stkRow = string.format("OCLJSTK=run/%d/%d/%s", stkSeq, stkFails, stkLast)
+      |  event.timer(0, stkBurst)
+      |end
+      |event.listen("ocljstk", function()
+      |  -- One handle of ours HELD for the life of the machine, so the registry
+      |  -- the save carries holds a proxy this probe owns, next to udh above:
+      |  -- the "proxies persisted" side of stk-3 is at least two.
+      |  stkHeld = fsproxy.open("manifest.lua", "r")
+      |  stkRow = "OCLJSTK=run/0/0/none"
+      |  event.timer(0, stkBurst)
+      |  return false   -- one-shot: OpenOS drops a listener that returns false
+      |end)
       |
       |-- The computer.lua.allowBytecode gate, probed from INSIDE the real
       |-- machine.lua sandbox.  This `load` is the sandbox wrapper at
@@ -1052,6 +1576,7 @@ object Smoke {
       |  component.gpu.set(1, 15, "OCLJNONCE=" .. nonce .. " OCLJCTR=" .. n .. "        ")
       |  if n % 10 == 0 then udProbe() end
       |  component.gpu.set(1, 17, udRow .. "        ")
+      |  component.gpu.set(1, 18, stkRow .. "        ")
       |  -- repainted every tick for the same reason as the counter: boot output
       |  -- would otherwise scroll a one-shot line off the screen.
       |  component.gpu.set(1, 16, gate .. "        ")
@@ -2086,7 +2611,12 @@ object Smoke {
         if (mr % 10 == 0) {
           var qq = 0
           while (computer.machine.isExecuting && qq < 200) { Thread.sleep(5); qq += 1 }
-          val s = jitStats(mLua); mcBack = s._1; trBack = s._3
+          // LOCKED.  This was the one raw-state read left outside the
+          // machine's monitor, and the isExecuting spin above is not an
+          // interlock (see evalStrLocked).  It read -1/-1 on one run in three
+          // and the ORIGINAL machine -- the one the stk phase below still
+          // needs -- died of Error.InternalError before that phase began.
+          val s = jitStatsLocked(computer.machine, mLua); mcBack = s._1; trBack = s._3
         }
       }
       // REPORTED, NOT ASSERTED, and the reason matters.  This watches an IDLE
@@ -2340,6 +2870,13 @@ object Smoke {
       milestone("f4-restore-no-error", computer2.machine.lastError == null,
         "restored lastError=" + computer2.machine.lastError)
     }
+
+    // --- (stk) a save that lands MID-SYNC-CALL ------------------------
+    // On the ORIGINAL machine, which f1 left running; ws2's copy shares the
+    // disk directory but is no longer ticked, so only this one answers the
+    // signal.  See syncCallSave for what is asserted and why.
+    syncCallSave(ws, computer, screen,
+      expect = nativeMode match { case "additive" => "bundle"; case "stock" => "stock"; case _ => "dropin" })
 
     // --- (g) the bytecode gate ----------------------------------------
     p("--- allowBytecode gate (on a private LuaState) ---")

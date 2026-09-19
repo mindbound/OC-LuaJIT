@@ -1,12 +1,14 @@
 package ocljit.arch
 
 import li.cil.repack.com.naef.jnlua
-import li.cil.repack.com.naef.jnlua.{LuaState, LuaStateLuaJIT}
-import totoro.ocelot.brain.Ocelot
+import li.cil.repack.com.naef.jnlua.{LuaGcMetamethodException, LuaRuntimeException, LuaState, LuaStateLuaJIT}
+import totoro.ocelot.brain.{Ocelot, Settings}
 import totoro.ocelot.brain.entity.machine.{Machine, MachineAPI}
-import totoro.ocelot.brain.entity.machine.luac.{LuaStateFactory, NativeLuaArchitecture}
+import totoro.ocelot.brain.entity.machine.luac.{LuaStateFactory, NativeLuaAPI, NativeLuaArchitecture, PersistenceAPI}
+import totoro.ocelot.brain.nbt.NBTTagCompound
 
 import java.nio.file.{Files, Path, Paths}
+import scala.collection.mutable
 
 /**
   * THE OCELOT-BRAIN ADAPTER: OC-LuaJIT as a real OpenComputers architecture.
@@ -109,6 +111,236 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
     OCLuaJITStateFactory.ensureInitialized()
     OCLuaJITStateFactory
   }
+
+  // ------------------------------------------------------------------ //
+  // Persistence: ONE blob, not two.
+  // ------------------------------------------------------------------ //
+
+  /**
+    * WHY save() AND load() ARE OVERRIDDEN WHOLESALE -- the same override as the
+    * mod's (LuaJITArchitecture.java, same section), against ocelot-brain's port
+    * of the class (NativeLuaArchitecture.scala load :347-395, save :397-442;
+    * OC's own is :349-437 and differs only in SaveHandler vs nbt.setByteArray
+    * and in the log text).
+    *
+    * NativeLuaArchitecture.save persists a running computer as TWO roots in
+    * TWO eris.persist calls: persist(1), the kernel coroutine, into
+    * "<address>_kernel", and, while the machine's state stack holds
+    * SynchronizedCall or SynchronizedReturn, persist(2) -- the closure the
+    * kernel yielded for the driver call, or the result table -- into
+    * "<address>_stack". Each call is its own reference space. The closure
+    * (machine.lua:1116-1124) holds four OPEN upvalues into the kernel
+    * coroutine's stack: args, target, unwrapUserdata, wrapUserdata. Under our
+    * serializer an open upvalue whose owning thread is not already in the
+    * reference table makes p_function chase the owner (eris_lj.c:543,
+    * elj_find_owner_any) and write the WHOLE kernel thread into the stack blob.
+    *
+    * THAT IS A SECOND KERNEL UNIVERSE. Measured on binary 1a9e8e17
+    * (serializer/tests/stack-universe.lua, U1): the stack blob is 11640 bytes
+    * against a kernel of 11377; two persisted proxies cost FOUR userdata.load
+    * calls; the restored closure's upvalue-id / args-slot / registry all point
+    * at the second kernel; and a sync call whose result is a host Value comes
+    * back NOT-UNWRAPPED -- a plain table the live kernel's registry has never
+    * seen. Nothing raises. That is the silent mode.
+    *
+    * THE FIX NEEDS NO SERIALIZER CHANGE (U2/U2r/U3 pass on the shipping
+    * binary): persist ONE table {[1]=kernel thread, [2]=closure-or-table} in
+    * ONE call. The closure's upvalues then find the thread already in the
+    * reference table and go out as TAG_UPVALOPEN into the same blob: 11650
+    * bytes = kernel + 273, one load per proxy, upvalue-id / args-slot /
+    * registry identical to a never-saved machine. On load, unpersist once and
+    * push t[1] to index 1 and t[2] (when present) to index 2 -- the exact stack
+    * shape runThreaded and runSynchronized assert (:172-174, :200-201).
+    *
+    * WHOLESALE, NOT WRAPPED: super.save/super.load do their persists
+    * unconditionally with no hook between, so both are reproduced here line by
+    * line -- every side effect, in order, including the failure protocol
+    * (nbt.removeTag("state")) that Machine relies on. Each line below carries
+    * the ocelot-brain source line it reproduces.
+    *
+    * THE ONE REFLECTIVE READ. The PersistenceAPI instance lives in the private
+    * 'apis' array, as its LAST element ("Persistence has to go last", :36-44).
+    * It must be THAT instance and not a fresh one: it owns the persistKey the
+    * kernel's shell-fill recipes were keyed with at load (machine.lua:1085,
+    * :1158), and its load(nbt) restores that key from NBT exactly as stock
+    * does. A fresh PersistenceAPI mints a new random key, and every recipe
+    * keyed with the old one is silently missed. Here three more members need
+    * the same treatment, because ocelot-brain makes them private[machine]:
+    * kernelMemory and ramScale on the architecture, and Machine.state plus the
+    * MachineAPI.State values themselves (the object is private[machine] too).
+    *
+    * NO MIGRATION PATH, deliberately. A blob written in the old two-call shape
+    * has a bare THREAD as its "_kernel" root, not a table, and load() below
+    * refuses that shape by name ("Invalid kernel.") -- the fingerprint would
+    * NOT catch a two-call blob from this same native; the shape check does.
+    * The bundle reuses the "_kernel" tag and writes no "_stack".
+    *
+    * THE SWITCH: OCLuaJITArchitecture.BundleRoots, below. OFF falls through to
+    * super.save/super.load, i.e. the two-call shape -- the harness's NEGATIVE
+    * CONTROL, and nothing else. Default ON.
+    */
+  private var resolvedApis: Array[NativeLuaAPI] = _
+  private var resolvedPersistence: PersistenceAPI = _
+
+  private def resolveApis(): Unit = {
+    if (resolvedPersistence != null) return
+    val found = OCLuaJITArchitecture.apisOf(this)
+    if (found == null || found.isEmpty || !found.last.isInstanceOf[PersistenceAPI]) {
+      throw new IllegalStateException("NativeLuaArchitecture.apis does not end in a PersistenceAPI (" +
+        (if (found == null) "null"
+         else s"${found.length} entries, last ${if (found.isEmpty) "none" else found.last.getClass.getName}") +
+        "): 'Persistence has to go last' no longer holds and this adapter cannot persist against this ocelot-brain build")
+    }
+    resolvedApis = found
+    resolvedPersistence = found.last.asInstanceOf[PersistenceAPI]
+  }
+  // At construction, not on the first save: a renamed field must be a machine
+  // that refuses to start, not a world that cannot be saved.
+  resolveApis()
+
+  /** `"\tat " + e.getLuaStackTrace.mkString("\n\tat ")`, or "" when empty (:390, :433). */
+  private def luaTrace(e: LuaRuntimeException): String =
+    if (e.getLuaStackTrace.isEmpty) "" else "\tat " + e.getLuaStackTrace.mkString("\n\tat ")
+
+  /**
+    * Build {[1]=the thread at index 1, [2]=the value at index 2 when withStack}
+    * above the live stack, persist it through the ONE PersistenceAPI, and take
+    * it down again -- also when persist throws, so a failed save leaves the
+    * running machine's stack exactly as it found it.
+    */
+  private def persistBundle(lua: LuaState, withStack: Boolean): Array[Byte] = {
+    val top = lua.getTop
+    try {
+      lua.newTable()          // ... t
+      lua.pushValue(1)        // ... t thread
+      lua.rawSet(-2, 1)       // ... t            t[1] = kernel thread
+      if (withStack) {
+        lua.pushValue(2)      // ... t v
+        lua.rawSet(-2, 2)     // ... t            t[2] = closure | result table
+      }
+      resolvedPersistence.persist(top + 1)
+    } finally lua.setTop(top)
+  }
+
+  override def save(nbt: NBTTagCompound): Unit = {
+    if (!OCLuaJITArchitecture.BundleRoots) {
+      super.save(nbt) // the two-call shape, NativeLuaArchitecture.scala:397-442
+      return
+    }
+    resolveApis()
+    val lua = OCLuaJITArchitecture.luaOf(this)
+
+    // Unlimit memory while persisting.                                          (:399-401)
+    if (Settings.get.limitMemory) {
+      lua.setTotalMemory(Integer.MAX_VALUE)
+    }
+
+    try {
+      // Save the kernel state (which is always at stack index one).             (:406)
+      assert(lua.isThread(1))
+      // While in a driver call we have one object on the global stack: either
+      // the function to call the driver with, or the result of the call.       (:411-414)
+      // The bundle takes index 1 ALWAYS and index 2 ONLY in the two sync
+      // states: save also runs in Restarting/Stopping, where index 2 may be a
+      // boolean or an error string, and the original does not persist it.
+      val inCall = OCLuaJITArchitecture.inState(machine, OCLuaJITArchitecture.SynchronizedCall)
+      val withStack = inCall || OCLuaJITArchitecture.inState(machine, OCLuaJITArchitecture.SynchronizedReturn)
+      if (withStack) {
+        assert(if (inCall) lua.isFunction(2) else lua.isTable(2))
+      }
+      // ONE persist of {[1]=kernel, [2]=closure|table} under the "_kernel"
+      // tag -- was persist(1) to "_kernel" and persist(2) to "_stack".         (:409, :417)
+      nbt.setByteArray(machine.node.address + "_kernel", persistBundle(lua, withStack))
+
+      nbt.setInteger("kernelMemory",                                             // (:420)
+        math.ceil(OCLuaJITArchitecture.kernelMemoryOf(this) / OCLuaJITArchitecture.ramScaleOf(this)).toInt)
+
+      for (api <- resolvedApis) {                                                // (:422-424)
+        api.save(nbt)
+      }
+
+      try lua.gc(LuaState.GcAction.COLLECT, 0) catch {                           // (:426-430)
+        case _: Throwable =>
+          Ocelot.log.warn("Error cleaning up loaded computer. This either means the server is badly overloaded or a user created an evil __gc method, accidentally or not.")
+          machine.crash("error in garbage collector, most likely __gc method timed out")
+      }
+    } catch {
+      case e: LuaRuntimeException =>                                             // (:432-434)
+        Ocelot.log.warn(s"Could not persist computer.\n${e.toString}" + luaTrace(e))
+        nbt.removeTag("state")
+      case e: LuaGcMetamethodException =>                                        // (:435-437)
+        Ocelot.log.warn(s"Could not persist computer.\n${e.toString}")
+        nbt.removeTag("state")
+    }
+
+    // Limit memory again.                                                       (:441)
+    recomputeMemory(machine.host.inventory.entities)
+  }
+
+  override def load(nbt: NBTTagCompound): Unit = {
+    if (!OCLuaJITArchitecture.BundleRoots) {
+      super.load(nbt) // the two-call shape, NativeLuaArchitecture.scala:347-395
+      return
+    }
+    if (!machine.isRunning) return                                               // (:348)
+    resolveApis()
+    val lua = OCLuaJITArchitecture.luaOf(this)
+
+    // Unlimit memory use while unpersisting.                                    (:351-353)
+    if (Settings.get.limitMemory) {
+      lua.setTotalMemory(Integer.MAX_VALUE)
+    }
+
+    try {
+      // Try unpersisting Lua, because that's what all of the rest depends
+      // on. First, clear the stack, meaning the current kernel.                 (:358)
+      lua.setTop(0)
+
+      // ONE unpersist of the bundle -- was "_kernel" and then, in the sync
+      // states, "_stack".                                                        (:361, :370)
+      resolvedPersistence.unpersist(nbt.getByteArray(machine.node.address + "_kernel"))
+      // The bundle is a table. Anything else -- nothing at all because
+      // allowPersistence is off, or a bare thread because the blob was written
+      // in the old shape (which the fingerprint gate refuses before this) -- is
+      // the corrupt-save case the original answers with this same message.
+      if (lua.getTop != 1 || !lua.isTable(1)) {
+        throw new LuaRuntimeException("Invalid kernel.")
+      }
+      val inCall = OCLuaJITArchitecture.inState(machine, OCLuaJITArchitecture.SynchronizedCall)
+      val withStack = inCall || OCLuaJITArchitecture.inState(machine, OCLuaJITArchitecture.SynchronizedReturn)
+      lua.rawGet(1, 1)                        // bundle thread
+      if (withStack) lua.rawGet(1, 2)         // bundle thread v
+      lua.remove(1)                           // thread [v]  -- what runThreaded/runSynchronized assert
+      if (!lua.isThread(1)) {                                                    // (:363-367)
+        // This shouldn't really happen, but there's a chance it does if
+        // the save was corrupt (maybe someone modified the Lua files).
+        throw new LuaRuntimeException("Invalid kernel.")
+      }
+      if (withStack && !(if (inCall) lua.isFunction(2) else lua.isTable(2))) {   // (:368-376)
+        // Same as with the above, should not really happen normally, but
+        // could for the same reasons.
+        throw new LuaRuntimeException("Invalid stack.")
+      }
+
+      OCLuaJITArchitecture.setKernelMemory(this,                                 // (:378)
+        (nbt.getInteger("kernelMemory") * OCLuaJITArchitecture.ramScaleOf(this)).toInt)
+
+      for (api <- resolvedApis) {                                                // (:380-382)
+        api.load(nbt)
+      }
+
+      try lua.gc(LuaState.GcAction.COLLECT, 0) catch {                           // (:384-388)
+        case _: Throwable =>
+          Ocelot.log.warn("Error cleaning up loaded computer. This either means the server is badly overloaded or a user created an evil __gc method, accidentally or not.")
+          machine.crash("error in garbage collector, most likely __gc method timed out")
+      }
+    } catch {
+      case e: LuaRuntimeException => throw new Exception(e.toString + luaTrace(e), e)   // (:390)
+    }
+
+    // Limit memory again.                                                       (:394)
+    recomputeMemory(machine.host.inventory.entities)
+  }
 }
 
 /**
@@ -136,16 +368,74 @@ object OCLuaJITArchitecture {
   val KernelResource = "/assets/ocluajit/lua/machine.lua"
 
   /**
-    * ocelot-brain declares `lua` as private[machine], so an adapter outside
-    * that package cannot see it. The mod side needs no such thing -- OC exposes
-    * `lua()` publicly -- but the harness is where this mechanism can actually
-    * be RUN, so it reaches the field the way CensusOs already does.
+    * THE SWITCH for the persistence override (see the class): default ON.
+    * -Docljit.persist.bundle=false, or OCLJ_PERSIST_BUNDLE=off in the
+    * environment (which smoke-test.sh's JVM inherits, so no script change is
+    * needed), falls through to super.save/super.load -- OpenComputers' two-call
+    * shape -- for the harness's NEGATIVE CONTROL. The mod's Java class has NO
+    * such switch, deliberately: one here is what lets the gate be shown to
+    * fail; one there would be readable from a server's environment.
     */
-  def luaOf(arch: NativeLuaArchitecture): LuaState = {
-    val f = classOf[NativeLuaArchitecture].getDeclaredField("lua")
-    f.setAccessible(true)
-    f.get(arch).asInstanceOf[LuaState]
+  val BundleRoots: Boolean = {
+    var v = System.getProperty("ocljit.persist.bundle")
+    if (v == null) v = System.getenv("OCLJ_PERSIST_BUNDLE")
+    val on = v == null || !Set("0", "false", "off", "no").contains(v.trim.toLowerCase(java.util.Locale.ROOT))
+    // STDERR AS WELL AS THE LOG, for the reason ensureInitialized gives.
+    val msg = "OC-LuaJIT persistence: bundled roots " +
+      (if (on) "ON (one blob: {kernel, closure|table})"
+       else "OFF -- OpenComputers' two-call shape; the NEGATIVE CONTROL, a save made mid-sync-call restores a second kernel")
+    if (on) Ocelot.log.info(msg) else Ocelot.log.warn(msg)
+    System.err.println("[ocljit] " + msg)
+    on
   }
+
+  /**
+    * ocelot-brain declares `lua`, `kernelMemory`, `ramScale` and `apis` as
+    * private[machine], so an adapter outside that package cannot see them. The
+    * mod side needs this only for `apis` -- OC exposes the other three publicly
+    * -- but the harness is where this mechanism can actually be RUN, so it
+    * reaches the fields the way CensusOs already does. A missing field is a
+    * changed ocelot-brain and is reported as such, by name.
+    */
+  private def field(name: String): java.lang.reflect.Field = {
+    val f = try classOf[NativeLuaArchitecture].getDeclaredField(name) catch {
+      case e: NoSuchFieldException =>
+        throw new IllegalStateException("NativeLuaArchitecture has no private field '" + name +
+          "': ocelot-brain has changed shape and this adapter cannot drive it", e)
+    }
+    f.setAccessible(true)
+    f
+  }
+
+  def luaOf(arch: NativeLuaArchitecture): LuaState = field("lua").get(arch).asInstanceOf[LuaState]
+
+  /** The private `apis` array. Its LAST element is the PersistenceAPI that owns
+    * this machine's persistKey ("Persistence has to go last"); the caller checks. */
+  def apisOf(arch: NativeLuaArchitecture): Array[NativeLuaAPI] =
+    field("apis").get(arch).asInstanceOf[Array[NativeLuaAPI]]
+
+  def kernelMemoryOf(arch: NativeLuaArchitecture): Int = field("kernelMemory").getInt(arch)
+  def setKernelMemory(arch: NativeLuaArchitecture, value: Int): Unit = field("kernelMemory").setInt(arch, value)
+  def ramScaleOf(arch: NativeLuaArchitecture): Double = field("ramScale").getDouble(arch)
+
+  /** Machine.state is private[machine]; its accessor is public at the JVM
+    * level. The harness can inspect the state stack through this too. */
+  def stateOf(machine: Machine): mutable.Stack[Enumeration#Value] =
+    classOf[Machine].getMethod("state").invoke(machine).asInstanceOf[mutable.Stack[Enumeration#Value]]
+
+  /** MachineAPI.State is private[machine] as well, so its values come off the
+    * enumeration's MODULE$ by name. */
+  private lazy val stateModule: AnyRef =
+    Class.forName("totoro.ocelot.brain.entity.machine.MachineAPI$State$").getField("MODULE$").get(null)
+
+  def stateValue(name: String): Enumeration#Value =
+    stateModule.getClass.getMethod(name).invoke(stateModule).asInstanceOf[Enumeration#Value]
+
+  lazy val SynchronizedCall: Enumeration#Value = stateValue("SynchronizedCall")
+  lazy val SynchronizedReturn: Enumeration#Value = stateValue("SynchronizedReturn")
+
+  /** The original's `state.contains(...)` (:345), on the same Stack. */
+  def inState(machine: Machine, s: Enumeration#Value): Boolean = stateOf(machine).contains(s)
 }
 
 object OCLuaJITStateFactory extends LuaStateFactory {

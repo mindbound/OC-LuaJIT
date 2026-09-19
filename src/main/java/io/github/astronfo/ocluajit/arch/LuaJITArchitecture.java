@@ -2,11 +2,24 @@ package io.github.astronfo.ocluajit.arch;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 
+import net.minecraft.nbt.NBTTagCompound;
+
+import li.cil.oc.OpenComputers;
+import li.cil.oc.Settings;
 import li.cil.oc.api.machine.Architecture;
 import li.cil.oc.api.machine.Machine;
+import li.cil.oc.common.SaveHandler;
 import li.cil.oc.server.machine.luac.LuaStateFactory;
+import li.cil.oc.server.machine.luac.NativeLuaAPI;
 import li.cil.oc.server.machine.luac.NativeLuaArchitecture;
+import li.cil.oc.server.machine.luac.PersistenceAPI;
+import li.cil.repack.com.naef.jnlua.LuaGcMetamethodException;
+import li.cil.repack.com.naef.jnlua.LuaRuntimeException;
+import li.cil.repack.com.naef.jnlua.LuaStackTraceElement;
+import li.cil.repack.com.naef.jnlua.LuaState;
+import scala.Enumeration;
 
 /**
  * LuaJIT-backed OpenComputers architecture: OpenComputers' own machine, running
@@ -72,6 +85,10 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
      */
     public LuaJITArchitecture(final Machine machine) {
         super(machine);
+        // Resolve the private 'apis' field NOW, not on the first save: if
+        // OpenComputers ever renames it, the failure must be a machine that
+        // refuses to start, not a world that cannot be saved.
+        resolveApis();
     }
 
     /** Which VM backs this architecture. */
@@ -156,5 +173,303 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
             } catch (final IOException ignored) {}
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------ //
+    // Persistence: ONE blob, not two.
+    // ------------------------------------------------------------------ //
+
+    /**
+     * WHY save() AND load() ARE OVERRIDDEN WHOLESALE.
+     *
+     * NativeLuaArchitecture.save persists a running computer as TWO roots in
+     * TWO eris.persist calls (NativeLuaArchitecture.scala:396-437; load
+     * :349-394): persist(1), the kernel coroutine, into "<address>_kernel",
+     * and, while the machine's state stack holds SynchronizedCall or
+     * SynchronizedReturn, persist(2) -- the closure the kernel yielded for the
+     * driver call, or the result table -- into "<address>_stack". Each call
+     * is its own reference space. The closure (machine.lua:1116-1124) holds
+     * four OPEN upvalues into the kernel coroutine's stack: args, target,
+     * unwrapUserdata, wrapUserdata. Under our serializer an open upvalue whose
+     * owning thread is not already in the reference table makes p_function
+     * chase the owner (eris_lj.c:543, elj_find_owner_any) and write the WHOLE
+     * kernel thread into the stack blob.
+     *
+     * THAT IS A SECOND KERNEL UNIVERSE. Measured on binary 1a9e8e17
+     * (serializer/tests/stack-universe.lua, U1): the stack blob is 11640 bytes
+     * against a kernel of 11377; two persisted proxies cost FOUR userdata.load
+     * calls; the restored closure's upvalue-id / args-slot / registry all point
+     * at the second kernel; and a sync call whose result is a host Value comes
+     * back NOT-UNWRAPPED -- a plain table the live kernel's registry has never
+     * seen. Nothing raises. That is the silent mode.
+     *
+     * THE FIX NEEDS NO SERIALIZER CHANGE (U2/U2r/U3 pass on the shipping
+     * binary): persist ONE table {[1]=kernel thread, [2]=closure-or-table} in
+     * ONE call. The closure's upvalues then find the thread already in the
+     * reference table and go out as TAG_UPVALOPEN into the same blob: 11650
+     * bytes = kernel + 273, one load per proxy, upvalue-id / args-slot /
+     * registry identical to a never-saved machine. On load, unpersist once
+     * and push t[1] to index 1 and t[2] (when present) to index 2 -- the exact
+     * stack shape runThreaded and runSynchronized assert (:174-176, :202-203).
+     *
+     * WHOLESALE, NOT WRAPPED: super.save/super.load do their persists
+     * unconditionally with no hook between, so both are reproduced here line
+     * by line against :349-437 -- every side effect, in order, including the
+     * failure protocol (nbt.removeTag("state")) that Machine relies on. Each
+     * line below carries the source line it reproduces.
+     *
+     * THE ONE REFLECTIVE READ. The PersistenceAPI instance lives in the private
+     * 'apis' array, as its LAST element ("Persistence has to go last",
+     * :49-57). It must be THAT instance and not a fresh one: it owns the
+     * persistKey the kernel's shell-fill recipes were keyed with at load
+     * (machine.lua:1085, :1158), and its load(nbt) restores that key from NBT
+     * exactly as stock does. A fresh PersistenceAPI mints a new random key,
+     * and every recipe keyed with the old one is silently missed.
+     *
+     * NO MIGRATION PATH, deliberately. A blob written in the old two-call
+     * shape has a bare THREAD as its "_kernel" root, not a table, and load()
+     * below refuses that shape by name ("Invalid kernel.") before anything is
+     * pushed: the computer comes back stopped, loudly. (The build fingerprint
+     * is NOT what protects us here -- a two-call blob written by this same
+     * native would pass it. The shape check is.) The bundle reuses the
+     * "_kernel" tag and writes no "_stack"; a stale "_stack" from an older
+     * save is inert (SaveHandler.cleanSaveData removes only empty
+     * directories).
+     *
+     * NO SWITCH, deliberately. The harness adapter (test/native/OcljArch.scala)
+     * carries an OFF switch so its gate can be shown to FAIL on the two-call
+     * shape; this class does not, because a switch here would be readable
+     * from a server's environment and would silently reinstate the defect.
+     * The release jar always bundles.
+     */
+
+    private static final Enumeration.Value SYNCHRONIZED_CALL = li.cil.oc.server.machine.Machine.State$.MODULE$
+        .SynchronizedCall();
+    private static final Enumeration.Value SYNCHRONIZED_RETURN = li.cil.oc.server.machine.Machine.State$.MODULE$
+        .SynchronizedReturn();
+
+    /** The original's `state.contains(...)`, on the same Stack (:347). */
+    private boolean inState(final Enumeration.Value s) {
+        return ((li.cil.oc.server.machine.Machine) machine()).state()
+            .contains(s);
+    }
+
+    /** Scala's assert is always on; Java's is not. This is the Scala one. */
+    private static void check(final boolean condition, final String what) {
+        if (!condition) throw new AssertionError("assertion failed: " + what);
+    }
+
+    /** `"\tat " + e.getLuaStackTrace.mkString("\n\tat ")`, or "" when empty (:389, :428). */
+    private static String luaTrace(final LuaRuntimeException e) {
+        final LuaStackTraceElement[] st = e.getLuaStackTrace();
+        if (st == null || st.length == 0) return "";
+        final StringBuilder sb = new StringBuilder("\tat ");
+        for (int i = 0; i < st.length; i++) {
+            if (i > 0) sb.append("\n\tat ");
+            sb.append(st[i]);
+        }
+        return sb.toString();
+    }
+
+    /** Resolved once per instance from the private 'apis' field; see resolveApis(). */
+    private NativeLuaAPI[] apis;
+    private PersistenceAPI persistence;
+
+    private void resolveApis() {
+        if (persistence != null) return;
+        final NativeLuaAPI[] found;
+        try {
+            final Field f = NativeLuaArchitecture.class.getDeclaredField("apis");
+            f.setAccessible(true);
+            found = (NativeLuaAPI[]) f.get(this);
+        } catch (final ReflectiveOperationException e) {
+            throw new IllegalStateException(
+                "NativeLuaArchitecture has no readable private field 'apis' (NativeLuaAPI[]): this "
+                    + "OpenComputers build has changed shape and OC-LuaJIT cannot persist against it",
+                e);
+        }
+        if (found == null || found.length == 0 || !(found[found.length - 1] instanceof PersistenceAPI)) {
+            throw new IllegalStateException(
+                "NativeLuaArchitecture.apis does not end in a PersistenceAPI ("
+                    + (found == null ? "null"
+                        : found.length + " entries, last "
+                            + (found.length == 0 ? "none"
+                                : found[found.length - 1].getClass()
+                                    .getName()))
+                    + "): 'Persistence has to go last' no longer holds and OC-LuaJIT cannot persist "
+                    + "against this OpenComputers build");
+        }
+        apis = found;
+        persistence = (PersistenceAPI) found[found.length - 1];
+    }
+
+    /**
+     * Build {[1]=the thread at index 1, [2]=the value at index 2 when withStack}
+     * above the live stack, persist it through the ONE PersistenceAPI, and take
+     * it down again -- also when persist throws, so a failed world save leaves
+     * the running machine's stack exactly as it found it.
+     */
+    private byte[] persistBundle(final LuaState lua, final boolean withStack) {
+        final int top = lua.getTop();
+        try {
+            lua.newTable(); // ... t
+            lua.pushValue(1); // ... t thread
+            lua.rawSet(-2, 1); // ... t t[1] = kernel thread
+            if (withStack) {
+                lua.pushValue(2); // ... t v
+                lua.rawSet(-2, 2); // ... t t[2] = closure | result table
+            }
+            return persistence.persist(top + 1);
+        } finally {
+            lua.setTop(top);
+        }
+    }
+
+    @Override
+    public void save(final NBTTagCompound nbt) {
+        resolveApis(); // no-op after the constructor; kept as a guard
+        final LuaState lua = lua();
+
+        // Unlimit memory while persisting. (:398-400)
+        if (Settings.get()
+            .limitMemory()) {
+            lua.setTotalMemory(Integer.MAX_VALUE);
+        }
+
+        try {
+            // Save the kernel state (which is always at stack index one). (:405)
+            check(lua.isThread(1), "lua.isThread(1)");
+            // While in a driver call we have one object on the global stack: either
+            // the function to call the driver with, or the result of the call. (:408-411)
+            // The bundle takes index 1 ALWAYS and index 2 ONLY in the two sync
+            // states: save also runs in Restarting/Stopping, where index 2 may be a
+            // boolean or an error string, and the original does not persist it.
+            final boolean inCall = inState(SYNCHRONIZED_CALL);
+            final boolean withStack = inCall || inState(SYNCHRONIZED_RETURN);
+            if (withStack) {
+                check(inCall ? lua.isFunction(2) : lua.isTable(2), inCall ? "lua.isFunction(2)" : "lua.isTable(2)");
+            }
+            // ONE persist of {[1]=kernel, [2]=closure|table} under the "_kernel"
+            // tag -- was persist(1) to "_kernel" and persist(2) to "_stack". (:407, :412)
+            SaveHandler.scheduleSave(
+                machine().host(),
+                nbt,
+                machine().node()
+                    .address() + "_kernel",
+                persistBundle(lua, withStack));
+
+            nbt.setInteger("kernelMemory", (int) Math.ceil(kernelMemory() / ramScale())); // (:415)
+
+            for (final NativeLuaAPI api : apis) { // (:417-419)
+                api.save(nbt);
+            }
+
+            try { // (:421-425)
+                lua.gc(LuaState.GcAction.COLLECT, 0);
+            } catch (final Throwable t) {
+                OpenComputers.log()
+                    .warn(
+                        "Error cleaning up loaded computer @ " + machine().host()
+                            .machinePosition()
+                            + ". This either means the server is badly overloaded or a user created an evil __gc method, accidentally or not.");
+                machine().crash("error in garbage collector, most likely __gc method timed out");
+            }
+        } catch (final LuaRuntimeException e) { // (:427-429)
+            OpenComputers.log()
+                .warn(
+                    "Could not persist computer @ " + machine().host()
+                        .machinePosition() + ".\n" + e.toString() + luaTrace(e));
+            nbt.removeTag("state");
+        } catch (final LuaGcMetamethodException e) { // (:430-432)
+            OpenComputers.log()
+                .warn(
+                    "Could not persist computer @ " + machine().host()
+                        .machinePosition() + ".\n" + e.toString());
+            nbt.removeTag("state");
+        }
+
+        // Limit memory again. (:436)
+        recomputeMemory(
+            machine().host()
+                .internalComponents());
+    }
+
+    @Override
+    public void load(final NBTTagCompound nbt) {
+        if (!machine().isRunning()) return; // (:350)
+        resolveApis(); // no-op after the constructor; kept as a guard
+        final LuaState lua = lua();
+
+        // Unlimit memory use while unpersisting. (:353-355)
+        if (Settings.get()
+            .limitMemory()) {
+            lua.setTotalMemory(Integer.MAX_VALUE);
+        }
+
+        try {
+            // Try unpersisting Lua, because that's what all of the rest depends
+            // on. First, clear the stack, meaning the current kernel. (:360)
+            lua.setTop(0);
+
+            // ONE unpersist of the bundle -- was "_kernel" and then, in the sync
+            // states, "_stack". (:362, :369)
+            persistence.unpersist(
+                SaveHandler.load(
+                    nbt,
+                    machine().node()
+                        .address() + "_kernel"));
+            // The bundle is a table. Anything else -- nothing at all because
+            // allowPersistence is off, or a bare thread because the blob was written
+            // in the old shape (which the fingerprint gate refuses before this) -- is
+            // the corrupt-save case the original answers with this same message.
+            if (lua.getTop() != 1 || !lua.isTable(1)) {
+                throw new LuaRuntimeException("Invalid kernel.");
+            }
+            final boolean inCall = inState(SYNCHRONIZED_CALL);
+            final boolean withStack = inCall || inState(SYNCHRONIZED_RETURN);
+            lua.rawGet(1, 1); // bundle thread
+            if (withStack) lua.rawGet(1, 2); // bundle thread v
+            lua.remove(1); // thread [v] -- what runThreaded/runSynchronized assert
+            if (!lua.isThread(1)) { // (:363-367)
+                // This shouldn't really happen, but there's a chance it does if
+                // the save was corrupt (maybe someone modified the Lua files).
+                throw new LuaRuntimeException("Invalid kernel.");
+            }
+            if (withStack) { // (:368-375)
+                if (!(inCall ? lua.isFunction(2) : lua.isTable(2))) {
+                    // Same as with the above, should not really happen normally, but
+                    // could for the same reasons.
+                    throw new LuaRuntimeException("Invalid stack.");
+                }
+            }
+
+            kernelMemory_$eq((int) (nbt.getInteger("kernelMemory") * ramScale())); // (:377)
+
+            for (final NativeLuaAPI api : apis) { // (:379-381)
+                api.load(nbt);
+            }
+
+            try { // (:383-387)
+                lua.gc(LuaState.GcAction.COLLECT, 0);
+            } catch (final Throwable t) {
+                OpenComputers.log()
+                    .warn(
+                        "Error cleaning up loaded computer @ " + machine().host()
+                            .machinePosition()
+                            + ". This either means the server is badly overloaded or a user created an evil __gc method, accidentally or not.");
+                machine().crash("error in garbage collector, most likely __gc method timed out");
+            }
+        } catch (final LuaRuntimeException e) { // (:389)
+            // The original throws a checked java.lang.Exception here, which a Java
+            // override of an interface method with no throws clause cannot.
+            // Machine.load catches Throwable, logs it and closes the machine either
+            // way; the wrapper's class is the only difference.
+            throw new RuntimeException(e.toString() + luaTrace(e), e);
+        }
+
+        // Limit memory again. (:393)
+        recomputeMemory(
+            machine().host()
+                .internalComponents());
     }
 }
