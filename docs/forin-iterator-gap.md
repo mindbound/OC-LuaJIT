@@ -273,6 +273,66 @@ The pattern generalises, and it has held for every hard call in this project:
 **information we already have at the Java layer is cheaper than cleverness in
 C.** Constraining the sandbox beats teaching the serializer another shape.
 
+## The #9 diagnostic — design, 2026-09-19 (to ship with the next serializer bump)
+
+What is left after sites 10–11 is the OS author's own `next`-wrapper (census
+#9). It cannot be rewritten: at save time it is not soundly distinguishable
+from a legitimate custom iterator with its own ordering. It can be *named*.
+
+**Detection (persist side, in `elj_forin_scan`).** The scan already classifies
+every live for-in triple by its control slot and func slot; the branch that
+today `continue`s past a Lua-closure iterator is where the diagnostic hooks.
+Condition: the func slot holds a Lua closure, the frame's position is inside
+or at the loop (`inbody != 0`), and the closure *reaches `next`*:
+
+- its prototype has a `BC_GGET` whose constant is the string `"next"` (the
+  global lookup — the shape of OC's old `component.list`, of
+  `componentProxy.__pairs`, of OpenOS's `component` library `__pairs`, and of
+  QuickOS's `lua_shell`), or
+- one of its upvalues holds the `next` fast function (`FF_next_N`; the
+  `local next = next` idiom), or
+- one of its function-valued upvalues is a Lua closure satisfying the above
+  (one level; bounded).
+
+The test does not require the state slot to be a table: an iterator that
+carries its table in an upvalue (`for k in myiter(t)`) is the same hazard.
+"Reaches `next`" is a heuristic — an iterator that calls `next` on some
+*other* table is a false positive — which is acceptable for an opt-in warning
+and why it is not a rewrite.
+
+**Message.** Both locations, because the author needs both: the loop
+(`chunkname:line` of the enclosing frame, from the frame pc) and the iterator
+(`chunkname:linedefined` of the closure). Text on the order of:
+`for-in loop at boot/04_component.lua:87 iterates with a Lua closure
+(boot/04_component.lua:79) that calls next; its position is not replayable and
+resumes against a different hash layout after a reload — return next, t, nil
+from the iterator, or walk a snapshot array by index`.
+
+**Surface.** A new `eris.settings("forin", mode)` with `mode` one of
+`"ignore"` (default; the wire format and the blob bytes are unchanged),
+`"warn"` (append the message to a registry-held list, retrievable and cleared
+by a new `eris.diagnostics()`), or `"refuse"` (persist raises the message as
+its error — the OS-developer setting, never a player default). In the mod,
+`LuaJITArchitecture` sets the mode from the JVM property
+`ocluajit.forin` (`-Docluajit.forin=warn`) at the end of `initialize()`, and
+after every successful save drains `eris.diagnostics()` to the server log,
+once per distinct message per machine (OC saves every 45 s; the same loop
+would otherwise log every time).
+
+**Tests, failing first.** In `serializer/tests/forin.lua`: (1) an OS-style
+wrapper (the `ocpairs` control shape) under `"warn"` yields exactly one
+diagnostic naming both lines; (2) the snapshot-array iterator (`ocpairs_snap`
+shape) under `"warn"` yields none; (3) `"refuse"` makes persist error with the
+same text; (4) under the default the blob is byte-identical to the one written
+before the change (a fixture blob from the shipping binary, compared after
+stripping the fingerprint header). The current binary fails (1) and (3) — the
+setting name is unknown to it.
+
+**What ships alongside** (one serializer hash move, one additive native
+rebuild on both platforms): the persist-side trace flush becomes a read
+through `GCtrace.startins` (roadmap: "JIT x persist interaction"), and the
+`eris_lj.c:1530` userdata refusal text loses its "(M3)" placeholder.
+
 ## Open questions
 
 - ~~What does OC's `componentProxy.__pairs` return, and why does it exist?~~

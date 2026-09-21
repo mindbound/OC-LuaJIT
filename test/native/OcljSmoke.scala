@@ -919,6 +919,15 @@ object Smoke {
   val nativeMode: String = System.getProperty("ocljit.native", "luajit")
 
   /**
+    * OCLJ_PROBE: "" (the default run) | "grace".  Read from the environment
+    * like OCLJ_BENCH_ONLY, so smoke-test.sh needs no plumbing.  "grace" boots
+    * OpenOS exactly as the default run does, then runs ONLY the grace-expiry
+    * probe (graceExpiryProbe below) in place of the suite and the persist
+    * milestones, and reports one milestone, k6.
+    */
+  val probeMode: String = Option(System.getenv("OCLJ_PROBE")).map(_.trim).getOrElse("")
+
+  /**
     * Which architecture must drive the machine, DERIVED from nativeMode rather
     * than chosen separately.
     *
@@ -1950,6 +1959,199 @@ object Smoke {
       |""".stripMargin
 
   // ------------------------------------------------------------------ //
+  // OCLJ_PROBE=grace -- the grace-expiry probe (milestone k6).
+  //
+  // WHAT IT ASKS.  OC's checkDeadline grants a program that catches the first
+  // "too long without yielding" a 0.5 s grace (deadline = deadline + 0.5) and
+  // re-arms itself as a count=1 hook for the rest of the resume.  A program
+  // that keeps running past that grace WITHOUT yielding must then bring the
+  // machine down -- the question is HOW.  On stock OpenComputers the sentinel
+  // unwinds the sandbox, main() turns it into a string, pcall(main) returns
+  // it, and the machine stops with lastError "too long without yielding".
+  // The 2026-09-19 load matrix (scratchpad/wd-load) saw our kernel die 9/9
+  // with "kernel panic: this is a bug ..." instead, and the source-level
+  // route runs through that re-arm: debug.sethook(co, f, "", 1) is per-thread
+  // on PUC Lua and GLOBAL on LuaJIT, so it hooks the kernel thread too, and
+  // checkDeadline then raises on the way to disarm(), inside pcall(main), and
+  // once more in pcallTimeoutCheck, outside it.  Load only made that route
+  // likely; this probe makes it certain, with no load at all:
+  //
+  //     pcall(function() while true do end end)   -- catch the first sentinel
+  //     local t = computer.uptime()
+  //     while computer.uptime() - t < 1 do end     -- past the grace, no yield
+  //
+  // k6 PASSES iff the machine stopped AND lastError says "too long without
+  // yielding" AND not "kernel panic".  Expected to FAIL on the current kernel
+  // and PASS on OCLJ_NATIVE=stock: it is the fail-first check for patcher
+  // site 12 (drop the re-arm), and must be seen failing before that fix is
+  // believed.
+  // ------------------------------------------------------------------ //
+
+  val GraceAutorunLua: String =
+    """-- OCLJ_PROBE=grace: heartbeat plus the grace-expiry program.  Nothing
+      |-- else from the default autorun -- no suite, no probes, no timer that
+      |-- could be pending when the deadline fires.
+      |local component = require("component")
+      |local event = require("event")
+      |local computer = require("computer")
+      |local nonce = string.format("%.4f-%d", computer.uptime(), math.random(100000, 999999))
+      |local n = 0
+      |local stage = "armed"
+      |local function paint()
+      |  component.gpu.set(1, 15, "OCLJNONCE=" .. nonce .. " OCLJCTR=" .. n .. "        ")
+      |  component.gpu.set(1, 16, "OCLJGRACE=" .. stage .. "        ")
+      |end
+      |-- Started by a SIGNAL from the harness once (d) has passed, like the stk
+      |-- and fi probes, so the harness knows when it began and nothing races
+      |-- the boot.  Dispatched from OpenOS's event loop like any handler.
+      |event.listen("ocljgrace", function()
+      |  -- The row is painted BEFORE the overrun: nothing between the first
+      |  -- catch and the end of the spin may yield, and gpu.set can.
+      |  stage = string.format("spinning/%.2f", computer.uptime())
+      |  pcall(paint)
+      |  local okd, err = pcall(function() while true do end end)
+      |  -- Caught the first "too long without yielding".  checkDeadline has
+      |  -- moved the deadline 0.5 s out and re-armed at count=1; keep running
+      |  -- past that WITHOUT yielding: no os.sleep, no print, no component
+      |  -- call.  computer.uptime is the host function itself (machine.lua's
+      |  -- libcomputer.uptime = computer.uptime), a direct call.
+      |  local t = computer.uptime()
+      |  while computer.uptime() - t < 1 do end
+      |  -- Only reached if the machine SURVIVED the expiry, which neither
+      |  -- kernel should allow.
+      |  stage = string.format("survived/%s/%s/%.2f", tostring(okd),
+      |    (tostring(err):gsub("[ /]", "_")), computer.uptime())
+      |  pcall(paint)
+      |  return false
+      |end)
+      |event.timer(0.05, function()
+      |  n = n + 1
+      |  pcall(paint)
+      |end, math.huge)
+      |""".stripMargin
+
+  /** ocelot-brain's WARN-and-above log lines, captured in-process (grace mode). */
+  val kernelLog = new java.util.concurrent.CopyOnWriteArrayList[String]()
+
+  /**
+    * Hook a capturing appender onto log4j's root logger.  "Kernel crashed.
+    * This is a bug!" is Ocelot.log.warn in NativeLuaArchitecture.runThreaded
+    * (:288), and under ocelot-brain's default log4j configuration the root
+    * level is ERROR, so that line is DROPPED unless the JVM runs with
+    * -Dlog4j2.level=WARN (the wd-load rig delivered it through
+    * JAVA_TOOL_OPTIONS).  Lowering the root level here makes the probe
+    * self-sufficient: the line lands on the console (smoke.log) AND in
+    * kernelLog, so k6's message can quote it.  Grace mode only; the default
+    * run never calls this.
+    */
+  def installKernelLogCapture(): String = {
+    try {
+      import org.apache.logging.log4j.Level
+      import org.apache.logging.log4j.core.{LogEvent, LoggerContext}
+      import org.apache.logging.log4j.core.appender.AbstractAppender
+      import org.apache.logging.log4j.core.config.Property
+      val app = new AbstractAppender("ocljit-kernel-log", null, null, true, Property.EMPTY_ARRAY) {
+        override def append(e: LogEvent): Unit =
+          kernelLog.add(e.getLevel.toString + " [" + e.getThreadName + "] " + e.getMessage.getFormattedMessage)
+      }
+      app.start()
+      val ctx = LoggerContext.getContext(false)
+      val cfg = ctx.getConfiguration
+      val root = cfg.getRootLogger
+      val was = root.getLevel
+      if (was.isMoreSpecificThan(Level.WARN)) root.setLevel(Level.WARN)
+      cfg.addAppender(app)
+      root.addAppender(app, Level.WARN, null)
+      ctx.updateLoggers()
+      "ok (root level " + was + " -> " + root.getLevel + ")"
+    } catch { case e: Throwable => "UNAVAILABLE: " + e }
+  }
+
+  /**
+    * The probe itself: signal the program, watch the machine until it stops
+    * (or survives, or 40 s pass), then say exactly how it ended.  Reads only
+    * the screen and Machine's own accessors -- never the Lua state, which a
+    * machine mid-overrun is using.
+    */
+  def graceExpiryProbe(ws: Workspace, computer: Case, screen: Screen,
+                       kernelMode: String, nativeMode: String): Unit = {
+    val m = computer.machine
+    p("--- grace-expiry probe: kernel=" + kernelMode + " native=" + nativeMode + " ---")
+    val tSig = System.currentTimeMillis()
+    val upSig = m.upTime()
+    val queued = m.signal("ocljgrace")
+    p(f"grace: signal ocljgrace queued=$queued at uptime $upSig%.2f")
+    // Bounded at 40 s of 25 ms ticks.  The program itself is 5 s (timeout)
+    // + 0.5 s (grace) + whatever the count=1 hook costs the spin, so 40 s is
+    // a ceiling, not an estimate; the loop leaves the moment the machine
+    // stops, or the row says the program outlived the expiry.
+    var row = parse(nonEmptyScreen(screen), "OCLJGRACE")
+    var lastRow = row
+    var tSpin = -1L
+    var upSpin = -1.0
+    var k = 0
+    while (k < 1600 && m.isRunning && !row.startsWith("survived")) {
+      ws.update(); Thread.sleep(25); k += 1
+      if (k % 4 == 0) {
+        row = parse(nonEmptyScreen(screen), "OCLJGRACE")
+        if (row != lastRow) {
+          p("grace: OCLJGRACE=" + row + " after " + (System.currentTimeMillis() - tSig) + " ms")
+          lastRow = row
+        }
+        if (tSpin < 0 && row.startsWith("spinning")) { tSpin = System.currentTimeMillis(); upSpin = m.upTime() }
+      }
+    }
+    val tStop = System.currentTimeMillis()
+    // A few more ticks so a death settles: OC paints its "Unrecoverable
+    // Error" onto the screen when the machine stops, and the log line is
+    // written by the executor thread that is still unwinding.
+    var k2 = 0
+    while (k2 < 20) { ws.update(); Thread.sleep(25); k2 += 1 }
+    val running = m.isRunning
+    val lastErr = m.lastError
+    val err = if (lastErr == null) "<null>" else lastErr
+    row = parse(nonEmptyScreen(screen), "OCLJGRACE")
+    val captured = kernelLog.toArray(new Array[String](0)).toList
+    val crashed = captured.filter(_.contains("Kernel crashed"))
+    p("GRACE-TIMELINE: kernel=" + kernelMode + " native=" + nativeMode +
+      " queued=" + queued + " ticks=" + k +
+      " spin_seen_ms=" + (if (tSpin < 0) -1L else tSpin - tSig) + f" spin_up=$upSpin%.2f" +
+      " spin_to_stop_ms=" + (if (tSpin < 0) -1L else tStop - tSpin) +
+      " running=" + running + " lastError=" + err + " row=" + row +
+      " log_lines=" + captured.size + " kernel_crashed_lines=" + crashed.size)
+    captured.foreach { s => s.linesIterator.foreach(l => p("  ocelot-brain log: " + l)) }
+    p("SCREEN AT END OF GRACE PROBE (running=" + running + "):")
+    println(nonEmptyScreen(screen))
+    // The clean message alone would also accept the vacuous path where the
+    // FIRST raise escaped the program's pcall and the machine died at the
+    // deadline D instead of at D + grace: that is a clean crash too, and it
+    // proves nothing about the grace.  So the death must come no earlier
+    // than the timeout itself (ocljit.conf timeout: 5.0), measured from the
+    // spin row.  OCLJ_GRACE_MIN_MS overrides the bound, which is how the
+    // clause is shown in its failing direction (99999 -> FAIL).
+    val graceMinMs = Option(System.getenv("OCLJ_GRACE_MIN_MS")).map(_.trim).filter(_.nonEmpty).map(_.toLong).getOrElse(5000L)
+    val outlived = tSpin >= 0 && (tStop - tSpin) >= graceMinMs
+    val clean = !running && err.contains("too long without yielding") && !err.contains("kernel panic") && outlived
+    val warnQuote = crashed.headOption.map(_.linesIterator.map(_.trim).filter(_.nonEmpty).take(2).toList.mkString(" | "))
+    milestone("k6-grace-expiry-crashes-cleanly", clean,
+      "kernel=" + kernelMode + " native=" + nativeMode +
+        ":  pcall(while true do end) caught, then 1 s more without yielding -> running=" + running +
+        "  lastError='" + err + "'" +
+        "  OCLJGRACE=" + row +
+        "  spinning->stop=" + (if (tSpin < 0) "?" else (tStop - tSpin) + " ms") +
+        "  outlived the first deadline (>= " + graceMinMs + " ms)=" + outlived +
+        (warnQuote match {
+          case Some(w) => "  ocelot-brain WARN: '" + w + "'"
+          case None => "  (no 'Kernel crashed' WARN captured)"
+        }) +
+        (if (clean) "   (a clean machine crash, as stock OpenComputers gives)"
+         else if (running) "   <- the machine SURVIVED running past the grace: the expiry was never enforced"
+         else if (err.contains("kernel panic")) "   <- KERNEL PANIC, not a clean crash: the sentinel escaped pcall(main) (the count=1 re-arm hooked the kernel thread)"
+         else if (!outlived) "   <- clean message but the machine died BEFORE the timeout had elapsed: the first raise escaped the program's pcall, so the grace was never exercised"
+         else "   <- stopped with an unexpected error"))
+  }
+
+  // ------------------------------------------------------------------ //
 
   def main(args: Array[String]): Unit = {
     val conf = if (args.length > 0) args(0) else ""
@@ -1974,6 +2176,12 @@ object Smoke {
     p("LuaStateFactory.includeLuaJ  = " + LuaStateFactory.includeLuaJ)
     p("forceNativeLibPathFirst      = '" + totoro.ocelot.brain.Settings.get.forceNativeLibPathFirst + "'")
     p("computer.lua.allowBytecode   = " + totoro.ocelot.brain.Settings.get.allowBytecode)
+    if (probeMode.nonEmpty && probeMode != "grace")
+      die("OCLJ_PROBE must be unset or 'grace', not '" + probeMode + "'")
+    if (probeMode == "grace") {
+      p("!! OCLJ_PROBE=grace: boot as usual, then ONLY the grace-expiry probe (k6);")
+      p("!! no suite, no persist.  ocelot-brain log capture: " + installKernelLogCapture())
+    }
     // The d2 milestone below is PARAMETERISED on this setting rather than
     // assuming it.  A gate test that only ever runs in the "shut" polarity
     // cannot tell enforcement from a probe that always prints "refused"; the
@@ -2000,7 +2208,11 @@ object Smoke {
     // The hard disk is bound to a real directory we pre-populate, so OpenOS
     // finds autorun.lua when it mounts it.
     val diskDir: Path = Files.createTempDirectory("ocljit-smoke-hdd")
-    Files.write(diskDir.resolve("autorun.lua"), AutorunLua.getBytes(StandardCharsets.UTF_8))
+    // OCLJ_PROBE=grace plants the probe's own autorun instead: heartbeat plus
+    // the grace-expiry program, nothing else.  The suite files planted below
+    // are still written (the planting code is shared) but nothing reads them.
+    val autorunSrc = if (probeMode == "grace") GraceAutorunLua else AutorunLua
+    Files.write(diskDir.resolve("autorun.lua"), autorunSrc.getBytes(StandardCharsets.UTF_8))
     // The Phase-0 compute pole, planted next to autorun.lua so the sandbox can
     // read it through the filesystem proxy.  OCLJ_BENCH_SABOTAGE plants a
     // deliberately wrong variant instead -- the control for the checksum
@@ -2184,7 +2396,8 @@ object Smoke {
     val hdd = new HDDManaged(Tier.One)
     hdd.customRealPath = Some(diskDir)
     computer.inventory(3) = hdd
-    p("hdd real path = " + diskDir + " (autorun.lua planted, " + AutorunLua.length + " bytes)")
+    p("hdd real path = " + diskDir + " (autorun.lua planted, " + autorunSrc.length + " bytes" +
+      (if (probeMode == "grace") ", the OCLJ_PROBE=grace variant" else "") + ")")
 
     computer.inventory(4) = Loot.LuaBiosEEPROM.create()
     computer.inventory(5) = Loot.OpenOsFloppy.create()
@@ -2240,6 +2453,17 @@ object Smoke {
     // reading it, or the guard and the kernel race on the same state.
     val qOk = quiesced(computer.machine, "the VM fingerprint")
     val fp = guard(computer.machine)
+    // The run's last lines, shared by the default path (the end of main) and
+    // the OCLJ_PROBE=grace path, which leaves right after (d).
+    def finish(): Nothing = {
+      p("FINGERPRINT: " + fp)
+      p(s"CHECKS: $checks   FAILURES: $failures   WALL: ${secs}s")
+      p("VERDICT: " + (if (failures == 0) "PASS" else "FAIL"))
+      p("=" * 72)
+      try Ocelot.shutdown() catch { case _: Throwable => }
+      System.exit(if (failures > 0) 1 else 0)
+      throw new RuntimeException()
+    }
 
     // --- (b2) the MACHINE's own accounting -----------------------------
     // Read-only, on the live machine, so it says something about the thing
@@ -2403,6 +2627,12 @@ object Smoke {
       die("autorun.lua never ran: no OCLJNONCE on screen. OpenOS did not mount the hard disk, " +
         "or /etc/filesystem.cfg disabled autorun.")
 
+    // --- (k6) OCLJ_PROBE=grace: the grace-expiry probe, and nothing after it --
+    if (probeMode == "grace") {
+      graceExpiryProbe(ws, computer, screen, kernelMode, nativeMode)
+      finish()
+    }
+
     // --- JIT PROBE, part 2: read out, then detach BEFORE the persist ------
     // The counter closure lives in the jit library's attach registry, which is
     // not something a persisted blob should ever contain.
@@ -2500,12 +2730,89 @@ object Smoke {
     // The watchdog replaces the mechanism behind "too long without yielding";
     // this is the assertion that the replacement enforces it.  Waits for the
     // probe autorun.lua scheduled: up to timeout (5 s) + grace + slack.
+    // WDTIMELINE (roadmap row 109): per-run discrimination of fires=0.  The
+    // probe is due at the autorun's uptime + 6 s, and the nonce IS that uptime
+    // (autorun: string.format("%.4f-%d", computer.uptime(), ...)).  While the
+    // probe spins nothing else on the machine runs, so OCLJCTR FREEZES with
+    // OCLJDEADLINE still "pending"; while the probe has not yet run, OCLJCTR
+    // keeps advancing under the same "pending".  The row alone cannot tell
+    // those apart; the counter can.  Diagnostic only: k1's condition, cap and
+    // sampling cadence are unchanged.
+    //   Measured 2026-09-19 (wd-load/instrument/ff-1-watchdog): the freeze is
+    // NOT the spin alone.  The autorun's 4 s walk timer (OCLJW01: 132 indirect
+    // fs.list calls, one host tick each, 6.05 s of uptime) runs from nonce+4
+    // and the probe dispatches in the same resume when it ends, with no
+    // heartbeat between, so freeze_up lands on nonce+4 and freeze_ms is walk
+    // plus spin.  Under load the walk's wall time inflates and the spin's does
+    // not, so freeze_ms cannot be read as watchdog lateness.  exec_run_ms is
+    // the spin itself: the longest run of consecutive samples with
+    // isExecuting=true, which the walk (a yield per fs.list) cannot produce.
+    // OpenOS timers catch up (event.lua: timeout += interval), so after the
+    // spin the heartbeat bursts at about one per tick and hb_per_s is an
+    // average over both regimes.
+    val tK1 = System.currentTimeMillis()
+    val upK1 = computer.machine.upTime()
+    val nonceUp = try nonceA.split("-")(0).toDouble catch { case _: Throwable => -1.0 }
+    val dueUp = if (nonceUp >= 0) nonceUp + 6.0 else -1.0
+    var ctrK1 = try parse(nonEmptyScreen(screen), "OCLJCTR").toInt catch { case _: Throwable => -1 }
+    val ctrK1Start = ctrK1
+    var tCtrMoved = tK1
+    var upCtrMoved = upK1
+    var frzMs = 0L
+    var frzStartMs = -1L
+    var frzUp = -1.0
+    var execSamples = 0
+    var execTrue = 0
+    var exRunStart = -1L
+    var exRunStartUp = -1.0
+    var exRunMs = 0L
+    var exRunStartMs = -1L
+    var exRunUp = -1.0
+    var rowSeenMs = if (txtA.contains("OCLJDEADLINE=")) tBootShell - t0 else -1L
     var kd = 0
     var dlRes = parse(nonEmptyScreen(screen), "OCLJDEADLINE")
     while (kd < 600 && computer.machine.isRunning && (dlRes == "pending" || dlRes == "<missing>")) {
       ws.update(); Thread.sleep(25); kd += 1
-      if (kd % 10 == 0) dlRes = parse(nonEmptyScreen(screen), "OCLJDEADLINE")
+      if (kd % 10 == 0) {
+        val t = nonEmptyScreen(screen)
+        dlRes = parse(t, "OCLJDEADLINE")
+        val now = System.currentTimeMillis()
+        if (rowSeenMs < 0 && dlRes != "<missing>") rowSeenMs = now - t0
+        execSamples += 1
+        if (computer.machine.isExecuting) {
+          execTrue += 1
+          if (exRunStart < 0) { exRunStart = now; exRunStartUp = computer.machine.upTime() }
+          if (now - exRunStart >= exRunMs) { exRunMs = now - exRunStart; exRunStartMs = exRunStart - t0; exRunUp = exRunStartUp }
+        } else exRunStart = -1L
+        val c = try parse(t, "OCLJCTR").toInt catch { case _: Throwable => -1 }
+        if (c != ctrK1) { ctrK1 = c; tCtrMoved = now; upCtrMoved = computer.machine.upTime() }
+        else if (now - tCtrMoved > frzMs) { frzMs = now - tCtrMoved; frzStartMs = tCtrMoved - t0; frzUp = upCtrMoved }
+      }
     }
+    val tK1End = System.currentTimeMillis()
+    val frzOpen = frzMs > 0 && (tK1End - tCtrMoved) >= frzMs
+    // "Open" = the longest exec run reached the last sample AND the loop left
+    // without a result.  The second clause is load-bearing: in a nominal run
+    // the sample that sees the row resolve can also catch the machine inside
+    // the heartbeat's catch-up burst (wd-load/instrument/ff-3-watchdog-final:
+    // exec_run_open=true with exec_at_exit=false), which is not the spin
+    // still going.  The probe60 fixture run (ff-4-probe60) reads false.
+    val exRunOpen = exRunStart >= 0 && (exRunStart - t0) == exRunStartMs &&
+      (dlRes == "pending" || dlRes == "<missing>")
+    val walkK1 = parse(nonEmptyScreen(screen), "OCLJW01")
+    p("WDTIMELINE-K1: kernel=" + kernelMode + " jit=" + jitMode + " native=" + nativeMode +
+      " k1_start_ms=" + (tK1 - t0) + " k1_ms=" + (tK1End - tK1) + " k1_ticks=" + kd + " k1=" + dlRes +
+      " k1_resolved_ms=" + (if (dlRes == "pending" || dlRes == "<missing>") -1L else tK1End - t0) +
+      " row_seen_ms=" + rowSeenMs +
+      f" nonce_up=$nonceUp%.2f due_up=$dueUp%.2f up_k1_start=$upK1%.2f up_k1_end=${computer.machine.upTime()}%.2f" +
+      " ctr=" + ctrK1Start + "->" + ctrK1 +
+      f" hb_per_s=${if (tK1End > tK1 && ctrK1 >= 0 && ctrK1Start >= 0) (ctrK1 - ctrK1Start) * 1000.0 / (tK1End - tK1) else -1.0}%.2f" +
+      f" freeze_ms=$frzMs freeze_start_ms=$frzStartMs freeze_up=$frzUp%.2f freeze_open=$frzOpen" +
+      f" exec_run_ms=$exRunMs exec_run_start_ms=$exRunStartMs exec_run_up=$exRunUp%.2f exec_run_open=$exRunOpen" +
+      " exec_pct=" + (if (execSamples > 0) execTrue * 100 / execSamples else -1) +
+      " exec_at_exit=" + computer.machine.isExecuting + " walk=" + walkK1 +
+      " running=" + computer.machine.isRunning +
+      " lastError=" + computer.machine.lastError)
     milestone("k1-deadline-still-fires", dlRes == "too_long_without_yielding",
       "kernel=" + kernelMode + "  pcall(while true do end) -> " + dlRes + " after " + kd + " ticks" +
         (if (dlRes == "too_long_without_yielding") "   (and the machine survived it: running=" + computer.machine.isRunning + ")"
@@ -2520,16 +2827,36 @@ object Smoke {
     // fire; in stock mode the kernel never arms, so all three must be zero.
     // If this one probes a running machine it does not merely misreport --
     // it corrupted the stack badly enough to break the persist that follows.
+    var wdQuiet = false
+    val tQ0 = System.currentTimeMillis()
+    var tQ1 = tQ0
     val wdStats = {
       // quiesced() is kept as a DIAGNOSTIC only.  It reports whether the
       // machine looked idle; it does not make the read safe, and believing it
       // did cost about one run in four.  evalStrLocked is what makes it safe.
-      quiesced(computer.machine, "the watchdog stats read-out")
+      wdQuiet = quiesced(computer.machine, "the watchdog stats read-out")
+      tQ1 = System.currentTimeMillis()
       evalStrLocked(computer.machine, mLua,
         "local f, r, x, dp, h = _OCLJ_WATCHDOG.stats() return f .. '/' .. r .. '/' .. x .. '/' .. dp .. '/' .. tostring(h)")
     }
+    val tQ2 = System.currentTimeMillis()
     val wdFires = try wdStats.split("/")(0).toInt catch { case _: Throwable => -1 }
     p("WATCHDOG STATS: fires/refires/filtered/depth/hooked = " + wdStats)
+    // The second half of the timeline: what the shim says, and how long the
+    // locked read waited.  evalStrLocked takes the machine's monitor, which
+    // Machine.run holds for the whole resume (ocelot-brain Machine.scala:907),
+    // so a probe still spinning here either ends first (a late fire, and then
+    // fires>=1 on this line) or holds this line off the log until OCLJ_TIMEOUT.
+    // A PRINTED fires=0 is therefore never "the loop was still running".
+    p("WDTIMELINE: kernel=" + kernelMode + " jit=" + jitMode + " native=" + nativeMode +
+      " k1=" + dlRes + " k1_ticks=" + kd + " k1_ms=" + (tK1End - tK1) +
+      " freeze_ms=" + frzMs + " freeze_open=" + frzOpen + " exec_run_ms=" + exRunMs +
+      " ctr=" + ctrK1Start + "->" + ctrK1 +
+      " quiesced=" + wdQuiet + " quiesce_ms=" + (tQ1 - tQ0) + " read_ms=" + (tQ2 - tQ1) +
+      " exec_at_read=" + computer.machine.isExecuting +
+      " stats(fires/refires/filtered/depth/hooked)=" + wdStats +
+      " k2_stops=" + stops + " running=" + computer.machine.isRunning +
+      " lastError=" + computer.machine.lastError + " wall_s=" + secs)
     if (nativeMode == "stock")
       milestone("k5-baseline-has-no-watchdog", wdFires == -1,
         "PUC 5.2 baseline: _OCLJ_WATCHDOG is absent (stats read " + wdStats + ")" +
@@ -3355,12 +3682,7 @@ object Smoke {
     bytecodeGate()
     memoryProbes()
 
-    p("FINGERPRINT: " + fp)
-    p(s"CHECKS: $checks   FAILURES: $failures   WALL: ${secs}s")
-    p("VERDICT: " + (if (failures == 0) "PASS" else "FAIL"))
-    p("=" * 72)
-    try Ocelot.shutdown() catch { case _: Throwable => }
-    System.exit(if (failures > 0) 1 else 0)
+    finish()
   }
 
   /** The kernel blob is buried somewhere in the entity tree; find it by key. */

@@ -114,3 +114,30 @@ address once (computer, filesystem x2, screen, keyboard, gpu, eeprom).
 `setPaletteColor`. Log clean: no `eris-lj:` text, no state-load error, no
 exception. Harness equivalent: `fi-1/2/3`, 45/0, with the negative control
 (sites 10–11 removed) failing `fi-2`/`fi-3` on the wrong-sequence symptom.
+
+## T4 — a caught timeout that outlives its grace crashes cleanly (kernel site 12)
+
+Shape: OC kills a program that catches `too long without yielding` and keeps
+running past the 0.5 s grace. On the 11-site kernel that kill escaped the kernel
+itself (LuaJIT's hooks are per-VM, and `checkDeadline`'s own count=1 re-arm
+hooked the kernel thread), so the computer died with **`kernel panic: this is a
+bug, check your log file and report it`** instead of the clean error stock OC
+gives.
+
+**Requires the power-cycle in step 3** — this is a kernel change.
+
+At `lua>`, paste (nothing between the catch and the end of the spin may yield):
+```lua
+pcall(function() while true do end end) local t = computer.uptime() while computer.uptime() - t < 1 do end
+```
+
+Signals: after ~5.5 s the computer stops with the red **Unrecoverable Error**
+screen reading **`too long without yielding`** — the same screen stock OC shows.
+A screen reading `kernel panic: this is a bug ...` is the old failure, and the
+log then carries `Kernel crashed. This is a bug!`. Either way the computer is
+stopped; sneak-right-click restarts it. Log check: no `Kernel crashed` line.
+
+**Result: pending.** Jar to use: the one built from this change (kernel 51952 B,
+12 sites; natives unchanged, DLL `49ead6cc`). Harness equivalent: `OCLJ_PROBE=grace`
+— `k6` FAIL on the 11-site kernel (kernel panic, 5411 ms), PASS on stock (5415 ms)
+and on the 12-site kernel 4/4 (5402–5421 ms).

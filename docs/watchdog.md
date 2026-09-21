@@ -132,6 +132,20 @@ trace table, so both orders are safe. Earlier project documents gave two
 contradictory orders; neither was wrong, and the requirement should be stated as
 "either order is safe" rather than as a rule.
 
+## The post-expiry re-arm is deleted (2026-09-21)
+
+OC's `checkDeadline` re-arms itself to count=1 with `debug.sethook(coroutine.running(), ...)`
+on its first raise. On LuaJIT that is a global hook, so from the first fire until
+`disarm()` the kernel thread was hooked too; once the grace expired in the sandbox
+the kernel's own instructions on the way to `disarm()` raised, and the chunk's
+`return pcallTimeoutCheck(pcall(main))` tail call let the raise escape the kernel
+coroutine: a kernel panic where stock gives `too long without yielding`. Kernel
+site 12 deletes the re-arm; the shim's hook is count=1, thread-filtered and
+re-fired every 50 ms from the first fire anyway, so nothing is lost. Reproduced
+without load by `OCLJ_PROBE=grace` (harness milestone `k6`); details and the two
+residuals (a leaked arm entry when an error lands between `resume` and `disarm`;
+JNLua dropping the panic message) are in the roadmap.
+
 ## Open items
 - Decide `SHORT_STRING` threshold (route all pattern ops through the Lua matcher?).
 - Stress-test cross-thread injection on a weak-memory host (ARM) or under TSan before shipping non-x86 natives.

@@ -106,8 +106,26 @@ grep -q '_OCLJ_WATCHDOG' "$OUT" \
 ARMS=$(grep -c 'watchdog.arm(' "$OUT")
 [ "$ARMS" = "3" ] || fail "expected exactly 3 watchdog.arm sites, found $ARMS"
 LEFT=$(grep -c 'debug.sethook' "$OUT")
-[ "$LEFT" = "3" ] || fail "expected exactly 3 surviving debug.sethook calls (bogomips x2 and the
-       immediate-fire arm at machine.lua:47), found $LEFT"
+[ "$LEFT" = "2" ] || fail "expected exactly 2 surviving debug.sethook calls (the bogomips arm and clear in
+       calcHookInterval; checkDeadline's post-expiry re-arm at machine.lua:47 is deleted by
+       site 12), found $LEFT"
+# By CONTENT, not only by count: the two survivors are the bogomips pair and
+# the post-expiry re-arm is gone.  On LuaJIT that re-arm was a per-VM,
+# unfiltered count=1 hook that fired on the kernel's own instructions between
+# the sandbox's resume returning and disarm(); past the 0.5 s grace it raised
+# inside main() and again outside pcall(main), and the machine died with
+# "kernel panic" where OC reports "too long without yielding" (2026-09-19 load
+# matrix, OpenOS boot 9/9 under saturating host load).
+grep -F -q 'debug.sethook(calcBogoMips, "", hookInterval)' "$OUT" \
+  || fail "the bogomips arm in calcHookInterval is missing: the patcher touched a line it must not"
+grep -F -q 'debug.sethook()' "$OUT" \
+  || fail "the bogomips clear in calcHookInterval is missing: the patcher touched a line it must not"
+if grep -F -q 'debug.sethook(coroutine.running(), checkDeadline, "", 1)' "$OUT"; then
+  fail "checkDeadline still re-arms a count=1 hook on the running coroutine (site 12 did not
+       apply): on LuaJIT that hook is per-VM and unfiltered, and a program that catches the
+       first 'too long without yielding' and runs past the grace kills the machine with a
+       kernel panic instead of crashing it cleanly"
+fi
 
 # _ENV, and BOTH sites named separately on purpose.  A single grep for _ENV
 # would pass on the one-site fix that was tried first and is WRONG: setting
@@ -171,7 +189,7 @@ NEXTS=$(grep -c 'next(' "$OUT")
        sites 10-11), found $NEXTS -- OpenComputers may have grown an iterator this patch does
        not know about, and a closure over next is the shape that restores wrong"
 
-say "    arms=$ARMS  surviving debug.sethook=$LEFT  _ENV sites=2  shell-fill sites=3  snapshot walks=2  next( calls=$NEXTS"
+say "    arms=$ARMS  surviving debug.sethook=$LEFT (bogomips only; the post-expiry re-arm is deleted)  _ENV sites=2  shell-fill sites=3  snapshot walks=2  next( calls=$NEXTS"
 say "    out     = $OUT  ($(wc -c < "$OUT") bytes)"
 echo
 echo "NEXT: package it."

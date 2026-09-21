@@ -4,13 +4,14 @@
 --   luajit patch-machine-lua.lua <in: OC machine.lua> <out: patched machine.lua>
 --
 -- WHY A PATCH AND NOT A FORK.  The census argument stands: we run OC's real
--- kernel semantics and couple to no particular OS.  This script changes eleven
+-- kernel semantics and couple to no particular OS.  This script changes twelve
 -- places and refuses to run if any anchor does not match EXACTLY ONCE -- so an
 -- OpenComputers bump that moves or rewords a site fails loudly at build time
 -- rather than shipping a kernel that arms the old hook somewhere.
 --
--- The eleven are FOUR changes, not one.  Sites 0-3 replace the standing
--- deadline hook with the watchdog.  Sites 4-5 bind the name _ENV, which LuaJIT
+-- The twelve are FOUR changes, not one.  Sites 0-3 and 12 replace the standing
+-- deadline hook with the watchdog (12 deletes checkDeadline's own post-expiry
+-- re-arm; see THE CHANGE).  Sites 4-5 bind the name _ENV, which LuaJIT
 -- does not provide at all; see THE SECOND CHANGE below.  Sites 6-9 convert the
 -- kernel's two __persist recipes to the shell-fill protocol; see THE THIRD
 -- CHANGE.  Sites 10-11 replace the kernel's two iterators that wrap next in a
@@ -25,9 +26,12 @@
 -- slower (docs/research/hook-vs-jit.md).  The watchdog the native provides
 -- as _OCLJ_WATCHDOG arms NOTHING until the deadline has actually passed; then
 -- a timer thread injects a count=1 hook that calls checkDeadline -- the SAME
--- checkDeadline, untouched, with its sentinel, its 0.5s grace and its own
--- count=1 re-arm against pcall-swallowing loops.  What this patch changes is
--- who arms the hook and when, and nothing else.
+-- checkDeadline, with its sentinel and its 0.5s grace.  Its own count=1
+-- re-arm is DELETED (site 12): hooks are per-VM on LuaJIT, so that re-arm was
+-- unfiltered and fired on the kernel's own instructions on the way to
+-- disarm(); past the grace that was a kernel panic instead of a clean "too
+-- long without yielding".  What this patch changes is who arms the hook and
+-- when, and that one line.
 --
 -- THE SECOND CHANGE: _ENV.  LuaJIT is API/ABI-locked to Lua 5.1, which is
 -- precisely why it cannot implement 5.2's _ENV -- upstream says so.  What it
@@ -137,9 +141,11 @@
 --   * calcHookInterval (the bogomips loop at the top) still arms a hook for
 --     0.05s at boot.  hookInterval is now used by nothing, but the loop is
 --     harmless and removing it would widen the diff for no gain.
---   * checkDeadline's own debug.sethook(coroutine.running(), checkDeadline,
---     "", 1): the post-expiry re-arm.  It only ever runs after the deadline
---     has passed, when speed no longer matters, and disarm() clears it.
+--   * NOT left alone, although the first version of this file did:
+--     checkDeadline's own debug.sethook(coroutine.running(), checkDeadline,
+--     "", 1), the post-expiry re-arm.  The reasoning was that disarm()
+--     clears it, which is true; the instructions on the way to disarm() are
+--     hooked by it, which is the bug.  Site 12.
 
 local inpath, outpath = arg[1], arg[2]
 assert(inpath and outpath, "usage: luajit patch-machine-lua.lua <in> <out>")
@@ -443,12 +449,52 @@ src = replace_once(src, "componentProxy.__pairs snapshot walk",
   end
 ]==])
 
--- What must remain: exactly the three debug.sethook calls we leave alone
--- (two in calcHookInterval, one in checkDeadline).  Anything else means OC
--- grew a fourth arm site this patch does not know about.
+-- 12. checkDeadline's post-expiry re-arm.  OC re-arms a count=1 hook on the
+--     running coroutine the moment the deadline has passed, so that a loop
+--     swallowing the error in pcall is re-raised at every instruction.  On
+--     PUC that hook is PER THREAD and the kernel's own thread never has one.
+--     On LuaJIT hook state lives in global_State, so the same call installs
+--     an unfiltered count=1 hook for every thread in the VM, replacing the
+--     native's thread-filtered hook: it fires on the kernel's instructions
+--     between the sandbox's resume returning and disarm(), and once the 0.5 s
+--     grace has expired checkDeadline raises inside main(), pcall(main)
+--     catches it, and the tail-called pcallTimeoutCheck raises again outside
+--     any pcall -- "kernel panic: this is a bug" where OC reports "too long
+--     without yielding" (2026-09-19 load matrix: OpenOS boot 9/9 under
+--     saturating host load).  The first version of this file left the re-arm
+--     in place, reasoning that disarm() clears it; it does, and the
+--     instructions on the way to disarm() were the problem.  The native's
+--     hook is already count=1 from its first fire until disarm() and is
+--     re-fired every 50 ms (wd_test W13a), so the re-arm added nothing here
+--     and only removed the filter.  The grace arithmetic and hitDeadline
+--     below are OC's, untouched.
+src = replace_once(src, "checkDeadline post-expiry re-arm",
+[==[  if computer.realTime() > deadline then
+    debug.sethook(coroutine.running(), checkDeadline, "", 1)
+    if not hitDeadline then
+]==],
+[==[  if computer.realTime() > deadline then
+    -- OC-LuaJIT: OC re-armed a count=1 hook on the running coroutine here --
+    -- the post-expiry escalation that keeps a pcall-swallowing loop from
+    -- escaping.  Deleted (site 12 in native/kernel/patch-machine-lua.lua).
+    -- On LuaJIT hook state is per-VM, not per-thread, so that re-arm replaced
+    -- the native's thread-filtered count=1 hook with an unfiltered one that
+    -- also fired on the kernel's own instructions between the sandbox's
+    -- resume returning and disarm().  Past the grace it raised inside main()
+    -- and then again outside pcall(main): a kernel panic where OC reports
+    -- "too long without yielding".  The native's hook is count=1 from its
+    -- first fire until disarm() and is re-fired every 50 ms, so the
+    -- escalation is intact without it.
+    if not hitDeadline then
+]==])
+
+-- What must remain: exactly the two debug.sethook calls we leave alone (the
+-- bogomips arm and clear in calcHookInterval).  checkDeadline's re-arm is
+-- gone by site 12.  Anything else means OC grew an arm site this patch does
+-- not know about -- or site 12 did not apply.
 local remaining = count(src, "debug.sethook(")
-assert(remaining == 3,
-  ("patch-machine-lua: %d debug.sethook( calls remain after patching, expected 3"):format(remaining))
+assert(remaining == 2,
+  ("patch-machine-lua: %d debug.sethook( calls remain after patching, expected 2"):format(remaining))
 
 -- And no call to next at all.  OC's kernel called it exactly three times, all
 -- inside the two blocks sites 10-11 replace (the synchronous snapshot loops
@@ -462,8 +508,9 @@ assert(nextcalls == 0,
 local banner = [==[-- =====================================================================
 -- OC-LuaJIT KERNEL VARIANT -- generated by native/kernel/patch-machine-lua.lua
 -- from OpenComputers' machine.lua.  Do not edit; edit the patcher.
--- Eleven sites changed: the standing deadline hook is replaced by the native's
--- asynchronous watchdog (4), the name _ENV is bound per chunk, which LuaJIT
+-- Twelve sites changed: the standing deadline hook is replaced by the native's
+-- asynchronous watchdog and checkDeadline's post-expiry re-arm, per-VM on
+-- LuaJIT, is deleted (5), the name _ENV is bound per chunk, which LuaJIT
 -- does not do (2), the two __persist recipes fill the shell the serializer
 -- hands them instead of returning a fresh table (3), and component.list and
 -- componentProxy.__pairs walk a snapshot of their keys by an integer instead
@@ -477,5 +524,5 @@ if crlf then out = out:gsub(LF, CR .. LF) end
 local g = assert(io.open(outpath, "wb"))
 g:write(out)
 g:close()
-io.write(("patch-machine-lua: ok  %d -> %d bytes, 11 sites, %d debug.sethook left, %d next( left, %s endings"):format(
+io.write(("patch-machine-lua: ok  %d -> %d bytes, 12 sites, %d debug.sethook left, %d next( left, %s endings"):format(
   srcbytes, #out, remaining, nextcalls, crlf and "CRLF" or "LF") .. LF)

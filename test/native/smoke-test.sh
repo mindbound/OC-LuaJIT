@@ -73,6 +73,19 @@
 #                 replaces OCLJ_JITOFF, which exported an env var the shim
 #                 deliberately never reads; it had been dead since the shim
 #                 lost its getenv() hatches.)
+#   OCLJ_PROBE    unset (default) | grace.  "grace" boots OpenOS exactly as the
+#                 default run does, then runs ONLY the grace-expiry program
+#                 (catch the first "too long without yielding", keep running
+#                 1 s past the 0.5 s grace without yielding) and reports one
+#                 milestone, k6-grace-expiry-crashes-cleanly: the machine must
+#                 stop with lastError "too long without yielding", not a kernel
+#                 panic.  No suite, no persist.  Read by the harness from the
+#                 environment (like OCLJ_BENCH_ONLY).  Expected to FAIL on the
+#                 11-site kernel and PASS on OCLJ_NATIVE=stock until patcher
+#                 site 12 lands; the harness lowers log4j's root level to WARN
+#                 in this mode so ocelot-brain's "Kernel crashed" line lands
+#                 in smoke.log (the wd-load rig did it with
+#                 JAVA_TOOL_OPTIONS=-Dlog4j2.level=WARN).
 #
 # USAGE
 #   OCLJ_LIBDIR=.../build/native/libdir OCLJ_BRAIN=~/src/ocelot-brain \
@@ -486,6 +499,12 @@ RUNCP="$(w "$OCLJ_WORK/classes")$SEP$CP"
 : "${OCLJ_JIT:=on}"
 case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT'";; esac
 [ "$OCLJ_JIT" = "off" ] && say "    OCLJ_JIT=off -- the harness will jit.off() the machine's state (JIT PROBE control run)"
+# Validated here for the same reason as OCLJ_JIT: a misspelling would silently
+# run the default suite and report on the wrong thing.  The harness reads the
+# variable itself; this only refuses unknown values and names the mode.
+: "${OCLJ_PROBE:=}"
+case $OCLJ_PROBE in ""|grace) ;; *) fail "OCLJ_PROBE must be unset or grace, not '$OCLJ_PROBE'";; esac
+[ "$OCLJ_PROBE" = "grace" ] && say "    OCLJ_PROBE=grace -- boot, then ONLY the grace-expiry probe (k6); no suite, no persist"
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
   timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
