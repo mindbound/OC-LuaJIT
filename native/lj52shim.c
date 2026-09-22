@@ -259,6 +259,12 @@ typedef struct lj52_mem {
   volatile long gc_collects;   /* arms that were PROVEN to complete a cycle   */
   volatile long gc_bailouts;   /* arms abandoned by the safety valve          */
   volatile long gc_refusals;   /* allocations refused -> lj_err_mem           */
+  /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+  int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
+                                  /* flush at the next safe point (wd_arm)    */
+  volatile long gc_traceflushes;  /* flushes performed at the safe point      */
+  volatile long gc_flushrefusals; /* flushes refused there: HOOK_GC was set   */
+  long long     gc_flushbytes;    /* GCtrace metadata unlinked, cumulative    */
 } lj52_mem;
 
 static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
@@ -652,6 +658,70 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  *     live + largest single allocation      <=  cap.
  * The gap is real and irreducible without a finer safepoint, which would
  * reintroduce C5 and C6.  This narrows the divergence; it does not close it.
+ *
+ * FLUSHING TRACES UNDER MEMORY PRESSURE (2026-09-22).  Since the persist-side
+ * flush went, trace metadata -- GCtrace, IR, snapshots, charged to the RAM
+ * cap through this allocator, unlike the machine code -- stays resident until
+ * LuaJIT's own self-flush at 1000 live traces or a full 2 MB mcode reserve.
+ * Measured: ~460 live traces are ~90 KB sandbox-visible at the 256 KB tier
+ * (docs/roadmap.md, the jit.opt row) -- a third of the machine, and no cycle
+ * can reclaim a byte of it: gc_traverse_proto marks pt->trace (lj_gc.c:287),
+ * so traces live exactly as long as the program that made them.
+ *
+ * THE PREDICATE IS "A PROVEN CYCLE DID NOT RESTORE HEADROOM", never "we
+ * armed".  In the gc_collects++ branch below, with the cycle complete and
+ * `used` the heap as it stands after it, headroom still under the watermark
+ * means garbage was not what filled the machine, and resident trace metadata
+ * is the one reclaimable thing left.  Arming is the wrong trigger: a small
+ * machine idling near its watermark arms constantly (the 2026-09-15 census
+ * boot of AxisOS: 99542 arms) and would lose its compiled code on every
+ * resume for nothing.  gc_flush_wanted is a FLAG.  The allocator sets it and
+ * does nothing else.
+ *
+ * THE FLUSH CANNOT HAPPEN HERE.  lj_trace_flushall frees machine code and
+ * rewrites bytecode (trace_unpatch) and must run on the Lua thread at a point
+ * where nothing compiled is executing or being recorded; the allocator is
+ * called from inside both.  So the flag is consumed at THE SAFE POINT:
+ * lj52_wd_arm, the C function the kernel calls on the Lua thread before every
+ * sandbox resume.  A C function the interpreter called is on-trace nowhere --
+ * a trace records neither a call to a C function nor anything past one --
+ * and is where luaJIT_setmode, i.e. jit.flush(), is meant to be called from.
+ * lj52_gc_flushtraces does, in order: clear the flag; measure what is
+ * resident (by the formula lj_trace_free credits back, so the stat is the
+ * bytes the sweep will return); return if nothing is; refuse under HOOK_GC,
+ * because luaJIT_setmode RAISES there (lj_dispatch.c:253-259, LJ_ERR_NOGCMM)
+ * and an error out of a C function the kernel called is a kernel crash, so
+ * it is checked first and counted, never caught; call luaJIT_setmode(L, 0,
+ * LUAJIT_MODE_FLUSH), the public API, which is lj_trace_flushall and resets
+ * the penalty cache with it; then RE-ARM the emergency cycle exactly as the
+ * allocator arms it -- stepmul 0, threshold = total, white latched -- so the
+ * GCtrace objects the flush unlinked are swept at the very next checkpoint
+ * rather than whenever the chronically-behind collector gets there.  The
+ * re-arm is skipped while a cycle is already armed (stepmul is 0 then, and
+ * latching that as gc_savedmul would make the disarm restore 0) and under a
+ * host GCSTOP, the two states the allocator's own arm respects.
+ *
+ * THIS CALLS NOTHING BACK INTO LUA, with one bounded exception that is
+ * LuaJIT's own: lj_trace_flushall sends the "flush" VM event, which reaches a
+ * Lua handler only where jit.attach installed one.  The sandbox cannot --
+ * machine.lua strips `jit` -- and the harness's counter (OcljSmoke.scala,
+ * JIT PROBE) is exactly the instrument that shows a flush happened.  The
+ * same event fires for LuaJIT's self-flush and for jit.flush() today.
+ *
+ * WHAT IT COSTS.  The next resume runs interpreted until its loops are hot
+ * again (56 iterations each, milliseconds), and the machine gets back what
+ * the traces held.  What it does NOT solve: a machine whose LIVE DATA alone
+ * is past the watermark raises the flag at every proven cycle and flushes at
+ * every resume, because for that machine the predicate is true and there is
+ * nothing else to reclaim.  That is a machine that is out of memory; staying
+ * interpreted is the right degradation, and trace_flushes in _OCLJ_GCSTATS
+ * makes it visible rather than mysterious.
+ *
+ * TESTED in test/native/mem_test.c P0-P2: a live hold that a cycle cannot
+ * resolve flushes exactly once at the arm and the accounted `used` drops by
+ * at least the metadata; a garbage hold that a cycle DOES resolve never sets
+ * the flag.  Both were first run against the shim before this section
+ * existed, and the flush half failed there.
  */
 
 #define LJ52_GC_WMIN   (128 * 1024)     /* watermark floor                   */
@@ -697,6 +767,15 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
       if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
       M->gc_armed = 0;
       M->gc_collects++;
+      /* THE FLUSH PREDICATE -- at the proof, never at the arm.  The cycle
+       * has run to completion and `used` is the heap as it stands after it.
+       * Headroom still short means garbage was not what filled the machine,
+       * and resident trace metadata is the reclaimable part no cycle can
+       * touch.  A flag only: the flush itself must wait for the safe point.
+       * See FLUSHING TRACES UNDER MEMORY PRESSURE above. */
+      w = total / 4;
+      if (w < LJ52_GC_WMIN) w = LJ52_GC_WMIN;
+      if (total - used < w) M->gc_flush_wanted = 1;
     } else if (++M->gc_armedcalls > LJ52_GC_ARMCAP) {
       /* The safety valve.  While armed, EVERY lj_gc_step from any site is
        * unbounded, so the window must not be allowed to persist if the latch
@@ -724,6 +803,65 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
     M->gc_arms++;
   }
   M->gc_busy = 0;
+}
+
+/* THE FLUSH, at the safe point.  Called by lj52_wd_arm on the Lua thread --
+ * inside a C function the interpreter called, so nothing compiled is
+ * executing and nothing is being recorded -- once the collector has raised
+ * gc_flush_wanted.  See FLUSHING TRACES UNDER MEMORY PRESSURE above for the
+ * predicate, the ordering, and why none of this can happen in the allocator.
+ * Raises nothing: an error out of here is an error in the kernel's resume
+ * path. */
+static void lj52_gc_flushtraces(lua_State *L, lj52_mem *M)
+{
+  global_State *g = G(L);
+  jit_State *J = G2J(g);
+  MSize i;
+  long long bytes = 0;
+
+  M->gc_flush_wanted = 0;               /* consumed, whatever happens below  */
+
+  /* What is resident, by the formula lj_trace_free credits back (lj_trace.c
+   * :172-183): the GCtrace header, the IR with its constants, the snapshots
+   * and the snapshot map.  Machine code is not in this figure; it is not
+   * charged to the machine either. */
+  for (i = 1; i < J->sizetrace; i++) {
+    GCtrace *T = (GCtrace *)gcref(J->trace[i]);
+    if (T != NULL)
+      bytes += (long long)(((sizeof(GCtrace)+7)&~7)
+                           + (size_t)(T->nins - T->nk) * sizeof(IRIns)
+                           + (size_t)T->nsnap * sizeof(SnapShot)
+                           + (size_t)T->nsnapmap * sizeof(SnapEntry));
+  }
+  if (bytes == 0) return;               /* nothing is live: nothing to flush */
+
+  /* luaJIT_setmode RAISES under HOOK_GC (lj_dispatch.c:253-259,
+   * LJ_ERR_NOGCMM) rather than returning failure, so that case is checked
+   * here first and counted; its return is checked as well because the
+   * public contract says 1 on success and nothing else is a flush. */
+  if ((g->hookmask & HOOK_GC) || luaJIT_setmode(L, 0, LUAJIT_MODE_FLUSH) != 1) {
+    M->gc_flushrefusals++;
+    return;
+  }
+  M->gc_traceflushes++;
+  M->gc_flushbytes += bytes;
+
+  /* Re-arm the emergency cycle exactly as the allocator arms it, so the
+   * GCtrace objects the flush just unlinked are swept at the very next
+   * checkpoint instead of whenever the chronically-behind collector gets
+   * there.  Skipped when a cycle is already armed -- gc.stepmul is 0 then,
+   * and latching it as gc_savedmul would make the disarm restore 0 -- and
+   * under a host GCSTOP (threshold parked at LJ_MAX_MEM), which the VM
+   * owns; both are the allocator's own rules. */
+  if (!M->gc_armed && g->gc.threshold != LJ_MAX_MEM) {
+    M->gc_savedmul = g->gc.stepmul;
+    M->gc_white    = g->gc.currentwhite;
+    g->gc.stepmul  = 0;
+    g->gc.threshold = g->gc.total;
+    M->gc_armed = 1;
+    M->gc_armedcalls = 0;
+    M->gc_arms++;
+  }
 }
 
 #define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
@@ -1122,6 +1260,13 @@ static int lj52_wd_arm(lua_State *L) {
   outermost = lua_toboolean(L, 3);
   co = lua_isthread(L, 4) ? lua_tothread(L, 4) : L;
   if (M == NULL) return luaL_error(L, "watchdog: not an lj52 state");
+  /* THE SAFE POINT for the trace flush under memory pressure: on the Lua
+   * thread, inside a C call the interpreter made, before the resume that
+   * would run compiled code.  Before the cap check on purpose -- a nested
+   * arm past the cap is still a safe point, and the flag was raised by a
+   * proven cycle that found the machine short.  See FLUSHING TRACES UNDER
+   * MEMORY PRESSURE in the collector section. */
+  if (M->gc_flush_wanted) lj52_gc_flushtraces(L, M);
   /* At the cap: push nothing, touch nothing, and hand back a token disarm()
    * will treat as a no-op.  The enclosing deadline stays live, which is what
    * a nested arm would have set anyway (the sandbox wrapper passes the same
@@ -1242,6 +1387,9 @@ static int lj52_wd_stats(lua_State *L) {
  * J->trace[i] slots, 1..sizetrace-1 -- the traces that EXIST right now.  It
  * is 0 after a flush and it is the number that says whether compiled code is
  * present; traces_used is kept because every log since 2026-09-03 quotes it.
+ * Since 2026-09-22 a flush can also be OURS: the emergency collector's
+ * trace flush under memory pressure (lj52_gc_flushtraces) zeroes this the
+ * same way, and _OCLJ_GCSTATS's trace_flushes says whether it did.
  *
  * A raw global like _OCLJ_NATIVE and _OCLJ_WATCHDOG: the sandbox never sees
  * raw _G, and jit.util -- the usual way to ask these questions -- is
@@ -1261,7 +1409,8 @@ static int lj52_jitstats(lua_State *L) {
 }
 
 /* _OCLJ_GCSTATS() -> arms, collects, bailouts, refusals, armed,
- *                    gc_total, gc_threshold, gc_stepmul, gc_state
+ *                    gc_total, gc_threshold, gc_stepmul, gc_state,
+ *                    trace_flushes, flush_wanted, flush_refusals, flush_bytes
  *
  * THE INSTRUMENT FOR THE EMERGENCY COLLECTOR, and it is not optional.  A
  * `sieve` that passes with arms == 0 proves nothing about this code -- it
@@ -1279,6 +1428,18 @@ static int lj52_jitstats(lua_State *L) {
  * "armed and still waiting": armed == true with a stepmul of 0 is the window
  * being open, and it should never be observable at rest.
  *
+ * The last four are the trace flush under pressure (FLUSHING TRACES UNDER
+ * MEMORY PRESSURE, in the collector section), APPENDED so every reader of
+ * the first nine keeps working against either native.  trace_flushes counts
+ * flushes performed at the safe point; flush_wanted is the flag as it stands
+ * (true at rest means a proven cycle found the machine short and no resume
+ * has happened since); flush_refusals counts safe points that found HOOK_GC
+ * set, which should read 0 -- the kernel does not resume from inside a
+ * finalizer; flush_bytes is the trace metadata every flush unlinked, in
+ * total, by the formula the sweep then credits back.  A machine that shows
+ * trace_flushes climbing resume after resume is a machine whose LIVE data
+ * alone is past the watermark: nothing to reclaim, correctly interpreted.
+ *
  * Read-only, allocates nothing, raw global like _OCLJ_JITSTATS -- the sandbox
  * never sees raw _G. */
 static int lj52_gcstats(lua_State *L) {
@@ -1293,7 +1454,11 @@ static int lj52_gcstats(lua_State *L) {
   lua_pushnumber(L, (lua_Number)g->gc.threshold);
   lua_pushnumber(L, (lua_Number)g->gc.stepmul);
   lua_pushinteger(L, (lua_Integer)g->gc.state);
-  return 9;
+  lua_pushinteger(L, M ? M->gc_traceflushes : -1);
+  lua_pushboolean(L, M ? M->gc_flush_wanted : 0);
+  lua_pushinteger(L, M ? M->gc_flushrefusals : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->gc_flushbytes : -1);
+  return 13;
 }
 
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */

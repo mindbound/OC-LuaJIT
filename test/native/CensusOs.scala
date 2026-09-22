@@ -122,9 +122,9 @@ object CensusOs {
   def gcStats(machine: totoro.ocelot.brain.entity.machine.Machine, lua: LuaState): String =
     evalLocked(machine, lua,
       "if _OCLJ_GCSTATS == nil then return 'absent (stock native)' end " +
-      "local a,c,b,r,on = _OCLJ_GCSTATS() " +
-      "return string.format('arms=%d collects=%d bailouts=%d refusals=%d armed=%s', " +
-      "a, c, b, r, tostring(on))")
+      "local a,c,b,r,on,tot,thr,mul,st,tf = _OCLJ_GCSTATS() " +
+      "return string.format('arms=%d collects=%d bailouts=%d refusals=%d armed=%s trace_flushes=%d', " +
+      "a, c, b, r, tostring(on), tf or -1)")
 
   def main(args: Array[String]): Unit = {
     // args(0) is the generated ocelot-brain config, supplied by smoke-test.sh

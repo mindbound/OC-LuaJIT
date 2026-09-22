@@ -31,6 +31,26 @@
  *   M8  clearing registry[JNLUA_JAVASTATE] -- what close_protected does --
  *       stops the accounting instead of writing through a dead reference
  *
+ * And the emergency collector's TRACE FLUSH (lj52shim.c, "FLUSHING TRACES
+ * UNDER MEMORY PRESSURE"), driven the same way -- the allocator is called
+ * directly from C, so every checkpoint is an interpreter one and the JIT can
+ * neither help nor hide:
+ *   P0  the JIT compiles a few dozen traces that stay resident (pinned by
+ *       their live prototypes, as a running program's are)
+ *   P1  THE NEGATIVE CONTROL: pressure that a cycle resolves -- garbage, not
+ *       live data -- must NOT flush.  The cycle is proven to have run (arms
+ *       and collects both advance), the traces are still there afterwards,
+ *       and the arm entry point leaves them alone
+ *   P2  THE FLUSH: live data holds headroom under the watermark THROUGH a
+ *       completed emergency cycle, so garbage alone cannot restore it.  The
+ *       collector raises flush_wanted at the proof; the next arm() -- the
+ *       kernel's per-resume safe point -- flushes every trace, re-arms the
+ *       cycle, and the accounted `used` then drops by at least the trace
+ *       metadata the flush unlinked
+ *   FAIL-FIRST: on the shim before the flush existed P2 fails (no flush,
+ *   traces remain, the stats are absent) and P1's behavioural half passes;
+ *   the log of that run is kept next to the change.
+ *
  * Build: see run-mem.sh next to this file.  Exit status 0 iff every case passes.
  */
 #include <stdio.h>
@@ -135,12 +155,121 @@ static int raw_push(lua_State *L) {
   return 1;
 }
 
+/* ---- the trace-flush cases' instruments ---------------------------------- */
+
+/* Run a chunk under pcall; on failure leave the message on the stack top. */
+static int runstr(lua_State *L, const char *src) {
+  if (luaL_loadstring(L, src) != 0) return -1;
+  return lua_pcall(L, 0, 0, 0);
+}
+
+static const char *errtop(lua_State *L) {
+  const char *s = lua_tostring(L, -1);
+  return s ? s : "(no message)";
+}
+
+/* The n-th (1-based) value returned by a raw global such as _OCLJ_GCSTATS,
+ * as a number; booleans read as 1/0.  A value the function does NOT return
+ * reads as -1, never as 0: an older shim answers fewer values, and a missing
+ * counter must show up as "absent", not as "zero flushes".  This is what
+ * lets the same test binary link against the previous object for the
+ * fail-first run. */
+static double statn(lua_State *L, const char *global, int n) {
+  double v = -1;
+  int top = lua_gettop(L);
+  lua_getglobal(L, global);
+  if (!lua_isfunction(L, -1) || lua_pcall(L, 0, LUA_MULTRET, 0) != 0) {
+    lua_settop(L, top);
+    return -1;
+  }
+  if (lua_gettop(L) - top >= n) {
+    int idx = top + n;
+    if (lua_isboolean(L, idx)) v = lua_toboolean(L, idx) ? 1 : 0;
+    else if (lua_isnumber(L, idx)) v = lua_tonumber(L, idx);
+  }
+  lua_settop(L, top);
+  return v;
+}
+/* _OCLJ_GCSTATS positions.  1-9 are the original nine; 10-13 were appended
+ * with the trace flush (lj52shim.c lj52_gcstats) and read -1 before it. */
+#define GC_ARMS(L)       statn(L, "_OCLJ_GCSTATS", 1)
+#define GC_COLLECTS(L)   statn(L, "_OCLJ_GCSTATS", 2)
+#define GC_BAILOUTS(L)   statn(L, "_OCLJ_GCSTATS", 3)
+#define GC_REFUSALS(L)   statn(L, "_OCLJ_GCSTATS", 4)
+#define GC_ARMED(L)      statn(L, "_OCLJ_GCSTATS", 5)
+#define GC_FLUSHES(L)    statn(L, "_OCLJ_GCSTATS", 10)
+#define GC_FLUSHWANT(L)  statn(L, "_OCLJ_GCSTATS", 11)
+#define GC_FLUSHREF(L)   statn(L, "_OCLJ_GCSTATS", 12)
+#define GC_FLUSHBYTES(L) statn(L, "_OCLJ_GCSTATS", 13)
+/* _OCLJ_JITSTATS position 5: traces_live, the non-NULL J->trace[] slots. */
+#define JIT_LIVE(L)      statn(L, "_OCLJ_JITSTATS", 5)
+
+/* Drive the allocator from C: one table per step, popped at once, so each
+ * step is exactly one lj_gc_check (lua_createtable's) plus one charged
+ * allocation, on the interpreter side of the VM.  `asize` picks the burst:
+ * 0 is a 64-byte GCtab, 8192 is a 64 KB array part that outruns the paced
+ * collector in a handful of steps.  Stops as soon as gc_collects passes
+ * `until_collects`, or after `max` steps.  Under lua_cpcall, because a
+ * refusal at the cap from a bare C frame is a panic and a dead process, and
+ * this test's whole point is to read numbers out afterwards. */
+typedef struct { int asize; double until; int max; int steps; } ChurnArgs;
+
+static int churn_cf(lua_State *L) {
+  ChurnArgs *a = (ChurnArgs *)lua_touserdata(L, 1);
+  int i;
+  for (i = 1; i <= a->max; i++) {
+    lua_createtable(L, a->asize, 0);
+    lua_pop(L, 1);
+    if (GC_COLLECTS(L) > a->until) { a->steps = i; return 0; }
+  }
+  a->steps = i - 1;
+  return 0;
+}
+
+/* Returns the steps taken; *status is the cpcall status (0, or LUA_ERRMEM
+ * when the cap refused before the collector caught up). */
+static int churn(lua_State *L, int asize, double until_collects, int max, int *status) {
+  ChurnArgs a;
+  a.asize = asize; a.until = until_collects; a.max = max; a.steps = 0;
+  *status = lua_cpcall(L, churn_cf, &a);
+  return a.steps;
+}
+
+/* The emergency collector's watermark, as lj52_gc_pressure computes it. */
+static long wmark(long total) {
+  long w = total / 4;
+  return w < 128 * 1024 ? 128 * 1024 : w;
+}
+
+/* Forty distinct prototypes, each with its own hot loop, each called three
+ * times: forty root traces, kept resident by __fns exactly as a running
+ * program's traces are kept resident by the function on its stack
+ * (gc_traverse_proto marks pt->trace).  The driver is jit.off'd so the only
+ * traces are the forty loops, not a side-trace fan-out of the calling loop. */
+static const char *TRACE_CHUNK =
+  "local fns = {} "
+  "for k = 1, 40 do "
+  "  fns[k] = assert(loadstring('local s = 0 for i = 1, 300 do s = s + i * ' .. k .. ' end return s')) "
+  "end "
+  "local function drive() for r = 1, 3 do for k = 1, 40 do fns[k]() end end end "
+  "jit.off(drive) "
+  "drive() "
+  "__fns = fns";
+
+/* The kernel's safe point: _OCLJ_WATCHDOG.arm on the Lua thread, which is
+ * what machine.lua calls before every sandbox resume, then disarm so no
+ * timer outlives the case.  Nothing else in the kernel's resume path is
+ * modelled; a flush that needs more than this call is a design failure. */
+static const char *ARM_DISARM =
+  "local t = _OCLJ_WATCHDOG.arm(3600, function() end, true) "
+  "_OCLJ_WATCHDOG.disarm(t)";
+
 int main(void) {
   lua_State *L;
   jint used0, used1, used2, usedBeforePush, usedAfterPush;
   long long gc0, gc1, gc2;
   int st, pushedMemo, rawStatus;
-  char d[192];
+  char d[512];
 
   /* UNBUFFERED on purpose, and _IONBF rather than _IOLBF.  One of this file's
    * negative controls (negative-control.sh, "norefuse") expects the process to
@@ -283,6 +412,151 @@ int main(void) {
      "M8 clearing the javastate stops the accounting",
      st == 0 ? "5000 tables allocated, setluamemory never called again"
              : "the allocation failed after the javastate was cleared");
+
+  /* ================================================================== *
+   * The trace flush under memory pressure
+   * ================================================================== */
+  /* The main state's flag, as the M cases leave it -- printed, not asserted,
+   * because M5-M7's dynamics are not this section's to control.  M5-M7 ran
+   * proven emergency cycles AT THE WALL (headroom ~0), each of which raised
+   * flush_wanted, and nothing in M1-M8 is a resume, so the flag stands.
+   * That is the design: the flag waits for the safe point.  It is also why
+   * the P cases below get a state of their own -- the first draft shared
+   * this one, P1's arm() consumed the stale flag and flushed, and P2 then
+   * had nothing left to measure.  Observed on the first run, then isolated. */
+  printf("        main state after M8: flush_wanted=%.0f trace_flushes=%.0f "
+         "(-1 == stat absent; a standing flag here is M5-M7's, awaiting a resume)\n",
+         GC_FLUSHWANT(L), GC_FLUSHES(L));
+
+  {
+    double live0, arms0, coll0, bail0, ref0, fl0, steps;
+    double armsA, collA, wantA, liveA, flA;
+    double armedB, collB, wantB, liveB, flB, flbytes, flref, armedB2, collB2;
+    jint base, base2, usedB, usedB2, usedB3;
+    long drop;
+    /* A fresh state with its own record and its own counters: every arm,
+     * collect and flush below is this section's, from zero. */
+    FakeState PS;
+    lua_State *P = luaL_newstate();     /* -> lj52_newstate, JIT on */
+    if (!P) { printf("  FAIL  luaL_newstate returned NULL for the P state\n"); return 1; }
+    luaL_openlibs(P);
+    memset(&PS, 0, sizeof PS);
+    PS.total = 64 * 1024 * 1024;
+    lua_setallocf(P, NULL, P);          /* jnlua's capped form, as in M2 */
+    bind_javastate(P, (void *)&PS);
+    lua_gc(P, LUA_GCCOLLECT, 0);
+    lua_gc(P, LUA_GCCOLLECT, 0);
+
+    /* ---- P0 ------------------------------------------------------------ */
+    st = runstr(P, TRACE_CHUNK);
+    live0 = JIT_LIVE(P);
+    sprintf(d, "traces_live=%.0f after 40 hot loops%s%s", live0,
+            st == 0 ? "" : "  chunk failed: ", st == 0 ? "" : errtop(P));
+    ok(st == 0 && live0 >= 24, "P0 the JIT compiled a few dozen resident traces", d);
+    lua_settop(P, 0);
+    lua_gc(P, LUA_GCCOLLECT, 0);
+    lua_gc(P, LUA_GCCOLLECT, 0);
+    base = PS.used;
+    arms0 = GC_ARMS(P); coll0 = GC_COLLECTS(P); bail0 = GC_BAILOUTS(P);
+    ref0 = GC_REFUSALS(P); fl0 = GC_FLUSHES(P);
+    printf("        base live set used=%ld  arms=%.0f collects=%.0f bailouts=%.0f "
+           "refusals=%.0f trace_flushes=%.0f (-1 == stat absent)\n",
+           (long)base, arms0, coll0, bail0, ref0, fl0);
+
+    /* ---- P1: garbage resolves the pressure -> no flush ------------------ */
+    /* 1 MB of headroom above the live set; the watermark is max(total/4,
+     * 128 KB).  64 KB tables outrun the paced collector -- lj_gc_step's
+     * budget is 2000 units per checkpoint and a full cycle is hundreds of
+     * them -- so the heap climbs into the watermark, the allocator arms, and
+     * the very next checkpoint runs the whole cycle and frees every one. */
+    PS.total = base + 1024 * 1024;
+    steps = churn(P, 8192, coll0, 400, &st);
+    armsA = GC_ARMS(P); collA = GC_COLLECTS(P); wantA = GC_FLUSHWANT(P);
+    sprintf(d, "%.0f steps of 64 KB garbage (status %d): arms %.0f -> %.0f, collects %.0f -> %.0f, "
+            "bailouts %+.0f, refusals %+.0f, used=%ld of %ld",
+            steps, st, arms0, armsA, coll0, collA, GC_BAILOUTS(P) - bail0,
+            GC_REFUSALS(P) - ref0, (long)PS.used, (long)PS.total);
+    ok(st == 0 && armsA > arms0 && collA > coll0 && GC_BAILOUTS(P) == bail0 && GC_REFUSALS(P) == ref0,
+       "P1a an emergency cycle armed and was proven to complete", d);
+    sprintf(d, "headroom after the cycle = %ld (watermark %ld); flush_wanted=%.0f",
+            (long)(PS.total - PS.used), wmark(PS.total), wantA);
+    ok(wantA == 0, "P1b garbage restored the headroom: flush NOT wanted",
+       wantA < 0 ? "flush_wanted stat ABSENT (older shim)" : d);
+    st = runstr(P, ARM_DISARM);
+    liveA = JIT_LIVE(P); flA = GC_FLUSHES(P);
+    sprintf(d, "arm()+disarm(): traces_live %.0f -> %.0f, trace_flushes=%.0f%s%s",
+            live0, liveA, flA, st == 0 ? "" : "  arm failed: ", st == 0 ? "" : errtop(P));
+    ok(st == 0 && liveA == live0, "P1c the safe point left the traces alone", d);
+    ok(flA == 0, "P1d trace_flushes is 0",
+       flA < 0 ? "trace_flushes stat ABSENT (older shim)" : d);
+    lua_settop(P, 0);
+
+    /* ---- P2: live data holds headroom under the watermark -> flush ------ */
+    lua_gc(P, LUA_GCCOLLECT, 0);
+    lua_gc(P, LUA_GCCOLLECT, 0);
+    base2 = PS.used;
+    coll0 = GC_COLLECTS(P);
+    /* 256 KB of headroom, then a 160 KB LIVE table parked in the registry:
+     * headroom 96 KB is under the 128 KB floor, and no cycle can free it. */
+    PS.total = base2 + 256 * 1024;
+    lua_createtable(P, 20480, 0);
+    lua_setfield(P, LUA_REGISTRYINDEX, "__live");
+    armedB = GC_ARMED(P);
+    sprintf(d, "used=%ld of %ld (headroom %ld), armed=%.0f", (long)PS.used,
+            (long)PS.total, (long)(PS.total - PS.used), armedB);
+    ok(armedB == 1, "P2a the live allocation armed the emergency cycle", d);
+    steps = churn(P, 0, coll0, 10000, &st);
+    collB = GC_COLLECTS(P); wantB = GC_FLUSHWANT(P); liveB = JIT_LIVE(P);
+    sprintf(d, "%.0f steps (status %d): collects %.0f -> %.0f, headroom now %ld "
+            "(watermark %ld), flush_wanted=%.0f, traces_live=%.0f",
+            steps, st, coll0, collB, (long)(PS.total - PS.used), wmark(PS.total),
+            wantB, liveB);
+    ok(st == 0 && collB > coll0 && (long)(PS.total - PS.used) < wmark(PS.total),
+       "P2b the cycle completed and headroom is STILL under the watermark", d);
+    ok(wantB == 1, "P2c the collector raised flush_wanted at the proof",
+       wantB < 0 ? "flush_wanted stat ABSENT (older shim)" : d);
+    ok(liveB == live0, "P2d nothing flushed yet: the allocator never flushes",
+       d);
+
+    /* THE SAFE POINT. */
+    usedB = PS.used;
+    st = runstr(P, ARM_DISARM);
+    flB = GC_FLUSHES(P); liveB = JIT_LIVE(P); wantB = GC_FLUSHWANT(P);
+    flbytes = GC_FLUSHBYTES(P); flref = GC_FLUSHREF(P); armedB2 = GC_ARMED(P);
+    usedB2 = PS.used;
+    sprintf(d, "arm(): trace_flushes=%.0f flush_wanted=%.0f traces_live=%.0f "
+            "flush_bytes=%.0f refusals=%.0f re-armed=%.0f%s%s",
+            flB, wantB, liveB, flbytes, flref, armedB2,
+            st == 0 ? "" : "  arm failed: ", st == 0 ? "" : errtop(P));
+    ok(st == 0 && flB == 1, "P2e the arm entry point flushed once",
+       flB < 0 ? "trace_flushes stat ABSENT (older shim)" : d);
+    ok(liveB == 0, "P2f no trace is live after the flush", d);
+    ok(wantB == 0 && armedB2 == 1,
+       "P2g the flag is consumed and the cycle re-armed", d);
+    lua_settop(P, 0);
+
+    /* Drive the re-armed cycle to its proof: the GCtrace objects the flush
+     * unlinked are swept and credited back through the allocator. */
+    collB = GC_COLLECTS(P);
+    steps = churn(P, 0, collB, 10000, &st);
+    collB2 = GC_COLLECTS(P);
+    usedB3 = PS.used;
+    drop = (long)usedB - (long)usedB3;
+    sprintf(d, "used %ld -> %ld -> %ld: dropped %ld across arm + %.0f steps "
+            "(status %d, collects %.0f -> %.0f); flush unlinked %.0f bytes of trace metadata",
+            (long)usedB, (long)usedB2, (long)usedB3, drop, steps, st, collB, collB2, flbytes);
+    /* At least the metadata, minus the one 64-byte churn table that is live
+     * at the proof and whatever the arm's own registry write grew: 1 KB of
+     * slack against a figure in the tens of KB. */
+    ok(st == 0 && collB2 > collB && flbytes > 0 && drop >= (long)flbytes - 1024,
+       "P2h the accounted used dropped by at least the trace metadata", d);
+
+    /* Unbind before close, as jnlua's close_protected does and M8 proves,
+     * so lua_close never writes through the userdata it is about to free. */
+    PS.total = 64 * 1024 * 1024;
+    clear_javastate(P);
+    lua_close(P);                       /* -> lj52_close: stops the timer too */
+  }
 
   printf("\nchecks=%d failures=%d\n", checks, failures);
   lua_close(L);                           /* -> lj52_close, frees the record */

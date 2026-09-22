@@ -284,8 +284,16 @@ grep -q LUAJIT_ENABLE_CHECKHOOK "$OCLJ_LUAJIT/src/lj_record.c" \
 # before tokenising, the '#' then comments to end of line, and the next line
 # starts with a bare '|'.  That shipped once and killed this script at
 # stage 0 -- every gate below it silently never ran.
+# -E, AND IT MATTERS: the collector gate below hands this an alternation with
+# a `\(` in it.  Under plain grep (BRE) `|` is a literal and `\(` opens a
+# group that is never closed, so grep printed "Unmatched ( or \(" to the
+# stderr this function discards and matched NOTHING -- the gate passed on
+# every build from the day it was written (2026-09-15) until 2026-09-22,
+# when the trace-flush phase replicated it by hand and watched it error.
+# Under -E the same pattern means what it says.  The escape-hatch tokens are
+# plain words and read the same either way.
 codegrep() {   # codegrep <pattern> -> prints only non-comment matches
-  grep -n "$1" "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" 2>/dev/null \
+  grep -nE "$1" "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" 2>/dev/null \
     | grep -vE ':[0-9]+: *([*]|/[*]|//)'
 }
 for tok in OCLJ_NOMODECHECK LJ52_DROP_LOAD_MODE OCLJ_TRACE OCLJ_JITOFF OCLJ_JITOPT \

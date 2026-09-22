@@ -352,19 +352,26 @@ object Smoke {
     * safety argument for handing the collector an unbounded budget -- is
     * wrong.  It is a bug signal, never a tuning signal. */
   def gcStatsLocked(machine: totoro.ocelot.brain.entity.machine.Machine,
-                    lua: LuaState): (Long, Long, Long, Long, Boolean, Int) =
+                    lua: LuaState): (Long, Long, Long, Long, Boolean, Int, Long, Long) =
     machine.synchronized { gcStats(lua) }
 
-  def gcStats(lua: LuaState): (Long, Long, Long, Long, Boolean, Int) = {
+  /** The last two are the trace flush under memory pressure (lj52shim.c,
+    * FLUSHING TRACES UNDER MEMORY PRESSURE): trace_flushes and flush_bytes,
+    * appended to _OCLJ_GCSTATS on 2026-09-22.  `tf or -1`: a native older
+    * than that returns nine values, and the first six must stay readable
+    * against it rather than all eight failing -- the same guard jitStats
+    * has for traces_live. */
+  def gcStats(lua: LuaState): (Long, Long, Long, Long, Boolean, Int, Long, Long) = {
     val s = evalStr(lua,
       "if _OCLJ_GCSTATS == nil then return 'absent' end " +
-      "local a, c, b, r, on, tot, thr, mul, st = _OCLJ_GCSTATS() " +
-      "return string.format('%d/%d/%d/%d/%s/%d', a, c, b, r, tostring(on), st)")
+      "local a, c, b, r, on, tot, thr, mul, st, tf, fw, fr, fb = _OCLJ_GCSTATS() " +
+      "return string.format('%d/%d/%d/%d/%s/%d/%d/%d', a, c, b, r, tostring(on), st, tf or -1, fb or -1)")
     try {
       val q = s.split("/")
       (q(0).toDouble.toLong, q(1).toDouble.toLong, q(2).toDouble.toLong,
-       q(3).toDouble.toLong, q(4) == "true", q(5).toInt)
-    } catch { case _: Throwable => (-1L, -1L, -1L, -1L, false, -1) }
+       q(3).toDouble.toLong, q(4) == "true", q(5).toInt,
+       q(6).toDouble.toLong, q(7).toDouble.toLong)
+    } catch { case _: Throwable => (-1L, -1L, -1L, -1L, false, -1, -1L, -1L) }
   }
 
   def jitStats(lua: LuaState): (Long, Long, Int, Boolean, Int) = {
@@ -376,6 +383,201 @@ object Smoke {
       val p = s.split("/")
       (p(0).toDouble.toLong, p(1).toDouble.toLong, p(2).toInt, p(3) == "true", p(4).toInt)
     } catch { case _: Throwable => (-1L, -1L, -1, false, -1) }
+  }
+
+  /** Every value _OCLJ_GCSTATS returns, verbatim, as "<count>:<v1>/<v2>/...".
+    * The count is the fingerprint: 9 is a native before the pressure flush,
+    * 13 is one with it.  For the MEM-2 lines, which quote the instrument
+    * rather than a tuple somebody typed. */
+  def gcStatsRaw(lua: LuaState): String = evalStr(lua,
+    "if _OCLJ_GCSTATS == nil then return 'absent' end " +
+    "local t = {_OCLJ_GCSTATS()} local o = {} for i = 1, #t do o[i] = tostring(t[i]) end " +
+    "return #t .. ':' .. table.concat(o, '/')")
+
+  // ------------------------------------------------------------------ //
+  // (mem-2) the trace flush under memory pressure, in a real machine
+  // ------------------------------------------------------------------ //
+
+  /**
+   * A sandbox program holds LIVE data past the emergency collector's
+   * watermark and keeps working; the collector must raise gc_flush_wanted at
+   * a proven cycle that left headroom short, and the next resume's
+   * _OCLJ_WATCHDOG.arm must flush every trace (lj52shim.c, FLUSHING TRACES
+   * UNDER MEMORY PRESSURE).  mem_test.c proves the same thing against the
+   * allocator directly; this is the in-machine gate, over OpenOS, the
+   * kernel's real resume path, and the sandbox's own memory view.
+   *
+   * THE PROGRAM (OCLJMP in AutorunLua, driven one step per timer callback
+   * like fi/dg): grows a table of distinct 4 KB strings until
+   * computer.freeMemory() is under 64 KB, keeps the table referenced, then
+   * computes for ~4 s -- short-lived strings, discarded -- yielding between
+   * steps, then drops the table and reports done.  Every step is a resume;
+   * every resume is a safe point.  64 KB sandbox-visible is 64 x ramScale
+   * real bytes of headroom, under the watermark max(total/4, 128 KB) at
+   * every tier, so from that point on each proven cycle finds the machine
+   * short of headroom for a reason garbage cannot explain.
+   *
+   * WHAT IS READ, under the executor's monitor between resumes, every
+   * fourth tick while the row says grow/hold: _OCLJ_JITSTATS traces_live and
+   * _OCLJ_GCSTATS trace_flushes.  PASS iff, on the SAME run,
+   *   (1) trace_flushes advanced by at least one over the program's life
+   *       (the shim's own count of flushes performed at the safe point);
+   *   (2) traces_live was read as 0 at some read while the program was
+   *       still running -- the independent evidence, from the trace table
+   *       itself, that the flush emptied it (and the program stepped again
+   *       after that read, so it was not a corpse being read);
+   *   (3) the program survived: state done, its own pcall caught nothing,
+   *       the machine running with no lastError -- "not enough memory" is
+   *       the failure this whole mechanism exists to prevent.
+   * traces_live is read BETWEEN resumes, so it counts what the last resume
+   * compiled after its flush; under sustained pressure every resume that
+   * finds a trace flushes it, so the count sits near zero and a read of
+   * exactly 0 is expected within a few reads.  The distribution of every
+   * read is printed, so a run that never saw 0 says how close it came.
+   *
+   * ON A NATIVE BEFORE THE FLUSH (the 2026-09-22 bundle, _OCLJ_GCSTATS with
+   * nine values) trace_flushes reads ABSENT and traces_live never drops:
+   * that is a FAIL, quoted as such -- observed on that native before this
+   * milestone was trusted.  SKIPs, each on its own line and not counted:
+   * the stock kernel (it never calls _OCLJ_WATCHDOG.arm, so the safe point
+   * does not exist there), the JIT off (nothing to flush), and a pre-read
+   * that produced no number.
+   */
+  def pressureFlush(ws: Workspace, computer: Case, screen: Screen, kernelMode: String,
+                    jitMode: String, tierName: String, tierKB: Int): Unit = {
+    val m = computer.machine
+    val id = "mem-2-pressure-flushes-traces"
+    p("--- (mem-2) a sandbox program holds LIVE data past the watermark at tier=" + tierName + " (" + tierKB +
+      " KB): a proven cycle must raise the flag and the next resume must flush the traces ---")
+    if (kernelMode != "watchdog") {
+      p("MILESTONE " + id + ": SKIP -- kernel=" + kernelMode + ": only the watchdog kernel calls " +
+        "_OCLJ_WATCHDOG.arm before a resume, and that call IS the safe point; the stock kernel has none (not counted)")
+      return
+    }
+    if (jitMode != "on") {
+      p("MILESTONE " + id + ": SKIP -- jit=" + jitMode + ": no trace is ever resident, so there is nothing to flush (not counted)")
+      return
+    }
+    if (!m.isRunning) {
+      milestone(id, ok = false, "no running machine: running=" + m.isRunning + " lastError=" + m.lastError)
+      return
+    }
+    val arch = m.architecture
+    if (arch == null || !arch.isInstanceOf[NativeLuaArchitecture]) {
+      p("MILESTONE " + id + ": SKIP -- no native architecture to read the raw state from (not counted)")
+      return
+    }
+    val lua = luaOf(arch)
+    def field(row: String, i: Int): String = { val f = row.split("/"); if (f.length > i) f(i) else "<missing>" }
+    def num(row: String, i: Int): Long = try field(row, i).toLong catch { case _: Throwable => -1L }
+    def liveStr(lv: Int): String = if (lv < 0) "n/a(4-value JITSTATS)" else lv.toString
+    def tfStr(tf: Long): String = if (tf < 0) "ABSENT(9-value GCSTATS)" else tf.toString
+    val j0 = jitStatsLocked(m, lua)
+    val g0 = gcStatsLocked(m, lua)
+    val raw0 = m.synchronized { gcStatsRaw(lua) }
+    if (j0._1 < 0 || g0._1 < 0) {
+      p("!! " + id + ": the pre-program read produced NO NUMBER: jit=" + j0 + " gc=" + g0 + " raw=" + raw0)
+      p("MILESTONE " + id + ": SKIP -- the raw state could not be read before the program ran (not counted)")
+      return
+    }
+    val live0 = j0._5; val flushes0 = g0._7; val bytes0 = g0._8
+    var rawFree0 = -1L; var rawTot0 = -1L
+    m.synchronized {
+      rawTot0 = try lua.getTotalMemory.toLong catch { case _: Throwable => -1L }
+      rawFree0 = try lua.getFreeMemory.toLong catch { case _: Throwable => -1L }
+    }
+    p("MEM-2 before: traces_live=" + liveStr(live0) + " traces=" + j0._3 + " mcode=" + j0._1 + " B" +
+      "  arms=" + g0._1 + " collects=" + g0._2 + " trace_flushes=" + tfStr(flushes0) + " flush_bytes=" + bytes0 +
+      "  raw total/free KB=" + rawTot0 / 1024 + "/" + rawFree0 / 1024 +
+      "  sandbox OCLJENV=" + parse(nonEmptyScreen(screen), "OCLJENV") + "  GCSTATS=" + raw0)
+    // go
+    val queued = m.signal("ocljmp")
+    var row = "<missing>"; var state = "<missing>"
+    var polls = 0
+    var reads = 0; var badReads = 0
+    var minLive = Int.MaxValue; var minLiveRow = ""
+    var zeroSeen = false; var zeroPoll = -1; var zeroRow = ""; var zeroSeq = -1L
+    var seqAfterZero = -1L
+    var maxFlushes = flushes0; var firstFlushPoll = -1; var firstFlushRow = ""
+    var minFree = Long.MaxValue; var maxHeld = -1L; var maxSeq = -1L
+    var holdReads = 0; var holdZero = 0
+    val hist = scala.collection.mutable.TreeMap[Int, Int]()
+    val tGo = System.currentTimeMillis()
+    while (state != "done" && state != "ERR" && polls < 2400 && m.isRunning) {
+      ws.update(); Thread.sleep(25); polls += 1
+      if (polls % 2 == 0) {
+        row = parse(nonEmptyScreen(screen), "OCLJMP")
+        state = field(row, 0)
+        val sq = num(row, 1); val held = num(row, 2); val fr = num(row, 3)
+        if (sq > maxSeq) maxSeq = sq
+        if (held > maxHeld) maxHeld = held
+        if (fr >= 0 && fr < minFree) minFree = fr
+        if (zeroSeen && sq > seqAfterZero) seqAfterZero = sq
+      }
+      if (polls % 4 == 0 && (state == "grow" || state == "hold")) {
+        val j = jitStatsLocked(m, lua)
+        val g = gcStatsLocked(m, lua)
+        if (j._1 < 0 || g._1 < 0) badReads += 1
+        else {
+          reads += 1
+          val lv = j._5; val tf = g._7
+          hist(lv) = hist.getOrElse(lv, 0) + 1
+          if (state == "hold") { holdReads += 1; if (lv == 0) holdZero += 1 }
+          if (lv >= 0 && lv < minLive) { minLive = lv; minLiveRow = row }
+          if (lv == 0 && !zeroSeen) { zeroSeen = true; zeroPoll = polls; zeroRow = row; zeroSeq = num(row, 1) }
+          if (tf > maxFlushes) { if (firstFlushPoll < 0) { firstFlushPoll = polls; firstFlushRow = row }; maxFlushes = tf }
+        }
+      }
+    }
+    val wallMs = System.currentTimeMillis() - tGo
+    // a few more ticks so the final row and its sequence number land
+    var settle = 0
+    while (settle < 12 && m.isRunning) { ws.update(); Thread.sleep(25); settle += 1 }
+    row = parse(nonEmptyScreen(screen), "OCLJMP")
+    state = field(row, 0)
+    val finalSeq = num(row, 1)
+    if (zeroSeen && finalSeq > seqAfterZero) seqAfterZero = finalSeq
+    val jN = jitStatsLocked(m, lua)
+    val gN = gcStatsLocked(m, lua)
+    val rawN = m.synchronized { gcStatsRaw(lua) }
+    var rawFreeN = -1L
+    m.synchronized { rawFreeN = try lua.getFreeMemory.toLong catch { case _: Throwable => -1L } }
+    val flushed = if (flushes0 < 0 || gN._7 < 0) -1L else gN._7 - flushes0
+    val histStr = hist.map { case (k, v) => (if (k < 0) "n/a" else k.toString) + "x" + v }.mkString(" ")
+    p("MEM-2 run: signal queued=" + queued + "; " + polls + " polls / " + wallMs + " ms; final row=" + row +
+      " (state/seq/heldKB/freeKB/err); max held=" + maxHeld + " KB, min sandbox free=" +
+      (if (minFree == Long.MaxValue) "n/a" else minFree.toString + " KB") + ", steps=" + maxSeq +
+      "; " + reads + " reads under the monitor (" + badReads + " produced no number), of them " + holdReads + " in hold")
+    p("MEM-2 reads: traces_live distribution " + (if (hist.isEmpty) "<no reads>" else histStr) +
+      "; min=" + (if (minLive == Int.MaxValue) "n/a" else minLive.toString) + " at row " + minLiveRow +
+      "; first 0 at poll " + zeroPoll + " row " + zeroRow + " (program stepped on to seq " + seqAfterZero + " after it)" +
+      "; first trace_flushes advance at poll " + firstFlushPoll + " row " + firstFlushRow)
+    p("MEM-2 after: traces_live=" + liveStr(jN._5) + " traces=" + jN._3 + " mcode=" + jN._1 + " B" +
+      "  arms=" + gN._1 + " collects=" + gN._2 + " bailouts=" + gN._3 + " refusals=" + gN._4 + " armed=" + gN._5 +
+      "  trace_flushes=" + tfStr(gN._7) + " (+" + flushed + " over the program) flush_bytes=" + gN._8 +
+      " (+" + (if (bytes0 < 0 || gN._8 < 0) -1L else gN._8 - bytes0) + ")" +
+      "  raw free KB=" + rawFreeN / 1024 + "  GCSTATS=" + rawN +
+      "  running=" + m.isRunning + " lastError=" + m.lastError)
+    val progErr = field(row, 4)
+    val survived = m.isRunning && m.lastError == null && state == "done" && progErr == "none"
+    val zeroWhileRunning = zeroSeen && seqAfterZero > zeroSeq
+    val ok = survived && flushed >= 1 && zeroWhileRunning
+    milestone(id, ok,
+      "tier=" + tierName + " (" + tierKB + " KB): held " + maxHeld + " KB live with sandbox free down to " +
+        (if (minFree == Long.MaxValue) "n/a" else minFree.toString + " KB") +
+        "; trace_flushes " + tfStr(flushes0) + " -> " + tfStr(gN._7) +
+        "; traces_live " + liveStr(live0) + " before, min " + (if (minLive == Int.MaxValue) "n/a" else minLive.toString) +
+        " over " + reads + " reads while running" +
+        (if (zeroSeen) " (0 first seen at poll " + zeroPoll + ", program still stepping afterwards=" + zeroWhileRunning + ")" else " (never 0)") +
+        "; program " + state + " err=" + progErr + " running=" + m.isRunning + " lastError=" + m.lastError +
+        (if (ok) ""
+         else if (reads == 0) "   <- NO READ under the monitor produced a number: nothing observed (a FAIL, not a pass)"
+         else if (flushes0 < 0 || gN._7 < 0) "   <- trace_flushes is ABSENT: this native's _OCLJ_GCSTATS returns " + rawN.takeWhile(_ != ':') +
+                                           " values, it predates the pressure flush -- nothing flushed, the traces stayed resident"
+         else if (!survived) "   <- the program did not survive the pressure: " +
+                             (if (progErr != "none") "its own step raised '" + progErr + "'" else "the machine stopped or the program never reported done")
+         else if (flushed < 1) "   <- the safe point never flushed: no proven cycle found the machine short, or no resume followed one"
+         else "   <- flushed, but traces_live was never read as 0 while the program ran: the last resume before every read had recompiled something"))
   }
 
   /** Evaluate a text chunk in the live state and return its single result. */
@@ -1921,6 +2123,69 @@ object Smoke {
       |  component.gpu.set(1, 42, s .. string.rep(" ", math.max(0, 150 - #s)))
       |end
       |
+      |-- (mem-2) MEMORY PRESSURE.  On the "ocljmp" signal, grow a table of
+      |-- DISTINCT 4 KB strings (LuaJIT interns strings, so equal ones would
+      |-- be one object) until computer.freeMemory() is under 64 KB, keep it
+      |-- referenced, then work for ~4 s making short-lived strings, then drop
+      |-- it.  One step per timer callback, the fi/dg shape: every step is a
+      |-- resume of the sandbox, and a resume is where the shim's trace flush
+      |-- can happen (lj52shim.c, FLUSHING TRACES UNDER MEMORY PRESSURE).  The
+      |-- step is pcall-wrapped so a "not enough memory" here is REPORTED on
+      |-- the row rather than killing the timer silently; the Java side reads
+      |-- traces_live and trace_flushes off the raw state between steps.
+      |local mpState, mpSeq, mpHeld, mpFree, mpErr = "idle", 0, 0, -1, "none"
+      |local mpData = nil
+      |local mpHoldUntil = 0
+      |local mpDirty = false
+      |local mpTarget = 64                    -- KB sandbox-visible free: stop growing here
+      |local mpChunk = 4000                   -- bytes per held string
+      |local mpScratch = 0
+      |local function mpGrow()
+      |  for i = 1, 8 do                      -- at most 32 KB per step: a bounded burst
+      |    mpFree = math.floor(computer.freeMemory() / 1024)
+      |    if mpFree < mpTarget then return true end
+      |    local k = #mpData + 1
+      |    mpData[k] = string.rep(string.char(65 + k % 26), mpChunk) .. "#" .. k
+      |    mpHeld = math.floor(k * mpChunk / 1024)
+      |  end
+      |  mpFree = math.floor(computer.freeMemory() / 1024)
+      |  return mpFree < mpTarget
+      |end
+      |local function mpWork()
+      |  local s = ""
+      |  for i = 1, 8 do s = s .. tostring(computer.uptime() + i) end
+      |  mpScratch = #s                       -- garbage, not growth
+      |  mpFree = math.floor(computer.freeMemory() / 1024)
+      |end
+      |local function mpDrive()
+      |  mpSeq = mpSeq + 1
+      |  local ok, err = pcall(function()
+      |    if mpState == "grow" then
+      |      if mpGrow() then mpState = "hold" mpHoldUntil = computer.uptime() + 4 end
+      |    elseif mpState == "hold" then
+      |      mpWork()
+      |      if computer.uptime() >= mpHoldUntil then mpState = "done" mpData = nil end
+      |    end
+      |  end)
+      |  if not ok then
+      |    mpErr = tostring(err):gsub("[ /]", "_"):sub(1, 40)
+      |    mpState = "ERR"
+      |    mpData = nil
+      |  end
+      |  mpDirty = true
+      |  if mpState == "grow" or mpState == "hold" then event.timer(0, mpDrive) end
+      |end
+      |event.listen("ocljmp", function()
+      |  mpData = {}
+      |  mpSeq, mpHeld, mpFree, mpErr, mpState = 0, 0, -1, "none", "grow"
+      |  mpDirty = true
+      |  event.timer(0, mpDrive)
+      |end)
+      |local function mpPaint()
+      |  local s = string.format("OCLJMP=%s/%d/%d/%d/%s", mpState, mpSeq, mpHeld, mpFree, mpErr)
+      |  component.gpu.set(1, 50, s .. string.rep(" ", math.max(0, 150 - #s)))
+      |end
+      |
       |-- The computer.lua.allowBytecode gate, probed from INSIDE the real
       |-- machine.lua sandbox.  This `load` is the sandbox wrapper at
       |-- machine.lua:754, which overwrites mode with "t" whenever
@@ -2401,6 +2666,10 @@ object Smoke {
       |  if dgDirty or n % 20 == 0 then
       |    dgDirty = false
       |    dgPaint()
+      |  end
+      |  if mpDirty or n % 20 == 0 then
+      |    mpDirty = false
+      |    mpPaint()
       |  end
       |  end)
       |  if not pok then
@@ -3666,14 +3935,18 @@ object Smoke {
       ", traces_live=" + lv0 + ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
 
     // --- the emergency collector, and whether it was even exercised ------
-    val (gcArms, gcCollects, gcBailouts, gcRefusals, gcArmed, gcState) =
+    val (gcArms, gcCollects, gcBailouts, gcRefusals, gcArmed, gcState, gcFlushes, gcFlushBytes) =
       if (quiesced(computer.machine, "the GC pressure read-out"))
         gcStatsLocked(computer.machine, mLua)
-      else (-1L, -1L, -1L, -1L, false, -1)
+      else (-1L, -1L, -1L, -1L, false, -1, -1L, -1L)
     if (gcArms >= 0) {
+      // trace_flushes is the pressure flush's own counter: a proven emergency
+      // cycle that left headroom short, then a resume that flushed.  0 on a
+      // run that never got there; -1 on a native that predates it.
       p("GC PRESSURE: arms=" + gcArms + " collects=" + gcCollects +
         " bailouts=" + gcBailouts + " refusals=" + gcRefusals +
-        " armed=" + gcArmed + " gcstate=" + gcState)
+        " armed=" + gcArmed + " gcstate=" + gcState +
+        " trace_flushes=" + gcFlushes + " flush_bytes=" + gcFlushBytes)
       // Every arm must be PROVEN to have completed a cycle.  The disarm
       // predicate is "currentwhite flipped AND state back at GCSpause"; a
       // shortfall means arms are resolving through the safety valve instead,
@@ -4217,6 +4490,15 @@ object Smoke {
     // signal.  See syncCallSave for what is asserted and why.
     syncCallSave(ws, computer, screen,
       expect = nativeMode match { case "additive" => "bundle"; case "stock" => "stock"; case _ => "dropin" })
+
+    // --- (mem-2) the trace flush under memory pressure -----------------
+    // LAST on the original machine, on purpose: the program drives the
+    // machine to within 64 KB of its cap and every resume from then on
+    // flushes the traces, so nothing measured after it (the MEM-1 residency
+    // reads above, the saves, the encore) would mean what it means today.
+    // Our natives only: the stock PUC 5.2 has no traces and no
+    // _OCLJ_GCSTATS.  See pressureFlush for the gates and the verdict.
+    if (nativeMode != "stock") pressureFlush(ws, computer, screen, kernelMode, jitMode, ramTierName, ramTierKB)
 
     // --- (g) the bytecode gate ----------------------------------------
     p("--- allowBytecode gate (on a private LuaState) ---")
