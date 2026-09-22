@@ -3,6 +3,9 @@ package io.github.astronfo.ocluajit.arch;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 import net.minecraft.nbt.NBTTagCompound;
 
@@ -140,6 +143,13 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
     public boolean initialize() {
         if (!super.initialize()) return false;
 
+        // The state exists and the eris library is open (LuaStateFactory opens
+        // it in openLibs, before super.initialize() returns): set the for-in
+        // diagnostic mode HERE, before the kernel swap below, so it is set on
+        // both branches -- the patched kernel and the fallback. See
+        // applyForinMode for why a refusal is a warning and not a failure.
+        applyForinMode();
+
         final InputStream patched = LuaJITArchitecture.class.getResourceAsStream(KERNEL_RESOURCE);
         if (patched == null) {
             // NOT silent, and not fatal. OpenComputers' own kernel runs fine on
@@ -173,6 +183,159 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
             } catch (final IOException ignored) {}
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------ //
+    // The for-in diagnostic: -Docluajit.forin=ignore|warn|refuse
+    // ------------------------------------------------------------------ //
+
+    /**
+     * WHAT THIS IS. The serializer replays a suspended `pairs` loop across a
+     * save, and the kernel's own two iterators walk snapshots (patch sites 10
+     * and 11) -- but an OS author's OWN `next`-wrapper (OpenOS installs one on
+     * its `component` library table, boot/04_component.lua:16-31) cannot be
+     * told from a legitimate custom iterator and cannot be rewritten
+     * (docs/forin-iterator-gap.md, "The #9 diagnostic"). It can be NAMED: under
+     * eris.settings("forin", "warn") the persist queues, for every live for-in
+     * loop whose iterator is a Lua closure that reaches `next`, one message
+     * giving the loop's line and the iterator's, retrievable through
+     * eris.diagnostics(); under "refuse" the persist raises it instead. The
+     * default, "ignore", does not even look, and no mode changes a wire byte.
+     *
+     * THE PROPERTY, read once per JVM: -Docluajit.forin=ignore|warn|refuse.
+     * Absent means ignore. Anything else is warned about ONCE and treated as
+     * ignore, because a typo in a JVM flag must not turn into a server whose
+     * computers refuse to save.
+     *
+     * WHERE THE MODE IS SET: at the top of initialize(), right after
+     * super.initialize() -- the state has just been created with the eris
+     * library open (LuaStateFactory.openLibs), and nothing has run in it yet.
+     * PersistenceAPI sets its own settings (spkey, path) later, in configure()
+     * on every persist, through exactly the sequence used here; ours is
+     * per-VM like theirs and survives them, so once is enough. A refusal (a
+     * native whose serializer predates the setting says "invalid option
+     * 'forin'") is logged once and the machine starts anyway: the jar's
+     * asset guard makes that combination unshippable, and a diagnostic must
+     * never be what stops a computer.
+     *
+     * WHERE THE LIST IS DRAINED: in save(), after persistBundle has RETURNED
+     * -- the persist that filled the list succeeded -- and only when the mode
+     * is not ignore. OpenComputers saves every 45 s, so the same parked loop
+     * would log on every save; each distinct message is logged once per
+     * machine (forinLogged), naming the machine by its node address. The
+     * drain can fail only through the Lua API, and every such failure is
+     * caught and logged once: nothing here may fail a save.
+     *
+     * THE PROTECTED-CALL RULE. Every Lua step below runs through LuaState
+     * methods that jnlua wraps in lua_pcall on the native side (LuaState.call
+     * IS lua_pcall; getGlobal/getField/rawGet go through the same
+     * *_protected trampolines) -- a Lua error surfaces as a
+     * LuaRuntimeException here, never as an unprotected longjmp through a JNI
+     * frame, which on Windows kills the JVM with no diagnostic
+     * (native/lj52shim.c, "unprotected error in call to Lua API"). The
+     * stack is restored to what it was on every path.
+     */
+    static final String FORIN_PROPERTY = "ocluajit.forin";
+
+    /** The mode, resolved once: "ignore", "warn" or "refuse". */
+    static final String FORIN_MODE = readForinMode();
+
+    private static String readForinMode() {
+        final String raw = System.getProperty(FORIN_PROPERTY);
+        if (raw == null) return "ignore";
+        final String v = raw.trim()
+            .toLowerCase(Locale.ROOT);
+        if (v.equals("ignore") || v.equals("warn") || v.equals("refuse")) return v;
+        io.github.astronfo.ocluajit.OCLuaJIT.LOG.warn(
+            "-D" + FORIN_PROPERTY
+                + "="
+                + raw
+                + " is not one of ignore|warn|refuse; treating it as ignore (the for-in diagnostic is off)");
+        return "ignore";
+    }
+
+    /** Every distinct diagnostic already logged for this machine. */
+    private final Set<String> forinLogged = new HashSet<String>();
+    /** Each failure class is logged once per machine, not once per save. */
+    private boolean forinSettingFailed;
+    private boolean forinDrainFailed;
+
+    /** The machine, for the log: its node address (what OpenComputers shows the player). */
+    private String whichMachine() {
+        try {
+            return "Computer " + machine().node()
+                .address()
+                + " @ "
+                + machine().host()
+                    .machinePosition();
+        } catch (final RuntimeException e) {
+            return "Computer <unknown>";
+        }
+    }
+
+    /** eris.settings("forin", FORIN_MODE), the way PersistenceAPI.configure sets spkey. */
+    private void applyForinMode() {
+        final LuaState lua = lua();
+        final int top = lua.getTop();
+        try {
+            lua.getGlobal("eris"); // ... eris
+            if (!lua.isTable(-1)) throw new IllegalStateException("no 'eris' global: " + lua.type(-1));
+            lua.getField(-1, "settings"); // ... eris settings
+            if (!lua.isFunction(-1)) throw new IllegalStateException("eris.settings is " + lua.type(-1));
+            lua.pushString("forin"); // ... eris settings "forin"
+            lua.pushString(FORIN_MODE); // ... eris settings "forin" mode
+            lua.call(2, 0); // ... eris (lua_pcall on the native side)
+        } catch (final RuntimeException e) {
+            if (!forinSettingFailed) {
+                forinSettingFailed = true;
+                io.github.astronfo.ocluajit.OCLuaJIT.LOG.warn(
+                    whichMachine() + ": could not set eris.settings(\"forin\", \""
+                        + FORIN_MODE
+                        + "\"): "
+                        + e
+                        + " -- the for-in diagnostic is OFF for this machine. A serializer that predates the "
+                        + "setting answers exactly this way; the machine starts regardless.");
+            }
+        } finally {
+            lua.setTop(top);
+        }
+    }
+
+    /**
+     * After a persist that RETURNED: eris.diagnostics() -> array of strings,
+     * cleared by the call; log each message this machine has not logged yet.
+     */
+    private void drainForinDiagnostics(final LuaState lua) {
+        if (FORIN_MODE.equals("ignore")) return;
+        final int top = lua.getTop();
+        try {
+            lua.getGlobal("eris"); // ... eris
+            if (!lua.isTable(-1)) throw new IllegalStateException("no 'eris' global: " + lua.type(-1));
+            lua.getField(-1, "diagnostics"); // ... eris diagnostics
+            if (!lua.isFunction(-1)) throw new IllegalStateException("eris.diagnostics is " + lua.type(-1));
+            lua.call(0, 1); // ... eris list
+            if (!lua.isTable(-1)) throw new IllegalStateException("eris.diagnostics() returned " + lua.type(-1));
+            final int n = lua.rawLen(-1);
+            for (int i = 1; i <= n; i++) {
+                lua.rawGet(-1, i); // ... eris list msg
+                final String msg = lua.isString(-1) ? lua.toString(-1) : "<" + lua.type(-1) + ">";
+                lua.pop(1); // ... eris list
+                if (forinLogged.add(msg)) {
+                    io.github.astronfo.ocluajit.OCLuaJIT.LOG.warn(
+                        whichMachine() + " (for-in diagnostic, -D" + FORIN_PROPERTY + "=" + FORIN_MODE + "): " + msg);
+                }
+            }
+        } catch (final RuntimeException e) {
+            if (!forinDrainFailed) {
+                forinDrainFailed = true;
+                io.github.astronfo.ocluajit.OCLuaJIT.LOG.warn(
+                    whichMachine() + ": could not read eris.diagnostics() after a save: "
+                        + e
+                        + " (logged once; the save itself is unaffected)");
+            }
+        } finally {
+            lua.setTop(top);
+        }
     }
 
     // ------------------------------------------------------------------ //
@@ -351,12 +514,17 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
             }
             // ONE persist of {[1]=kernel, [2]=closure|table} under the "_kernel"
             // tag -- was persist(1) to "_kernel" and persist(2) to "_stack". (:407, :412)
+            final byte[] bundle = persistBundle(lua, withStack);
             SaveHandler.scheduleSave(
                 machine().host(),
                 nbt,
                 machine().node()
                     .address() + "_kernel",
-                persistBundle(lua, withStack));
+                bundle);
+            // The persist RETURNED: whatever it queued about loops it could not
+            // replay goes to the log now (a no-op under the default mode, and
+            // never a failure -- see the diagnostic section above).
+            drainForinDiagnostics(lua);
 
             nbt.setInteger("kernelMemory", (int) Math.ceil(kernelMemory() / ramScale())); // (:415)
 

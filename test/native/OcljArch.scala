@@ -83,6 +83,10 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
     */
   override def initialize(): Boolean = {
     if (!super.initialize()) return false
+    // The state exists and eris is open (openLibs): set the for-in diagnostic
+    // mode HERE, before the kernel swap, so both branches below get it.  The
+    // mod does the same at the same point (LuaJITArchitecture.initialize).
+    applyForinMode()
     val patched = classOf[OCLuaJITArchitecture].getResourceAsStream(OCLuaJITArchitecture.KernelResource)
     if (patched == null) {
       // NOT silent. Falling back to OpenComputers' kernel still RUNS -- that is
@@ -110,6 +114,76 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
   override protected def factory: LuaStateFactory = {
     OCLuaJITStateFactory.ensureInitialized()
     OCLuaJITStateFactory
+  }
+
+  // ------------------------------------------------------------------ //
+  // The for-in diagnostic: -Docluajit.forin=ignore|warn|refuse
+  // ------------------------------------------------------------------ //
+
+  /**
+    * The same half the mod carries (LuaJITArchitecture.java, same section):
+    * set eris.settings("forin", mode) once the state exists, and after every
+    * persist that RETURNED drain eris.diagnostics() -- the loops the
+    * serializer could not replay, an OS author's own `next`-wrapper each
+    * (docs/forin-iterator-gap.md, "The #9 diagnostic") -- to the log, each
+    * distinct message once per machine.  Nothing here may fail a save or stop
+    * a machine: every Lua step runs through LuaState methods that jnlua
+    * protects with lua_pcall on the native side, so a refusal arrives as a
+    * LuaRuntimeException, and each failure class is logged once.
+    *
+    * WHAT THE HARNESS ADDS: `forinDiagnostics`, every message the drains of
+    * this machine's saves returned, in order, duplicates included -- the dg-1
+    * milestone counts what ONE save produced -- and `lastSaveError`, the text
+    * of a save that failed (refuse mode's evidence).  The BundleRoots=OFF
+    * negative control falls through to super.save and drains nothing.
+    */
+  val forinDiagnostics: mutable.ArrayBuffer[String] = mutable.ArrayBuffer.empty[String]
+  private val forinLogged = mutable.HashSet.empty[String]
+  private var forinSettingFailed = false
+  private var forinDrainFailed = false
+  var lastSaveError: String = ""
+
+  private def whichMachine(): String =
+    try "computer " + machine.node.address catch { case _: Exception => "computer <unknown>" }
+
+  private def applyForinMode(): Unit = {
+    val mode = OCLuaJITArchitecture.ForinMode
+    try OCLuaJITArchitecture.forinApply(OCLuaJITArchitecture.luaOf(this), mode)
+    catch {
+      case e: Exception =>
+        if (!forinSettingFailed) {
+          forinSettingFailed = true
+          val msg = "OC-LuaJIT " + whichMachine() + ": could not set eris.settings(\"forin\", \"" + mode + "\"): " + e +
+            " -- the for-in diagnostic is OFF for this machine. A serializer that predates the setting answers " +
+            "exactly this way; the machine starts regardless."
+          Ocelot.log.warn(msg)
+          System.err.println("[ocljit] " + msg)
+        }
+    }
+  }
+
+  private def drainForinDiagnostics(lua: LuaState): Unit = {
+    val mode = OCLuaJITArchitecture.ForinMode
+    if (mode == "ignore") return
+    try {
+      val msgs = OCLuaJITArchitecture.forinDrain(lua)
+      forinDiagnostics ++= msgs
+      for (m <- msgs if forinLogged.add(m)) {
+        val line = "OC-LuaJIT " + whichMachine() + " (for-in diagnostic, -D" + OCLuaJITArchitecture.ForinProperty +
+          "=" + mode + "): " + m
+        Ocelot.log.warn(line)
+        System.err.println("[ocljit] " + line)
+      }
+    } catch {
+      case e: Exception =>
+        if (!forinDrainFailed) {
+          forinDrainFailed = true
+          val msg = "OC-LuaJIT " + whichMachine() + ": could not read eris.diagnostics() after a save: " + e +
+            " (logged once; the save itself is unaffected)"
+          Ocelot.log.warn(msg)
+          System.err.println("[ocljit] " + msg)
+        }
+    }
   }
 
   // ------------------------------------------------------------------ //
@@ -235,6 +309,7 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
       lua.setTotalMemory(Integer.MAX_VALUE)
     }
 
+    lastSaveError = ""
     try {
       // Save the kernel state (which is always at stack index one).             (:406)
       assert(lua.isThread(1))
@@ -251,6 +326,9 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
       // ONE persist of {[1]=kernel, [2]=closure|table} under the "_kernel"
       // tag -- was persist(1) to "_kernel" and persist(2) to "_stack".         (:409, :417)
       nbt.setByteArray(machine.node.address + "_kernel", persistBundle(lua, withStack))
+      // The persist RETURNED: drain what it queued about loops it could not
+      // replay (a no-op under the default mode; never a failure).
+      drainForinDiagnostics(lua)
 
       nbt.setInteger("kernelMemory",                                             // (:420)
         math.ceil(OCLuaJITArchitecture.kernelMemoryOf(this) / OCLuaJITArchitecture.ramScaleOf(this)).toInt)
@@ -266,9 +344,11 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
       }
     } catch {
       case e: LuaRuntimeException =>                                             // (:432-434)
+        lastSaveError = e.toString
         Ocelot.log.warn(s"Could not persist computer.\n${e.toString}" + luaTrace(e))
         nbt.removeTag("state")
       case e: LuaGcMetamethodException =>                                        // (:435-437)
+        lastSaveError = e.toString
         Ocelot.log.warn(s"Could not persist computer.\n${e.toString}")
         nbt.removeTag("state")
     }
@@ -387,6 +467,78 @@ object OCLuaJITArchitecture {
     if (on) Ocelot.log.info(msg) else Ocelot.log.warn(msg)
     System.err.println("[ocljit] " + msg)
     on
+  }
+
+  /**
+    * THE FOR-IN DIAGNOSTIC's mode, from -Docluajit.forin -- the MOD's property
+    * name, deliberately, so the harness's JAVA_TOOL_OPTIONS reads exactly as a
+    * server's would: ignore (default; absent) | warn | refuse.  Anything else
+    * is warned about once and treated as ignore, as the mod does.
+    */
+  val ForinProperty = "ocluajit.forin"
+
+  val ForinMode: String = {
+    val raw = System.getProperty(ForinProperty)
+    val v = if (raw == null) "ignore" else raw.trim.toLowerCase(java.util.Locale.ROOT)
+    val mode = if (v == "ignore" || v == "warn" || v == "refuse") v else "ignore"
+    val msg =
+      if (raw == null) "OC-LuaJIT for-in diagnostic: -D" + ForinProperty + " absent -> ignore (the default: the persist does not look)"
+      else if (mode == v) "OC-LuaJIT for-in diagnostic: -D" + ForinProperty + "=" + mode
+      else "OC-LuaJIT for-in diagnostic: -D" + ForinProperty + "=" + raw + " is not one of ignore|warn|refuse; treating it as ignore"
+    if (mode == v) Ocelot.log.info(msg) else Ocelot.log.warn(msg)
+    System.err.println("[ocljit] " + msg)
+    mode
+  }
+
+  /**
+    * eris.settings("forin", mode) on a state, the way PersistenceAPI.configure
+    * sets spkey: getGlobal, getField, two pushes, call(2, 0) -- each a
+    * lua_pcall-protected jnlua entry, so a refusal ("invalid option 'forin'"
+    * from a serializer that predates the setting) is a LuaRuntimeException,
+    * never an unprotected longjmp through a JNI frame.  The stack is left as
+    * found on every path.  Throws; the caller decides what a refusal means.
+    */
+  def forinApply(lua: LuaState, mode: String): Unit = {
+    val top = lua.getTop
+    try {
+      lua.getGlobal("eris")                                       // ... eris
+      if (!lua.isTable(-1)) throw new IllegalStateException("no 'eris' global: " + lua.`type`(-1))
+      lua.getField(-1, "settings")                                // ... eris settings
+      if (!lua.isFunction(-1)) throw new IllegalStateException("eris.settings is " + lua.`type`(-1))
+      lua.pushString("forin")
+      lua.pushString(mode)
+      lua.call(2, 0)                                              // ... eris
+    } finally lua.setTop(top)
+  }
+
+  /**
+    * eris.diagnostics(): the pending messages as strings, in order.  The call
+    * CLEARS the list (the table handed back is the list and the registry
+    * forgets it), so two reads in a row give the messages and then nothing.
+    * Throws when the library lacks the function (a serializer that predates
+    * it) -- the caller must not read that as "no diagnostics".
+    */
+  def forinDrain(lua: LuaState): List[String] = {
+    val top = lua.getTop
+    try {
+      lua.getGlobal("eris")                                       // ... eris
+      if (!lua.isTable(-1)) throw new IllegalStateException("no 'eris' global: " + lua.`type`(-1))
+      lua.getField(-1, "diagnostics")                             // ... eris diagnostics
+      if (!lua.isFunction(-1))
+        throw new IllegalStateException("eris.diagnostics is " + lua.`type`(-1) + " (a serializer older than the setting?)")
+      lua.call(0, 1)                                              // ... eris list
+      if (!lua.isTable(-1)) throw new IllegalStateException("eris.diagnostics() returned " + lua.`type`(-1))
+      val n = lua.rawLen(-1)
+      val out = mutable.ListBuffer.empty[String]
+      var i = 1
+      while (i <= n) {
+        lua.rawGet(-1, i)                                         // ... eris list msg
+        out += (if (lua.isString(-1)) lua.toString(-1) else "<" + lua.`type`(-1) + ">")
+        lua.pop(1)                                                // ... eris list
+        i += 1
+      }
+      out.toList
+    } finally lua.setTop(top)
   }
 
   /**

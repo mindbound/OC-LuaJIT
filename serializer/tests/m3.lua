@@ -675,7 +675,8 @@ do -- save, restore, save again from the replay state, restore again
   end
 end
 
-do -- a loop warmed until the JIT compiles it: persist must flush first
+do -- a loop warmed until the JIT compiles it, in the same prototype as the
+   -- loop the thread then yields inside
   local t = { 1, 2, 3, 4, 5, 6, 7, 8 }
   local co = coroutine.create(function()
     local spin = 0
@@ -685,10 +686,91 @@ do -- a loop warmed until the JIT compiles it: persist must flush first
   end)
   coroutine.resume(co)
   local okp, g = pcall(roundtrip, co, { [t] = "T" }, { T = t })
-  ok(okp, "a JIT-warmed loop persists (traces are flushed first)", g)
+  ok(okp, "a JIT-warmed loop persists (the head is read through the trace)", g)
   if okp then
     local got = drain(g)
     ok(got[#got] == 18000, "and its arithmetic survives", got[#got])
+  end
+end
+
+do -- the SAME loop the thread yields inside was compiled by the JIT, so at
+   -- persist time its head is not a BC_ITERN at all: trace_stop rewrote the
+   -- slot into BC_JLOOP with the trace number in D. The scan reads the
+   -- original through GCtrace.startins, as lj_bcwrite does when it dumps a
+   -- prototype, and flushes NOTHING. The old binary flushed every trace in
+   -- the VM here, which is what the traceinfo assertion catches.
+  local jutil = require("jit.util")
+  local t = { a = 1, b = 2, c = 3, d = 4, e = 5, f = 6, g = 7, h = 8 }
+  local body = function()
+    for round = 1, 300 do                 -- rounds 1-299 compile the inner loop
+      for k in pairs(t) do
+        if round == 300 then coroutine.yield(k) end   -- guard exit, then yield
+      end
+    end
+    return "DONE"
+  end
+  -- The opcode at every position of `body` BEFORE it runs, so the
+  -- precondition can be stated without naming an opcode number: the slot a
+  -- root trace started at must READ DIFFERENTLY once that trace exists.
+  local before = {}
+  for pc = 0, 4095 do
+    local ins = jutil.funcbc(body, pc)
+    if ins == nil then break end
+    before[pc] = bit.band(ins, 0xff)
+  end
+  -- PRECONDITION, proven rather than assumed: every root trace the JIT stops
+  -- in `body`, by trace number, with the bytecode position it started at.
+  -- ("start" carries the pc; a root trace has no parent argument.)
+  local startpc, roots = {}, {}
+  local function cb(what, tr, func, pc, parent)
+    if what == "start" then
+      startpc[tr] = (parent == nil and func == body) and pc or nil
+    elseif what == "abort" then
+      startpc[tr] = nil
+    elseif what == "stop" and startpc[tr] then
+      roots[#roots + 1] = tr
+    end
+  end
+  jit.attach(cb, "trace")
+  local co = coroutine.create(body)
+  local first = select(2, coroutine.resume(co))     -- suspended at round 300
+  jit.attach(cb)                                    -- detach
+  local why
+  if not jit.status() then
+    why = "PRECONDITION FAILED: the JIT is off in this harness"
+  elseif #roots == 0 then
+    why = "PRECONDITION FAILED: no root trace was compiled in the coroutine's function"
+  else
+    local patched = 0
+    for _, tr in ipairs(roots) do
+      local ins = jutil.funcbc(body, startpc[tr])
+      if jutil.traceinfo(tr) and ins and bit.band(ins, 0xff) ~= before[startpc[tr]] then
+        patched = patched + 1
+      end
+    end
+    if patched == 0 then
+      why = "PRECONDITION FAILED: no trace's start slot is patched while the thread is suspended"
+    end
+  end
+  ok(why == nil, "PRECONDITION: the yielded-in loop's head is JIT-patched at persist time", why)
+  if why == nil then
+    local p = perms_with(BASEP, { [t] = "T" })
+    local u = perms_with(BASEU, { T = t })
+    local okp, blob = pcall(eris.persist, p, co)
+    ok(okp, "a loop whose head is a live BC_JLOOP persists without flushing", blob)
+    if okp then
+      local kept = 0
+      for _, tr in ipairs(roots) do if jutil.traceinfo(tr) then kept = kept + 1 end end
+      ok(kept == #roots, "and every trace compiled in it is still there after persist",
+         string.format("%d of %d survived (a persist-side flush discards them all)",
+                       kept, #roots))
+      local g = eris.unpersist(u, blob)   -- the RESTORE side flushes; that is fine
+      local got = drain(g)
+      table.remove(got)                   -- "DONE"
+      got[#got + 1] = first
+      ok(sorted(got) == keylist(t), "and the restored loop visits every key exactly once",
+         sorted(got))
+    end
   end
 end
 

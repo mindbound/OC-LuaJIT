@@ -275,6 +275,31 @@ C.** Constraining the sandbox beats teaching the serializer another shape.
 
 ## The #9 diagnostic — design, 2026-09-19 (to ship with the next serializer bump)
 
+> **Implemented 2026-09-22** in the serializer, as designed below (serializer
+> hash `8c5a1168`; the JIT-flush removal and the userdata wording shipped in
+> the same hash move). Detection sits in `elj_forin_scan`'s real pass, before
+> the state-slot test, gated on the mode so `"ignore"` does not even look;
+> messages are formatted after the scan (`elj_forin_diagnose`), because the
+> scan must stay allocation-free. Surface: `eris.settings("forin", mode)` and
+> `eris.diagnostics()`; `serializer/README.md`, API section. Tests:
+> `serializer/tests/forin.lua`, `ELJ_MODE=diag`, run by `run-forin.sh` after
+> the pad matrix — nine cases, eight failing on the shipping binary at
+> `eris.settings` (`invalid option 'forin'`) and the ninth, the default-mode
+> blob identity, using that binary as the reference writer of
+> `tests/fixtures/forin-identity.blob`. The message for the `ocpairs` shape
+> reads exactly: `for-in loop at diag_wrap:12 iterates with a Lua closure
+> (diag_wrap:4) that calls next; its position is not replayable and resumes
+> against a different hash layout after a reload -- return next, t, nil from
+> the iterator, or walk a snapshot array by index`. Two things the tests
+> taught: the identity check has to mask one 8-byte payload per Lua frame —
+> the link slot's raw return-PC, which the shipping wire has always carried
+> and the restore never reads (README, known limitations) — and the callable
+> **table** shape (old `component.list`, a `__call` metamethod) is outside
+> the stated condition "the func slot holds a Lua closure", so it is not
+> flagged; the kernel no longer ships that shape. The mod half — setting the
+> mode from `-Docluajit.forin` and draining `eris.diagnostics()` to the log
+> after each save — is not part of the serializer change.
+
 What is left after sites 10–11 is the OS author's own `next`-wrapper (census
 #9). It cannot be rewritten: at save time it is not soundly distinguishable
 from a legitimate custom iterator with its own ordering. It can be *named*.

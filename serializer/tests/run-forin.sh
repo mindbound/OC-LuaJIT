@@ -9,8 +9,11 @@
 # turns an intermittent failure (the keyindex design was correct in 4 runs
 # out of 20) into a deterministic matrix: every pad must pass.
 #
-#   sh tests/run-forin.sh            # 22 cases x pads 0..19
+#   sh tests/run-forin.sh            # 22 cases x pads 0..19, then the diag cases
 #   PADS="$(seq 0 63)" sh tests/run-forin.sh   # the deep sweep
+#
+# After the matrix it runs forin.lua's ELJ_MODE=diag cases (the #9 diagnostic:
+# in-process, one run) against tests/fixtures/forin-identity.blob.
 #
 # Exit status is the number of failing cases.
 
@@ -87,6 +90,22 @@ for case in $CASES; do
     fails=$((fails + 1))
   fi
 done
+
+# The #9 diagnostic (docs/forin-iterator-gap.md): the in-process cases, plus
+# the default-mode blob identity against a fixture the SHIPPING binary wrote:
+#   ELJ_MODE=diagblob ELJ_BLOB=tests/fixtures/forin-identity.blob <old exe> tests/forin.lua
+# Regenerate it only when the wire format is meant to move, and say so in the
+# commit; a silent difference here is the exact drift the fixture exists for.
+# The exit status is the number of failing cases; a crashed run counts as one.
+DIAGREF=${DIAGREF:-tests/fixtures/forin-identity.blob}
+ELJ_MODE=diag ELJ_REF="$DIAGREF" "$BIN" tests/forin.lua > "$DIR/diag.log" 2>&1
+rc=$?
+grep -E '^(OK|FAIL) ' "$DIR/diag.log"
+if [ "$rc" -ne 0 ]; then
+  grep -E '^error' "$DIR/diag.log" | sed 's/^/     /'
+  echo "FAIL diag: $rc case(s) (see $DIR/diag.log)"
+  fails=$((fails + rc))
+fi
 
 echo
 if [ "$fails" -eq 0 ]; then

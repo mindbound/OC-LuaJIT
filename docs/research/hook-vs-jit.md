@@ -520,7 +520,7 @@ state in practice. Recorded so nobody rediscovers it.
 
 Both of these were recorded as "currently masked because traces never run".
 They are no longer masked, and both now have numbers instead of arguments.
-Measured with `_OCLJ_JITSTATS()`, a raw-global accessor added for this --
+Measured with `_OCLJ_JITSTATS()`, a raw-global accessor added for this (four values then; a fifth, `traces_live`, was added 2026-09-22 because `freetrace-1` cannot tell "no recording" from "every recording aborts") --
 `J->szallmcarea` (`lj_jit.h:510`) plus the trace count -- because `jit.util`
 is deliberately kept out of the sandbox.
 

@@ -292,6 +292,21 @@ void lj52_pushcfunction(lua_State *L, lua_CFunction f);
  * hit a limit here first.  Beyond it arm() degrades to "inherit the enclosing
  * deadline" rather than erroring.  Part of the contract, hence here. */
 #define LJ52_WD_MAXDEPTH 256
+
+/* How many fires the hook will SKIP on a parent that armed a live entry and
+ * is not the thread the top entry protects, per entry, before it stops
+ * treating that parent as "a few instructions from disarm()" and fires on it
+ * as PUC would.  The kernel's real windows, counted in bytecode
+ * (luajit -bl on the patched machine.lua, 2026-09-22): 4-5 instructions from
+ * the child's resume returning to the disarm() CALL at every site, 12 more
+ * if the fire lands between arm() and the resume, 17 on one entry at worst.
+ * 64 is the power of two that is still "a few dozen": 3.7x the worst measured
+ * path, 12x the common one, and a parent that needs more than 64 instructions
+ * between a child's return and disarm() is not the kernel's window but a
+ * leaked entry (see THE THREAD FILTER in lj52shim.c) -- and a leaked entry
+ * must degrade to PUC behaviour, not to a thread nothing can interrupt.
+ * Part of the contract: wd_test asserts this exact number. */
+#define LJ52_WD_SKIPMAX 64
 #undef lua_pushcfunction
 #define lua_pushcfunction(L, f) lj52_pushcfunction((L), (f))
 

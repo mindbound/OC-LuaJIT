@@ -7,11 +7,31 @@
 # ocelot-brain is modified; the whole compatibility layer is lj52shim.{c,h}.
 #
 # The DLL is three translation units plus static LuaJIT:
-#   jnlua.o    OC-JNLua's own native/src/jnlua.c, UNMODIFIED, compiled with
-#              -include lj52shim.h so the 5.2 C API it calls resolves to us
+#   jnlua.o    OC-JNLua's own native/src/jnlua.c, unmodified except for ONE
+#              diagnostic line, compiled with -include lj52shim.h so the 5.2
+#              C API it calls resolves to us.  The line: lua_1resume's error
+#              path throws from the top of L, where the coroutine object sits,
+#              instead of from the error object lua_resume left on T -- so
+#              every kernel panic logged "LuaRuntimeException: thread: 0x..."
+#              and never the kernel's message.  native/jnlua/patch-resume-
+#              error.sh moves T's error object onto L first, on a build-dir
+#              COPY (both variants), anchored to occur exactly once; the
+#              checkout itself stays pristine and is asserted so below.
 #   lj52shim.o the compatibility layer (5.2 surface on the 5.1 ABI)
 #   eris_lj.o  our Eris-API-compatible serializer (serializer/eris_lj.c)
-#   libluajit.a  LuaJIT 2.1 static, LUA52COMPAT + CHECKHOOK
+#   libluajit.a  LuaJIT 2.1 static, LUA52COMPAT + CHECKHOOK, plus ONE
+#              function patched on the build copy: lj_func_freeproto scrubs
+#              the trace-abort penalty cache of the dying prototype's loop
+#              heads (native/luajit/patch-penalty-scrub.sh).  The cache is
+#              keyed by bytecode ADDRESS and upstream never clears it when a
+#              prototype dies, so on our CRT heap a program re-loaded from
+#              source inherits its predecessor's penalties and is blacklisted
+#              to the interpreter on the ~9th re-load (2026-09-22;
+#              test/native/penalty_test.c).  Same shape as the jnlua patch:
+#              anchored, applied to the copy, asserted by content before make
+#              -- and the copy's lj_func.c is re-taken from the pristine
+#              checkout every build first, so the patched file is always a
+#              fresh patch of upstream, never a verified-and-kept old one.
 #
 # WHY THOSE TWO LUAJIT FLAGS (both are mandatory, not tuning):
 #   LUAJIT_ENABLE_LUA52COMPAT -- OC's platform (machine.lua, OpenOS, the
@@ -89,9 +109,10 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # WHICH LIBRARY THIS BUILD PRODUCES, and it is two different products.
 #
-#   dropin   (default)  jnlua.c UNMODIFIED, so LUA_VERSION_NUM 502 makes it
-#                       export Java_..._LuaState_* -- it IS OpenComputers' 5.2
-#                       native.  The harness substitutes it wholesale via
+#   dropin   (default)  jnlua.c with its macro values as upstream has them, so
+#                       LUA_VERSION_NUM 502 makes it export Java_..._LuaState_*
+#                       -- it IS OpenComputers' 5.2 native.  The harness
+#                       substitutes it wholesale via
 #                       debug.forceNativeLibPathFirst.  Every measurement in
 #                       bench/runs/ was taken on this, and it can never be the
 #                       shipped mod: OC loads its own 5.2 native in preInit and
@@ -102,6 +123,9 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 #                       Java_..._LuaStateLuaJIT_* instead, backing the fourth
 #                       LuaState class gen-luastate-subclass.py emits.  Nothing
 #                       of OpenComputers' is replaced.  THIS IS WHAT SHIPS.
+#
+#   Both variants then get the one-line resume-error patch (see the header)
+#   on their copy; the dropin's copy exists only for that.
 #
 # docs/research/shipping-model.md has the reasoning; test/native/LinkProbe.java
 # is the proof a JVM actually binds the additive one (5/5, 2026-09-15).
@@ -377,6 +401,43 @@ if [ ! -d "$LJ_WORK" ]; then
   rm -rf "$LJ_WORK/.git"
 fi
 LJ=$LJ_WORK/src
+# THE ONE FUNCTION OF LUAJIT WE CHANGE, on the copy, every build.  The copy
+# persists between builds, and the patch script's "already patched" path
+# verifies only four marker lines -- so a stale or hand-edited block on the
+# copy (say `pc < bcend` turned into `pc < bc`) would be ACCEPTED and ship
+# silently, and a revised block in the script would never reach a copy that
+# already carries the old one.  Demonstrated 2026-09-22: the script alone,
+# run in place on such a mangling, exits 0 "already carries the penalty
+# scrub" and leaves the mangled line in.
+#
+# So the copy's lj_func.c is never the patch's input.  The PRISTINE checkout's
+# file is re-copied over it first, every build, on every platform, and the
+# patch is applied to that: the file make compiles is then a pure function of
+# (checkout, patch script), byte-identical to a fresh patch of the pristine
+# source, and the "already patched" path is never taken here (asserted: the
+# scrub must be ABSENT right after the re-copy).  The pre-make content
+# assertion and the lj_func.o -nt check below pin the rest.
+SCRUB_LINE='setmref(J->penalty[i].pc, NULL);'
+grep -q -F -- "$SCRUB_LINE" "$OCLJ_LUAJIT/src/lj_func.c" \
+  && fail "$OCLJ_LUAJIT/src/lj_func.c carries the penalty scrub: the pinned
+         checkout must stay pristine.  The patch belongs on the build copy only."
+cp -f "$OCLJ_LUAJIT/src/lj_func.c" "$LJ/lj_func.c" \
+  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_func.c over $LJ/lj_func.c"
+grep -q -F -- "$SCRUB_LINE" "$LJ/lj_func.c" \
+  && fail "$LJ/lj_func.c still carries the penalty scrub right after the pristine
+         re-copy -- the copy did not take, and the patch step would have been
+         verifying a stale block instead of applying the current one"
+say "    lj_func.c: pristine copy re-taken from $OCLJ_LUAJIT/src (the build copy is never the patch's input)"
+sh "$OCLJ_REPO/native/luajit/patch-penalty-scrub.sh" "$LJ/lj_func.c" "$LJ/lj_func.c" \
+  || fail "the penalty-scrub patch refused (see above)"
+# And it must be IN THE FILE MAKE IS ABOUT TO COMPILE, asserted by content
+# rather than by the step's exit status, for the same reason the jnlua patch
+# is: a build that compiled an unpatched copy would blacklist every re-loaded
+# program again, with nothing to say so.
+[ "$(grep -c -F -- "$SCRUB_LINE" "$LJ/lj_func.c")" = "1" ] \
+  || fail "$LJ/lj_func.c does not carry the penalty scrub exactly once -- the
+         copy make is about to compile is not the patched one"
+say "    lj_func.c: penalty scrub present in the freshly re-derived build copy (asserted by content before make)"
 make -C "$LJ" clean >/dev/null 2>&1
 # Q= makes the Makefile echo full compiler command lines, so the flags can be
 # asserted rather than assumed.
@@ -385,6 +446,16 @@ make -C "$LJ" BUILDMODE=static XCFLAGS="$LJ_FLAGS" Q= -j"$JOBS" \
   || { tail -30 "$OCLJ_BUILD/luajit_build.log"; fail "LuaJIT build failed (log: $OCLJ_BUILD/luajit_build.log)"; }
 [ -f "$LJ/libluajit.a" ] || fail "no $LJ/libluajit.a after make"
 stamp "libluajit.a built ($(wc -c < "$LJ/libluajit.a") bytes)"
+# The patched lj_func.c must be what went into the archive.  `make clean`
+# above removes every object, so this holds by construction -- but say so
+# with evidence: the object is newer than the (possibly just rewritten)
+# source, and the compile line for it is in the log.
+[ -f "$LJ/lj_func.o" ] || fail "no $LJ/lj_func.o after make"
+[ "$LJ/lj_func.o" -nt "$LJ/lj_func.c" ] \
+  || fail "lj_func.o is not newer than the patched lj_func.c -- make did not recompile it"
+grep -q 'lj_func\.c' "$OCLJ_BUILD/luajit_build.log" \
+  || fail "lj_func.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
+say "    lj_func.o recompiled from the patched lj_func.c ($(date -r "$LJ/lj_func.o" +%H:%M:%S) > $(date -r "$LJ/lj_func.c" +%H:%M:%S))"
 
 # The two flags must be OBSERVABLE, not merely passed.
 grep -q -- "-DLUAJIT_ENABLE_LUA52COMPAT" "$OCLJ_BUILD/luajit_build.log" \
@@ -468,26 +539,46 @@ say "    -Wall -Wextra warnings = $SW"
 [ "$SW" = "0" ] || { grep -E 'warning:' "$OCLJ_BUILD/shim.err" | head -20; fail "the shim must compile warning-clean"; }
 
 # --------------------------------------------------------------- 3
-say "=============== 3. OC-JNLua jnlua.c (UNMODIFIED, shim force-included) ==============="
+say "=============== 3. OC-JNLua jnlua.c (checkout unmodified; one diagnostic line patched on a copy; shim force-included) ==============="
 # -include lj52shim.h is the whole trick: jnlua.c's 5.2 calls bind to the shim
-# before jnlua.c's own first line is read.  jnlua.c itself is byte-identical to
-# upstream OC-JNLua -- verified below.
+# before jnlua.c's own first line is read.  The CHECKOUT's jnlua.c is
+# byte-identical to upstream OC-JNLua -- verified below.  What we compile is a
+# build-dir copy that differs from it by the macro values repack.sh rewrites
+# (additive only) plus the ONE line patch-resume-error.sh replaces (both
+# variants): lua_1resume's throw, which otherwise reports the coroutine object
+# instead of the error the coroutine died with.  Each step refuses unless it
+# changes exactly what it says, so neither can quietly become a fork of
+# jnlua.c's logic, and neither moves a line number (the warning allowlist
+# below pins two of them).
 rm -f "$OBJ/jnlua.o"
-JNLUA_SRC="$OCLJ_JNLUA/native/src/jnlua.c"
+PATCH_IN="$OCLJ_JNLUA/native/src/jnlua.c"
 if [ "$OCLJ_VARIANT" = additive ]; then
-  # repack.sh refuses unless it changes EXACTLY two lines, so 'additive' can
-  # never quietly become a fork of jnlua.c's logic.
-  sh "$OCLJ_REPO/native/jnlua/repack.sh" "$OCLJ_JNLUA" "$OCLJ_BUILD/jnlua-luajit.c" \
+  # repack.sh refuses unless it changes EXACTLY two lines.
+  sh "$OCLJ_REPO/native/jnlua/repack.sh" "$OCLJ_JNLUA" "$OCLJ_BUILD/jnlua-luajit.repack.c" \
     || fail "the jnlua repack refused (see above)"
+  PATCH_IN="$OCLJ_BUILD/jnlua-luajit.repack.c"
   JNLUA_SRC="$OCLJ_BUILD/jnlua-luajit.c"
+else
+  JNLUA_SRC="$OCLJ_BUILD/jnlua-dropin.c"
 fi
+# patch-resume-error.sh refuses unless its anchor matches EXACTLY once and the
+# result differs from its input by exactly one line.
+sh "$OCLJ_REPO/native/jnlua/patch-resume-error.sh" "$PATCH_IN" "$JNLUA_SRC" \
+  || fail "the jnlua resume-error patch refused (see above)"
+# And the fix must be IN THE FILE WE COMPILE, asserted by content rather than
+# by the step's exit status: a future reshuffle of the two steps that left
+# JNLUA_SRC pointing at an unpatched copy would otherwise build a native that
+# logs "thread: 0x..." for every kernel panic again, with nothing to say so.
+[ "$(grep -c -F '{ lua_xmove(T, L, 1); } throw(L, status);' "$JNLUA_SRC")" = "1" ] \
+  || fail "$JNLUA_SRC does not carry the resume-error fix exactly once -- the
+         compiled copy is not the patched one"
 "$CC" -c -O2 $PICFLAG -Wall -DNDEBUG -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -I"$LJ" -I"$OCLJ_SHIM" \
   -include "$OCLJ_SHIM/lj52shim.h" \
   "$JNLUA_SRC" -o "$OBJ/jnlua.o" \
   > "$OCLJ_BUILD/jnlua.err" 2>&1
 NERR=$(grep -c 'error:' "$OCLJ_BUILD/jnlua.err" || true)
 NWARN=$(grep -c 'warning:' "$OCLJ_BUILD/jnlua.err" || true)
-say "    errors=$NERR  warnings=$NWARN   (-Wall; jnlua.c is byte-identical to upstream)"
+say "    errors=$NERR  warnings=$NWARN   (-Wall; the checkout's jnlua.c is byte-identical to upstream, the copy differs by the lines named above)"
 [ "$NERR" = "0" ] && [ -f "$OBJ/jnlua.o" ] \
   || { grep -oE 'error: .*' "$OCLJ_BUILD/jnlua.err" | head -20; fail "jnlua.c did not compile"; }
 
@@ -511,12 +602,14 @@ say "    errors=$NERR  warnings=$NWARN   (-Wall; jnlua.c is byte-identical to up
 # THE FILENAME IS VARIABLE BUT THE LINE NUMBERS ARE NOT.  The additive variant
 # compiles build/native/jnlua-luajit.c, a repack.sh copy, so warnings arrive as
 # jnlua-luajit.c:623 rather than jnlua.c:623 and the allowlist missed them --
-# the gate correctly refused an otherwise fine build.  repack.sh changes two
-# lines IN PLACE and inserts nothing, so :623 and :1666 still point at the same
-# statements in either file; that is precisely why it verifies a 2-line diff.
+# the gate correctly refused an otherwise fine build.  The dropin now compiles
+# a copy too, jnlua-dropin.c.  repack.sh changes two lines IN PLACE and
+# patch-resume-error.sh one, and neither inserts anything, so :623 and :1666
+# still point at the same statements in every one of these files; that is
+# precisely why each verifies its diff by line count.
 grep -E 'warning:' "$OCLJ_BUILD/jnlua.err" \
-  | grep -vE 'jnlua(-luajit)?\.c:623:[0-9]+: warning: pointer targets in passing argument 2' \
-  | grep -vE "jnlua(-luajit)?\.c:1666:[0-9]+: warning: .tablesize_result. may be used uninitialized" \
+  | grep -vE 'jnlua(-luajit|-dropin)?\.c:623:[0-9]+: warning: pointer targets in passing argument 2' \
+  | grep -vE "jnlua(-luajit|-dropin)?\.c:1666:[0-9]+: warning: .tablesize_result. may be used uninitialized" \
   > "$OCLJ_BUILD/jnlua.unexpected" 2>/dev/null
 UNEXPECTED=$(grep -c . "$OCLJ_BUILD/jnlua.unexpected" || true)
 say "    shim-attributable warnings = $UNEXPECTED  (2 pre-existing jnlua.c warnings allowlisted)"
@@ -707,7 +800,8 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #      OCLJ_JNI="/c/Program Files/Java/jdk1.8.0_211/include"
 #
 # 3. OC-JNLua sources -- OpenComputers' repackaged JNLua, the thing whose
-#    jnlua.c we compile untouched:
+#    jnlua.c we compile from an untouched checkout (a build-dir copy carries
+#    the one-line resume-error patch, and the additive variant's macro values):
 #      git clone https://github.com/MightyPirates/OC-JNLua.git
 #    Only native/src/jnlua.c is consumed.  Its gradle build is not used.
 #

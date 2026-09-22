@@ -8,7 +8,10 @@ the feasibility verdict: [../docs/persistence-study.md](../docs/persistence-stud
 protocol, Lua closures with **upvalue identity** and environments, and
 **suspended coroutines**: a thread round-trips and resumes exactly where it left
 off, with its frame chain, open upvalues and nested coroutines intact. Userdata
-still raises an error naming the milestone that will add it.
+is never persisted by value: it goes through the permanents table, or through a
+table proxy whose metatable carries the spkey function (`__persist`), which is
+how OC's `machine.lua` presents every userdata. A raw userdata is refused with
+an error that says so.
 
 ## Build & test
 
@@ -30,12 +33,33 @@ cd serializer && make test CC=gcc
 eris.persist([perms,] value)   --> binary string
 eris.unpersist([uperms,] blob) --> value
 eris.settings(name [, value])  --> previous value; nil resets to the default
+eris.diagnostics()             --> array of pending save-time diagnostics; clears it
 eris.version()                 --> version, build fingerprint, format number
 ```
 
 Settings: `spkey` (default `"__persist"`), `path`, `maxrec` (default 2000, and
 clamped there: M3 frame records cost ~160 bytes of C stack per level), `debug`, `spio` (must stay false). This is exactly the surface
 OC touches, so `PersistenceAPI.scala` needs no changes.
+
+One setting is ours: `forin`, one of `"ignore"` (the default), `"warn"` or
+`"refuse"`. It governs the one for-in shape the replay cannot reach — a loop
+whose iterator is a **Lua closure that itself calls `next`** (an OS author's
+own `pairs` wrapper; census #9 in
+[../docs/forin-iterator-gap.md](../docs/forin-iterator-gap.md)). Its position
+lives in the closure's upvalues, so a save inside that loop resumes against
+the restored table's different hash layout and silently skips or repeats keys.
+It cannot be rewritten (at save time it is indistinguishable from a custom
+iterator with its own ordering), so it is *named*: under `"warn"` `persist()`
+queues one message per such loop, with both the loop's `chunk:line` and the
+iterator's, for `eris.diagnostics()` to drain; under `"refuse"` the first one
+is the error `persist()` raises. `"ignore"` does not even look, and no mode
+changes a single wire byte (`tests/forin.lua`, `diag/4-identity`, against a
+fixture the previous binary wrote). "Reaches `next`" is a heuristic — a
+global lookup of `next`, `next` held in an upvalue, or one level of
+function-valued upvalue doing either — so a custom iterator that calls `next`
+on some *other* table is a documented false positive (`diag/2c`); the
+snapshot-array walkers kernel sites 10–11 ship are not flagged (`diag/2*`).
+The mode is per-VM, like the other settings, and the list sits beside them.
 
 ## Format
 
@@ -116,6 +140,21 @@ OC's sanctioned degraded path).
 - **A checksum is not a MAC.** CRC32 catches corruption, not tampering — any
   save can be re-sealed by an attacker. Parser robustness, not the checksum, is
   what makes crafted blobs safe.
+- **A thread blob carries one process-specific word per Lua frame: the frame
+  link slot's raw contents.** The slot loop writes every stack slot, and under
+  `LJ_FR2` a Lua frame's link is its return PC — a heap address, which reads
+  as a subnormal double and goes out as `TAG_NUM` + 8 bytes. It is inert: the
+  restore rebuilds every link from the frame records (`u_thread`, pass 3) and
+  never reads that value. But it means two processes' blobs of one value are
+  never byte-identical (found by `diag/4-identity`: the shipping binary's own
+  two runs differ in 6 bytes of that one payload and nowhere else), and the
+  frame-record comment's "no stack address ever reaches the wire" is true of
+  the records, not of the slots. Writing `nil` there instead would be a
+  harmless wire change; it is deliberately *not* made in a change whose
+  contract is "the default mode writes the same bytes", and is left as its
+  own item. `diag/4-identity` masks exactly that payload, located
+  structurally (the same shape loaded as a second chunk in one process can
+  differ nowhere else), and compares everything else byte for byte.
 
 ## Review history
 
@@ -282,28 +321,37 @@ value instead, since there is no frame on the other side to alias.
     stays despecialised in the restoring VM, so it loses the `ITERN` fast path.
     Correctness is unaffected and a later fresh entry to the same loop still
     iterates normally.
-  - `persist()` flushes JIT traces once, the first time a call reaches a
-    thread **that contains a generic-for loop at all**. A trace overwrites the
-    very instruction the scan reads (`trace_stop` replaces the loop head with
-    `BC_JLOOP`, whose A operand is a slot count, and the following `ITERL`
-    becomes a `JITERL` whose D field is a trace number), so it is not optional
-    there — but gating it matters, because the flush discards every compiled
-    trace in the VM and is *refused* while a GC hook is active. Saving a
-    coroutine with no for-in loop, or a dead one, therefore neither resets the
-    host's JIT nor fails from inside a `__gc` finalizer.
+  - `persist()` has **no JIT side effect**. A root trace overwrites the very
+    instruction the scan reads (`trace_stop` replaces an `ITERN` loop head
+    with `BC_JLOOP`, whose A operand is a slot count, and a hot `ITERL`
+    becomes a `JITERL`; both carry the *trace number* in D), but LuaJIT keeps
+    the original in `GCtrace.startins`, and the scan reads every bytecode
+    through it (`elj_bc_orig`) exactly as `lj_bcwrite.c` does when it dumps a
+    prototype. So every compiled trace in the VM survives a save, and saving
+    from inside a `__gc` finalizer (where `lj_trace_flushall` refuses) is no
+    different from any other save. Earlier builds flushed all traces on every
+    save that reached a for-in loop — measured at ~10 ms per autosave, but a
+    global side effect with a refusal mode; `tests/m3.lua` asserts the traces
+    are still there afterwards. The **restore** side still flushes once,
+    because it rewrites bytecode (`elj_despecialise`) that a live trace would
+    keep running the old way; that is one-time, into a VM that is cold anyway.
   - Keys **added** during a traversal are not visited. Lua already leaves that
     undefined.
-  - One residual gap is open: a loop whose iterator is a **Lua closure
-    wrapping `next`** rather than `next` itself. Its `ffid` is not
-    `FF_next_N`, so the scan cannot see it, yet its control slot carries the
-    same layout dependence. It is not closeable **by inference** — that shape
-    is indistinguishable from a legitimate custom iterator with its own
-    ordering, and rewriting the latter would silently change its semantics.
-    It *is* closeable with information the host already has, and there is a
-    plan: see [../docs/forin-iterator-gap.md](../docs/forin-iterator-gap.md).
-    `pairs(t)` returns the raw `next`, so ordinary code is unaffected — but
-    **a sandbox whose `__pairs` returns a wrapper would not be**, which makes
-    this a live question for the OC integration rather than a footnote.
+  - One residual gap is open, and is now **named at save time** rather than
+    silent: a loop whose iterator is a **Lua closure wrapping `next`** rather
+    than `next` itself. Its `ffid` is not `FF_next_N`, so the replay cannot
+    see it, yet its position carries the same layout dependence — in the
+    closure's upvalues, where no rewrite can reach it. It is not closeable
+    **by inference** — that shape is indistinguishable from a legitimate
+    custom iterator with its own ordering, and rewriting the latter would
+    silently change its semantics. The platform's own two instances (OC's
+    `component.list` and `componentProxy.__pairs`) were rewritten in the
+    kernel to walk a snapshot array by index (sites 10–11); what remains is an
+    OS author's own wrapper, which `eris.settings("forin", "warn")` reports
+    with both locations and `"refuse"` turns into a save error — see the API
+    section and [../docs/forin-iterator-gap.md](../docs/forin-iterator-gap.md)
+    ("The #9 diagnostic", implemented 2026-09-22). `pairs(t)` returns the raw
+    `next`, so ordinary code is unaffected.
   - One shape is refused rather than guessed at: a frame whose bytecode
     position cannot be recovered *and* which holds an unmarked `next`-shaped
     triple. Without the position, three ordinary locals holding

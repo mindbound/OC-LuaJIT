@@ -76,12 +76,15 @@ object Smoke {
     f.getInt(arch)
   }
 
-  /** mcode bytes / cap / traces / jit-on, read off the raw state.
-    * The RAM cap cannot see machine code (it is VirtualAlloc'd, never through
-    * g->allocf), so this is the only number that says what a machine actually
-    * costs.  It is also the trace-flush signature: lj_trace_flushall zeroes
-    * szallmcarea, so a drop to 0 across a persist proves the serializer threw
-    * away every compiled trace in the VM. */
+  /** mcode bytes / cap / traces-used / jit-on / traces-live, read off the raw
+    * state.  The RAM cap cannot see machine code (it is VirtualAlloc'd, never
+    * through g->allocf), so this is the only number that says what a machine
+    * actually costs.  It is also the trace-flush signature: lj_trace_flushall
+    * zeroes szallmcarea, so a drop to 0 across a persist proves the serializer
+    * threw away every compiled trace in the VM.  traces-used is J->freetrace-1
+    * and FREEZES when every recording aborts (it sat at 468 through the
+    * 2026-09-22 penalty-cache regression); traces-live counts the traces that
+    * exist right now and is the one that says whether compiled code is present. */
   /**
    * Wait for the machine's worker thread to stop executing before this thread
    * touches its LuaState, and REPORT rather than proceed if it does not.
@@ -121,9 +124,218 @@ object Smoke {
     println(nonEmptyScreen(screen))
   }
 
+  // ------------------------------------------------------------------ //
+  // (jn-1) the jnlua resume-error patch, exercised through jnlua itself
+  // ------------------------------------------------------------------ //
+
+  /**
+   * THE ONE LINE WE PATCH IN jnlua.c HAS TO BE SHOWN TO WORK.  Until this
+   * milestone its only observation was the old-11-site-kernel mirror probe,
+   * where the escaping object was OC's tooLongWithoutYielding sentinel TABLE
+   * with the count=1 hook still armed: throw_protected's luaL_tolstring ran
+   * the sentinel's __tostring under that hook, the hook raised, and jnlua's
+   * throw() fell back to java.lang.Error -- the machine showed
+   * Error.InternalError and the patched line was never seen doing its job.
+   * Under the shipped 12-site kernel that path is unreachable (no hook
+   * reaches the kernel thread, the sentinel never escapes pcall(main)).
+   *
+   * This drives LuaState.resume -- jnlua's lua_1resume, the JNI method the
+   * patch lives in -- on the harness's RAW main state, under the machine's
+   * monitor (evalStrLocked's reasoning), on a fresh coroutine that dies with
+   * (a) a plain string and (b) a table whose __tostring returns a string.
+   * PATCHED (native/jnlua/patch-resume-error.sh): lua_1resume xmoves T's
+   * error object onto L before throw(), so the LuaRuntimeException message
+   * is that object rendered and contains the expected text.  UNPATCHED (any
+   * native built before 2026-09-22): throw() renders the top of L, which is
+   * the coroutine object itself, and the message is "thread: 0x...".  PASS
+   * iff both (a) and (b) carry their text; no hook is armed for either.
+   *
+   * (c) is RECORDED, NOT ASSERTED: a table whose __tostring itself raises.
+   * throw_protected runs under lua_pcall (jnlua.c throw(), :2353); when the
+   * metamethod raises inside it the pcall fails and throw() falls back to
+   * ThrowNew(error_class, lua_tostring(L, -1) or "error throwing Lua
+   * exception") -- a java.lang.Error carrying the raise's message when it is
+   * a string, and jnlua's literal fallback text when it is not.  That is
+   * jnlua's own shape for ANY error object whose __tostring raises, patched
+   * or not, and it is what a machine shows as Error.InternalError.  Two
+   * variants are recorded so both halves of that sentence are quoted from
+   * the native rather than read off the source: a __tostring raising a
+   * string, and one raising a table.
+   */
+  def jnluaResumeErrorProbe(machine: totoro.ocelot.brain.entity.machine.Machine,
+                            lua: LuaState): Unit = {
+    val id = "jn-1-resume-error-carries-message"
+    p("--- (jn-1) LuaState.resume on a coroutine that dies: does the LuaRuntimeException carry the error object? ---")
+    // One coroutine per case: load the body (a function), wrap it in a new
+    // thread, resume it THROUGH JNLUA, and report what Java caught.  The
+    // stack is restored to its base whether or not the resume threw; the base
+    // is expected to be 1 (the kernel thread), as every raw-state read is.
+    def one(label: String, body: String): String = machine.synchronized {
+      var base = -1
+      try {
+        base = lua.getTop
+        if (base != 1)
+          p("!! jn-1 " + label + ": raw-state probe on a dirty stack: getTop=" + base +
+            " (expected 1) -- something else is using this state")
+        lua.load(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)), "=jn1-" + label, "t")
+        lua.newThread()
+        val n = lua.resume(lua.getTop, 0)
+        "<no exception: resume returned " + n + " value(s); thread status=" + lua.status(base + 1) + ">"
+      } catch {
+        case t: Throwable => t.getClass.getName + ": " + t.getMessage
+      } finally {
+        if (base >= 0) try lua.setTop(base) catch { case _: Throwable => }
+      }
+    }
+    // What hook, if any, would a __tostring run under.  Diagnostic: the claim
+    // "no hook armed" is read from the state, not assumed.  LuaJIT keeps the
+    // hook in global_State, so the main state's answer covers the new threads.
+    val hook = machine.synchronized { evalStr(lua,
+      "if debug == nil then return 'debug-absent' end " +
+      "local h, m, c = debug.gethook() return tostring(h ~= nil) .. '/' .. tostring(m) .. '/' .. tostring(c)") }
+    val a  = one("a",  "error('jn1-string-error', 0)")
+    val b  = one("b",  "error(setmetatable({}, { __tostring = function() return 'jn1-tostring-error' end }))")
+    val c1 = one("c1", "error(setmetatable({}, { __tostring = function() error('jn1-tostring-raises', 0) end }))")
+    val c2 = one("c2", "error(setmetatable({}, { __tostring = function() error({}) end }))")
+    val topAfter = machine.synchronized { try lua.getTop catch { case _: Throwable => -1 } }
+    val okA = a.contains("jn1-string-error")
+    val okB = b.contains("jn1-tostring-error")
+    val threadShape = a.contains("thread: 0x") || b.contains("thread: 0x")
+    p("JNLUA RESUME: hook(set/mask/count)=" + hook + "  stack top after the four resumes=" + topAfter)
+    p("JNLUA RESUME (a) error('jn1-string-error')                      -> " + a)
+    p("JNLUA RESUME (b) error(table with __tostring -> 'jn1-tostring-error') -> " + b)
+    p("JNLUA RESUME (c) RECORDED, not asserted: __tostring raises a string -> " + c1)
+    p("JNLUA RESUME (c) RECORDED, not asserted: __tostring raises a table  -> " + c2)
+    milestone(id, okA && okB,
+      "(a) " + a + ";  (b) " + b +
+        (if (okA && okB) "   (jnlua reports the coroutine's error object; hook=" + hook + ")"
+         else if (threadShape) "   <- jnlua rendered the COROUTINE OBJECT, not its error: the resume-error patch " +
+                                "(native/jnlua/patch-resume-error.sh) is not in this native"
+         else "   <- neither message carries its text; hook=" + hook))
+  }
+
+  // ------------------------------------------------------------------ //
+  // (mem-1) what the compiled traces cost the RAM cap, per tier
+  // ------------------------------------------------------------------ //
+
+  /**
+   * One resident-memory read: what the sandbox sees, what the allocator
+   * really charged, and how many traces are alive to be charged for.
+   *
+   * WHY IT EXISTS.  Trace metadata -- the GCtrace, its IR, its snapshots --
+   * is allocated through g->allocf, so it is charged against the machine's
+   * RAM cap (machine code is not: VirtualAlloc'd, see jitStats).  Up to
+   * 2026-09-22 the serializer flushed every trace on every save, which gave
+   * that charge back each time a world saved; since then a save leaves the
+   * traces resident, and only LuaJIT's own self-flush takes them back: a
+   * full trace table (maxtrace, default 1000 -- lj_trace.c trace_findfree
+   * returns 0 and lj_trace_start calls lj_trace_flushall) or a full mcode
+   * reservation (maxmcode, default 2048 KB -- lj_mcode.c lj_mcode_limiterr
+   * raises LJ_TRERR_MCODEAL and trace_abort flushes).  On a 256 KB tier that
+   * residency is a real fraction of the machine.  This is the instrument
+   * that measures it; nothing here asserts a threshold, because the player
+   * picks both the tier and the workload.
+   *
+   * THREE READINGS PER POINT, in three units, and the units are the point:
+   *   sandbox   computer.totalMemory()/freeMemory() as the autorun paints
+   *             them on row 20 (OCLJENV=total/free, KB) every 50 ms -- the
+   *             number a program inside the machine acts on.  Sampled over
+   *             ~1 s of ticks and reported as min..max free, because the
+   *             incremental collector makes one reading a random point
+   *             between the live set and the pause threshold.  It is real
+   *             bytes / ramScale with kernelMemory taken out
+   *             (NativeLuaArchitecture:158-166), so it hides the scale factor
+   *             the player never sees either.
+   *   raw       lua.getTotalMemory / getFreeMemory off the LuaState, real
+   *             bytes, under the machine's monitor (b2 reads the same pair).
+   *   traces    _OCLJ_JITSTATS: traces_live is what is actually resident;
+   *             `traces` is J->freetrace-1 and only grows.  -1 for
+   *             traces_live is a shim older than 2026-09-22 (four values):
+   *             reported as n/a, not counted as a failed read, because the
+   *             pre-bump native is one of the two arms this compares.
+   *
+   * THEN ONE PERTURBING READ, labelled as such and LAST: collectgarbage
+   * ("collect") on the raw state, then the raw free and the trace count
+   * again.  Without it the "resident" figure is unreadable -- garbage that
+   * the collector has not reached yet is indistinguishable from trace
+   * metadata in every number above.  It is a full GC on a quiescent machine
+   * under the executor's monitor, the same thing machine.lua does at boot
+   * and the emergency collector does under pressure; nothing above it is
+   * measured after it.  A trace whose start prototype is otherwise dead is
+   * garbage to this GC too (lj_gc.c gc_traverse_proto marks pt->trace, and
+   * nothing else does), so traces_live may DROP across it: that drop is the
+   * part of the residency a GC can reclaim without a flush, and it is
+   * printed rather than folded in.
+   *
+   * Returns true iff every non-perturbing read produced a number.  One that
+   * did not is announced on its own line so the milestone can SKIP instead
+   * of passing on a number nobody saw.
+   */
+  def residentTracesRead(ws: Workspace, machine: totoro.ocelot.brain.entity.machine.Machine,
+                         screen: Screen, lua: LuaState, tierName: String, point: String,
+                         ticks: Int = 40): Boolean = {
+    // sandbox: `ticks` ticks (~25 ms each) of the autorun's own row, min..max free
+    var envTot = -1L; var envMin = Long.MaxValue; var envMax = -1L; var envReads = 0
+    var t = 0
+    while (t < ticks && machine.isRunning) {
+      ws.update(); Thread.sleep(25); t += 1
+      if (t % 4 == 0) {
+        val e = parse(nonEmptyScreen(screen), "OCLJENV").split("/")
+        if (e.length == 2) {
+          try {
+            val tot = e(0).toLong; val fr = e(1).toLong
+            envTot = tot; envReads += 1
+            if (fr < envMin) envMin = fr
+            if (fr > envMax) envMax = fr
+          } catch { case _: Throwable => }
+        }
+      }
+    }
+    val benchRow = parse(nonEmptyScreen(screen), "OCLJB01")
+    val sandboxOk = envReads > 0 && envTot > 0
+    // raw bytes and the trace count, under the executor's monitor.  quiesced()
+    // is the DIAGNOSTIC it is at the k5 read, not the gate: it reports whether
+    // the machine looked idle, and with the encore timer running it says
+    // "no" one read in three (a resume can be scheduled between its last
+    // poll and its answer -- the evalStrLocked reasoning).  The monitor is
+    // what makes the read safe; Machine.run holds it for the whole resume.
+    val q = quiesced(machine, "the mem-1 " + point + " read (diagnostic; the read proceeds under the monitor)")
+    var rawTot = -1L; var rawFree = -1L
+    machine.synchronized {
+      rawTot = try lua.getTotalMemory.toLong catch { case _: Throwable => -1L }
+      rawFree = try lua.getFreeMemory.toLong catch { case _: Throwable => -1L }
+    }
+    val s = jitStatsLocked(machine, lua)
+    val mc = s._1; val tr = s._3; val lv = s._5
+    val rawOk = rawTot > 0 && rawFree >= 0 && mc >= 0
+    def kb(b: Long) = if (b < 0) "n/a" else (b / 1024).toString
+    p("MEM-1 " + point + ": tier=" + tierName +
+      "  sandbox total/free KB=" + (if (sandboxOk) s"$envTot/$envMin..$envMax" else "<no OCLJENV row in " + t + " ticks>") +
+      " (" + envReads + " samples; phase0=" + (if (benchRow == "<missing>") "<missing>" else benchRow.split("/").take(2).mkString("/")) + ")" +
+      "  raw total/free KB=" + (if (rawOk) kb(rawTot) + "/" + kb(rawFree) + " (used " + kb(rawTot - rawFree) + ")" else "<not read>") +
+      "  traces_live=" + (if (!rawOk) "<not read>" else if (lv < 0) "n/a(4-value JITSTATS)" else lv.toString) +
+      " traces=" + (if (rawOk) tr.toString else "<not read>") + " mcode=" + kb(mc) + " KB" +
+      (if (!sandboxOk) "   <- the sandbox row did not parse" else "") +
+      (if (!rawOk) "   <- the raw read produced no number" else "") +
+      "  quiesced=" + q + " running=" + machine.isRunning)
+    // the perturbing read, last
+    if (rawOk) {
+      val gcCount = evalStrLocked(machine, lua,
+        "collectgarbage('collect') return string.format('%d', math.floor(collectgarbage('count') * 1024))")
+      var gcFree = -1L
+      machine.synchronized { gcFree = try lua.getFreeMemory.toLong catch { case _: Throwable => -1L } }
+      val s2 = jitStatsLocked(machine, lua)
+      p("MEM-1 " + point + " after a full GC (PERTURBING, on the raw state): raw free KB=" + kb(gcFree) +
+        " (used " + kb(rawTot - gcFree) + "; collectgarbage('count')=" + gcCount + " B)" +
+        "  traces_live=" + (if (s2._5 < 0) "n/a" else s2._5.toString) + " traces=" + s2._3 + " mcode=" + kb(s2._1) + " KB" +
+        "   <- garbage reclaimed " + kb(gcFree - rawFree) + " KB; traces_live " + lv + " -> " + s2._5)
+    }
+    sandboxOk && rawOk
+  }
+
   /** jitStats under the executor's monitor -- same reasoning as evalStrLocked. */
   def jitStatsLocked(machine: totoro.ocelot.brain.entity.machine.Machine,
-                     lua: LuaState): (Long, Long, Int, Boolean) =
+                     lua: LuaState): (Long, Long, Int, Boolean, Int) =
     machine.synchronized { jitStats(lua) }
 
   /** _OCLJ_GCSTATS -> arms, collects, bailouts, refusals, armed, state.
@@ -155,13 +367,15 @@ object Smoke {
     } catch { case _: Throwable => (-1L, -1L, -1L, -1L, false, -1) }
   }
 
-  def jitStats(lua: LuaState): (Long, Long, Int, Boolean) = {
-    val s = evalStr(lua, "local m, c, t, on = _OCLJ_JITSTATS() " +
-      "return string.format('%d/%d/%d/%s', m, c, t, tostring(on))")
+  def jitStats(lua: LuaState): (Long, Long, Int, Boolean, Int) = {
+    // `lv or -1`: a native older than 2026-09-22 returns four values, and the
+    // first four must stay readable against it rather than all five failing.
+    val s = evalStr(lua, "local m, c, t, on, lv = _OCLJ_JITSTATS() " +
+      "return string.format('%d/%d/%d/%s/%d', m, c, t, tostring(on), lv or -1)")
     try {
       val p = s.split("/")
-      (p(0).toDouble.toLong, p(1).toDouble.toLong, p(2).toInt, p(3) == "true")
-    } catch { case _: Throwable => (-1L, -1L, -1, false) }
+      (p(0).toDouble.toLong, p(1).toDouble.toLong, p(2).toInt, p(3) == "true", p(4).toInt)
+    } catch { case _: Throwable => (-1L, -1L, -1, false, -1) }
   }
 
   /** Evaluate a text chunk in the live state and return its single result. */
@@ -915,6 +1129,186 @@ object Smoke {
     try m4.stop() catch { case _: Throwable => }
   }
 
+  /**
+   * THE OS-WRAPPER DIAGNOSTIC SAVE (dg-1).
+   *
+   * fi-2/fi-3 prove the kernel's two iterators survive a mid-walk save once
+   * sites 10/11 snapshot them.  What is LEFT is census #9: a `next`-wrapper
+   * the OS author wrote -- OpenOS's boot/04_component.lua:16-31 puts one on
+   * its `component` library table -- which the serializer cannot tell from a
+   * legitimate custom iterator and cannot rewrite.  The answer designed for
+   * it (docs/forin-iterator-gap.md, "The #9 diagnostic") is a save-time NAME:
+   * under eris.settings("forin", "warn") the persist queues, for each live
+   * for-in loop whose iterator is a Lua closure that reaches `next`, one
+   * message giving the loop's line and the iterator's; the Architecture sets
+   * the mode from -Docluajit.forin and drains eris.diagnostics() to the log
+   * after every save that returned.  This is the in-machine gate for that
+   * whole path, over the real OpenOS wrapper.
+   *
+   * How the save lands mid-loop: the sandbox half (OCLJDG in AutorunLua)
+   * walks `for k in pairs(component)` one key per timer step and parks it
+   * strictly inside until a second signal, exactly as fi does.
+   *
+   * WHO DRAINS.  In the additive arm OCLuaJITArchitecture drives the machine
+   * and its save() drains into `forinDiagnostics`; the milestone reads what
+   * THIS save appended.  In the dropin arm OpenComputers' own
+   * NativeLua52Architecture drives the machine over our native and reads no
+   * property, so the harness plays the adapter's part on the same state with
+   * the adapter's own two calls (forinApply before, forinDrain after), under
+   * the machine's monitor like every raw-state read here.  Either way the
+   * SERIALIZER is what is being asked, and it is the same one.
+   *
+   * KEYED ON THE MODE the JVM was started with (-Docluajit.forin, through
+   * JAVA_TOOL_OPTIONS), because one run cannot show both directions:
+   *   warn     STRICT: the save landed with the loop parked strictly inside
+   *            (1 <= pos < n, n >= 3) and produced a real kernel blob, and at
+   *            least one diagnostic drained by this save names
+   *            04_component.lua.  It FAILS on a native whose serializer
+   *            predates the setting (the setting is refused, nothing is
+   *            drained) and when the loop did not park (nothing to name).
+   *   ignore   the property absent, or =ignore: the NEGATIVE.  The same save,
+   *            nothing drained (the adapter does not look), AND a direct
+   *            eris.diagnostics() after the save comes back empty -- the
+   *            serializer's own word that ignore did not look.  It reports
+   *            "mode=ignore: 0 diagnostics, as configured" and PASSES; on a
+   *            serializer without eris.diagnostics it fails, by name.
+   *   refuse   the persist must have RAISED the message instead: no kernel
+   *            blob, and (additive arm) the adapter's recorded save error
+   *            names 04_component.lua.
+   * Afterwards the parked loop is released with the second signal and the
+   * completion is reported, so the saves that follow (stk) meet no parked
+   * wrapper -- under refuse they would fail on it.
+   */
+  def forinDiagnosticSave(ws: Workspace, computer: Case, screen: Screen): Unit = {
+    val m = computer.machine
+    val mode = OCLuaJITArchitecture.ForinMode
+    val id = "dg-1-forin-diagnostic-names-the-os-wrapper"
+    p("--- (dg) saving WHILE an OpenOS-authored next-wrapper loop is parked mid-walk: for k in pairs(component), " +
+      "boot/04_component.lua's __pairs (-D" + OCLuaJITArchitecture.ForinProperty + "=" + mode + ") ---")
+    def field(row: String, i: Int): String = { val f = row.split("/"); if (f.length > i) f(i) else "<missing>" }
+    def num(row: String, i: Int): Int = try field(row, i).toInt catch { case _: Throwable => -1 }
+    if (!m.isRunning) {
+      milestone(id, ok = false, "no running machine to save: running=" + m.isRunning + " lastError=" + m.lastError)
+      return
+    }
+    val arch = m.architecture
+    val adapter: OCLuaJITArchitecture = arch match { case a: OCLuaJITArchitecture => a; case _ => null }
+    val lua = if (arch == null) null else luaOf(arch)
+    val driver = if (adapter != null) "adapter" else "harness"
+    // The dropin arm: nothing in OC's architecture reads the property, so the
+    // harness sets the mode itself, with the adapter's own call.
+    var applyErr = ""
+    if (adapter == null && lua != null) {
+      try m.synchronized { OCLuaJITArchitecture.forinApply(lua, mode) }
+      catch { case e: Exception => applyErr = e.toString }
+      p("dg: dropin arm -- the harness set eris.settings(\"forin\", \"" + mode + "\") itself" +
+        (if (applyErr.isEmpty) "" else ": REFUSED " + applyErr))
+    }
+    val queued = m.signal("ocljdg")
+    var row0 = "<missing>"
+    var polls = 0
+    val tPoll = System.currentTimeMillis()
+    while (!row0.startsWith("held/") && !row0.startsWith("ERR/") && polls < 1200 && m.isRunning) {
+      ws.update(); Thread.sleep(25); polls += 1
+      if (polls % 2 == 0) row0 = parse(nonEmptyScreen(screen), "OCLJDG")
+    }
+    // Parked, so nothing below changes any more; a few more ticks let the
+    // paint land (the row is painted from the heartbeat, not the driver).
+    var settle = 0
+    while (settle < 8 && m.isRunning) { ws.update(); Thread.sleep(25); settle += 1 }
+    row0 = parse(nonEmptyScreen(screen), "OCLJDG")
+    val held = field(row0, 0) == "held"
+    val seq0 = num(row0, 1)
+    val pos = num(row0, 2)
+    val n = num(row0, 3)
+    p("dg: signal queued=" + queued + "; " + polls + " polls in " + (System.currentTimeMillis() - tPoll) +
+      " ms; row at save = " + row0 + "  (state/seq/pos/n/err)")
+    val inside = held && n >= 3 && pos >= 1 && pos < n
+    if (!held) {
+      milestone(id, ok = false, "the loop never parked: row=" + row0 + " after " + polls + " polls; running=" +
+        m.isRunning + " lastError=" + m.lastError)
+      return
+    }
+    val before = if (adapter != null) adapter.forinDiagnostics.size else 0
+    val nbt = new NBTTagCompound()
+    var saveOk = true
+    var saveErr = ""
+    val tSave = System.currentTimeMillis()
+    try ws.save(nbt) catch { case t: Throwable => saveOk = false; saveErr = " " + t.toString }
+    val saveMs = System.currentTimeMillis() - tSave
+    val kBlob = findBlob(nbt, m.node.address + "_kernel")
+    val k = if (kBlob == null) 0 else kBlob.length
+    // What THIS save produced.
+    var drainErr = ""
+    val drained: List[String] =
+      if (adapter != null) adapter.forinDiagnostics.drop(before).toList
+      else if (lua != null) {
+        try m.synchronized { OCLuaJITArchitecture.forinDrain(lua) }
+        catch { case e: Exception => drainErr = e.toString; Nil }
+      } else Nil
+    // A direct read AFTER the drain, in every mode: what is left in the
+    // serializer's list.  After the adapter drained it must be nothing; under
+    // ignore it must be nothing because ignore does not look; and on a
+    // serializer that lacks the function it is an ERROR, not "nothing".
+    var residualErr = ""
+    val residual: List[String] =
+      if (lua == null) Nil
+      else {
+        try m.synchronized { OCLuaJITArchitecture.forinDrain(lua) }
+        catch { case e: Exception => residualErr = e.toString; Nil }
+      }
+    for (d <- drained) p("dg: diagnostic (drained by the " + driver + "): " + d)
+    for (d <- residual) p("dg: residual after the drain: " + d)
+    val named = drained.filter(_.contains("04_component.lua"))
+    val lastErr = if (adapter != null) adapter.lastSaveError else ""
+    // Release the parked loop, so the saves that follow meet no parked wrapper.
+    val go = m.signal("ocljdggo")
+    var rowA = row0
+    var t = 0
+    while (t < 400 && !(field(rowA, 0) == "done" && num(rowA, 1) == seq0 + 1) && m.isRunning) {
+      ws.update(); Thread.sleep(25); t += 1
+      if (t % 4 == 0) rowA = parse(nonEmptyScreen(screen), "OCLJDG")
+    }
+    val released = field(rowA, 0) == "done" && num(rowA, 1) == seq0 + 1
+    p("dg: go queued=" + go + "; after " + t + " ticks the row is " + rowA + " (released=" + released +
+      ", running=" + m.isRunning + " lastError=" + m.lastError + ")")
+    val common = "save ok=" + saveOk + saveErr + " in " + saveMs + " ms; loop parked at " + pos + "/" + n +
+      " (strictly inside=" + inside + "); _kernel=" + k + " B; drained by the " + driver + ": " + drained.size +
+      " diagnostic(s), " + named.size + " naming 04_component.lua" +
+      (if (drainErr.isEmpty) "" else " (drain REFUSED: " + drainErr + ")") +
+      "; residual after the drain: " + residual.size +
+      (if (residualErr.isEmpty) "" else " (direct read REFUSED: " + residualErr + ")") +
+      (if (applyErr.isEmpty) "" else "; eris.settings(\"forin\") REFUSED: " + applyErr) +
+      "; released=" + released
+    mode match {
+      case "warn" =>
+        val ok = saveOk && inside && k > 10000 && named.nonEmpty
+        milestone(id, ok, "mode=warn: " + common +
+          (if (ok) ""
+           else if (!inside) "   <- a position at an end of its range proves nothing about a suspended loop"
+           else if (!saveOk || k <= 10000) "   <- no kernel blob: the persist did not return, so there was nothing to drain"
+           else if (drained.isEmpty) "   <- the persist named NOTHING with the wrapper parked mid-walk: the setting was refused (a serializer older than it), or the scan missed the shape"
+           else "   <- something was named, but not the OpenOS wrapper"))
+      case "ignore" =>
+        val ok = saveOk && inside && k > 10000 && drained.isEmpty && residual.isEmpty && residualErr.isEmpty
+        milestone(id, ok, "mode=ignore: " + drained.size + " diagnostics, as configured; " + common +
+          (if (ok) "   (the NEGATIVE: the " + driver + " did not look, and eris.diagnostics() read directly after the save is empty)"
+           else if (residualErr.nonEmpty) "   <- eris.diagnostics() is not there: this serializer predates the diagnostic"
+           else if (drained.nonEmpty || residual.nonEmpty) "   <- ignore LOOKED: the persist queued a diagnostic under the default mode"
+           else if (!inside) "   <- a position at an end of its range proves nothing about a suspended loop"
+           else "   <- no kernel blob: the save did not return"))
+      case _ =>
+        val namedErr = lastErr.contains("04_component.lua")
+        val ok = inside && kBlob == null && (adapter == null || namedErr)
+        milestone(id, ok, "mode=refuse: " + common + "; the save's recorded error: " +
+          (if (lastErr.isEmpty) "<none recorded>" else lastErr) +
+          (if (ok) (if (adapter == null) "   (dropin arm: OC's own save hides the text; the blob's absence is what is asserted)" else "")
+           else if (kBlob != null) "   <- refuse did NOT refuse: a kernel blob was written with the wrapper parked mid-walk"
+           else if (!inside) "   <- a position at an end of its range proves nothing about a suspended loop"
+           else "   <- the persist failed, but not with the wrapper's name"))
+    }
+  }
+
   /** Which native this run is driven by: luajit (dropin) | additive | stock. */
   val nativeMode: String = System.getProperty("ocljit.native", "luajit")
 
@@ -1468,6 +1862,65 @@ object Smoke {
       |  end
       |end
       |
+      |-- THE OS-WRAPPER DIAGNOSTIC PROBE, sandbox half (dg-1 on the Java side).
+      |-- What fi cannot cover: an iterator the OS AUTHOR wrote.  OpenOS's
+      |-- boot/04_component.lua:16-31 installs a __pairs on the `component`
+      |-- library table -- a Lua closure over `next` with a parent-phase flag,
+      |-- own keys first and then the primaries -- so `for k in pairs(component)`
+      |-- is exactly the residual shape of docs/forin-iterator-gap.md (census
+      |-- #9): not replayable, not soundly rewritable, and under
+      |-- -Docluajit.forin=warn NAMED by the persist, both lines.  One
+      |-- coroutine, one key per timer step, parked strictly inside the loop at
+      |-- half its keys until a second signal -- the fi pattern, so the position
+      |-- at save time is a fact read off the screen and not a race.  A yield
+      |-- inside the body is what os.sleep would be too: the frame is suspended
+      |-- inside the loop either way, and that is the condition the scan tests.
+      |local dgState, dgSeq, dgPos, dgN, dgErr = "idle", 0, 0, 0, "none"
+      |local dgHold = 0                            -- 0: park at half; -1: run free
+      |local dgCo = nil
+      |local dgDirty = false
+      |local function dgLoop()
+      |  local n = 0
+      |  for _ in pairs(component) do n = n + 1 end -- the same wrapper, walked through for the count
+      |  dgN = n
+      |  if dgHold == 0 then dgHold = math.max(1, math.floor(n / 2)) end
+      |  for k in pairs(component) do               -- OpenOS's own __pairs: boot/04_component.lua:16
+      |    dgPos = dgPos + 1
+      |    coroutine.yield()                        -- the loop line the diagnostic names
+      |  end
+      |end
+      |local function dgDrive()
+      |  local done = coroutine.status(dgCo) == "dead"
+      |  local parked = dgHold > 0 and dgPos >= dgHold
+      |  if not done and not parked then
+      |    local ok, err = coroutine.resume(dgCo)
+      |    if not ok then dgErr = tostring(err):gsub("[ /]", "_"):sub(1, 40) end
+      |    done = coroutine.status(dgCo) == "dead"
+      |  end
+      |  parked = dgHold > 0 and dgPos >= dgHold
+      |  dgDirty = true
+      |  if dgErr ~= "none" then dgState = "ERR" return end
+      |  if done then dgSeq = dgSeq + 1 dgState = "done" return end
+      |  if parked then dgState = "held" return end
+      |  event.timer(0.1, dgDrive)
+      |end
+      |event.listen("ocljdg", function()
+      |  dgPos, dgN, dgHold = 0, 0, 0
+      |  dgErr, dgState = "none", "run"
+      |  dgCo = coroutine.create(dgLoop)
+      |  dgDirty = true
+      |  event.timer(0, dgDrive)
+      |end)
+      |event.listen("ocljdggo", function()
+      |  dgHold = -1
+      |  -- Parked means nothing is pending, so the driver has to be re-armed.
+      |  if dgState == "held" then dgState = "go" dgDirty = true event.timer(0, dgDrive) end
+      |end)
+      |local function dgPaint()
+      |  local s = string.format("OCLJDG=%s/%d/%d/%d/%s", dgState, dgSeq, dgPos, dgN, dgErr)
+      |  component.gpu.set(1, 42, s .. string.rep(" ", math.max(0, 150 - #s)))
+      |end
+      |
       |-- The computer.lua.allowBytecode gate, probed from INSIDE the real
       |-- machine.lua sandbox.  This `load` is the sandbox wrapper at
       |-- machine.lua:754, which overwrites mode with "t" whenever
@@ -1945,6 +2398,10 @@ object Smoke {
       |    fiDirty = false
       |    fiPaint()
       |  end
+      |  if dgDirty or n % 20 == 0 then
+      |    dgDirty = false
+      |    dgPaint()
+      |  end
       |  end)
       |  if not pok then
       |    perrs = perrs + 1
@@ -2203,7 +2660,27 @@ object Smoke {
     val cpu = new CPU(Tier.Three)
     computer.inventory(0) = cpu
     computer.inventory(1) = new GraphicsCard(Tier.Three)
-    computer.inventory(2) = new Memory(ExtendedTier.ThreeHalf)
+    // THE RAM TIER IS A KNOB (OCLJ_RAM_TIER -> -Docljit.ramtier), default
+    // the 3.5 the harness has always used.  Every memory figure this run
+    // prints is a fraction of it, and the one question the mem-1 lines exist
+    // to answer -- what resident trace metadata costs a machine that cannot
+    // afford it -- has no answer at 1024 KB.  Refused rather than defaulted
+    // on a misspelling: a run that quietly measured the wrong tier would be
+    // filed under the tier it was asked for.
+    val ramTierName = System.getProperty("ocljit.ramtier", "threehalf")
+    val ramTier: ExtendedTier.ExtendedTier = ramTierName match {
+      case "one"       => ExtendedTier.One
+      case "onehalf"   => ExtendedTier.OneHalf
+      case "two"       => ExtendedTier.Two
+      case "twohalf"   => ExtendedTier.TwoHalf
+      case "three"     => ExtendedTier.Three
+      case "threehalf" => ExtendedTier.ThreeHalf
+      case other => die("ocljit.ramtier must be one|onehalf|two|twohalf|three|threehalf, not '" + other + "'")
+    }
+    computer.inventory(2) = new Memory(ramTier)
+    val ramTierKB = totoro.ocelot.brain.Settings.get.ramSizes(ramTier.id)
+    p("RAM tier = " + ramTierName + " (" + ramTierKB + " KB as the sandbox sees it; x ramScale " +
+      totoro.ocelot.brain.Settings.get.ramScaleFor64Bit + " real bytes, plus kernelMemory)")
 
     // The hard disk is bound to a real directory we pre-populate, so OpenOS
     // finds autorun.lua when it mounts it.
@@ -2690,6 +3167,20 @@ object Smoke {
         (if ((jitMode == "off") == (jitStatus == "false")) ""
          else "   <- the probe's own control did not take; this run's numbers mean nothing"))
 
+    // --- (mem-1) resident traces at the shell, after boot -----------------
+    // Here and not right after (d): the trace counter is detached now, so the
+    // ticks this read spends cannot move the k2 number.  Only 12 of them: the
+    // deadline probe's spin starts 4 s of uptime after the autorun ran and k1
+    // begins about 2 s after it (WDTIMELINE-K1: nonce_up vs up_k1_start), so
+    // a longer window would tick the machine INTO the spin and this read
+    // would then wait out the timeout instead of measuring a shell.  Phase 0
+    // (2 s after the autorun) may still fire inside the window; the OCLJB01
+    // status on the line says whether it did.
+    // Our natives only, like jn-1: the stock PUC 5.2 has no traces to be
+    // resident, and its _OCLJ_JITSTATS-less read would SKIP every stock run.
+    val memAfterBoot = nativeMode != "stock" &&
+      residentTracesRead(ws, computer.machine, screen, mLua, ramTierName, "after-boot", ticks = 12)
+
     // --- (d2) the allowBytecode gate, as seen from inside the sandbox --
     // bytecodeGate() below exercises the C entry point (jnlua's
     // LuaState.load, i.e. the shim's lua_load macro).  THIS milestone
@@ -2867,6 +3358,12 @@ object Smoke {
     else
       milestone("k5-watchdog-fired-NEGATIVE-CONTROL", wdFires == 0,
         "stock kernel never arms: fires=" + wdFires + " (must be 0)")
+
+    // --- (jn-1) the jnlua resume-error line, through jnlua ----------------
+    // Same quiescent moment as the k5 read, same monitor.  Our natives only:
+    // the stock PUC 5.2 native is OC's own jnlua build, unpatched, and would
+    // report the thread -- a known shape, not a control worth a milestone.
+    if (nativeMode != "stock") jnluaResumeErrorProbe(computer.machine, mLua)
 
     // --- (k4) still fast AFTER the timeout ----------------------------
     // The only thing that distinguishes "disarm() cleared checkDeadline's
@@ -3162,11 +3659,11 @@ object Smoke {
     // Sampled either side of the persist below.  Both numbers were masked
     // until the watchdog landed: with traces thrashing there was almost no
     // mcode to account for and nothing worth flushing.
-    val (mc0, mcCap, tr0, jitOn) =
+    val (mc0, mcCap, tr0, jitOn, lv0) =
       if (quiesced(computer.machine, "the mcode read-out")) jitStatsLocked(computer.machine, mLua)
-      else (-1L, -1L, -1, false)
+      else (-1L, -1L, -1, false, -1)
     p("JIT MEMORY: mcode=" + mc0 + " B of a " + mcCap + " B cap, traces=" + tr0 +
-      ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
+      ", traces_live=" + lv0 + ", jit=" + jitOn + "  (the RAM cap cannot see any of this)")
 
     // --- the emergency collector, and whether it was even exercised ------
     val (gcArms, gcCollects, gcBailouts, gcRefusals, gcArmed, gcState) =
@@ -3251,9 +3748,9 @@ object Smoke {
     val tPersist = System.currentTimeMillis()
     try ws.save(nbt) catch { case t: Throwable => persistOk = false; persistErr = t.toString }
     val persistMs = System.currentTimeMillis() - tPersist
-    val (mc1, _, tr1, _) = jitStatsLocked(computer.machine, mLua)
+    val (mc1, _, tr1, _, lv1) = jitStatsLocked(computer.machine, mLua)
     val flushed = mc0 > 0 && mc1 == 0
-    p("JIT MEMORY after persist: mcode=" + mc1 + " B, traces=" + tr1 +
+    p("JIT MEMORY after persist: mcode=" + mc1 + " B, traces=" + tr1 + ", traces_live=" + lv1 +
       (if (flushed) "   <- FLUSHED: the save discarded every compiled trace"
        else if (mc0 > 0) "   (traces survived the save)" else ""))
     // OURS, not "luajit": the additive arm is the same VM behind a different
@@ -3261,14 +3758,16 @@ object Smoke {
     // Gating on the literal "luajit" silently SKIPPED this milestone for the
     // one shape we actually ship -- and a skipped milestone reads as a pass.
     if (nativeMode != "stock" && kernelMode == "watchdog" && jitMode == "on")
-      // Not an assertion about WHICH way it goes -- both are legitimate, and
-      // the serializer flushes only when the coroutine is suspended inside a
-      // generic-for loop (eris_lj.c:1209).  What is asserted is that we can
-      // TELL, so the answer is recorded rather than assumed.
+      // Not an assertion about WHICH way it goes -- both are legitimate.  Up
+      // to 2026-09-22 the serializer flushed every trace whenever the thread
+      // was parked in a generic-for loop (an idle OpenOS always is); since
+      // then it reads a compiled loop head through GCtrace.startins and
+      // flushes nothing, so a save leaves the machine WARM.  What is asserted
+      // is that we can TELL, so the answer is recorded rather than assumed.
       milestone("m2-persist-flush-observed", mc0 > 0 && mc1 >= 0,
         "mcode " + mc0 + " -> " + mc1 + " B, traces " + tr0 + " -> " + tr1 +
-          (if (flushed) "  (a world save leaves the machine COLD; it must recompile)"
-           else "  (this save did not trigger the for-in flush)"))
+          (if (flushed) "  (a world save leaves the machine COLD; it must recompile -- a pre-2026-09-22 serializer)"
+           else "  (traces survived the save: the machine stays warm)"))
 
     // --- (m3) how cold is cold? ---------------------------------------
     // A save flushes every trace, and the machine goes on running.  What it
@@ -3280,6 +3779,7 @@ object Smoke {
       var mr = 0
       var mcBack = 0L
       var trBack = 0
+      var lvBack = 0
       while (mr < 120 && computer.machine.isRunning && mcBack == 0L) {
         ws.update(); Thread.sleep(25); mr += 1
         if (mr % 10 == 0) {
@@ -3290,7 +3790,7 @@ object Smoke {
           // interlock (see evalStrLocked).  It read -1/-1 on one run in three
           // and the ORIGINAL machine -- the one the stk phase below still
           // needs -- died of Error.InternalError before that phase began.
-          val s = jitStatsLocked(computer.machine, mLua); mcBack = s._1; trBack = s._3
+          val s = jitStatsLocked(computer.machine, mLua); mcBack = s._1; trBack = s._3; lvBack = s._5
         }
       }
       // REPORTED, NOT ASSERTED, and the reason matters.  This watches an IDLE
@@ -3302,10 +3802,16 @@ object Smoke {
       // working one.  Real recovery has to be measured with a WORKLOAD after
       // the save, which belongs in the benchmark harness (Step 3), not here.
       p("JIT MEMORY recovery (idle machine, informational only): mcode back to " +
-        mcBack + " B / " + trBack + " traces after " + mr + " ticks (~" + (mr * 25) +
+        mcBack + " B / " + trBack + " traces (" + lvBack + " live) after " + mr + " ticks (~" + (mr * 25) +
         " ms).  An idle machine has nothing to recompile; recovery under load is" +
         " measured by the benchmark harness, not by this line.")
     }
+
+    // --- (mem-1) resident traces after the first save ---------------------
+    // After m3's recovery watch, so that watch sees the machine the save left
+    // and not one this read has ticked and collected.
+    val memAfterSave = nativeMode != "stock" &&
+      residentTracesRead(ws, computer.machine, screen, mLua, ramTierName, "after-first-save")
 
     val kernelKey = computer.machine.node.address + "_kernel"
     val blob = try findBlob(nbt, kernelKey) catch { case _: Throwable => null }
@@ -3393,7 +3899,7 @@ object Smoke {
         nextSample(400)
         for (i <- 0 until K) {
           val nbtK = new NBTTagCompound()
-          val (mcPre, _, trPre, _) = jitStatsLocked(computer.machine, mLua)
+          val (mcPre, _, trPre, _, lvPre) = jitStatsLocked(computer.machine, mLua)
           mcBeforeSave(i) = mcPre
           val t0 = System.currentTimeMillis()
           val ok = try { ws.save(nbtK); true } catch {
@@ -3401,20 +3907,23 @@ object Smoke {
           }
           persistMsArr(i) = System.currentTimeMillis() - t0
           if (ok) savesOk += 1
-          val (mc1, _, tr1, _) = jitStatsLocked(computer.machine, mLua)
+          val (mc1, _, tr1, _, lv1) = jitStatsLocked(computer.machine, mLua)
           mcAfterSave(i) = mc1; trAfterSave(i) = tr1
           val seqAtSave = seqSeen
           val c = nextSample(600)              // 15 s budget for a 5 s period
           if (c._2 > 0) { cold(i) = c._1; samples += 1; seqGap(i) += c._2 - seqAtSave - 1 }
           val w = nextSample(600)
           if (w._2 > 0) { rewarm(i) = w._1; samples += 1; seqGap(i) += w._2 - c._2 - 1 }
-          val (mc2, _, tr2, _) = jitStatsLocked(computer.machine, mLua)
+          val (mc2, _, tr2, _, lv2) = jitStatsLocked(computer.machine, mLua)
           mcAfterWarm(i) = mc2; trAfterWarm(i) = tr2
-          p("m4 save " + (i + 1) + ": before mcode=" + mcPre + " B traces=" + trPre +
-            "; persist " + persistMsArr(i) + " ms; right after: mcode=" + mc1 + " B traces=" + tr1 +
+          // traces_live alongside traces: the latter is J->freetrace-1 and sat
+          // frozen at 468 through the penalty-cache regression, so it cannot
+          // tell "nothing recorded" from "everything aborted"; the live count can.
+          p("m4 save " + (i + 1) + ": before mcode=" + mcPre + " B traces=" + trPre + " traces_live=" + lvPre +
+            "; persist " + persistMsArr(i) + " ms; right after: mcode=" + mc1 + " B traces=" + tr1 + " traces_live=" + lv1 +
             (if (mcPre > 0 && mc1 == 0) " (FLUSHED)" else if (mcPre > 0) " (traces survived)" else "") +
             "; cold=" + cold(i) + " s, re-warmed=" + rewarm(i) + " s" +
-            "; after re-warm: mcode=" + mc2 + " B traces=" + tr2 +
+            "; after re-warm: mcode=" + mc2 + " B traces=" + tr2 + " traces_live=" + lv2 +
             (if (seqGap(i) != 0) "   <- " + seqGap(i) + " sample(s) skipped by the screen poll" else "") +
             (if (c._2 < 0 || w._2 < 0) "   <- a sample did not arrive within budget" else ""))
         }
@@ -3431,20 +3940,47 @@ object Smoke {
         val hadTraces = (0 until K).exists(i => mcBeforeSave(i) > 0L)
         val flushWord =
           if (!hadTraces) "nothing to flush (mcode 0 before every save)"
-          else "flush seen after every save=" + flushEveryTime
+          else if (flushEveryTime) "every save FLUSHED the traces (a pre-2026-09-22 serializer)"
+          else "traces survived every save=" + (0 until K).forall(i => mcAfterSave(i) > 0L)
         p("m4 summary: warm best " + encWarm + " s; cold mean " + f"$coldMean%.4f" + " s (" + r(coldMean) +
           "), cold max " + f"$coldMax%.4f" + " s (" + r(coldMax) + "); re-warmed mean " + f"$warmMean%.4f" +
           " s (" + r(warmMean) + "); persist mean " + f"$persistMean%.1f" + " ms; " + flushWord +
           "; traces back after the re-warm run every time=" + tracesBack +
           "; cost per save on this encore ~" + f"${(coldMean - encWarm) * 1000}%.1f" + " ms beyond a warm run" +
           " (jit=" + jitMode + ")")
-        val instrumentOk = savesOk == K && samples == 2 * K && (jitMode != "on" || flushEveryTime)
+        // Since 2026-09-22 the persist reads a compiled loop head through
+        // GCtrace.startins instead of flushing, so mcode == 0 after a save is
+        // no longer expected -- the instrument condition is only that the
+        // saves happened and the samples arrived.  Whether traces survived is
+        // REPORTED (flushWord), and the ratios are what this milestone is for:
+        // they are how the penalty-cache blacklisting was first seen.
+        val instrumentOk = savesOk == K && samples == 2 * K
         milestone("m4-persist-and-continue-under-load", instrumentOk,
           "jit=" + jitMode + ": " + savesOk + "/" + K + " saves, " + samples + "/" + (2 * K) +
             " samples; " + flushWord +
             "; warm " + encWarm + " s -> cold mean " + f"$coldMean%.4f" + " s (" + r(coldMean) +
             "), re-warmed mean " + f"$warmMean%.4f" + " s (" + r(warmMean) + ")   (ratios REPORTED, not asserted)")
       }
+    }
+
+    // --- (mem-1) resident traces after the m4 saves, and the verdict ---
+    val memAfterM4 = nativeMode != "stock" &&
+      residentTracesRead(ws, computer.machine, screen, mLua, ramTierName, "after-m4-saves")
+    val memReads = List(("after-boot", memAfterBoot), ("after-first-save", memAfterSave), ("after-m4-saves", memAfterM4))
+    if (nativeMode == "stock") {
+      // no line at all: the stock arm has nothing resident to measure
+    } else if (memReads.forall(_._2)) {
+      milestone("mem-1-resident-traces-at-tier", ok = true,
+        "tier=" + ramTierName + " (" + ramTierKB + " KB): every read above produced a number at all three points" +
+          " -- the figures are REPORTED on the MEM-1 lines, never asserted")
+    } else {
+      // NOT a pass and NOT counted: a read that produced no number leaves
+      // nothing to report, and a PASS here would read as "the memory looked
+      // fine at this tier" to anyone scanning the milestone list.
+      val bad = memReads.filter(!_._2).map(_._1).mkString(",")
+      p("!! mem-1-resident-traces-at-tier: a read produced NO NUMBER at " + bad + " -- see the MEM-1 lines above")
+      p("MILESTONE mem-1-resident-traces-at-tier: SKIP -- tier=" + ramTierName + ": read failed at " + bad +
+        " (not counted; nothing to report is not a pass)")
     }
 
     // --- (f2) restore into a FRESH workspace and resume ----------------
@@ -3668,6 +4204,12 @@ object Smoke {
     // On the ORIGINAL machine too, before stk starts its endless fs.open
     // burst chain on it.  See forInSave for what is asserted and why.
     forInSave(ws, computer, screen, kernelMode)
+
+    // --- (dg) a save that lands MID-FOR-IN over OpenOS's OWN next-wrapper --
+    // The residual of the for-in gap (census #9): not fixable, but NAMED at
+    // save time under -Docluajit.forin=warn.  Our serializer only -- stock
+    // Eris has no such setting.  See forinDiagnosticSave for the arms.
+    if (nativeMode != "stock") forinDiagnosticSave(ws, computer, screen)
 
     // --- (stk) a save that lands MID-SYNC-CALL ------------------------
     // On the ORIGINAL machine, which f1 left running; ws2's copy shares the

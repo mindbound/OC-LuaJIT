@@ -144,7 +144,10 @@ site 12 deletes the re-arm; the shim's hook is count=1, thread-filtered and
 re-fired every 50 ms from the first fire anyway, so nothing is lost. Reproduced
 without load by `OCLJ_PROBE=grace` (harness milestone `k6`); details and the two
 residuals (a leaked arm entry when an error lands between `resume` and `disarm`;
-JNLua dropping the panic message) are in the roadmap.
+JNLua dropping the panic message) are in the roadmap — both closed 2026-09-22:
+the filter now carries a per-entry skip budget (`LJ52_WD_SKIPMAX`) after which a
+parent is hooked as PUC would hook it, and JNLua's `lua_1resume` moves the error
+object off the coroutine before throwing.
 
 ## Open items
 - Decide `SHORT_STRING` threshold (route all pattern ops through the Lua matcher?).

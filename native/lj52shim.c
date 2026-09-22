@@ -234,6 +234,8 @@ typedef struct lj52_mem {
   double        wd_stack[LJ52_WD_MAXDEPTH]; /* absolute deadlines, ms      */
   lua_State    *wd_for[LJ52_WD_MAXDEPTH];   /* the thread each arm protects */
   lua_State    *wd_by[LJ52_WD_MAXDEPTH];    /* the thread that armed each   */
+  int           wd_skip[LJ52_WD_MAXDEPTH];  /* fires skipped on each armer; */
+                                            /* see THE THREAD FILTER        */
   /* Diagnostics, written by the timer thread and the hook, read by stats().
    * Plain ints on purpose: they are counters for a human, not for logic. */
   volatile int  wd_fired;    /* the current timer has fired at least once   */
@@ -444,15 +446,21 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  * not the Lua thread -- calls lua_sethook(L, hook, LUA_MASKCOUNT, 1).  The
  * next trace-entry guard fails, the trace exits, the interpreter fires the
  * hook on the very next instruction, and the hook calls fn.  fn is
- * machine.lua's own checkDeadline, UNCHANGED: the tooLongWithoutYielding
- * sentinel, the +0.5s grace, the count=1 re-arm that keeps a pcall-swallowing
- * loop from escaping -- all of it stays exactly as OC wrote it.  What changes
- * is only who arms the hook and when: never, until the deadline has actually
- * passed.  Between deadlines g->hookmask is zero and traces run.
+ * machine.lua's own checkDeadline: the tooLongWithoutYielding sentinel and
+ * the +0.5s grace stay exactly as OC wrote them.  Its count=1 re-arm -- the
+ * post-expiry escalation that kept a pcall-swallowing loop from escaping --
+ * is DELETED by kernel site 12 (native/kernel/patch-machine-lua.lua): on
+ * LuaJIT it was a per-VM hook, unfiltered, that reached the kernel thread.
+ * The escalation is ours instead: the hook the timer installs is count=1 and
+ * is re-fired every LJ52_WD_REFIRE_MS from the first fire until disarm(), so
+ * past the grace checkDeadline raises on every instruction with no help from
+ * Lua.  What changes is only who arms the hook and when: never, until the
+ * deadline has actually passed.  Between deadlines g->hookmask is zero and
+ * traces run.
  *
  * disarm() cancels the timer -- BLOCKING until a callback already in flight
- * has finished -- and clears whatever hook is set, including checkDeadline's
- * own re-arm.  It must be called when the resume returns, or a deadline that
+ * has finished -- and clears the hook (ours; since site 12 there is no
+ * other).  It must be called when the resume returns, or a deadline that
  * expires while the machine is idle between ticks would set a count=1 hook
  * that fires on the first instruction of the NEXT resume as a spurious
  * timeout.
@@ -467,12 +475,16 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  * hooks assumption that holds on PUC and not here.
  *
  * ... AND A STACK CAN LEAK, so it is built to heal.  After a deadline fires,
- * checkDeadline's count=1 re-arm is GLOBAL (hooks are, on LuaJIT), so it also
- * fires on the kernel's own instructions between the resume returning and
- * disarm() being called.  Inside the grace that is harmless; past it,
- * checkDeadline errors THERE, disarm() is never reached -- and if the error is
- * then caught by a sandbox pcall (OpenOS's event loop catches callback
- * errors), the machine lives on with one stale entry left on the stack.  A
+ * our count=1 hook is GLOBAL (hooks are, on LuaJIT), so it also runs on the
+ * parent's own instructions between the child's resume returning and
+ * disarm() being called.  THE THREAD FILTER at lj52_wd_hook keeps those from
+ * calling checkDeadline -- but an error can land in that window on its own
+ * (LUA_ERRMEM at the wrapper's table.pack), disarm() is then never reached,
+ * and if the error is caught by a sandbox pcall (OpenOS's event loop catches
+ * callback errors) the machine lives on with one stale entry left on the
+ * stack.  (When this was written the leak was routine: checkDeadline's Lua
+ * re-arm, since deleted by kernel site 12, fired unfiltered on those
+ * instructions and errored there past the grace.)  A
  * naive pop-one disarm would deepen the stack by one per such leak and, worse,
  * re-program the stale, already-expired deadline the moment a legitimate one
  * popped above it: a spurious "too long without yielding" on the very next
@@ -499,9 +511,11 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  * callback does exactly one thing, lua_sethook, and nothing else; disarm
  * cancels the timer BEFORE touching the hook itself, and arm creates the new
  * timer only AFTER cancelling any old one, so the callback never runs
- * concurrently with a lua_sethook on the Lua thread.  The one lua_sethook the
- * kernel still makes itself, checkDeadline's count=1 re-arm, runs from inside
- * the hook the callback installed -- i.e. after the callback has returned.
+ * concurrently with a lua_sethook on the Lua thread.  The kernel makes no
+ * lua_sethook of its own while an arm is live: checkDeadline's count=1 re-arm
+ * was deleted by kernel site 12, and the two debug.sethook calls machine.lua
+ * keeps (calcHookInterval's bogomips probe) run at boot, before the first
+ * arm.
  *
  * ... WHICH IS NOT THE WHOLE STORY, and the adversarial review said so.
  * g->hookmask is ONE byte holding both the event bits (LUA_MASKCOUNT and
@@ -524,8 +538,8 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
  *     hook_leave that can no longer happen.  The machine is then silently
  *     undefended for the rest of its life.  And the re-fire that fixes the
  *     first direction multiplies exposure to this one: during the 0.5 s
- *     grace after a fire, checkDeadline's count=1 re-arm has the Lua thread
- *     in hook_enter/hook_leave on every instruction while the timer lands ten
+ *     grace after a fire, our own count=1 hook has the Lua thread in
+ *     hook_enter/hook_leave on every instruction while the timer lands ten
  *     more RMWs into that stream.
  * So the timer thread does NOT call lua_sethook.  lj52_wd_inject stores
  * hookf and hookcount (aligned words, atomic on x64), then ORs the single
@@ -783,12 +797,38 @@ static void lj52_wd_hook(lua_State *L, lua_Debug *ar) {
    * disarm() is a few instructions away.  Everything else fires: the
    * protected thread itself, and any thread that armed nothing (the deep
    * nesting of (a)).  The count=1 hook stays set, harmless, until disarm()
-   * clears it. */
+   * clears it.
+   *
+   *   (c) ... AND "A FEW INSTRUCTIONS AWAY" IS A CLAIM, NOT A FACT, so the
+   *       skip is bounded (found reviewing kernel site 12, 2026-09-21).  If
+   *       an error lands in the sandbox wrapper between its raw
+   *       coroutine.resume returning and its disarm(wd) -- LUA_ERRMEM at the
+   *       table.pack, a stack overflow inside callhook -- the entry stays
+   *       (wd_for = the child, wd_by = the parent), the parent's pcall
+   *       swallows the error, and the parent runs on.  Every fire on it then
+   *       matched this predicate: it was filtered FOREVER, until it yielded
+   *       to its own parent, and a `while true do end` there wedged the
+   *       executor where PUC's per-thread hook would have killed it.  So each
+   *       entry carries a skip budget, LJ52_WD_SKIPMAX, reset when the entry
+   *       is armed and charged to the first live entry the running thread
+   *       armed.  The kernel's real windows are 4-5 bytecodes (17 at worst,
+   *       counted in lj52shim.h at the constant); a parent still being
+   *       skipped after 64 is not on its way to disarm(), and from then on it
+   *       fires -- checkDeadline runs on it exactly as PUC would have run its
+   *       own hook, and the leak degrades to OC's behaviour instead of a
+   *       hang.  wd_filtered keeps counting the skips, so a leak shows in
+   *       stats() as exactly LJ52_WD_SKIPMAX per leaked entry.  wd_test W10a-b
+   *       (the leak, fail-first against the unbounded shim) and W10g (the
+   *       normal path, which a budget of 0 fails). */
   if (M != NULL && M->wd_depth > 0 && M->wd_for[M->wd_depth - 1] != L) {
-    int i, armer = 0;
+    int i;
     for (i = 0; i < M->wd_depth; i++)
-      if (M->wd_by[i] == L) { armer = 1; break; }
-    if (armer) { M->wd_filtered++; return; }
+      if (M->wd_by[i] == L) break;
+    if (i < M->wd_depth && M->wd_skip[i] < LJ52_WD_SKIPMAX) {
+      M->wd_skip[i]++;
+      M->wd_filtered++;
+      return;
+    }
   }
   lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
   lua_rawget(L, LUA_REGISTRYINDEX);
@@ -1096,13 +1136,15 @@ static int lj52_wd_arm(lua_State *L) {
   lj52_wd_cancel(M);
   if (outermost) {
     /* Heal whatever the last resume leaked: the stack, AND the hook.  A
-     * skipped disarm leaves checkDeadline's count=1 re-arm in place, and a
-     * new resume that started under it would run one hook call per
-     * instruction until something cleared it.  OC's stock kernel is immune
-     * by accident -- its next arm simply overwrites the hook.  Only the
-     * OUTERMOST arm may do this: inside a nested arm that same re-arm is the
-     * escalation a pcall-swallowing loop must not be allowed to escape.
-     * (wd_test W8c, found the first time the healing was tested.) */
+     * skipped disarm leaves our count=1 hook in place (fired, never
+     * cleared), and a new resume that started under it would run one hook
+     * call per instruction until something cleared it.  OC's stock kernel is
+     * immune by accident -- its next arm simply overwrites the hook.  Only
+     * the OUTERMOST arm may do this: inside a nested arm that same count=1
+     * hook is the escalation a pcall-swallowing loop must not be allowed to
+     * escape -- and the only one there is, since kernel site 12 deleted
+     * checkDeadline's Lua re-arm.  (wd_test W8c, found the first time the
+     * healing was tested.) */
     M->wd_depth = 0;
     if (lua_gethook(L) != NULL) lua_sethook(L, NULL, 0, 0);
   }
@@ -1112,6 +1154,7 @@ static int lj52_wd_arm(lua_State *L) {
   M->wd_stack[M->wd_depth] = lj52_wd_now() + secs * 1000.0;
   M->wd_for[M->wd_depth] = co;
   M->wd_by[M->wd_depth] = L;
+  M->wd_skip[M->wd_depth] = 0;          /* a fresh skip budget; see the hook */
   M->wd_depth++;
   lj52_wd_program(M);
   lua_pushinteger(L, M->wd_depth);
@@ -1127,7 +1170,8 @@ static int lj52_wd_disarm(lua_State *L) {
   to = lua_isnoneornil(L, 1) ? M->wd_depth - 1 : (int)luaL_checkinteger(L, 1) - 1;
   if (to < 0) to = 0;
   lj52_wd_cancel(M);
-  /* Clear ours AND checkDeadline's count=1 re-arm ("avoid gc issues", as the
+  /* Clear the hook -- ours, fired or not; since kernel site 12 deleted
+   * checkDeadline's Lua re-arm there is no other ("avoid gc issues", as the
    * kernel's own comment at the coroutine.resume site puts it).  Guarded so
    * the common case -- nothing armed, the resume simply yielded -- does not
    * pay lj_trace_abort + lj_dispatch_update on every return. */
@@ -1169,9 +1213,10 @@ static int lj52_wd_stats(lua_State *L) {
  * JIT accounting, for measurement only
  * ================================================================== */
 
-/* _OCLJ_JITSTATS() -> mcode_bytes, maxmcode_bytes, traces_used, jit_on
+/* _OCLJ_JITSTATS() -> mcode_bytes, maxmcode_bytes, traces_used, jit_on,
+ *                     traces_live
  *
- * Two things this project needs to measure and cannot reach any other way.
+ * Three things this project needs to measure and cannot reach any other way.
  *
  * MCODE IS INVISIBLE TO THE RAM CAP.  Machine code is VirtualAlloc'd by
  * lj_mcode.c and never passes g->allocf, so the per-machine cap the shim
@@ -1189,17 +1234,30 @@ static int lj52_wd_stats(lua_State *L) {
  * around a save is how we find out whether a world save leaves the machine
  * cold.
  *
+ * AND traces_used IS NOT A LIVE COUNT.  It is J->freetrace-1, where the
+ * scan for the next free trace slot starts, and it cannot tell "nothing is
+ * being recorded" from "every recording aborts": in the 2026-09-22 penalty-
+ * cache regression (native/luajit/patch-penalty-scrub.sh) it froze at 468
+ * while the machine ran interpreted.  traces_live is the number of non-NULL
+ * J->trace[i] slots, 1..sizetrace-1 -- the traces that EXIST right now.  It
+ * is 0 after a flush and it is the number that says whether compiled code is
+ * present; traces_used is kept because every log since 2026-09-03 quotes it.
+ *
  * A raw global like _OCLJ_NATIVE and _OCLJ_WATCHDOG: the sandbox never sees
  * raw _G, and jit.util -- the usual way to ask these questions -- is
  * deliberately kept out of it (docs/research/os-shape-census.md).  Read-only,
  * and it allocates nothing. */
 static int lj52_jitstats(lua_State *L) {
   jit_State *J = L2J(L);
+  MSize i, live = 0;
+  for (i = 1; i < J->sizetrace; i++)
+    if (gcref(J->trace[i]) != NULL) live++;
   lua_pushnumber(L, (lua_Number)J->szallmcarea);
   lua_pushnumber(L, (lua_Number)(J->param[JIT_P_maxmcode] << 10));
   lua_pushinteger(L, (lua_Integer)(J->freetrace ? J->freetrace - 1 : 0));
   lua_pushboolean(L, (J->flags & JIT_F_ON) != 0);
-  return 4;
+  lua_pushinteger(L, (lua_Integer)live);
+  return 5;
 }
 
 /* _OCLJ_GCSTATS() -> arms, collects, bailouts, refusals, armed,

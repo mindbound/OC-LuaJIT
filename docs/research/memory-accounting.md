@@ -1042,7 +1042,7 @@ pass/fail on one `sieve`, and it would have reported a clean win.
 
 `hook-vs-jit.md` §7 made traces actually run, so the cap's blindness to JIT
 machine code stopped being theoretical. Measured (`hook-vs-jit.md` §8, via the
-`_OCLJ_JITSTATS()` accessor added for it): a booted OpenOS holds **196 608 B**
+`_OCLJ_JITSTATS()` accessor added for it; it returns five values since 2026-09-22, the fifth being the live trace count): a booted OpenOS holds **196 608 B**
 of machine code, stable across six consecutive runs, against a `maxmcode`
 ceiling of 2 097 152 B. The cap charges for **none** of it.
 

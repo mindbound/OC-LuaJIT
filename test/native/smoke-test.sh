@@ -86,6 +86,15 @@
 #                 in this mode so ocelot-brain's "Kernel crashed" line lands
 #                 in smoke.log (the wd-load rig did it with
 #                 JAVA_TOOL_OPTIONS=-Dlog4j2.level=WARN).
+#   OCLJ_RAM_TIER one | onehalf | two | twohalf | three | threehalf (default).
+#                 The machine's RAM stick (ocelot-brain's ramSizes: 192, 256,
+#                 384, 512, 768, 1024 KB as the sandbox sees them; the real
+#                 cap is that x OCLJ_RAM_SCALE plus kernelMemory).  Passed as
+#                 -Docljit.ramtier.  The mem-1 milestone reports resident
+#                 trace metadata at whatever tier this names; the default is
+#                 the 3.5 every other number in this repository was taken at.
+#                 A tier OpenOS cannot boot on ends at c-openos-shell, which is
+#                 a result, not a harness fault.
 #
 # USAGE
 #   OCLJ_LIBDIR=.../build/native/libdir OCLJ_BRAIN=~/src/ocelot-brain \
@@ -505,11 +514,17 @@ case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT
 : "${OCLJ_PROBE:=}"
 case $OCLJ_PROBE in ""|grace) ;; *) fail "OCLJ_PROBE must be unset or grace, not '$OCLJ_PROBE'";; esac
 [ "$OCLJ_PROBE" = "grace" ] && say "    OCLJ_PROBE=grace -- boot, then ONLY the grace-expiry probe (k6); no suite, no persist"
+# Validated for the same reason again, and the harness refuses it a second
+# time: a run filed under the wrong tier is worse than no run.
+: "${OCLJ_RAM_TIER:=threehalf}"
+case $OCLJ_RAM_TIER in one|onehalf|two|twohalf|three|threehalf) ;;
+  *) fail "OCLJ_RAM_TIER must be one, onehalf, two, twohalf, three or threehalf, not '$OCLJ_RAM_TIER'";; esac
+[ "$OCLJ_RAM_TIER" != "threehalf" ] && say "    OCLJ_RAM_TIER=$OCLJ_RAM_TIER -- a smaller RAM stick than the 3.5 the reference numbers were taken at"
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
-  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
+  timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -Docljit.ramtier="$OCLJ_RAM_TIER" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
 else
-  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
+  "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -Docljit.ramtier="$OCLJ_RAM_TIER" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
 fi
 RC=$?
 cat "$LOG"

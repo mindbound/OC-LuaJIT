@@ -23,10 +23,14 @@
  *   W9  the timer re-fires until disarmed, so a hookmask update lost to a
  *       concurrent restore on the Lua thread costs one interval, not the
  *       deadline (the threads lens of the adversarial review)
- *   W10 the thread filter: a fire that lands on the thread that ARMED sets
- *       the hook but calls nothing; every other thread is interrupted,
- *       including a coroutine nested past the cap with no entry of its own
- *       (the hole the review reproduced in the first filter)
+ *   W10 the thread filter, and its bound: a fire that lands on a parent
+ *       waiting on a child is skipped -- for LJ52_WD_SKIPMAX instructions and
+ *       not one more, after which the parent is interrupted as PUC would (a
+ *       leaked entry, 2026-09-21: the parent was filtered FOREVER); the
+ *       normal path -- child killed, disarm() a few instructions later --
+ *       never reaches the parent's callback; every other thread is
+ *       interrupted, including a coroutine nested past the cap with no entry
+ *       of its own (the hole the review reproduced in the first filter)
  *   W11 past the nesting cap, arm() degrades to the enclosing deadline
  *       instead of raising -- and never touches the live timer first
  *   W12 a timeout past LJ52_WD_MAXMS arms nothing, on either backend
@@ -160,10 +164,25 @@ static void test_alarm(int sig) {
  * disarm() -- fire checkDeadline too, and the only reason they get through is
  * that the 0.5 s grace has not yet elapsed.  W3 exercises exactly that path,
  * and a DEADLINE that errored unconditionally would (and, in this file's first
- * draft, did) fail every check after W2. */
+ * draft, did) fail every check after W2.
+ *
+ * SINCE THEN the kernel patch (site 12, native/kernel/patch-machine-lua.lua)
+ * has DELETED that re-arm: on LuaJIT it was a per-VM hook that replaced the
+ * shim's thread-filtered one and reached the kernel thread.  The shim's own
+ * hook is count=1 from its first fire until disarm(), so the escalation is
+ * intact without it.  DEADLINE keeps the old shape so W1-W13 stay the checks
+ * they were; DEADLINE12 is the shape the kernel runs today, and the filter
+ * cases (W10a, W10g) MUST use it: a Lua re-arm swaps the shim's hook out for
+ * a raw one that bypasses the filter, and "which thread did the fire reach"
+ * would then be a fact about the test, not about the shim.  Both count their
+ * calls, and the calls that landed on the main thread, so a check can say
+ * "the parent's callback was (not) reached" with a number. */
 static const char *PRELUDE =
-  "DL_DEADLINE, DL_HIT = math.huge, false\n"
+  "DL_DEADLINE, DL_HIT, DL_CALLS, DL_MAIN = math.huge, false, 0, 0\n"
+  "MAIN = coroutine.running()\n"
   "DEADLINE = function()\n"
+  "  DL_CALLS = DL_CALLS + 1\n"
+  "  if coroutine.running() == MAIN then DL_MAIN = DL_MAIN + 1 end\n"
   "  if now() > DL_DEADLINE then\n"
   "    debug.sethook(coroutine.running(), DEADLINE, '', 1)\n"
   "    if not DL_HIT then DL_DEADLINE = DL_DEADLINE + 0.5 end\n"
@@ -171,6 +190,17 @@ static const char *PRELUDE =
   "    error('WD-DEADLINE', 0)\n"
   "  end\n"
   "end\n"
+  "DEADLINE12 = function()\n"
+  "  DL_CALLS = DL_CALLS + 1\n"
+  "  if coroutine.running() == MAIN then DL_MAIN = DL_MAIN + 1 end\n"
+  "  if now() > DL_DEADLINE then\n"
+  "    if not DL_HIT then DL_DEADLINE = DL_DEADLINE + 0.5 end\n"
+  "    DL_HIT = true\n"
+  "    error('WD-DEADLINE', 0)\n"
+  "  end\n"
+  "end\n"
+  /* FILTERED() is the shim's own count of skipped fires, from stats(). */
+  "FILTERED = function() local _, _, f = _OCLJ_WATCHDOG.stats() return f end\n"
   /* ARM(s) is what each kernel arm site does: set the deadline, then arm. */
   "ARM = function(s, outer) DL_DEADLINE, DL_HIT = now() + s, false return _OCLJ_WATCHDOG.arm(s, DEADLINE, outer) end\n"
   "DISARM = function(t) _OCLJ_WATCHDOG.disarm(t) end\n"
@@ -400,22 +430,47 @@ int main(void) {
   ok(st == 0 && !hooked(L), "W8d and popping the legitimate one re-programs nothing stale", d);
   lua_settop(L, 0);
 
-  /* ---- W10: the thread filter ----------------------------------------
+  /* ---- W10: the thread filter, and its bound --------------------------
    * Skipped only for a parent waiting on a child: a thread that armed a live
-   * entry and is not the thread that entry protects.  Here main arms FOR CO
-   * and then runs itself -- exactly the kernel's post-yield window. */
-  run(L, "CO = coroutine.create(function() while true do end end)");
-  run(L, "DL_DEADLINE, DL_HIT = now() + 0.05, false _OCLJ_WATCHDOG.arm(0.05, DEADLINE, false, CO)");
-  st = run(L, "local t = now() while now() - t < 0.15 do end");
-  sprintf(d, "status=%d hook=%s", st, hooked(L) ? "SET" : "clear");
-  ok(st == 0 && hooked(L), "W10a a fire on a parent waiting on a child calls nothing", d);
+   * entry and is not the thread that entry protects.  THE LEAK SHAPE FIRST.
+   * main arms FOR COL, resumes it, COL yields -- and main never disarms.
+   * That is the entry machine.lua's sandbox wrapper leaks when an error lands
+   * between its raw coroutine.resume returning and its disarm(wd) (LUA_ERRMEM
+   * at the table.pack; a stack overflow inside callhook), after which main
+   * runs its own code past the deadline.  Until 2026-09-21 the filter skipped
+   * every fire on main for as long as the entry lived, i.e. FOREVER: a
+   * `while true do end` here wedged the executor, where PUC's per-thread hook
+   * would have killed it.  The skip is now a budget of LJ52_WD_SKIPMAX per
+   * entry, so the fire must reach main within that many instructions --
+   * microseconds -- and the loop below ends at the deadline, not at the
+   * 300 ms it is allowed.  On the unbounded shim it runs the whole 300 ms
+   * with status 0 and millions of skips (the fail-first control, in the log). */
+  run(L, "COL = coroutine.create(function() coroutine.yield() end)");
+  run(L, "DL_DEADLINE, DL_HIT, DL_CALLS, DL_MAIN = now() + 0.05, false, 0, 0"
+         " FLT0 = FILTERED()"
+         " _OCLJ_WATCHDOG.arm(0.05, DEADLINE12, false, COL)"
+         " assert(coroutine.resume(COL))");
+  t0 = now_ms();
+  st = run(L, "local t = now() while now() - t < 0.3 do end");
+  dt = now_ms() - t0;
+  sprintf(d, "status=%d msg=%.60s after %.1f ms (deadline 50 ms, loop allowed 300)", st, msg(L), dt);
+  ok(st != 0 && strstr(msg(L), "WD-DEADLINE") != NULL && dt < 300.0,
+     "W10a a leaked entry: the fire reaches the parent past the skip budget", d);
+  lua_settop(L, 0);
+  run(L, "FLT_DELTA = FILTERED() - FLT0");
+  lua_getglobal(L, "FLT_DELTA"); lua_getglobal(L, "DL_MAIN");
+  sprintf(d, "skipped=%d (LJ52_WD_SKIPMAX=%d), callback calls on main=%d",
+          (int)lua_tointeger(L, -2), LJ52_WD_SKIPMAX, (int)lua_tointeger(L, -1));
+  ok(lua_tointeger(L, -2) == LJ52_WD_SKIPMAX && lua_tointeger(L, -1) >= 1,
+     "W10b ...after exactly LJ52_WD_SKIPMAX skipped fires, not one more", d);
   lua_settop(L, 0);
   run(L, "DISARM()");
-  ok(!hooked(L), "W10b and disarm clears it as usual", NULL);
+  ok(!hooked(L), "W10c and disarm clears it as usual", NULL);
+  run(L, "CO = coroutine.create(function() while true do end end)");
   run(L, "DL_DEADLINE, DL_HIT = now() + 0.05, false _OCLJ_WATCHDOG.arm(0.05, DEADLINE, false, CO)");
   st = run(L, "local okc, err = coroutine.resume(CO) if okc then error('CO ran to completion', 0) end error(tostring(err), 0)");
   sprintf(d, "status=%d msg=%s", st, msg(L));
-  ok(st != 0 && strstr(msg(L), "WD-DEADLINE") != NULL, "W10c the same arm interrupts the coroutine it protects", d);
+  ok(st != 0 && strstr(msg(L), "WD-DEADLINE") != NULL, "W10d an arm FOR a coroutine interrupts that coroutine", d);
   lua_settop(L, 0);
   run(L, "DISARM()");
   /* The review's reproduction: a coroutine PAST THE CAP has no entry of its
@@ -434,10 +489,45 @@ int main(void) {
   dt = now_ms() - t0;
   sprintf(d, "status=%d after %.1f ms msg=%s", st, dt, msg(L));
   ok(st != 0 && strstr(msg(L), "WD-DEADLINE") != NULL && dt < 2000.0,
-     "W10d a coroutine nested past the cap is still interrupted", d);
+     "W10e a coroutine nested past the cap is still interrupted", d);
   lua_settop(L, 0);
   run(L, "DISARM(T1)");
-  ok(!hooked(L), "W10e and disarm(token) unwinds it all", NULL);
+  ok(!hooked(L), "W10f and disarm(token) unwinds it all", NULL);
+  /* THE NORMAL PATH, as the control on the bound.  The child overruns and is
+   * killed; the parent's few instructions on the way to disarm() -- the
+   * kernel's post-yield window, 4-5 bytecodes at every site -- are skipped,
+   * and the parent's callback is never called.  DEADLINE12, so the only hook
+   * in play is the shim's.  A budget of 0 fails this and only this (checked
+   * 2026-09-22 on a scratch shim: every window instruction then calls
+   * DEADLINE12 on main inside the grace -- calls on main=4, skipped=0). */
+  run(L, "CO4 = coroutine.create(function() while true do end end)");
+  st = run(L, "DL_DEADLINE, DL_HIT, DL_CALLS, DL_MAIN = now() + 0.05, false, 0, 0"
+              " FLT0 = FILTERED()"
+              " local tok = _OCLJ_WATCHDOG.arm(0.05, DEADLINE12, false, CO4)"
+              " local okc, err = coroutine.resume(CO4)"
+              " _OCLJ_WATCHDOG.disarm(tok)"
+              " FLT_DELTA = FILTERED() - FLT0"
+              " OKC, ERR = okc, tostring(err)");
+  sprintf(d, "status=%d msg=%.60s", st, st ? msg(L) : "");
+  lua_settop(L, 0);
+  lua_getglobal(L, "OKC"); lua_getglobal(L, "ERR"); lua_getglobal(L, "DL_MAIN");
+  lua_getglobal(L, "DL_CALLS"); lua_getglobal(L, "FLT_DELTA");
+  {
+    int okc = lua_toboolean(L, -5);
+    const char *err = lua_isstring(L, -4) ? lua_tostring(L, -4) : "?";
+    int dlmain = (int)lua_tointeger(L, -3), dlcalls = (int)lua_tointeger(L, -2);
+    int flt = (int)lua_tointeger(L, -1);
+    sprintf(d + strlen(d), " child ok=%d err=%.40s, callback calls=%d on main=%d, skipped=%d",
+            okc, err, dlcalls, dlmain, flt);
+    ok(st == 0 && !okc && strstr(err, "WD-DEADLINE") != NULL && dlcalls >= 1 && dlmain == 0
+       && flt >= 1 && flt < LJ52_WD_SKIPMAX,
+       "W10g the normal path: child killed, parent skipped to disarm(), never called", d);
+  }
+  lua_settop(L, 0);
+  lua_getglobal(L, "DEPTH"); lua_call(L, 0, 1);
+  sprintf(d, "hook=%s depth=%d", hooked(L) ? "SET" : "clear", (int)lua_tointeger(L, -1));
+  ok(!hooked(L) && lua_tointeger(L, -1) == 0, "W10h and disarm(token) left nothing behind", d);
+  lua_settop(L, 0);
 
   /* ---- W11: past the cap, arm degrades to the enclosing deadline ------- */
   run(L, "T1 = ARM(10) for i = 1, 400 do _OCLJ_WATCHDOG.arm(10, DEADLINE) end");

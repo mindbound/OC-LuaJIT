@@ -35,6 +35,10 @@
 # assertion keeps its meaning; the claim becomes a statement about the INPUT to
 # the repack.  What must never happen is a fork of jnlua.c's LOGIC: this script
 # changes two macro values and nothing else, and verifies exactly that below.
+# (The one line of jnlua.c LOGIC we do change -- lua_1resume reporting the
+# coroutine object instead of its error -- is a separate, separately-verified
+# step, native/jnlua/patch-resume-error.sh, which build-native.sh runs on this
+# script's output and, for the dropin, on a plain copy of the checkout.)
 set -u
 
 [ $# -ge 2 ] || { echo "usage: repack.sh <OC-JNLua> <out.c> [suffix] [class]" >&2; exit 2; }

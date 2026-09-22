@@ -429,6 +429,327 @@ local function read_file(p)
   local f = assert(io.open(p, "rb")); local d = f:read("*a"); f:close(); return d
 end
 
+---------------------------------------------------------- #9 diagnostic ---
+
+-- The #9 diagnostic (docs/forin-iterator-gap.md, "The #9 diagnostic"). The
+-- one shape left after kernel sites 10-11 is an OS author's OWN next-wrapper:
+-- a Lua-closure iterator whose position lives in its upvalues, where the
+-- replay cannot reach it. It cannot be rewritten -- at save time it is not
+-- soundly distinguishable from a custom iterator with its own ordering -- so
+-- persist() NAMES it under eris.settings("forin", "warn" | "refuse"), and the
+-- default "ignore" writes the bytes it always wrote.
+--
+-- These cases run in ONE process (ELJ_MODE=diag): the detection is a property
+-- of the saving VM. Every shape is a loadstring chunk with a chunkname WE
+-- choose, so the expected "chunk:line" fragments are constants rather than
+-- whatever line this file happens to put them on.
+--
+-- Fail-first: the shipping binary does not know the "forin" setting, so every
+-- case that sets it fails there at eris.settings; the identity case uses that
+-- binary as the REFERENCE WRITER (ELJ_MODE=diagblob) and passes on it, which
+-- is the instrument's own determinism check.
+
+local DIAG_TAIL = "that calls next; its position is not replayable and "
+  .. "resumes against a different hash layout after a reload -- return "
+  .. "next, t, nil from the iterator, or walk a snapshot array by index"
+
+local DIAG_SHAPES = {
+  -- (1) OC's componentProxy.__pairs shape: a closure over `self` calling the
+  -- GLOBAL next, handed back through pairs() so the loop's state slot is nil
+  -- and the table rides in an upvalue.
+  wrap = { chunk = "diag_wrap", loop = 12, iter = 4, src = {
+    "local t = ...",                                    -- 1
+    "setmetatable(t, { __pairs = function(self)",       -- 2
+    "  local key",                                      -- 3
+    "  return function()",                              -- 4  the iterator closure
+    "    local v",                                      -- 5
+    "    key, v = next(self, key)",                     -- 6
+    "    return key, v",                                -- 7
+    "  end",                                            -- 8
+    "end })",                                           -- 9
+    "return function()",                                -- 10
+    "  for k in pairs(t) do",                           -- 11
+    "    coroutine.yield(k)",                           -- 12 the frame's current line
+    "  end",                                            -- 13
+    "  return 'DONE'",                                  -- 14
+    "end" } },
+  -- (2) Kernel site 11's shape: the walk snapshotted at __pairs time and an
+  -- integer cursor over the array. The __pairs function itself reaches next,
+  -- but it is not the iterator; the closure in the func slot holds only `ks`
+  -- and `i`. This is the design's stated criterion: it must NOT be named.
+  snap = { chunk = "diag_snap", src = {
+    "local t = ...",                                    -- 1
+    "setmetatable(t, { __pairs = function(self)",       -- 2
+    "  local ks, n = {}, 0",                            -- 3
+    "  for k in next, self do n = n + 1; ks[n] = k end",-- 4
+    "  local i = 0",                                    -- 5
+    "  return function()",                              -- 6  no next in here
+    "    i = i + 1",                                    -- 7
+    "    return ks[i]",                                 -- 8
+    "  end",                                            -- 9
+    "end })",                                           -- 10
+    "return function()",                                -- 11
+    "  for k in pairs(t) do",                           -- 12
+    "    coroutine.yield(k)",                           -- 13
+    "  end",                                            -- 14
+    "  return 'DONE'",                                  -- 15
+    "end" } },
+  -- (2b) The documented FALSE POSITIVE: a legitimate custom iterator with its
+  -- own integer position that happens to call next on an UNRELATED table.
+  -- "Reaches next" is a heuristic, and this is its price; acceptable for an
+  -- opt-in warning, and the reason the diagnostic names rather than rewrites.
+  fp = { chunk = "diag_fp", loop = 10, iter = 3, src = {
+    "local t = ...",                                    -- 1
+    "local other = { a = 1 }",                          -- 2
+    "local function iter(arr, i)",                      -- 3  the iterator closure
+    "  i = i + 1",                                      -- 4
+    "  local _ = next(other)",                          -- 5  next, on another table
+    "  if arr[i] ~= nil then return i, arr[i] end",     -- 6
+    "end",                                              -- 7
+    "return function()",                                -- 8
+    "  for i, v in iter, t, 0 do",                      -- 9
+    "    coroutine.yield(v)",                           -- 10 the frame's current line
+    "  end",                                            -- 11
+    "  return 'DONE'",                                  -- 12
+    "end" } },
+}
+
+-- A coroutine suspended two keys into the shape's loop.
+local function diag_suspended(shape, tbl)
+  local chunk = assert(loadstring(table.concat(shape.src, "\n"), "=" .. shape.chunk))
+  local co = coroutine.create(chunk(tbl))
+  for _ = 1, 2 do
+    local okr, v = coroutine.resume(co)
+    assert(okr and v ~= "DONE", "shape " .. shape.chunk .. " did not yield twice")
+  end
+  return co
+end
+
+local function diag_expected(shape)
+  return string.format("for-in loop at %s:%d iterates with a Lua closure (%s:%d) %s",
+                       shape.chunk, shape.loop, shape.chunk, shape.iter, DIAG_TAIL)
+end
+
+-- The identity value: shape (1) over an ARRAY, so the bytes cannot depend on
+-- the string-hash layout. (Under LUAJIT_SECURITY_STRID=1 string ids are
+-- reseeded from the PRNG every <256 strings, so a string-keyed table's next()
+-- order -- and with it its wire order -- is per-process. That is a property
+-- of the instrument, not of the change under test.)
+local function diag_identity()
+  local P = build_perms()
+  return P, diag_suspended(DIAG_SHAPES.wrap, { 10, 20, 30, 40, 50, 60 })
+end
+
+-- The blob body: everything between the fingerprint header
+-- ('E' 'L' 'J' <u8 format> <u8 fplen> <fingerprint>) and the trailing CRC,
+-- which covers the header and so moves with the fingerprint by construction.
+local function diag_body(blob)
+  assert(blob:sub(1, 3) == "ELJ", "not an eris-lj blob")
+  local fplen = blob:byte(5)
+  return blob:sub(6 + fplen, -5), blob:byte(4)
+end
+
+-- One thing in a thread blob is per-process even so: the slot loop writes
+-- every stack slot, and a Lua frame's LINK slot is its return PC -- a heap
+-- address, written as it stands (TAG_NUM, 8 LE bytes). The restore rebuilds
+-- every link from the frame records and never reads it, so it is inert; but
+-- it makes two processes' blobs of one value differ in exactly those bytes
+-- (measured: the shipping binary's own two runs differ at 6 bytes of one
+-- 8-byte payload and nowhere else). The identity check masks precisely that
+-- payload, located structurally: the same shape loaded as a SECOND chunk in
+-- this process can differ from the first nowhere but that pointer, and the
+-- payload must sit behind its own TAG_NUM byte. Anything else is a real
+-- difference and fails. (README, known limitations, records the finding.)
+local function diag_link_window(bodyA, bodyB)
+  assert(#bodyA == #bodyB, "two in-process blobs of one shape differ in length")
+  local first, last
+  for i = 1, #bodyA do
+    if bodyA:byte(i) ~= bodyB:byte(i) then first = first or i; last = i end
+  end
+  if not first then return nil end
+  local cands = {}
+  for p = math.max(2, last - 7), first do
+    if bodyA:byte(p - 1) == 4 and last < p + 8 then cands[#cands + 1] = p end
+  end
+  assert(#cands == 1, string.format(
+    "cannot localise the frame-link payload: %d candidates for diffs at %d..%d",
+    #cands, first, last))
+  return cands[1], cands[1] + 7
+end
+
+if mode == "diagblob" then
+  -- The reference writer: the identity value, default mode, to ELJ_BLOB.
+  -- tests/fixtures/forin-identity.blob was written by the shipping binary
+  -- this way (see run-forin.sh).
+  local P, co = diag_identity()
+  local blob = eris.persist(P, co)
+  write_file(path, blob)
+  io.write(string.format("DIAGBLOB bytes=%d body=%d\n", #blob, #diag_body(blob)))
+  return 0
+end
+
+if mode == "diag" then
+  local nfail = 0
+  local function case(name, fn)
+    local okc, note = pcall(fn)
+    pcall(eris.settings, "forin", nil)              -- never leak a mode
+    if okc then
+      io.write("OK   diag/", name, note and ("  -- " .. tostring(note)) or "", "\n")
+    else
+      nfail = nfail + 1
+      io.write("FAIL diag/", name, "  -- ", tostring(note), "\n")
+    end
+  end
+  local function drain()
+    local d = eris.diagnostics()
+    assert(type(d) == "table", "diagnostics() returned a " .. type(d))
+    return d
+  end
+
+  case("0-setting", function()
+    assert(eris.settings("forin") == "ignore", "the default is not ignore")
+    assert(eris.settings("forin", "warn") == "ignore", "set did not return the old value")
+    assert(eris.settings("forin") == "warn", "set did not stick")
+    local okb, e = pcall(eris.settings, "forin", "loud")
+    assert(not okb and tostring(e):find("invalid option", 1, true),
+           "a bogus mode was accepted: " .. tostring(e))
+    assert(eris.settings("forin", "refuse") == "warn")
+    assert(eris.settings("forin", nil) == "refuse" and eris.settings("forin") == "ignore",
+           "nil did not reset to the default")
+    assert(type(eris.diagnostics) == "function", "no eris.diagnostics")
+    assert(next(drain()) == nil, "diagnostics() is not empty before any persist")
+    return "ignore/warn/refuse validated, bogus refused, nil resets; diagnostics() empty"
+  end)
+
+  case("1-wrap-warn", function()
+    local P = build_perms()
+    local co = diag_suspended(DIAG_SHAPES.wrap, RECIPES.proxy())
+    eris.settings("forin", "warn")
+    eris.persist(P, co)
+    local d = drain()
+    assert(#d == 1, "expected exactly one diagnostic, got " .. #d
+           .. (d[1] and ("; first: " .. tostring(d[1])) or ""))
+    assert(d[1]:find("diag_wrap:12", 1, true), "the loop location is missing: " .. d[1])
+    assert(d[1]:find("(diag_wrap:4)", 1, true), "the iterator location is missing: " .. d[1])
+    local want = diag_expected(DIAG_SHAPES.wrap)
+    assert(d[1] == want, "message differs:\n     got  " .. d[1] .. "\n     want " .. want)
+    assert(next(drain()) == nil, "diagnostics() did not clear the list")
+    return d[1]
+  end)
+
+  case("1b-ocpairs-body-warn", function()
+    -- This file's own ocpairs control body, as the pad matrix runs it.
+    local P = build_perms()
+    local co = coroutine.create(BODIES.ocpairs(RECIPES.proxy()))
+    for _ = 1, 2 do assert(coroutine.resume(co)) end
+    eris.settings("forin", "warn")
+    eris.persist(P, co)
+    local d = drain()
+    assert(#d == 1, "expected exactly one diagnostic, got " .. #d)
+    local _, n = d[1]:gsub("forin%.lua:%d+", "")
+    assert(n == 2, "expected two forin.lua locations in: " .. d[1])
+    return d[1]
+  end)
+
+  case("2-snap-warn", function()
+    local P = build_perms()
+    local co = diag_suspended(DIAG_SHAPES.snap, RECIPES.proxy())
+    eris.settings("forin", "warn")
+    eris.persist(P, co)
+    local d = drain()
+    assert(#d == 0, "the snapshot walker was named: " .. tostring(d[1]))
+    return "no diagnostic for the snapshot-array iterator"
+  end)
+
+  case("2b-kernel-snap-bodies-warn", function()
+    -- This file's own site 10 / site 11 bodies (oclist_snap: a callable
+    -- table in the func slot; ocpairs_snap: a closure over an array).
+    local P = build_perms()
+    eris.settings("forin", "warn")
+    for _, c in ipairs { "oclist_snap", "ocpairs_snap" } do
+      local co = coroutine.create(BODIES[c](recipe_for(c)()))
+      for _ = 1, 2 do assert(coroutine.resume(co)) end
+      eris.persist(P, co)
+      local d = drain()
+      assert(#d == 0, c .. " was named: " .. tostring(d[1]))
+    end
+    return "oclist_snap and ocpairs_snap: no diagnostic"
+  end)
+
+  case("2c-false-positive-warn", function()
+    local P = build_perms()
+    local co = diag_suspended(DIAG_SHAPES.fp, { 10, 20, 30, 40 })
+    eris.settings("forin", "warn")
+    eris.persist(P, co)
+    local d = drain()
+    assert(#d == 1, "expected the documented false positive, got " .. #d)
+    local want = diag_expected(DIAG_SHAPES.fp)
+    assert(d[1] == want, "message differs:\n     got  " .. d[1] .. "\n     want " .. want)
+    return "KNOWN FALSE POSITIVE, documented: " .. d[1]
+  end)
+
+  case("3-wrap-refuse", function()
+    local P = build_perms()
+    local co = diag_suspended(DIAG_SHAPES.wrap, RECIPES.proxy())
+    eris.settings("forin", "refuse")
+    local okp, err = pcall(eris.persist, P, co)
+    assert(not okp, "persist succeeded under refuse")
+    local want = diag_expected(DIAG_SHAPES.wrap)
+    assert(tostring(err):find(want, 1, true),
+           "the error does not carry the message:\n     " .. tostring(err))
+    assert(next(drain()) == nil, "refuse also queued the message")
+    eris.settings("forin", "ignore")
+    assert(#eris.persist(P, co) > 0, "still not persistable under ignore")
+    return tostring(err)
+  end)
+
+  case("4-identity", function()
+    local ref = os.getenv("ELJ_REF")
+    assert(ref and ref ~= "", "ELJ_REF (the reference blob) is not set")
+    local rbody, rfmt = diag_body(read_file(ref))
+    -- Runnable on the reference writer too, which does not know the setting:
+    -- there it is the instrument's own cross-process determinism check.
+    local oks, m = pcall(eris.settings, "forin")
+    assert(not oks or m == "ignore", "not in the default mode")
+    local P, coA = diag_identity()
+    local _, coB = diag_identity()              -- a second chunk: another address
+    local bodyA, fmt = diag_body(eris.persist(P, coA))
+    local bodyB = diag_body(eris.persist(P, coB))
+    local lo, hi = diag_link_window(bodyA, bodyB)
+    local function masked(b)
+      if not lo then return b end
+      return b:sub(1, lo - 1) .. string.rep("\0", hi - lo + 1) .. b:sub(hi + 1)
+    end
+    assert(fmt == rfmt, string.format("format byte %d vs reference %d", fmt, rfmt))
+    local a, r = masked(bodyA), masked(rbody)
+    if a ~= r then
+      local at = math.min(#a, #r) + 1
+      for i = 1, math.min(#a, #r) do
+        if a:byte(i) ~= r:byte(i) then at = i; break end
+      end
+      error(string.format("body differs from the reference at byte %d (lengths %d vs %d)",
+                          at, #a, #r))
+    end
+    return string.format("%d body bytes identical to %s outside the frame-link payload at %s (format %d)",
+                         #bodyA, ref, lo and (lo .. ".." .. hi) or "none", fmt)
+  end)
+
+  case("4b-default-quiet-warn-same-bytes", function()
+    local P, co = diag_identity()
+    local blob0 = eris.persist(P, co)                 -- the default: ignore
+    assert(next(drain()) == nil, "the default mode queued a diagnostic")
+    eris.settings("forin", "warn")
+    local blob1 = eris.persist(P, co)
+    local d = drain()
+    assert(#d == 1, "warn named " .. #d .. " loops")
+    assert(blob0 == blob1, "warn mode changed the bytes")
+    return "ignore queues nothing; warn queues 1 and writes the identical blob"
+  end)
+
+  io.write(string.format("DIAG %d case(s) failed\n", nfail))
+  return nfail
+end
+
 -------------------------------------------------------------------- save ---
 
 if mode == "save" then

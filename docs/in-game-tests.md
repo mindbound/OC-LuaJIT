@@ -144,3 +144,60 @@ yielding` — the same screen stock OC shows — and rebooted normally afterward
 Log: no `Kernel crashed` line. Harness equivalent: `OCLJ_PROBE=grace`
 — `k6` FAIL on the 11-site kernel (kernel panic, 5411 ms), PASS on stock (5415 ms)
 and on the 12-site kernel 4/4 (5402–5421 ms).
+
+## T5 — a program re-run many times stays compiled (the penalty-cache cure)
+
+Shape: LuaJIT's trace-abort penalty cache is keyed by bytecode address and was
+never scrubbed when a prototype died; on our CRT heap a re-loaded program
+inherits the dead one's abort history and is blacklisted to the interpreter
+around its 9th run. Before 2026-09-22 the per-save trace flush reset it once per
+autosave, so the symptom needed ~9 runs between two saves; now the cure is in the
+native (`lj_func_freeproto` scrubs the slots) and the flush is gone.
+
+**Requires the new natives** (the jar built from this change, serializer hash
+`8c5a1168`; the mod refuses to load a stale one).
+
+Write `/home/bench.lua` (any compute loop with an inner loop that exits early is
+the shape; this one is `bench/oc/mandelbrot.lua`'s):
+```lua
+local t0 = os.clock()
+local n, sum = 300, 0
+for py = 0, n - 1 do for px = 0, n - 1 do
+  local zr, zi, cr, ci, it = 0, 0, 2 * px / n - 1.5, 2 * py / n - 1, 0
+  while it < 50 and zr * zr + zi * zi <= 4 do zr, zi, it = zr * zr - zi * zi + cr, 2 * zr * zi + ci, it + 1 end
+  sum = sum + it
+end end
+print(string.format("%d %.3f s", sum, os.clock() - t0))
+```
+Then at the shell, run it fifteen times in a row:
+```
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do bench; done
+```
+(OpenOS `sh` has no `for`; use `lua -e 'for i = 1, 15 do dofile("/home/bench.lua") end'` — each `dofile` is a fresh load, which is the shape that matters.)
+
+Signals: every run prints the same checksum and about the same time (the first
+one or two a little slower while the JIT warms). The old failure is a jump to
+~5–8x the time from around the 9th run that never recovers, with the checksum
+unchanged. Harness equivalent: `test/native/run-penalty.sh` (unpatched lib:
+first blacklist at run 11, 5.97x; patched: 40/40 clean).
+
+**Result: pending.**
+
+## T6 — the for-in diagnostic names an OS-authored `next` wrapper (opt-in)
+
+Shape: OpenOS's `boot/04_component.lua` installs a `__pairs` on the `component`
+library that is a Lua closure over `next`; a save landing inside
+`for k in pairs(component)` cannot be replayed, and with
+`-Docluajit.forin=warn` the mod says so in the server log, once per machine.
+
+Add `-Docluajit.forin=warn` to the instance's JVM arguments, launch, then at `lua>`:
+```lua
+for k in pairs(require("component")) do os.sleep(1) end
+```
+While it runs, save (Save & Quit is enough; the diagnostic is emitted by the
+save itself). Signal: one line in the log of the form `OC-LuaJIT computer <addr>
+(for-in diagnostic, -Docluajit.forin=warn): for-in loop at <chunk>:<line>
+iterates with a Lua closure (boot/04_component.lua:18) that calls next; ...`.
+Without the property, no line. Harness equivalent: `dg-1`.
+
+**Result: pending.**

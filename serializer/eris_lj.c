@@ -67,6 +67,7 @@
 #include "lj_vm.h"
 #include "lj_bc.h"
 #include "lj_tab.h"
+#include "lj_debug.h"
 #include "lj_trace.h"
 
 #include "eris_lj.h"
@@ -211,7 +212,7 @@ typedef struct {
   RThread *rthreads;          /* unpersist: threads still being restored */
   int level, maxrec;
   int wdebug;                 /* keep debug info in dumps ('debug' setting) */
-  int flushed;                /* JIT traces already flushed for this call */
+  int forin_mode;             /* 'forin' setting: 0 ignore, 1 warn, 2 refuse */
 } Info;
 
 /* ----------------------------------------------------------------- crc32 */
@@ -894,6 +895,22 @@ typedef struct {
                        * restored once and is being persisted again */
 } ForinRec;
 
+/* One for-in loop the replay CANNOT reach: its iterator is a Lua closure that
+ * itself calls `next`, so the traversal position lives in that closure's
+ * upvalues, not in the control slot the replay rewrites. Nothing is done about
+ * it -- it is not soundly distinguishable from a custom iterator with its own
+ * ordering -- but under the 'forin' setting it is NAMED, with both locations
+ * the author needs. Stack OFFSETS again, for the same reason as ForinRec: the
+ * message is only formatted after the scan, and formatting allocates. */
+typedef struct {
+  ptrdiff_t ctl;      /* stack slot of the control var; the func is at ctl-2 */
+  ptrdiff_t frame;    /* stack slot of the enclosing frame's function */
+  uint32_t pc;        /* the frame's current position, or 0 if unknown */
+  uint32_t pos;       /* bcofs of the loop head */
+} ForinDiag;
+
+static void push_diagnostics(lua_State *L);
+
 /* Current bytecode offset of the frame BELOW `above`, recovered the way
  * lj_debug.c's debug_framepc does it: a Lua or continuation frame stores the
  * pc it will return to, which IS its caller's current position. The third
@@ -913,6 +930,38 @@ static uint32_t elj_frame_pc(GCproto *pt, TValue *above)
   return (uint32_t)(ins - bc) - 1;      /* the call, not the return address */
 }
 
+/* The instruction at `pos` of `pt` as the parser wrote it. A root trace
+ * patches its starting instruction IN PLACE: trace_stop turns a loop head into
+ * BC_JLOOP (an ITERN start, with a slot count in A), BC_JITERL or BC_JFORL,
+ * each carrying the TRACE NUMBER in D and nothing readable in A or J. The
+ * original is kept in GCtrace.startins, with GCtrace.startpc naming the slot
+ * it came from, and lj_bcwrite.c reads through exactly this way when it dumps
+ * a prototype. So does this, which is what lets persist() locate a for-in loop
+ * under a live trace without flushing the JIT.
+ *
+ * The three checks are the trace's own invariants (trace_unpatch asserts the
+ * same ownership). A slot that claims a trace it cannot name is an ERROR,
+ * never a loop passed over: a for-in loop the scan silently misses is the
+ * corruption class this serializer refuses everywhere else. */
+static BCIns elj_bc_orig(lua_State *L, GCproto *pt, uint32_t pos)
+{
+  BCIns ins = proto_bc(pt)[pos];
+  BCOp op = bc_op(ins);
+  if (op == BC_JFORL || op == BC_JITERL || op == BC_JLOOP) {
+#if LJ_HASJIT
+    jit_State *J = L2J(L);
+    uint32_t tn = bc_d(ins);
+    GCtrace *T = (tn > 0 && tn < J->sizetrace) ? traceref(J, tn) : NULL;
+    if (T == NULL || mref(T->startpc, BCIns) != proto_bc(pt) + pos)
+      luaL_error(L, "eris-lj: compiled loop head at %d has no trace", (int)pos);
+    return T->startins;
+#else
+    luaL_error(L, "eris-lj: compiled loop head at %d has no trace", (int)pos);
+#endif
+  }
+  return ins;
+}
+
 /* Extent of the loop body belonging to the loop head at `pos`. The generic-for
  * layout is
  *      ISNEXT/JMP base -> loop        (at body-1)
@@ -920,16 +969,18 @@ static uint32_t elj_frame_pc(GCproto *pt, TValue *above)
  *   loop: ITERN/ITERC base, ...
  *         ITERL base -> body
  * so the body is [ITERL target, pos). Returns 0 when the extent cannot be
- * read: BC_JITERL's D field is a trace number rather than a jump offset, so a
- * traced loop must not be guessed at (which is why persist flushes first). */
-static int elj_loop_body(GCproto *pt, uint32_t pos, uint32_t *body)
+ * read. The ITERL is read through elj_bc_orig: a loop over the real `next`
+ * that the JIT compiled starts its trace AT the ITERL, which is then a
+ * BC_JITERL whose D field is a trace number rather than a jump offset. */
+static int elj_loop_body(lua_State *L, GCproto *pt, uint32_t pos, uint32_t *body)
 {
-  const BCIns *bc = proto_bc(pt);
+  BCIns iterl;
   ptrdiff_t b;
   if (pos + 1 >= pt->sizebc) return 0;
-  if (bc_op(bc[pos + 1]) != BC_ITERL && bc_op(bc[pos + 1]) != BC_IITERL)
+  iterl = elj_bc_orig(L, pt, pos + 1);
+  if (bc_op(iterl) != BC_ITERL && bc_op(iterl) != BC_IITERL)
     return 0;
-  b = (ptrdiff_t)pos + 2 + bc_j(bc[pos + 1]);
+  b = (ptrdiff_t)pos + 2 + bc_j(iterl);
   if (b < 1 || b > (ptrdiff_t)pos) return 0;
   *body = (uint32_t)b;
   return 1;
@@ -960,9 +1011,57 @@ static int elj_loop_body(GCproto *pt, uint32_t pos, uint32_t *body)
  * With recs == NULL this only returns an upper bound on the number of records
  * -- every loop head in every Lua frame -- so the caller can size the array
  * before anything is allocated. That counting walk touches no Lua object and
- * so cannot move the stack under the detection walk that follows. */
+ * so cannot move the stack under the detection walk that follows.
+ *
+ * The real pass additionally NAMES the loops it cannot replay when `diags` is
+ * non-NULL (the 'forin' setting is "warn" or "refuse"): a Lua-closure iterator
+ * that reaches `next` -- see elj_reaches_next -- is recorded, at most once per
+ * control slot, in `diags` (sized `cap` like recs, since each loop head yields
+ * at most one). The message is formatted afterwards by elj_forin_diagnose,
+ * because this pass must stay allocation-free. */
+
+/* Does this Lua closure reach `next`? Three shapes, all read-only:
+ *  (a) its prototype does a global lookup of "next" (BC_GGET on that string
+ *      constant) -- OC's old component.list and componentProxy.__pairs, the
+ *      OpenOS component library's __pairs, QuickOS's lua_shell;
+ *  (b) one of its upvalues holds the `next` fast function (`local next = next`);
+ *  (c) one of its function-valued upvalues is a Lua closure that satisfies (a)
+ *      or (b), one level down and no further.
+ * A heuristic by design: an iterator that calls `next` on some OTHER table is
+ * a false positive, which is acceptable for an opt-in warning and is why this
+ * only names the loop rather than rewriting it. */
+static int elj_reaches_next(GCfunc *fn, int depth)
+{
+  GCproto *pt = funcproto(fn);
+  const BCIns *bc = proto_bc(pt);
+  uint32_t i;
+  for (i = 1; i < pt->sizebc; i++) {
+    if (bc_op(bc[i]) == BC_GGET) {
+      /* The D operand of a GGET indexes the GC constants from the top down,
+       * exactly as fs_fixup_k stored it: kgc[~D]. */
+      GCobj *o = proto_kgc(pt, ~(ptrdiff_t)bc_d(bc[i]));
+      if (o->gch.gct == ~LJ_TSTR && gco2str(o)->len == 4 &&
+          memcmp(strdata(gco2str(o)), "next", 4) == 0)
+        return 1;
+    }
+  }
+  for (i = 0; i < fn->l.nupvalues; i++) {
+    TValue *uv = uvval(&gcref(fn->l.uvptr[i])->uv);
+    if (tvisfunc(uv)) {
+      GCfunc *f = funcV(uv);
+      if (!isluafunc(f)) {
+        if (f->c.ffid == FF_next_N) return 1;
+      } else if (depth > 0 && elj_reaches_next(f, depth - 1)) {
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
 static uint32_t elj_forin_scan(Info *I, lua_State *co, uint64_t top_ofs,
-                               ForinRec *recs, uint32_t cap)
+                               ForinRec *recs, uint32_t cap,
+                               ForinDiag *diags, uint32_t *ndiag)
 {
   lua_State *L = I->L;
   TValue *stack = tvref(co->stack);
@@ -982,21 +1081,22 @@ static uint32_t elj_forin_scan(Info *I, lua_State *co, uint64_t top_ofs,
     above_varg = frame_isvarg(f);
     if (!pseudo && tvisfunc(f - 1) && isluafunc(funcV(f - 1))) {
       GCproto *pt = funcproto(funcV(f - 1));
-      const BCIns *bc = proto_bc(pt);
       ptrdiff_t base_ofs = (f + 1) - stack;
       uint32_t pc = elj_frame_pc(pt, above);
       uint32_t pos;
       for (pos = 1; pos + 1 < pt->sizebc; pos++) {
-        BCOp op = bc_op(bc[pos]);
+        /* Every bytecode read goes through elj_bc_orig: a loop head the JIT
+         * compiled is a BC_JLOOP in the prototype, and its ITERN is only
+         * recoverable from the trace. Neither pass flushes anything. */
+        BCIns head = elj_bc_orig(L, pt, pos);
+        BCOp op = bc_op(head);
         uint32_t ra, body, idx, j;
         ptrdiff_t ctl_ofs;
         TValue *fn, *st, *ctl;
         int inbody, recs_replay = 0;
         if (recs == NULL) {
-          /* Capacity bound only -- and this pass runs BEFORE the trace flush,
-           * so a compiled loop head still reads as BC_JLOOP. Counting that too
-           * is what makes a hot loop force the flush that reveals it. */
-          if (op == BC_ITERN || op == BC_ITERC || op == BC_JLOOP) n++;
+          /* Capacity bound only. */
+          if (op == BC_ITERN || op == BC_ITERC) n++;
           continue;
         }
         if (op != BC_ITERN && op != BC_ITERC) continue;
@@ -1004,7 +1104,7 @@ static uint32_t elj_forin_scan(Info *I, lua_State *co, uint64_t top_ofs,
          * blacklist_pc despecialises a RUNNING loop and leaves its
          * LJ_KEYINDEX control value in place (lj_tab_keyindex has a branch
          * for exactly that), so an ITERC head can carry either form. */
-        ra = bc_a(bc[pos]);
+        ra = bc_a(head);
         if (ra < 3 || (uint32_t)(ra - 1) >= pt->framesize) continue;
         ctl_ofs = base_ofs + (ptrdiff_t)ra - 1;
         if (ctl_ofs < (ptrdiff_t)(3 + LJ_FR2) ||
@@ -1014,12 +1114,33 @@ static uint32_t elj_forin_scan(Info *I, lua_State *co, uint64_t top_ofs,
          * a Lua function that yields, the frame's position sits exactly on
          * the ITERC while the hidden triple is still live. */
         inbody = -1;
-        if (pc != 0 && elj_loop_body(pt, pos, &body))
+        if (pc != 0 && elj_loop_body(L, pt, pos, &body))
           inbody = (pc >= body && pc <= pos);
         if (inbody == 0) continue;
         fn = stack + ctl_ofs - 2;
         st = stack + ctl_ofs - 1;
         ctl = stack + ctl_ofs;
+        /* The #9 diagnostic (docs/forin-iterator-gap.md), BEFORE the state
+         * slot is tested: an iterator that carries its table in an upvalue
+         * (`for k in myiter(t)`, or a __pairs closure over `self`) leaves the
+         * state slot nil and is the same hazard. Neither the real `next`
+         * (replayed) nor the replay iterator is a Lua closure, so neither can
+         * get here; a closure that never reaches `next` -- the snapshot-array
+         * walkers of kernel sites 10-11 -- is exactly what must not be named.
+         * Deduped by control slot like the records, for the same reason. */
+        if (diags != NULL && tvisfunc(fn) && isluafunc(funcV(fn)) &&
+            elj_reaches_next(funcV(fn), 1)) {
+          for (j = 0; j < *ndiag; j++) if (diags[j].ctl == ctl_ofs) break;
+          if (j == *ndiag) {
+            if (*ndiag >= cap)
+              luaL_error(L, "eris-lj: too many for-in loops in one thread");
+            diags[*ndiag].ctl = ctl_ofs;
+            diags[*ndiag].frame = (f - 1) - stack;
+            diags[*ndiag].pc = pc;
+            diags[*ndiag].pos = pos;
+            (*ndiag)++;
+          }
+        }
         if (!tvistab(st)) continue;
         if (ctl->u32.hi == LJ_KEYINDEX) {
           /* The specialised form, and unambiguous: only BC_ISNEXT ever writes
@@ -1082,6 +1203,57 @@ static uint32_t elj_forin_scan(Info *I, lua_State *co, uint64_t top_ofs,
     f = nextf;
   }
   return n;
+}
+
+/* Name every loop the scan flagged. Both locations, because the author needs
+ * both: the loop (the enclosing frame's chunkname and CURRENT line, from the
+ * frame pc; the loop head's own line when the position is unknown) and the
+ * iterator closure (chunkname:linedefined). Under "warn" the message joins
+ * the registry-held list that eris.diagnostics() drains; under "refuse" the
+ * first one is raised as persist's error. The default, "ignore", never gets
+ * here, and the wire is untouched in every mode.
+ *
+ * Formatting allocates, so the stack is re-derived per message and each slot
+ * is re-classified rather than trusted: a GC step can run a finalizer that
+ * reaches this thread's slots through debug.setlocal, exactly as the replay
+ * loop below guards against. A loop that is no longer there is not named. */
+static void elj_forin_diagnose(Info *I, lua_State *co,
+                               const ForinDiag *d, uint32_t n)
+{
+  lua_State *L = I->L;
+  uint32_t k;
+  int listidx = 0;
+  for (k = 0; k < n; k++) {
+    TValue *stack = tvref(co->stack);
+    TValue *fnv = stack + d[k].ctl - 2;
+    TValue *frv = stack + d[k].frame;
+    GCproto *ipt, *fpt;
+    char loopsrc[LUA_IDSIZE], itersrc[LUA_IDSIZE];
+    BCLine loopline;
+    if (!(tvisfunc(fnv) && isluafunc(funcV(fnv)) &&
+          tvisfunc(frv) && isluafunc(funcV(frv))))
+      continue;
+    ipt = funcproto(funcV(fnv));
+    fpt = funcproto(funcV(frv));
+    lj_debug_shortname(loopsrc, proto_chunkname(fpt), fpt->firstline);
+    lj_debug_shortname(itersrc, proto_chunkname(ipt), ipt->firstline);
+    loopline = lj_debug_line(fpt, d[k].pc != 0 ? d[k].pc : d[k].pos);
+    lua_pushfstring(L, "for-in loop at %s:%d iterates with a Lua closure "
+                       "(%s:%d) that calls next; its position is not "
+                       "replayable and resumes against a different hash "
+                       "layout after a reload -- return next, t, nil from "
+                       "the iterator, or walk a snapshot array by index",
+                    loopsrc, (int)loopline, itersrc, (int)ipt->firstline);
+    if (I->forin_mode >= 2)
+      luaL_error(L, "eris-lj: %s", lua_tostring(L, -1));
+    if (!listidx) {
+      push_diagnostics(L);              /* ... msg list */
+      lua_insert(L, -2);                /* ... list msg */
+      listidx = lua_gettop(L) - 1;
+    }
+    lua_rawseti(L, listidx, (int)lua_objlen(L, listidx) + 1);
+  }
+  if (listidx) lua_pop(L, 1);
 }
 
 /* Despecialise one generic-for loop head, exactly as blacklist_pc does.
@@ -1226,34 +1398,35 @@ static void p_thread(Info *I)  /* ... co */
    * triple is substituted on the wire only, so persist() stays observationally
    * pure and the saving program keeps iterating exactly as it was. */
   {
-    /* The counting pass is allocation-free and reads no operands, so it is
-     * safe before the flush. It exists to answer one question: is there a
-     * loop here at all? */
-    uint32_t cap = elj_forin_scan(I, co, (uint64_t)top_ofs, NULL, 0);
-    if (cap && !I->flushed) {
-      /* Locating a for-in loop means reading its prototype's bytecode, and a
-       * compiled trace overwrites the very instruction we look for: trace_stop
-       * replaces the loop head with BC_JLOOP, whose A operand is a slot count
-       * rather than the loop base, and turns the following ITERL into a JITERL
-       * whose D field is a trace number. Flushing unpatches every one of them.
-       *
-       * Gated on there being a loop, because the flush is not free and not
-       * always available: it discards every compiled trace in the VM, and it
-       * REFUSES while a GC hook is active. Persisting a coroutine with no
-       * generic-for loop -- or a dead one, for which the scan returns 0 at its
-       * first line -- therefore neither resets the host's JIT nor fails from
-       * inside a __gc finalizer. */
-      I->flushed = 1;
-      if (lj_trace_flushall(L))
-        luaL_error(L, "eris-lj: cannot persist a thread suspended in a for-in "
-                      "loop from inside a GC hook (traces cannot be flushed)");
-    }
+    /* The counting pass is allocation-free and touches no Lua object. It
+     * exists to answer one question: is there a loop here at all?
+     *
+     * Nothing here flushes the JIT. Locating a loop means reading its
+     * prototype's bytecode, and a compiled trace overwrites the very
+     * instruction we look for -- but the original is kept in the trace, and
+     * both passes read it through elj_bc_orig. Persisting therefore has no
+     * JIT side effect at all: the host keeps every compiled trace, and a save
+     * from inside a __gc finalizer (where lj_trace_flushall refuses) is no
+     * different from any other. The RESTORE side still flushes, because it
+     * rewrites bytecode (elj_despecialise) that a live trace would keep
+     * running the old way; that is one-time, into a VM that is cold anyway. */
+    uint32_t cap = elj_forin_scan(I, co, (uint64_t)top_ofs, NULL, 0,
+                                  NULL, NULL);
     if (cap) {
+      ForinDiag *diags = NULL;
+      uint32_t ndiag = 0;
       recs = (ForinRec *)lua_newuserdata(L, (size_t)cap * sizeof(ForinRec));
       memset(recs, 0, (size_t)cap * sizeof(ForinRec));
+      if (I->forin_mode != 0) {
+        /* Only when asked: the default mode does not even look. */
+        diags = (ForinDiag *)lua_newuserdata(L, (size_t)cap * sizeof(ForinDiag));
+        memset(diags, 0, (size_t)cap * sizeof(ForinDiag));
+      }
       lua_newtable(L);
       statesidx = lua_gettop(L);
-      nrep = elj_forin_scan(I, co, (uint64_t)top_ofs, recs, cap);
+      nrep = elj_forin_scan(I, co, (uint64_t)top_ofs, recs, cap,
+                            diags, &ndiag);
+      if (ndiag) elj_forin_diagnose(I, co, diags, ndiag);
       for (k = 0; k < nrep; k++) {
         TValue *fnv, *stv, *ctlv;
         /* Re-derive the stack each time: building a replay state allocates,
@@ -1527,7 +1700,15 @@ static void persist_typed(Info *I, int type)  /* ... obj */
       p_function(I);
       break;
     case LUA_TUSERDATA:
-      luaL_error(I->L, "eris-lj: cannot persist userdata yet (M3)");
+      /* Never by value: its payload is host memory this serializer cannot
+       * read back. The two routes are the permanents table, and a TABLE
+       * proxy whose metatable carries the spkey function (p_table honours
+       * it; a raw userdata gets no such chance), which is how OC's
+       * machine.lua presents every userdata to the serializer. */
+      luaL_error(I->L, "eris-lj: cannot persist userdata by value; put it "
+                       "in the perms table, or reach it only through a table "
+                       "whose metatable has a '%s' function (as OC's "
+                       "machine.lua does)", lua_tostring(I->L, SPKIDX));
       break;
     case LUA_TTHREAD: p_thread(I); break;
     default:
@@ -2743,7 +2924,14 @@ static void unpersist(Info *I)
 static const char SETTINGS_KEY = 0;
 
 static const char *const setting_names[] =
-  { "spkey", "path", "maxrec", "debug", "spio", NULL };
+  { "spkey", "path", "maxrec", "debug", "spio", "forin", NULL };
+
+/* 'forin': what persist() does about a for-in loop it cannot replay (a Lua
+ * closure iterator that reaches `next`; docs/forin-iterator-gap.md, "The #9
+ * diagnostic"). "ignore" is the player default and changes nothing; "warn"
+ * queues a message for eris.diagnostics(); "refuse" raises it. The index in
+ * this list is Info.forin_mode. */
+static const char *const forin_modes[] = { "ignore", "warn", "refuse", NULL };
 
 static void push_default(lua_State *L, int opt)
 {
@@ -2752,8 +2940,38 @@ static void push_default(lua_State *L, int opt)
     case 1: lua_pushboolean(L, 0); break;                /* path */
     case 2: lua_pushinteger(L, ERIS_LJ_MAXREC_DEFAULT); break;
     case 3: lua_pushboolean(L, 1); break;                /* debug */
-    default: lua_pushboolean(L, 0); break;               /* spio */
+    case 4: lua_pushboolean(L, 0); break;                /* spio */
+    default: lua_pushliteral(L, "ignore"); break;        /* forin */
   }
+}
+
+/* The pending for-in diagnostics, beside the settings in the registry (so
+ * per-VM, like them), created on first use. */
+static const char DIAG_KEY = 0;
+
+static void push_diagnostics(lua_State *L)
+{
+  lua_pushlightuserdata(L, (void *)&DIAG_KEY);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  if (!lua_istable(L, -1)) {
+    lua_pop(L, 1);
+    lua_newtable(L);
+    lua_pushlightuserdata(L, (void *)&DIAG_KEY);
+    lua_pushvalue(L, -2);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+  }
+}
+
+/* eris.diagnostics() -> the pending messages as an array (empty when there
+ * are none), and the list is cleared: the table handed back IS the list, and
+ * the registry forgets it, so the next persist starts a fresh one. */
+static int l_diagnostics(lua_State *L)
+{
+  push_diagnostics(L);
+  lua_pushlightuserdata(L, (void *)&DIAG_KEY);
+  lua_pushnil(L);
+  lua_rawset(L, LUA_REGISTRYINDEX);
+  return 1;
 }
 
 static void push_settings(lua_State *L)
@@ -2790,6 +3008,7 @@ static int l_settings(lua_State *L)
         if (lua_toboolean(L, 2))
           return luaL_error(L, "eris-lj: the 'spio' setting is not supported");
         break;
+      case 5: luaL_checkoption(L, 2, NULL, forin_modes); break;
       default: break;  /* booleans: any value, truthiness is what counts */
     }
   }
@@ -2827,6 +3046,15 @@ static void load_settings(lua_State *L, Info *I)
   lua_pop(L, 1);
   lua_getfield(L, -1, "debug");
   I->wdebug = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  lua_getfield(L, -1, "forin");
+  I->forin_mode = 0;
+  if (lua_type(L, -1) == LUA_TSTRING) {
+    const char *m = lua_tostring(L, -1);
+    int i;
+    for (i = 0; forin_modes[i]; i++)
+      if (strcmp(m, forin_modes[i]) == 0) I->forin_mode = i;
+  }
   lua_pop(L, 1);
   lua_getfield(L, -1, "spkey");         /* ... settings spkey */
   lua_remove(L, -2);                    /* ... spkey */
@@ -2975,6 +3203,7 @@ static const luaL_Reg eris_lj_funcs[] = {
   { "persist",   l_persist },
   { "unpersist", l_unpersist },
   { "settings",  l_settings },
+  { "diagnostics", l_diagnostics },
   { "version",   l_version },
   { NULL, NULL }
 };
