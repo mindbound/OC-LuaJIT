@@ -169,11 +169,23 @@ for py = 0, n - 1 do for px = 0, n - 1 do
 end end
 print(string.format("%d %.3f s", sum, os.clock() - t0))
 ```
-Then at the shell, run it fifteen times in a row:
+Then run it fifteen times. Two things shape how: OpenOS's `lua` takes only a
+file path (no `-e`), its `sh` has no `for`, `collectgarbage` is not in the
+sandbox, and the kernel runs a full GC every 10 sandbox resumes
+(`machine.lua:1527`) — that GC is what frees the dead prototype so the next
+load can land at the same address, and it only happens between resumes.
+
+A, from the shell (the shape that bit): at `/home #` type `bench` fifteen
+times (PATH includes `.`, so it resolves to `./bench.lua`; ↑ + Enter repeats).
+Each invocation is a fresh `load` with its own resumes.
+
+B, one REPL line: `lua`, then
+```lua
+for i = 1, 15 do dofile("/home/bench.lua") os.sleep(0.5) end
 ```
-for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do bench; done
-```
-(OpenOS `sh` has no `for`; use `lua -e 'for i = 1, 15 do dofile("/home/bench.lua") end'` — each `dofile` is a fresh load, which is the shape that matters.)
+`dofile` loads fresh each time and the `os.sleep` yields so the kernel's GC can
+run between runs; without the sleep the loop is one resume, the dead
+prototypes are not collected in time, and the test is vacuous on both natives.
 
 Signals: every run prints the same checksum and about the same time (the first
 one or two a little slower while the JIT warms). The old failure is a jump to
