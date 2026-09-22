@@ -193,7 +193,14 @@ one or two a little slower while the JIT warms). The old failure is a jump to
 unchanged. Harness equivalent: `test/native/run-penalty.sh` (unpatched lib:
 first blacklist at run 11, 5.97x; patched: 40/40 clean).
 
-**Result: pending.**
+**Result: PASS, 2026-09-22, the native-bump jar (serializer hash `8c5a1168`).**
+Both forms, 15 runs each: checksum `2196322` every time, 0.005–0.008 s per run
+with no trend (A from the shell: 0.006/0.007/0.006/0.006/0.006/0.006/0.006/
+0.006/0.006/0.006/0.006/0.007/0.007/0.005/0.007; B in the REPL with the
+`os.sleep`: 0.007/0.006/0.007/0.006/0.006/0.006/0.007/0.007/0.008/0.007/0.006/
+0.006/0.006/0.006/0.007). 6 ms for ~2.2 M inner iterations is compiled speed —
+an interpreted run of this shape is about ten times that — so every re-load
+stayed on the JIT.
 
 ## T6 — the for-in diagnostic names an OS-authored `next` wrapper (opt-in)
 
@@ -212,4 +219,11 @@ save itself). Signal: one line in the log of the form `OC-LuaJIT computer <addr>
 iterates with a Lua closure (boot/04_component.lua:18) that calls next; ...`.
 Without the property, no line. Harness equivalent: `dg-1`.
 
-**Result: pending.**
+**Result: PASS, 2026-09-22, the native-bump jar with `-Docluajit.forin=warn`.**
+The server log carried exactly one line: `[Server thread/WARN] [ocluajit]:
+Computer 1bac88a3-... @ (-353.500, 4.50000, 1137.50, 0) (for-in diagnostic,
+-Docluajit.forin=warn): for-in loop at stdin:1 iterates with a Lua closure
+(boot/04_component.lua:18) that calls next; its position is not replayable and
+resumes against a different hash layout after a reload -- return next, t, nil
+from the iterator, or walk a snapshot array by index`. `stdin:1` is the REPL
+line's chunk name; `boot/04_component.lua:18` is OpenOS's `__pairs` closure.
