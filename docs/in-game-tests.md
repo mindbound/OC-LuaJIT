@@ -137,7 +137,10 @@ A screen reading `kernel panic: this is a bug ...` is the old failure, and the
 log then carries `Kernel crashed. This is a bug!`. Either way the computer is
 stopped; sneak-right-click restarts it. Log check: no `Kernel crashed` line.
 
-**Result: pending.** Jar to use: the one built from this change (kernel 51952 B,
-12 sites; natives unchanged, DLL `49ead6cc`). Harness equivalent: `OCLJ_PROBE=grace`
+**Result: PASS, 2026-09-22, jar built from the site-12 change** (kernel 51952 B,
+12 sites; natives unchanged, DLL `49ead6cc`). The REPL line ran, the computer
+stopped on the blue *Unrecoverable Error* screen reading `too long without
+yielding` — the same screen stock OC shows — and rebooted normally afterwards.
+Log: no `Kernel crashed` line. Harness equivalent: `OCLJ_PROBE=grace`
 — `k6` FAIL on the 11-site kernel (kernel panic, 5411 ms), PASS on stock (5415 ms)
 and on the 12-site kernel 4/4 (5402–5421 ms).
