@@ -9,8 +9,9 @@ fix; each is run once after the fix ships and recorded here with its result.
 ## Before every test
 
 1. **Install the jar**: replace the previous `ocluajit-*.jar` in
-   `D:/Minecraft/instances/Main/minecraft/mods/` with the one from
-   `build/libs/` (the non-`-dev` one). One jar at a time.
+   `C:/Games/Minecraft/instances/Main/minecraft/mods/` (a Prism instance; it
+   lived under `D:/Minecraft/...` before the 2026-09-29 machine migration) with
+   the one from `build/libs/` (the non-`-dev` one). One jar at a time.
 2. Launch, load the OC experiment save, open the computer.
 3. **Power-cycle the computer** (shut it down, then start it) **before the
    test.** A machine restored from a save runs the kernel it was *saved* with —
@@ -23,7 +24,7 @@ fix; each is run once after the fix ships and recorded here with its result.
    pause/autosave persists the machine too, but quit-and-reload is the shape
    that proved every defect so far and is what the results below refer to.)
 6. Afterwards, read the client log
-   (`D:/Minecraft/instances/Main/minecraft/logs/latest.log` or `fml-client-latest.log`):
+   (`C:/Games/Minecraft/instances/Main/minecraft/logs/latest.log` or `fml-client-latest.log`):
    - expected: `[ocluajit/ocluajit]: Registered the LuaJIT architecture with
      OpenComputers.` once at startup (the mod prints nothing per save; the
      `bundled roots ON` banner is the harness adapter's);
@@ -227,3 +228,28 @@ Computer 1bac88a3-... @ (-353.500, 4.50000, 1137.50, 0) (for-in diagnostic,
 resumes against a different hash layout after a reload -- return next, t, nil
 from the iterator, or walk a snapshot array by index`. `stdin:1` is the REPL
 line's chunk name; `boot/04_component.lua:18` is OpenOS's `__pairs` closure.
+
+## T7 — the in-game column of the sandbox-tax ladder
+
+Shape: [bench/results-ladder-2026-09-22.md](../bench/results-ladder-2026-09-22.md)
+measured our LuaJIT rung by rung up to the ocelot-brain machine, where the pure
+loops read 1.7–2.1x plain LuaJIT and binarytrees 2.9x. Whether that last rung
+is the sandbox or the harness's own JVM (a poller waking every 25 ms on a busy
+box) is what the in-game numbers decide. This is a measurement, not a pass/fail.
+
+Copy `bench/oc/mandelbrot.lua`, `matmul.lua`, `binarytrees.lua` and
+`ingame-ladder.lua` into the computer's `/home` — an OC hard disk is the
+directory `saves/<world>/opencomputers/<address>/` on the host (the one that
+already holds `home/bench.lua`); do it at the title screen. Then at the shell:
+```
+ingame-ladder
+```
+It prints, per bench, the CHECK and the min of 5 reps (with a yield between
+reps). Expected CHECKs: mandelbrot `37904620`, matmul `481.0000`, binarytrees
+`7038400`. For comparison (min of 5, same files): plain `luajit.exe`
+0.091 / 0.135 / 0.286 s; our binary in a bare C host with the accounting
+allocator 0.094 / 0.160 / 0.564 s; the ocelot-brain machine 0.157 / 0.335 /
+1.833 s. sha256 is left out (compat.lua picks a different bit-op path in the
+sandbox), sieve is quarantined.
+
+**Result: pending.**
