@@ -232,10 +232,16 @@ line's chunk name; `boot/04_component.lua:18` is OpenOS's `__pairs` closure.
 ## T7 — the in-game column of the sandbox-tax ladder
 
 Shape: [bench/results-ladder-2026-09-22.md](../bench/results-ladder-2026-09-22.md)
-measured our LuaJIT rung by rung up to the ocelot-brain machine, where the pure
-loops read 1.7–2.1x plain LuaJIT and binarytrees 2.9x. Whether that last rung
-is the sandbox or the harness's own JVM (a poller waking every 25 ms on a busy
-box) is what the in-game numbers decide. This is a measurement, not a pass/fail.
+measured our LuaJIT rung by rung up to the ocelot-brain machine, where on the
+old, busy box the machine read 1.7–2.1x the capped host on the pure loops and
+2.9x on binarytrees; re-measured on the new machine with the box idle
+([bench/results-ladder-2026-09-29.md](../bench/results-ladder-2026-09-29.md))
+the same rung reads mandelbrot 1.15x, sha256 1.39x, matmul 1.64x and
+binarytrees 1.76x the capped host, which against plain LuaJIT is 1.15 / 1.39 /
+2.0 / 3.7x. Whether what remains is the sandbox or the harness's own JVM
+(a poller waking every 25 ms beside the machine) is what the in-game numbers
+decide, and Minecraft now runs on the same box as the rungs, so the column is
+directly comparable. This is a measurement, not a pass/fail.
 
 Copy `bench/oc/mandelbrot.lua`, `matmul.lua`, `binarytrees.lua` and
 `ingame-ladder.lua` into the computer's `/home` — an OC hard disk is the
@@ -246,10 +252,12 @@ ingame-ladder
 ```
 It prints, per bench, the CHECK and the min of 5 reps (with a yield between
 reps). Expected CHECKs: mandelbrot `37904620`, matmul `481.0000`, binarytrees
-`7038400`. For comparison (min of 5, same files): plain `luajit.exe`
-0.091 / 0.135 / 0.286 s; our binary in a bare C host with the accounting
-allocator 0.094 / 0.160 / 0.564 s; the ocelot-brain machine 0.157 / 0.335 /
-1.833 s. sha256 is left out (compat.lua picks a different bit-op path in the
-sandbox), sieve is quarantined.
+`7038400`. For comparison on this box (2026-09-29, min of 5, same files,
+mandelbrot / matmul / binarytrees): plain `luajit.exe` 0.065 / 0.080 / 0.192 s;
+our binary in a bare C host with the accounting allocator 0.065 / 0.097 /
+0.409 s; the ocelot-brain machine 0.075 / 0.161 / 0.715 s. (The old box read
+0.091 / 0.135 / 0.286, 0.094 / 0.160 / 0.564 and 0.157 / 0.335 / 1.833.)
+sha256 is left out (compat.lua picks a different bit-op path in the sandbox),
+sieve is quarantined.
 
 **Result: pending.**

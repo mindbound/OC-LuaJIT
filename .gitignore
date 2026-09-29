@@ -71,3 +71,4 @@ __pycache__/
 # serializer test byproducts: run-forin.sh / forin.lua write these into the cwd
 serializer/*.blob
 serializer/*.keys
+.claude/settings.local.json

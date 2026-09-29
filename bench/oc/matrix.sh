@@ -146,7 +146,7 @@ run() {                        # run <cell> <bench> <rep> <reps>
     printf '%-22s %3ss  MISATTRIBUTED kernel=%s want=%s bench=%s want=%s\n' \
       "$tag" "$el" "$gotk" "$wk" "$gotb" "$bench" >> "$OUT/progress.txt"; return
   fi
-  meter=$(sed -n 's/.*sandbox-bench(min-s\/iters\/reps)=\([0-9.]*\).*/\1/p' "$sl" | head -1)
+  meter=$(sed -n 's/.*sandbox-bench(min-s\/iters\/reps[^)]*)=\([0-9.]*\).*/\1/p' "$sl" | head -1)
   row=$(sed -n 's/.*PHASE1 ROW: .*jit=[a-z]*  //p' "$sl" | head -1)
   died=$(grep -c 'MACHINE STOPPED' "$sl" 2>/dev/null); [ -n "$died" ] || died=0
   f=$(grep -c 'MILESTONE.*FAIL' "$sl" 2>/dev/null); [ -n "$f" ] || f=0

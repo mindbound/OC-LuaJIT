@@ -2264,17 +2264,37 @@ object Smoke {
       |-- JIT PROBE.  A compute-bound loop run from INSIDE the sandbox -- i.e.
       |-- under OC's real deadline hook, with OC's real hookInterval and the real
       |-- checkDeadline doing its work -- timed with the sandbox's own os.clock.
-      |-- Min of three, so a GC pause or a tick boundary cannot inflate it.  The
-      |-- Java side reads this back and pairs it with the trace counter it
-      |-- attached to the raw state; see docs/research/hook-vs-jit.md section 5.
-      |local function work(k) local s = 0 for i = 1, k do s = s + (i % 7) * 2 end return s end
-      |local N = 2000000
-      |local best = math.huge
-      |for r = 1, 3 do
-      |  local t0 = os.clock(); work(N); local dt = os.clock() - t0
-      |  if dt < best then best = dt end
+      |-- Min of up to three, so a GC pause or a tick boundary cannot inflate
+      |-- it; the reps stop once 0.6 s has gone, so under the stock kernel's
+      |-- standing hook (~25x the interpreter) one rep is all the probe takes
+      |-- and the 5 s deadline never comes into it.  The Java side reads this
+      |-- back, pairs it with the trace counter it attached to the raw state,
+      |-- and times THE SAME loop interpreted in the raw state as the reference
+      |-- the k3/k4 bounds are relative to; see docs/research/hook-vs-jit.md
+      |-- section 5 and its 2026-09-29 addendum.
+      |--   The body is four independent accumulator chains: eight bytecodes
+      |-- an iteration that compile to ~4 cycles, so compiled runs ~10x faster
+      |-- than interpreted (0.002 vs 0.020 s per 4M iterations standalone).
+      |-- The earlier `s + (i % 7) * 2` was fmod-bound in both modes and only
+      |-- ~3x apart, which stopped separating them the day a faster CPU moved
+      |-- the interpreter under the old absolute 0.010 s bound.  The sum is
+      |-- exact in a double and is checked, so an arm that did different work
+      |-- cannot report a time.  Keep this body and N identical to the raw-
+      |-- state reference in the Java side's k-milestone read-out.
+      |local function work(k)
+      |  local a, b, c, d = 0, 0, 0, 0
+      |  for i = 1, k do a = a + i b = b + i * 0.5 c = c + i * 0.25 d = d + i * 0.125 end
+      |  return a + b + c + d
       |end
-      |local bench = string.format("OCLJBENCH=%.4f/%d/3", best, N)
+      |local N = 12000000
+      |local best, reps, sum, tAll = math.huge, 0, 0, os.clock()
+      |for r = 1, 3 do
+      |  local t0 = os.clock(); sum = work(N); local dt = os.clock() - t0
+      |  reps = r
+      |  if dt < best then best = dt end
+      |  if os.clock() - tAll > 0.6 then break end
+      |end
+      |local bench = string.format("OCLJBENCH=%.4f/%d/%d/%.0f", best, N, reps, sum)
       |
       |-- DEADLINE PROBE.  Six seconds after autorun starts -- after the Java
       |-- side has finished its boot and counter milestones -- spin forever
@@ -2316,8 +2336,19 @@ object Smoke {
       |  -- races checkDeadline's 0.5 s grace, so roughly 1 run in 6 never
       |  -- reports and k4 tolerates that below.
       |  event.timer(1, function()
-      |    local t0 = os.clock(); work(N)
-      |    bench2 = string.format("OCLJBENCH2=%.4f", os.clock() - t0)
+      |    -- Same shape and fields as OCLJBENCH -- min of up to three reps,
+      |    -- stopping after 0.6 s -- so the Java side reads both with one
+      |    -- accessor and checks the same sum.  A single rep read 1.9-2.3x
+      |    -- the best-of-3 on the same box (the first rep after a wake is the
+      |    -- slow one), which is noise the k4 margin should not have to carry.
+      |    local best2, reps2, sum2, tAll2 = math.huge, 0, 0, os.clock()
+      |    for r = 1, 3 do
+      |      local t0 = os.clock(); sum2 = work(N); local dt = os.clock() - t0
+      |      reps2 = r
+      |      if dt < best2 then best2 = dt end
+      |      if os.clock() - tAll2 > 0.6 then break end
+      |    end
+      |    bench2 = string.format("OCLJBENCH2=%.4f/%d/%d/%.0f", best2, N, reps2, sum2)
       |    -- The suite starts from the callback that finished, the shape OC
       |    -- programs actually use.
       |    event.timer(0.05, function() startSuiteOnce() end)
@@ -3389,32 +3420,71 @@ object Smoke {
     val jitStatus = evalStrLocked(computer.machine, mLua, "return tostring(jit.status())")
     evalStrLocked(computer.machine, mLua, "jit.attach(__ocljTrFn) __ocljTr = nil __ocljTrFn = nil return 'ok'")
     val bench = parse(txtA2, "OCLJBENCH")
+    // THE INTERPRETED REFERENCE for k3/k4: the sandbox probe's loop, body and
+    // N identical (AutorunLua, "JIT PROBE"), run here in the raw state with the
+    // compiler switched off for that one function, on this box, in this run.
+    // Until 2026-09-29 k3/k4 compared the sandbox loop against an ABSOLUTE
+    // 0.010 s calibrated between the old box's compiled (0.003-0.005 s) and
+    // interpreted (0.017-0.026 s) readings; a faster CPU then ran the
+    // interpreter in 0.0097 s and the JIT-off negative control failed on a
+    // machine that was doing exactly what it should -- the fifth timing bound
+    // here to fail on a host it was not calibrated on (roadmap: W6b,
+    // d-autorun-counter-live, p0, k4 under load).  Under the stock kernel the
+    // standing hook is per-VM and slows this reference too -- 2.2x, the count
+    // hook firing every hookInterval instructions -- while the sandbox loop
+    // under it pays the full hook-dispatch-plus-thrash price (~25x), so the
+    // ratio read ~11x there: "not compiled" by a wide margin, in the direction
+    // the negative control wants.  On the PUC baseline there is no `jit` and
+    // the loop is simply interpreted.  Up to three reps, stopping after 0.6 s,
+    // like the probe.
+    val refRaw = evalStrLocked(computer.machine, mLua,
+      "local function work(k) local a, b, c, d = 0, 0, 0, 0 for i = 1, k do a = a + i b = b + i * 0.5 c = c + i * 0.25 d = d + i * 0.125 end return a + b + c + d end " +
+      "if jit then jit.off(work) end local N = 12000000 local best, reps, sum, tAll = math.huge, 0, 0, os.clock() " +
+      "for r = 1, 3 do local t0 = os.clock() sum = work(N) local dt = os.clock() - t0 reps = r if dt < best then best = dt end if os.clock() - tAll > 0.6 then break end end " +
+      "return string.format('%.4f/%d/%d/%.0f', best, N, reps, sum)")
     p("JIT PROBE: kernel=" + kernelMode + "  mode=" + jitMode + "  jit.status()=" + jitStatus +
       "  traces start/stop/abort/flush=" + trRaw +
       "  ticks-to-shell=" + i + "  boot-ms=" + bootMs +
-      "  sandbox-bench(min-s/iters/reps)=" + bench)
+      "  sandbox-bench(min-s/iters/reps/sum)=" + bench +
+      "  raw-interpreted-ref(min-s/iters/reps/sum)=" + refRaw)
     // With the WATCHDOG kernel and the JIT on, the numbers stop being merely
     // informational: the boot must no longer thrash, and the sandbox loop must
-    // run as compiled code.  Thresholds sit between the two measured regimes
-    // -- ~2700 discarded traces and 0.485 s under the standing hook, ~2 traces
-    // and 0.008 s with no hook at all -- with room on both sides.
-    // Thresholds, and what they sit between.  Measured regimes for the 2M-
-    // iteration sandbox loop: compiled 0.003-0.005 s; plain interpreter
-    // 0.017-0.026 s; under OC's standing hook 0.47-0.49 s.  So the "compiled"
-    // threshold must sit BELOW the interpreter -- 0.010 s -- or it would pass
-    // with no compiled code running at all (it did, at 0.1 s, until a review
-    // pointed it out).  Traces completed during boot: ~110 with the watchdog,
-    // ~2500 thrashing under the standing hook; 300 sits between.
-    //   The same thresholds are asserted INVERTED in the other polarities,
-    // so each one is observed to fail where the thrash is real, not merely
+    // run as compiled code.  Traces completed during boot: ~110 with the
+    // watchdog, ~2500 thrashing under the standing hook; 300 sits between.
+    //   The sandbox loop is judged RELATIVE to refS, the same loop interpreted
+    // in the raw state of this run: compiled code runs it ~10x faster than the
+    // interpreter (four independent accumulator chains -- 0.002 vs 0.020 s per
+    // 4M iterations standalone on the 2026-09-29 box), so "compiled-fast" is
+    // under a third of the reference and "not compiled" is at or above it: the
+    // geometric middle, ~3x of room either side.  The reference is measured
+    // where the probe cannot reach (`jit.off` is not in the sandbox), on the
+    // harness thread; a core-placement or clock-ramp difference between the
+    // two threads is what the 3x absorbs.  Each reading must also carry the
+    // loop's exact sum, so a time is never accepted for work that was not
+    // done.  A missing or failed reference fails every k3/k4 assertion; it
+    // never passes one.
+    //   The same predicate is asserted INVERTED in the other polarities, so
+    // each one is observed to fail where the thrash is real, not merely
     // observed to pass where it is not.
+    val WORK_SUM = "135000011250000"   // 12M iterations: N(N+1)/2 * 1.875, exact in a double
+    def field(v: String, k: Int): String = { val f = v.split("/"); if (k < f.length) f(k) else "?" }
+    def probeSecs(v: String): Double = try field(v, 0).toDouble catch { case _: Throwable => -1.0 }
+    val refS = probeSecs(refRaw)
+    def compiledFast(v: String): Boolean = { val t = probeSecs(v); refS > 0 && t > 0 && t < refS / 3 && field(v, 3) == WORK_SUM }
+    def notCompiled(v: String): Boolean = { val t = probeSecs(v); refS > 0 && t > 0 && t >= refS / 3 && field(v, 3) == WORK_SUM }
+    def ratioTxt(v: String): String = {
+      val t = probeSecs(v)
+      (if (refS > 0 && t > 0) f" = ${t / refS}%.2fx the raw interpreted reference $refS%.4f s" else " (reference " + refRaw + ")") +
+        (if (field(v, 3) == WORK_SUM) "" else "   <- SUM MISMATCH: " + field(v, 3) + " vs " + WORK_SUM) +
+        (if (refS > 0 && field(refRaw, 3) == WORK_SUM) "" else "   <- REFERENCE BROKEN: " + refRaw)
+    }
     val stops = try trRaw.split("/")(1).toInt catch { case _: Throwable => -1 }
-    val benchS = try bench.split("/")(0).toDouble catch { case _: Throwable => -1.0 }
+    val benchS = probeSecs(bench)
     if (kernelMode == "watchdog" && jitMode == "on") {
       milestone("k2-jit-not-thrashing", stops >= 0 && stops < 300,
         "traces completed during boot = " + stops + " (standing hook: ~2500; want < 300)")
-      milestone("k3-sandbox-loop-is-compiled", benchS > 0 && benchS < 0.010,
-        "sandbox loop best-of-3 = " + benchS + " s (interpreter: 0.017-0.026; standing hook: 0.47; want < 0.010)")
+      milestone("k3-sandbox-loop-is-compiled", compiledFast(bench),
+        "sandbox loop best-of-" + field(bench, 2) + " = " + benchS + " s" + ratioTxt(bench) + " (compiled-fast means < 1/3)")
     } else if (nativeMode == "stock") {
       // PUC Lua 5.2 has no compiler, so "traces" and "mcode" are not merely
       // zero, the accessors do not exist.  That absence is this cell's own
@@ -3425,11 +3495,11 @@ object Smoke {
     } else if (kernelMode == "stock" && jitMode == "on") {
       milestone("k2-jit-not-thrashing-NEGATIVE-CONTROL", stops >= 300,
         "stock kernel: traces completed during boot = " + stops + " -- the thrash must be SEEN here (want >= 300)")
-      milestone("k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL", benchS >= 0.010,
-        "stock kernel: sandbox loop = " + benchS + " s -- must be slow here (want >= 0.010)")
+      milestone("k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL", notCompiled(bench),
+        "stock kernel: sandbox loop = " + benchS + " s" + ratioTxt(bench) + " -- must NOT be compiled-fast here (want >= 1/3)")
     } else {
-      milestone("k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL", benchS >= 0.010,
-        "JIT off: sandbox loop = " + benchS + " s -- interpreter speed, must be >= 0.010")
+      milestone("k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL", notCompiled(bench),
+        "JIT off: sandbox loop = " + benchS + " s" + ratioTxt(bench) + " -- interpreter speed, must be >= 1/3")
     }
     milestone("j0-jit-switch-honoured", (jitMode == "off") == (jitStatus == "false"),
       "mode=" + jitMode + " -> jit.status()=" + jitStatus +
@@ -3650,7 +3720,7 @@ object Smoke {
       ws.update(); Thread.sleep(25); k4 += 1
       if (k4 % 10 == 0) b2 = parse(nonEmptyScreen(screen), "OCLJBENCH2")
     }
-    val bench2S = try b2.toDouble catch { case _: Throwable => -1.0 }
+    val bench2S = probeSecs(b2)
     if (kernelMode == "watchdog" && jitMode == "on") {
       // Tolerates a MISSING report, never a slow one.  The probe schedules
       // itself from inside the callback that just took the timeout, so it
@@ -3659,15 +3729,19 @@ object Smoke {
       // front instead kills the machine).  A missing value says nothing about
       // the hook; a slow one says disarm() did not clear the re-arm, and that
       // still fails.  The distribution is reported either way so a change in
-      // the miss rate is visible rather than silent.
-      milestone("k4-still-compiled-after-timeout", bench2S < 0 || bench2S < 0.010,
-        "sandbox loop on the resume after the timeout = " + b2 + " s (before: " + bench.split("/")(0) + "; want < 0.010), reported after " + k4 + " ticks" +
-          (if (bench2S > 0 && bench2S < 0.010) ""
+      // the miss rate is visible rather than silent.  "Fast" is the k3
+      // predicate: under a third of the same loop interpreted in this run's
+      // raw state (a surviving count=1 re-arm reads ~25x the interpreter).
+      milestone("k4-still-compiled-after-timeout", bench2S < 0 || compiledFast(b2),
+        "sandbox loop on the resume after the timeout = " + bench2S + " s (before: " + field(bench, 0) + ")" +
+          (if (bench2S > 0) ratioTxt(b2) + " (want < 1/3)" else "") + ", reported after " + k4 + " ticks" +
+          (if (bench2S > 0 && compiledFast(b2)) ""
            else if (bench2S < 0) "   (not reported -- the follow-up timer lost its race with the grace; no claim either way)"
            else "   <- SLOW after the timeout: the count=1 re-arm survived disarm()"))
     } else {
-      milestone("k4-still-compiled-after-timeout-NEGATIVE-CONTROL", bench2S < 0 || bench2S >= 0.010,
-        "kernel=" + kernelMode + " jit=" + jitMode + ": loop after the timeout = " + b2 + " (must NOT be compiled-fast here)")
+      milestone("k4-still-compiled-after-timeout-NEGATIVE-CONTROL", bench2S < 0 || notCompiled(b2),
+        "kernel=" + kernelMode + " jit=" + jitMode + ": loop after the timeout = " + bench2S + " s" +
+          (if (bench2S > 0) ratioTxt(b2) else " (" + b2 + ")") + " (must NOT be compiled-fast here: want >= 1/3)")
     }
 
     // --- (p0) PHASE 0: the two poles -----------------------------------

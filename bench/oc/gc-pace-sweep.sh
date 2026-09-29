@@ -117,7 +117,7 @@ run() {                      # run <cell> <stepmul> <pause> <rep> <bench>
     printf '%-24s %3ss  %s -- NOT TABULATED\n' "$tag" "$el" "$took" >> "$OUT/progress.txt"; return
   fi
 
-  meter=$(sed -n 's/.*sandbox-bench(min-s\/iters\/reps)=\([0-9.]*\).*/\1/p' "$sl" | head -1)
+  meter=$(sed -n 's/.*sandbox-bench(min-s\/iters\/reps[^)]*)=\([0-9.]*\).*/\1/p' "$sl" | head -1)
   row=$(sed -n 's/.*PHASE1 ROW: .*jit=[a-z]*  //p' "$sl" | head -1)
   died=$(grep -c 'MACHINE STOPPED' "$sl" 2>/dev/null); [ -n "$died" ] || died=0
   status=$(printf '%s' "${row:-<no row>}" | cut -d/ -f2)

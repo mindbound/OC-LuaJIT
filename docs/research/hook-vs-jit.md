@@ -361,6 +361,87 @@ from 1000 ms to 300 ms (measured ~60), and W6b's from 100 ms to 20 ms so that
 "traces run" is asserted on time -- compiled 6-8 ms against ~30 ms interpreted
 -- and not merely inferred from "traces were compiled".
 
+### Addendum 2026-09-29: k3/k4 are judged against the same run's interpreter
+
+The 0.010 s bound above was calibrated on one machine (a Ryzen 7 7840U):
+between that box's compiled 0.003-0.005 s and interpreted 0.017-0.026 s for the
+2M-iteration loop. On the machine the project moved to (a Core Ultra 9 285HX)
+the interpreter ran the same loop in 0.0097 s on the resume after the timeout,
+and `k4-still-compiled-after-timeout-NEGATIVE-CONTROL` failed on a machine that
+was doing exactly what it should; the k3 negative control read 0.0113 and
+0.0125 against the same bound, so its margin was gone too. The fifth timing
+bound in this project to fail on a host it was not calibrated on (roadmap:
+W6b, `d-autorun-counter-live`, p0, k4 under load). Two things had made the
+instrument fragile, and the faster CPU only exposed them:
+
+* the loop body `s = s + (i % 7) * 2` is fmod-bound compiled and interpreted
+  alike, so the two regimes were only ~3x apart (standalone on the new box:
+  0.002 vs 0.006-0.007 s per 2M); and
+* a compiled 2M loop is ~3 ms, and in-machine readings of it varied 0.0025 to
+  0.0071 s between runs -- 1.25-3.5x above the standalone figure -- so a
+  single bound in the gap had at most ~1.4x of room.
+
+What changed, in `OcljSmoke.scala` (the probe in `AutorunLua` and the
+k-milestone read-out):
+
+* **The body** is four independent accumulator chains
+  (`a = a + i  b = b + i*0.5  c = c + i*0.25  d = d + i*0.125`), 12M
+  iterations: eight bytecodes an iteration that compile to ~4 cycles, so
+  compiled is ~10x faster than interpreted (0.002 vs 0.020 s per 4M
+  standalone). The sum is exact in a double (`135000011250000`) and is carried
+  in every reading and checked, so a time is never accepted for work that was
+  not done.
+* **Min of up to three reps, stopping after 0.6 s**, so under the stock
+  kernel's standing hook (~25x the interpreter) one rep is all the probe takes
+  and the 5 s deadline never enters into it. The post-timeout k4 reading is
+  now the same shape (its single rep read 1.9-2.3x the best-of-3 on the same
+  box: the first rep after a wake is the slow one).
+* **The reference**: at the k-milestone read-out the harness runs THE SAME
+  loop in the raw state with `jit.off(work)` (`if jit then`: the PUC baseline
+  has no `jit` and is simply interpreted), min of up to three, and every k3/k4
+  bound is relative to it: *compiled-fast* is under a third of the reference,
+  *not compiled* is at or above a third -- the geometric middle of a 10x gap,
+  ~3x of room either side. The reference runs where the probe cannot reach
+  (`jit.off` is not in the sandbox), on the harness thread; a core-placement or
+  clock-ramp difference between the two threads is what the 3x absorbs. Under
+  the stock kernel the hook is per-VM and slows the reference too -- 2.2x, a
+  count hook firing every `hookInterval` instructions -- while the sandbox loop
+  under it pays hook dispatch plus the trace thrash (~25x), so the ratio there
+  read ~11x: "not compiled" by a wide margin, in the direction the control
+  wants. A missing or failed reference fails every k3/k4 assertion; it never
+  passes one.
+
+Observed in every polarity on the new box, 2026-09-29 (OCLJ_REPS=3; the
+sandbox loop and the reference are both min of up to 3 over 12M iterations):
+
+| arm | sandbox loop | raw interpreted reference | ratio | k3 / k4 |
+|---|---|---|---|---|
+| watchdog, JIT on, all benches (56/0) | **0.0063 s** | 0.0681 s | **0.09x** | k3 PASS; k4 (one rep) 0.0145 s = 0.21x PASS |
+| watchdog, JIT off, all benches (54/0) | 0.0773 s | 0.0783 s | 0.99x | k3-NC PASS; k4-NC 0.0896 s = 1.14x PASS |
+| watchdog, JIT off, sieve only (48/0) -- the arm that had failed at 0.0097 s | 0.0714 s | 0.0675 s | 1.06x | k3-NC PASS; k4-NC 0.1256 s = 1.86x PASS |
+| **fail-first**: the reference's `jit.off` removed, JIT on | 0.0061 s | 0.0085 s (compiled) | 0.72x | **k3 FAIL, k4 FAIL** (50/2) -- the check is seen to fail |
+| PUC 5.2 baseline, stock kernel (41/0) | 0.1798 s | 0.1405 s | 1.28x | k4-NC 0.1683 s = 1.20x PASS; k3 not asserted (no compiler to assert) |
+| *after k4 became best-of-3:* watchdog, JIT on, all benches (56/0) | 0.0080 s | 0.0710 s | 0.11x | k3 PASS; **k4 0.0071 s = 0.10x** PASS |
+| *after k4 became best-of-3:* watchdog, JIT off, sieve only (48/0) | 0.0862 s | 0.0692 s | 1.25x | k3-NC PASS; k4-NC 0.0862 s = 1.25x PASS |
+| **stock kernel** (standing hook), our JIT on, dropin native | **1.6696 s, 1 rep** (the 0.6 s cut-off did its job) | 0.1519 s | **10.99x** | k2-NC PASS (2996 traces); k3-NC PASS; k4-NC 1.7805 s = 11.72x PASS; k5-NC `fires=0` PASS |
+
+The sums matched in every row. Three things the runs also showed. The
+stock-kernel arm cannot run under the *additive* architecture at all -- its
+bundled-roots `save`/`load` asserts the patched kernel's synchronized-call
+shape, and OC's own `machine.lua` fails that assertion after one tick
+(`Faulty architecture implementation for synchronized calls`,
+`Error.InternalError`); pre-existing, and the standing-hook control therefore
+ran on the dropin native, whose last build is the 2026-09-17 one. On that arm
+the four k-controls read as designed and eleven other milestones failed, none
+of them about the probe: `jn-1` (the resume-error patch postdates that
+dropin, and the message says so), `p1-sieve` (25x slower under the thrash, it
+overran the 5 s deadline), and the persistence rows `f3/f5/f7`, `fi-1..3`,
+`dg-1`, `stk-3/4` ("the loops never parked" inside tick-counted caps on a
+machine running 25x slower; "the restored machine is not running") -- the
+stock kernel with the stale dropin is not a maintained arm and none of this
+was investigated. And the reference's cost is ~0.2 s of harness time per run
+(three interpreted reps), 0.4 s on PUC.
+
 ### What the adversarial review found, and what changed
 
 Five reviewers, five lenses, each told to break this; every finding then went
