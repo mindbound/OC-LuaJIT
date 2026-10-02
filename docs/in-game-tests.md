@@ -240,24 +240,57 @@ the same rung reads mandelbrot 1.15x, sha256 1.39x, matmul 1.64x and
 binarytrees 1.76x the capped host, which against plain LuaJIT is 1.15 / 1.39 /
 2.0 / 3.7x. Whether what remains is the sandbox or the harness's own JVM
 (a poller waking every 25 ms beside the machine) is what the in-game numbers
-decide, and Minecraft now runs on the same box as the rungs, so the column is
-directly comparable. This is a measurement, not a pass/fail.
+were to decide (the result below narrows it without separating it), and
+Minecraft now runs on the same box as the rungs, so the column is directly
+comparable. This is a measurement, not a pass/fail.
 
 Copy `bench/oc/mandelbrot.lua`, `matmul.lua`, `binarytrees.lua` and
 `ingame-ladder.lua` into the computer's `/home` — an OC hard disk is the
 directory `saves/<world>/opencomputers/<address>/` on the host (the one that
-already holds `home/bench.lua`); do it at the title screen. Then at the shell:
+already holds `home/bench.lua`); do it at the title screen. **On a re-run,
+copy `ingame-ladder.lua` again first**: the disk still holds the load-once
+version the 2026-10-02 run used (`91a25f2`), whose binarytrees reps after the
+first are comparable only with standalone re-calls of one loaded chunk (see
+the result). Then at the shell:
 ```
 ingame-ladder
 ```
-It prints, per bench, the CHECK and the min of 5 reps (with a yield between
-reps). Expected CHECKs: mandelbrot `37904620`, matmul `481.0000`, binarytrees
-`7038400`. For comparison on this box (2026-09-29, min of 5, same files,
-mandelbrot / matmul / binarytrees): plain `luajit.exe` 0.065 / 0.080 / 0.192 s;
+It prints, per bench, the CHECK and the min of 5 reps, each a fresh load of
+the file, with a yield between reps. Expected CHECKs: mandelbrot `37904620`,
+matmul `481.0000`, binarytrees `7038400`; expect binarytrees' reps not to
+climb from the second (on the C-allocator host, fresh reps after the first
+ran up to 1.27x faster than the first, so a step down is possible). For
+comparison on this box
+(2026-09-29, min of 5, same files, mandelbrot / matmul / binarytrees): plain
+`luajit.exe` 0.065 / 0.080 / 0.192 s;
 our binary in a bare C host with the accounting allocator 0.065 / 0.097 /
 0.409 s; the ocelot-brain machine 0.075 / 0.161 / 0.715 s. (The old box read
 0.091 / 0.135 / 0.286, 0.094 / 0.160 / 0.564 and 0.157 / 0.335 / 1.833.)
-sha256 is left out (compat.lua picks a different bit-op path in the sandbox),
-sieve is quarantined.
+sha256 is left out (it would need compat.lua copied too; compat takes the
+same `operators` path in the sandbox as standalone), sieve is quarantined.
 
-**Result: pending.**
+**Result: measured 2026-10-02** (the `91a25f2` runner; the 2026-09-29 jar,
+whose DLL `bcf8715c` is the one the harness's rung 4 ran; a 16 MB machine;
+Minecraft in-world). CHECKs as expected. mandelbrot 0.0626 s, matmul
+0.1031 s, binarytrees 0.5586 s: 0.963 / 1.052 / 1.376x the capped host
+(0.065 / 0.098 / 0.406 s), 0.963 / 1.289 / 2.909x plain LuaJIT, and
+0.839 / 0.641 / 0.782x the ocelot-brain machine. The game is faster than the
+harness on all three, so on this box rung 4 overstates what a player pays;
+which of the harness's differences accounts for that (a hidden background
+JVM on a hybrid CPU, its JVM flags, its poller, ocelot-brain against GTNH
+OC) is not separated. The pure loop shows no cost in the game — it reads
+2–5% faster than every standalone process, which is not explained and may
+sit in every in-game ratio — and the largest factor in binarytrees' 2.9x is
+still the allocator rung (1.92x), not the in-game rung (1.38x).
+binarytrees' reps climbed (0.559 → 0.717 → 0.941 / 0.898 / 0.921) the way one
+loaded chunk called five times climbs standalone on all three builds run,
+upstream included. Standalone, a `jit.flush()` before each call removed the
+climb with the closure count past LuaJIT's threshold (later calls within
+1.08x of the first on `luajit.exe` and upstream, against ~2x without), so
+the climb needs the trace state the earlier calls leave behind, not the
+closure count; the account, not measured, is that later calls run through
+the traces compiled for the earlier calls' closures, and the game had no
+flush arm. Only binarytrees' first rep is comparable; the runner now loads
+per rep.
+Detail: [bench/results-ladder-2026-09-29.md](../bench/results-ladder-2026-09-29.md),
+"The in-game column".
