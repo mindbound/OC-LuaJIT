@@ -387,7 +387,8 @@ object Smoke {
 
   /** Every value _OCLJ_GCSTATS returns, verbatim, as "<count>:<v1>/<v2>/...".
     * The count is the fingerprint: 9 is a native before the pressure flush,
-    * 13 is one with it.  For the MEM-2 lines, which quote the instrument
+    * 13 is one with it, 14 adds heap (1 = the state's own lj_alloc arena).
+    * For the MEM-2 lines, which quote the instrument
     * rather than a tuple somebody typed. */
   def gcStatsRaw(lua: LuaState): String = evalStr(lua,
     "if _OCLJ_GCSTATS == nil then return 'absent' end " +
@@ -3280,6 +3281,32 @@ object Smoke {
       "asked for " + kernelMode + ", raw _G._OCLJ_KERNEL=" + kernelSeen +
         (if ((kernelMode == "watchdog") == (kernelSeen == "watchdog")) ""
          else "   <- the kernel that ran is NOT the one requested; nothing below means what it says"))
+    // --- (al-1) which allocator the machine's blocks live in --------------
+    // Since 2026-10-02 every state the shim creates keeps its blocks in its
+    // own lj_alloc arena (lj52shim.c, lj52_back) instead of the C library's
+    // heap -- the allocator rung of bench/results-ladder-2026-09-29.md,
+    // measured in bench/results-allocator-2026-10-02.md.  _OCLJ_GCSTATS's 14th
+    // value says which one this machine runs on.  A native from before the
+    // change returns 13 values and fails here; that is this milestone's
+    // negative control.  PUC has no _OCLJ_GCSTATS at all, so stock skips it.
+    if (nativeMode == "stock") {
+      p("MILESTONE al-1-machine-heap-is-lj-alloc: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)")
+    } else {
+      val heapRaw = evalStrLocked(computer.machine, mLua,
+        "if _OCLJ_GCSTATS == nil then return 'absent' end " +
+        "local t = {_OCLJ_GCSTATS()} return #t .. ':' .. tostring(t[14])")
+      val heapCount = try heapRaw.split(":")(0).toInt catch { case _: Throwable => -1 }
+      val heapVal = if (heapRaw.contains(":")) heapRaw.split(":", 2)(1) else ""
+      milestone("al-1-machine-heap-is-lj-alloc", heapRaw == "14:1",
+        "_OCLJ_GCSTATS count:heap = " + heapRaw + " (want 14:1, the state's own lj_alloc arena)" +
+          (if (heapRaw == "14:1") ""
+           else if (heapRaw == "absent") "   <- no _OCLJ_GCSTATS: this native is not our shim"
+           else if (heapRaw.startsWith("<error")) "   <- the read failed; nothing was observed"
+           else if (heapCount >= 0 && heapCount < 14) "   <- a " + heapCount + "-value _OCLJ_GCSTATS: a native from before the arena change"
+           else if (heapVal == "0") "   <- arena creation failed (lj_prng_seed_secure or lj_alloc_create): the C library fallback"
+           else if (heapVal == "-1") "   <- the state is not on lj52_alloc at all: no accounting record, the RAM cap unenforced"
+           else "   <- unrecognised reading"))
+    }
     var qj = 0
     quiesced(computer.machine, "the JIT probe read-out")
     if (jitMode == "off")

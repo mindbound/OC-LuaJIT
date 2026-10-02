@@ -396,9 +396,11 @@ probe (which allocated inside the `jit.attach` callback and printed a row
 per run) saw streaks of 9 in one run and mostly fresh addresses in another.
 A host that installs the C library allocator (`lua_newstate` with a
 `realloc`/`free` function, as embedders commonly do) hands the block
-straight back: the project that found this runs its VM on CRT
-`realloc`/`free` and its C-host test (`test/native/penalty_test.c` +
-`penalty_test.lua`, which reads `J->penalty[]` directly) blacklists on the
+straight back: the project that found this ran its VM on CRT
+`realloc`/`free` until 2026-10-02 (each VM now has its own `lj_alloc`
+arena, which reuses a freed block as described above), and its C-host
+test (`test/native/penalty_test.c` + `penalty_test.lua`, which reads
+`J->penalty[]` directly, still on `realloc`/`free`) blacklists on the
 8th-14th load. So how many loads it takes depends on the allocator and on
 what else the program allocates between loads -- but it only ever takes
 a handful of loads at one address.

@@ -9,6 +9,10 @@
  * that negative-control.sh can make fail on purpose.
  *
  * Covered:
+ *   M0  the state's blocks live in its own lj_alloc arena (_OCLJ_GCSTATS
+ *       heap = 1): -1 on an object from before the arena change, 0 on the
+ *       C-library fallback; M0b checks the second state, M0c re-checks the
+ *       first at the end
  *   M1  a state with no cap installed is not charged, and does not crash
  *   M2  installing a cap starts charging only once the Java object is BOUND --
  *       controlled_newstate really does call lua_setallocf before
@@ -201,6 +205,9 @@ static double statn(lua_State *L, const char *global, int n) {
 #define GC_FLUSHWANT(L)  statn(L, "_OCLJ_GCSTATS", 11)
 #define GC_FLUSHREF(L)   statn(L, "_OCLJ_GCSTATS", 12)
 #define GC_FLUSHBYTES(L) statn(L, "_OCLJ_GCSTATS", 13)
+/* Position 14, appended 2026-10-02: 1 = the state's blocks live in its own
+ * lj_alloc arena, 0 = the C library fallback; -1 (absent) on an older shim. */
+#define GC_HEAP(L)       statn(L, "_OCLJ_GCSTATS", 14)
 /* _OCLJ_JITSTATS position 5: traces_live, the non-NULL J->trace[] slots. */
 #define JIT_LIVE(L)      statn(L, "_OCLJ_JITSTATS", 5)
 
@@ -286,6 +293,16 @@ int main(void) {
   L = luaL_newstate();                    /* -> lj52_newstate */
   if (!L) { printf("  FAIL  luaL_newstate returned NULL\n"); return 1; }
   luaL_openlibs(L);
+
+  /* ---- M0 ---------------------------------------------------------- */
+  /* Which allocator the state's blocks live in.  A state on the C library
+   * fallback still passes every accounting check below, so without this the
+   * suite could not tell the two apart. */
+  {
+    double h = GC_HEAP(L);
+    snprintf(d, sizeof d, "_OCLJ_GCSTATS heap=%g (1 = own lj_alloc arena, 0 = libc, -1 = absent)", h);
+    ok(h == 1, "M0 the state's heap is its own lj_alloc arena", d);
+  }
 
   /* ---- M1 ---------------------------------------------------------- */
   st = alloc_tables(L, 2000);
@@ -440,6 +457,8 @@ int main(void) {
     lua_State *P = luaL_newstate();     /* -> lj52_newstate, JIT on */
     if (!P) { printf("  FAIL  luaL_newstate returned NULL for the P state\n"); return 1; }
     luaL_openlibs(P);
+    snprintf(d, sizeof d, "_OCLJ_GCSTATS heap=%g", GC_HEAP(P));
+    ok(GC_HEAP(P) == 1, "M0b the second state is on its own arena too", d);
     memset(&PS, 0, sizeof PS);
     PS.total = 64 * 1024 * 1024;
     lua_setallocf(P, NULL, P);          /* jnlua's capped form, as in M2 */
@@ -557,6 +576,9 @@ int main(void) {
     clear_javastate(P);
     lua_close(P);                       /* -> lj52_close: stops the timer too */
   }
+
+  snprintf(d, sizeof d, "_OCLJ_GCSTATS heap=%g after every case above", GC_HEAP(L));
+  ok(GC_HEAP(L) == 1, "M0c the first state is still on its arena at the end", d);
 
   printf("\nchecks=%d failures=%d\n", checks, failures);
   lua_close(L);                           /* -> lj52_close, frees the record */

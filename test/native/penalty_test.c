@@ -3,10 +3,12 @@
  * THE DEFECT (2026-09-22, the flush-cost bisect; established standalone by two
  * analysts before this test existed).  LuaJIT's J->penalty[64] is keyed by the
  * raw ADDRESS of a loop-head bytecode and is scrubbed by exactly one thing,
- * lj_trace_flushall.  lj_func_freeproto is a bare lj_mem_free.  A machine's
- * heap is CRT realloc/free (native/lj52shim.c lj52_alloc), which hands a dead
- * prototype's block straight back to the next same-size load(), so a FRESH
- * prototype inherits the DEAD one's penalty slots; its own ordinary
+ * lj_trace_flushall.  lj_func_freeproto is a bare lj_mem_free.  A heap that
+ * hands a dead prototype's block straight back to the next same-size load()
+ * -- a machine's was CRT realloc/free until 2026-10-02 and is now its own
+ * lj_alloc arena (native/lj52shim.c lj52_back), which does the same
+ * (docs/research/luajit-penalty-cache-report.md) -- makes a FRESH
+ * prototype inherit the DEAD one's penalty slots; its own ordinary
  * nested-loop aborts (LLEAVE / LINNER) double them; on the 8th-11th re-load at
  * that address blacklist_pc rewrites its loop heads to ILOOP/IFORL on their
  * first abort, and the program runs interpreted (~6x slower) forever after,
@@ -18,10 +20,11 @@
  * whose pc lies inside the dying prototype's bytecode.
  *
  * THIS HOST links the very libluajit.a build-native.sh produced, creates the
- * state on a CRT realloc/free allocator exactly as the shim does, and hands
- * penalty_test.lua a `penalty` module that reads J->penalty and friends
- * directly, so each check is an observation of the cache and the bytecode,
- * not an inference from timing alone:
+ * state on a CRT realloc/free allocator -- the machine's backing store until
+ * 2026-10-02, kept now as the deterministic-reuse worst case (crt_alloc,
+ * below) -- and hands penalty_test.lua a `penalty` module that reads
+ * J->penalty and friends directly, so each check is an observation of the
+ * cache and the bytecode, not an inference from timing alone:
  *
  *   P1  every re-load computes the published checksum (the chunk ran)
  *   P2  no re-load reads a blacklisted loop head (ILOOP/IFORL/IITERL)
@@ -76,9 +79,13 @@ static double now_ms(void) {
 }
 #endif
 
-/* The machine's allocator: the branch lj52_alloc takes for every block once
- * the state is up.  luaL_newstate would use LuaJIT's own lj_alloc, whose
- * reuse pattern differs; the defect needs the libc one. */
+/* The C library allocator: the machine's backing store until 2026-10-02,
+ * when each state got its own lj_alloc arena (native/lj52shim.c lj52_back),
+ * kept here as the deterministic-reuse worst case -- realloc/free hands a
+ * freed block straight back to the next same-size request.  lj_alloc reuses
+ * it too (docs/research/luajit-penalty-cache-report.md reproduces the defect
+ * on upstream's lj_alloc), but how often depends on what else is allocated
+ * between loads. */
 static void *crt_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)ud; (void)osize;
   if (nsize == 0) { free(ptr); return NULL; }

@@ -19,10 +19,13 @@
 # rewrites the head to ILOOP/IFORL/IITERL: that loop runs interpreted for the
 # rest of the prototype's life.  The cache is reset by exactly one thing,
 # the memset in lj_trace_flushall; a prototype's death, lj_func_freeproto,
-# is a bare lj_mem_free.  With a libc heap (our machine allocator is CRT
-# realloc/free, native/lj52shim.c lj52_alloc) the freed block goes straight
-# back to the next same-size load(), so a FRESH prototype INHERITS the DEAD
-# one's penalty slots.  A program re-run from the same source -- a shell
+# is a bare lj_mem_free.  With a heap that reuses freed blocks (the machine's
+# was CRT realloc/free until 2026-10-02; each state now has its own lj_alloc
+# arena, native/lj52shim.c lj52_back, which also hands a freed block straight
+# back: docs/research/luajit-penalty-cache-report.md reproduces the defect on
+# upstream's lj_alloc) the freed block goes straight back to the next
+# same-size load(), so a FRESH prototype INHERITS the DEAD one's penalty
+# slots.  A program re-run from the same source -- a shell
 # loop, a REPL, an OS re-loading a program, the harness's encore -- doubles
 # the inherited values with its own ordinary nested-loop aborts (LLEAVE /
 # LINNER, lj_record.c) and on the 8th-11th re-load its loop heads are

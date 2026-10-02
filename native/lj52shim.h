@@ -147,10 +147,17 @@ typedef unsigned int lua_Unsigned;
  * luaL_newstate() instead installs its OWN internal allocator (lj_alloc,
  * VirtualAlloc/mmap-backed). Handing those blocks to libc free() at close time
  * corrupts the heap and takes the JVM down with no Java-visible error.
- * lj52_newstate() therefore creates the state with a libc allocator from
- * birth; only a GC64 build tolerates a foreign allocator on x64, which
- * build-native.sh asserts at stage 1b rather than letting it surface as a heap
- * corruption at close time. */
+ * lj52_newstate() therefore creates the state with OUR allocator, lj52_alloc,
+ * from birth, and jnlua's swaps never reach it (lj52_setallocf below); only a
+ * GC64 build tolerates a foreign allocator on x64, which build-native.sh
+ * asserts at stage 1b rather than letting it surface as a heap corruption at
+ * close time.
+ *   The hazard is a block changing allocators, not lj_alloc itself, and since
+ * 2026-10-02 lj52_alloc keeps every block of a state in that state's own
+ * lj_alloc arena, created with the state and destroyed after lua_close
+ * (lj52_back in lj52shim.c): one allocator per block for its whole life, and
+ * LuaJIT's allocator rather than the C library's, which cost up to 2.6x on
+ * allocation-heavy code (bench/results-allocator-2026-10-02.md). */
 #define luaL_newstate() lj52_newstate()
 
 /* ------------------------------------------------------------------ *

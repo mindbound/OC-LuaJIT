@@ -10,8 +10,10 @@
 #
 # Same shape as run-wd.sh: consumes build-native.sh's libluajit.a so the test
 # exercises exactly the archive the DLL links.  No shim and no JNI: the defect
-# is LuaJIT's, and the host supplies the one thing the shim would -- a CRT
-# realloc/free allocator (penalty_test.c).
+# is LuaJIT's, and the host supplies a CRT realloc/free allocator
+# (penalty_test.c) -- the machine's backing store until 2026-10-02, now the
+# deterministic-reuse worst case: each state has its own lj_alloc arena
+# since, which also hands a freed block straight back.
 set -u
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"

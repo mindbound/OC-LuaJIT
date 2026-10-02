@@ -149,7 +149,9 @@ and on the 12-site kernel 4/4 (5402–5421 ms).
 ## T5 — a program re-run many times stays compiled (the penalty-cache cure)
 
 Shape: LuaJIT's trace-abort penalty cache is keyed by bytecode address and was
-never scrubbed when a prototype died; on our CRT heap a re-loaded program
+never scrubbed when a prototype died; on a heap that hands a freed block
+straight back (the machine's was the C library's until 2026-10-02 and is now
+its own `lj_alloc` arena, which usually does the same) a re-loaded program
 inherits the dead one's abort history and is blacklisted to the interpreter
 around its 9th run. Before 2026-09-22 the per-save trace flush reset it once per
 autosave, so the symptom needed ~9 runs between two saves; now the cure is in the
@@ -278,10 +280,16 @@ Minecraft in-world). CHECKs as expected. mandelbrot 0.0626 s, matmul
 harness on all three, so on this box rung 4 overstates what a player pays;
 which of the harness's differences accounts for that (a hidden background
 JVM on a hybrid CPU, its JVM flags, its poller, ocelot-brain against GTNH
-OC) is not separated. The pure loop shows no cost in the game — it reads
-2–5% faster than every standalone process, which is not explained and may
+OC) is not separated (**2026-10-02:** core placement — pinned to the
+performance cores, the harness reads mandelbrot 0.0661, matmul 0.1049 and
+binarytrees 0.5168 s, near the game's; see T8 and the roadmap). The pure
+loop shows no cost in the game — it reads 2–5% faster than every
+standalone process, which is not explained and may
 sit in every in-game ratio — and the largest factor in binarytrees' 2.9x is
-still the allocator rung (1.92x), not the in-game rung (1.38x).
+still the allocator rung (1.92x), not the in-game rung (1.38x)
+(**2026-10-02:** each machine's own `lj_alloc` arena removes most of that
+rung — 1.92x to 1.08x our `luajit.exe` standalone, and binarytrees 0.539 to
+0.411 s in the pinned harness; not yet re-measured in game, see T8).
 binarytrees' reps climbed (0.559 → 0.717 → 0.941 / 0.898 / 0.921) the way one
 loaded chunk called five times climbs standalone on all three builds run,
 upstream included. Standalone, a `jit.flush()` before each call removed the
@@ -294,3 +302,51 @@ flush arm. Only binarytrees' first rep is comparable; the runner now loads
 per rep.
 Detail: [bench/results-ladder-2026-09-29.md](../bench/results-ladder-2026-09-29.md),
 "The in-game column".
+
+## T8 — the allocator change in game
+
+Shape: until 2026-10-02 every machine's heap was the C library's
+(`realloc`/`free`, jnlua's convention); since then each machine's blocks live
+in its own `lj_alloc` arena — LuaJIT's own allocator — under the same
+accounting (`lj52_back` in `native/lj52shim.c`;
+[bench/results-allocator-2026-10-02.md](../bench/results-allocator-2026-10-02.md)).
+Standalone, that took binarytrees from 1.92x our `luajit.exe` to 1.08x (accounting
+off; 1.22x with it). In the ocelot-brain harness pinned to the performance
+cores — which, pinned, reproduced T7's in-game figures (mandelbrot 0.0661,
+matmul 0.1049, binarytrees 0.5168 s against the game's 0.0626 / 0.1031 /
+0.5586) — the shipping native, against the pre-arena DLL in the same
+fingerprinted chain, reads binarytrees 0.4127–0.4295 s (pre-arena 0.5671),
+matmul 0.0954–0.0978 (0.1102), strings2 0.2383–0.2509 (0.2737), mandelbrot
+0.0637–0.0638 (0.0671). This test is the game's side of that: a measurement, not a
+pass/fail, beyond the CHECKs.
+
+1. **With the game closed**, in
+   `C:/Games/Minecraft/instances/Main/minecraft/mods/` remove
+   `ocluajit-f32897a-master+f32897a824-dirty.jar` and put
+   `build/libs/ocluajit-d20a14d-master+d20a14d376-dirty.jar` in its place
+   (780 887 bytes; the non-`-dev` one). It carries the DLL `88b50796`; the
+   serializer hash is unchanged (`8c5a1168`), so saves the T7 jar wrote are
+   read by the same serializer.
+2. Also with the game closed, copy the repo's current
+   `bench/oc/ingame-ladder.lua` into the computer's `/home` on the host
+   (`saves/<world>/opencomputers/<address>/home/`, the disk that holds T7's
+   files), replacing the load-once copy the T7 run used: the new one loads
+   the file afresh for every rep. `mandelbrot.lua`, `matmul.lua` and
+   `binarytrees.lua` have not changed since T7 and stay.
+3. Launch, load the world, open the computer and power-cycle it (Before every
+   test, step 3).
+4. At the shell: `ingame-ladder` (or `lua /home/ingame-ladder.lua`).
+
+Nothing in the game says which native is loaded: the serializer hash did not
+change, and `_OCLJ_GCSTATS`, whose 14th value names the heap (1 = the arena),
+is a raw global the sandbox never sees. The check is that the `d20a14d` jar is
+the only `ocluajit-*.jar` in `mods/`.
+
+Expected — a prediction from the pinned harness, not a measurement: CHECKs
+mandelbrot `37904620`, matmul `481.0000`, binarytrees `7038400`; binarytrees
+from T7's 0.5586 s (its first rep) toward ~0.44 s, matmul from 0.1031 toward
+~0.095 s, mandelbrot unchanged (~0.063 s) — if the game tracks the pinned
+harness as it did at T7. With a fresh load per rep, binarytrees' reps should
+not climb.
+
+**Result: pending.**

@@ -16,7 +16,17 @@ box's rather than the ladder's. Companions further back:
 box, mandelbrot, matmul and binarytrees (its first rep) read 0.963x, 1.052x
 and 1.376x the capped host and 0.839, 0.641 and 0.782 of the ocelot-brain
 machine's times, so here the harness's rung 4 overstates what a player pays —
-see [The in-game column](#the-in-game-column-t7-2026-10-02).
+see [The in-game column](#the-in-game-column-t7-2026-10-02). **That evening**
+core placement turned out to be the main factor — unpinned, the harness's
+JVM reads 1.12–1.50x its performance-core times, the efficient-core arm's
+range, and pinned to the performance cores its rung 4 reads
+mandelbrot 0.0661, matmul 0.1049 and binarytrees 0.5168 against the game's
+0.0626, 0.1031 and 0.5586 ([Addendum 2026-10-02 evening](#addendum-2026-10-02-evening-the-harness-was-on-the-efficient-cores))
+— nqueens' compiled-slower-than-interpreted reading turned out to be the
+stale-trace mechanism ([nqueens: the same mechanism](#nqueens-the-same-mechanism)),
+and the allocator rung got its missing `lj_alloc` arm, which puts the rung on
+the allocator, and a shim change that gives every machine its own `lj_alloc`
+arena ([results-allocator-2026-10-02.md](results-allocator-2026-10-02.md)).
 
 ## The question
 
@@ -390,6 +400,19 @@ jnlua's `lua_setallocf` convention is a question this measurement raises and
 does not answer — it is the same question as on 09-22, now asked on a rung
 whose four numbers are resolved rather than inside their cells' noise.
 
+**Answered 2026-10-02** ([results-allocator-2026-10-02.md](results-allocator-2026-10-02.md)).
+The arm this section lacked — the same host source linked against a shim
+whose states keep their blocks in their own `lj_alloc` arena, every other
+object the same — puts the rung on the allocator: r3u over that host reads
+sieve 2.647, binarytrees 1.785, strings2 1.177 and matmul 1.157, every pair
+of cells disjoint, and what the host adds besides (that host over r2) is
+1.000–1.025 on three of the four and 1.077 on binarytrees. The question
+above has its answer too: under jnlua's convention the allocator jnlua sees
+stays `lj52_alloc` and only the store beneath it changes, and since that day
+the shim gives every state its own arena. The r3u and r3 rows in this
+document were measured on the pre-arena shim object `8ef84b32…`, on the C
+library's allocator as described above.
+
 ### 3. r3/r3u — the accounting
 
 JIT on: **binarytrees 1.124**, **strings2 1.076**, matmul 1.032, mandelbrot
@@ -653,6 +676,14 @@ A rung between r3c and the machine — the bare host running `machine.lua`'s
 sandbox over the same driver, with no OpenOS and no JVM — is the measurement
 that would split this list, and it does not exist yet.
 
+**2026-10-02 evening:** the standalone half of this — the compiler making
+nqueens slower than the interpreter — is the stale-trace mechanism of the
+in-game column, on our build and on upstream alike
+([nqueens: the same mechanism](#nqueens-the-same-mechanism)). The in-machine
+half is not explained by it; pinned to the performance cores the in-machine
+min is lower still (0.5639, on a cell spreading 1.93x; the
+[addendum](#addendum-2026-10-02-evening-the-harness-was-on-the-efficient-cores)).
+
 The game itself reads lower than this harness on all three benchmarks it ran:
 mandelbrot, matmul and binarytrees at 0.839, 0.641 and 0.782 of rung 4's
 mins (see [The in-game column](#the-in-game-column-t7-2026-10-02)).
@@ -697,6 +728,17 @@ the same ordering on the first four, with sha256's leverage lower for the
 reason above, and the last two swapped — Phase 1 had binarytrees (1.10) above
 trampoline (1.04), today trampoline (1.30) is above binarytrees (1.23) —
 trampoline's being the one row whose picture changed.
+
+**2026-10-02 evening: nqueens' 0.830 and 0.821 are the stale-trace
+mechanism.** The benchmark makes a new closure of `solve` in each of its six
+reps. Standalone, its first rep compiled runs about 2.4x faster than
+interpreted, and from the third rep on each rep runs 1.55–1.66x slower than
+interpreted, in the trace state the earlier reps' closures left behind. With one
+`solve` for all six reps the compiler's leverage on nqueens is 2.4–2.5x on
+our build (0.349–0.360 s compiled against 0.866–0.868 s interpreted), and
+upstream's compiled run reads the same 0.347–0.351 s
+([nqueens: the same mechanism](#nqueens-the-same-mechanism)). The machine
+column's 1.61 is not explained by this.
 
 ## The in-game column (T7, 2026-10-02)
 
@@ -873,7 +915,13 @@ benchmarks never touch `computer`, and the cap bound in neither. The test
 that would separate the first candidate is the harness run again with its
 JVM pinned to the performance cores, or as a foreground process: if rung 4
 falls to the game's numbers, placement was it, and the standalone arms,
-launched the same way, would want the same re-run.
+launched the same way, would want the same re-run. **2026-10-02 evening:**
+that run was made, and pinned to the performance cores rung 4 fell to the
+game's numbers (mandelbrot 0.0661, matmul 0.1049, binarytrees 0.5168), so
+core placement is confirmed as the main factor, while the standalone arms,
+which ran at performance-core speed unpinned (tested on r1, three
+benchmarks), did not need the re-run
+([Addendum 2026-10-02 evening](#addendum-2026-10-02-evening-the-harness-was-on-the-efficient-cores)).
 
 ### binarytrees' reps: the runner's shape, by the standalone reproduction
 
@@ -1046,7 +1094,7 @@ called repeatedly — what can pay is a function re-created in one VM while
 traces compiled for its earlier closures are still attached (one with no
 bit-operator syntax, which would start its prototype past the threshold): a
 local function defined inside a loop or inside a function called often
-(`bench/oc/nqueens.lua:98` defines `solve` inside its six-rep loop, so every
+(`bench/oc/nqueens.lua:122` defines `solve` inside its six-rep loop, so every
 run makes six closures of it; whether that is behind nqueens'
 compiled-slower-than-interpreted reading outside the machine in section 6,
 0.830 and 0.821, is untested and now a lead — one that must also explain the
@@ -1070,7 +1118,11 @@ flush was removed, such trees last until the machine's VM is replaced (a
 reboot, or a reload that restores the machine into a new, cold VM) or
 something flushes them: the memory-pressure flush, or LuaJIT itself when
 its 1000 trace slots or its 2 MB machine-code reserve fill
-(`lj_trace.c:447`, `:661`; the roadmap's `jit.opt` row).
+(`lj_trace.c:447`, `:661`; the roadmap's `jit.opt` row). **2026-10-02
+evening:** the nqueens lead is confirmed standalone — the same climb, on
+our build and upstream alike, and one `solve` for all six reps makes the
+benchmark 2.4–2.5x faster than the interpreter — while its machine column
+stays unexplained ([nqueens: the same mechanism](#nqueens-the-same-mechanism)).
 
 **The runner now loads per rep.** `bench/oc/ingame-ladder.lua` loads the
 file again for every rep, as the harness suite does (changed 2026-10-02,
@@ -1079,6 +1131,182 @@ disk is still the load-once version; a re-run should copy the new file first
 and expect binarytrees' reps not to climb; on the C-allocator host the fresh
 reps after the first ran up to 1.27x faster than the first (the side result
 above), so they may step down instead.
+
+### nqueens: the same mechanism
+
+Added on the evening of 2026-10-02. `bench/oc/nqueens.lua` defines `local
+function solve` inside its six-rep loop: every rep makes a new
+closure over new tables (`cols`, `d1`, `d2`, `count`) that recurses through
+its own upvalue — the shape the account above names. Three scratch variants
+of the file, each also returning its per-rep times, loaded and called once
+per process the way the harness loads a benchmark (`nqlead/run.lua`): the
+benchmark as it is (`nq-orig.lua`); the same with `jit.flush()` at the top
+of every rep, inside the timed region (`nq-flush.lua`); and one `solve` for
+all six reps with its state reset by assignment, so that its upvalues are
+now reassigned every rep — a second difference, stated in the file
+(`nq-hoist.lua`). Three fresh processes per cell, CHECK `85200` in all 24
+runs, Minecraft closed (`nqlead/run-1/run.log`, 21:26–21:27). Seconds,
+ranges over the processes:
+
+| variant | arm | total | rep 1 | rep 2 | reps 3–6 |
+|---|---|---:|---:|---:|---:|
+| as in the benchmark | r2 | 1.056–1.058 | 0.057–0.060 | 0.087–0.089 | 0.227–0.229 |
+| as in the benchmark | r1 upstream | 1.055–1.091 | 0.058–0.060 | 0.088–0.089 | 0.226–0.237 |
+| `jit.flush()` before each rep | r2 | 0.427–0.429 | 0.058–0.059 | 0.059–0.060 | 0.076–0.078 |
+| `jit.flush()` before each rep | r1 upstream | 0.430–0.435 | 0.059 | 0.057–0.058 | 0.077–0.082 |
+| one `solve` for all reps | r2 | 0.349–0.360 | 0.059–0.066 | 0.057–0.061 | 0.057–0.059 |
+| one `solve` for all reps | r1 upstream | 0.347–0.351 | 0.058–0.059 | 0.059 | 0.056–0.059 |
+| as in the benchmark, `-joff` | r2 | 0.865–0.871 | 0.144–0.145 | 0.144–0.146 | 0.143–0.146 |
+| one `solve`, `-joff` | r2 | 0.866–0.868 | 0.144–0.145 | 0.144 | 0.143–0.146 |
+
+The climb is binarytrees': compiled, rep 1 runs about 2.4x faster than
+interpreted (0.057–0.060 s against 0.143–0.146 s), rep 2 about 1.5x rep 1,
+and from rep 3 every rep runs 3.8–4.0x rep 1 — 1.55–1.66x slower than the
+interpreter — on our build and on pristine upstream alike, so it is upstream
+behaviour. A `jit.flush()` before each rep takes the benchmark from
+1.055–1.091 s to 0.427–0.435 s, and one closure for all six reps to
+0.347–0.360 s, 2.4–2.5x faster than the same variant interpreted
+(0.866–0.868 s). That is section 6's "the compiler makes nqueens slower"
+(0.830 on plain LuaJIT, 0.821 in the capped host, a cause the benchmark's
+own header recorded as not known until this run): not the compiler's work on
+the search itself, but the trace state each rep leaves behind for the next
+rep's new closure — the traces the candidate, as for binarytrees, since the
+flush also clears the penalty cache and no arm here separates the two.
+
+Unlike binarytrees', the flushed reps 3–6 still run about 1.3x rep 1
+(0.076–0.082 s against 0.058–0.059 s, 1.31–1.39x within each process), and
+the step comes exactly at the third closure, where the prototype passes
+`PROTO_CLC_POLY` and the recorder starts specialising calls to the prototype. The closure count is the
+candidate for this 1.3x; no arm separates it from whatever else changes at
+the third rep. (The hoisted variant, whose upvalues are reassigned every rep
+and so cannot be trace constants, runs every rep at rep-1 speed.) Against
+the whole climb's 3.8–4.0x over rep 1 it is the small part; what the flush
+removes is 2.8–3.1x (reps 3–6 0.226–0.237 s unflushed against 0.076–0.082 s
+flushed).
+
+**What this does not explain is the machine column.** In the machine the
+same file reads faster than anywhere standalone (section 5). The six
+seven-benchmark runs of 10-02 at tier `threehalf` launched pinned to the
+performance cores — the P arm of the addendum below, and the baseline, the
+two arena runs and both gate runs of
+[results-allocator-2026-10-02.md](results-allocator-2026-10-02.md), the gate
+runs with no affinity read back — read mins of 0.4339–0.5639 s and maxes of
+1.0871–1.1402 s: every min between the flushed variant's total
+(0.427–0.435 s) and the benchmark's own (1.055–1.091 s), every max at or
+just above the latter. That is the shape that some loads running with a
+flush somewhere among their reps, and others without, would give. The first
+gate run's small-tier boots (placement not read back) read 0.5554/1.0995 at
+tier one and 0.5458/1.1092 at onehalf on the arena, and 1.0890/1.1207 at
+tier one on the pre-arena DLL: that run never read faster than standalone.
+The candidate is LuaJIT's own self-flush — at 1000 traces or a full 2 MB
+machine-code reserve — landing mid-run in a machine
+that already holds the boot's traces (section 5 records the cache emptied
+during the 09-29 suite with the shim's `trace_flushes` still 0); untested.
+
+## Addendum 2026-10-02 evening: the harness was on the efficient cores
+
+The in-game column ended on a test: run the harness with its JVM pinned to
+the performance cores, and if rung 4 falls to the game's numbers, placement
+was it. It was run on 2026-10-02, 21:30–21:35, with Minecraft closed (0
+java processes at the start), together with standalone controls.
+
+**How.** The topology, read with `GetSystemCpuSetInformation`
+(`pcore/cpusets.exe`): EfficiencyClass 1, the 8 performance cores, is
+logical processors 0, 1, 10–13, 22 and 23 (mask `0xC03C03`);
+EfficiencyClass 0, the 16 efficient cores, is 2–9 and 14–21 (`0x3FC3FC`).
+`pcore/affrun.exe` creates its child suspended, sets the child's affinity
+and resumes it; the chain under it (bash → sh → java) inherits the mask, and
+25 s into every harness run the java process's own affinity was read back
+and logged — `0xC03C03`, `0x3FC3FC` and `0xFFFFFF` (unpinned) in the three
+runs. The harness is rung 4's: DLL `bcf8715c…`, the watchdog kernel,
+Temurin JDK 8.0.504, tier `threehalf`, the seven non-quarantined benchmarks,
+compiler on, `OCLJ_REPS=5`; one run per arm, serialised, all three PASS
+56/0. The standalone control is r1, pristine `luajit.exe`, through the
+ladder driver, five fresh processes per cell.
+
+The harness, `PHASE1 ROW` min/max, seconds; the 09-29 column is this
+document's rung 4:
+
+| benchmark | P, `0xC03C03` | E, `0x3FC3FC` | unpinned, 10-02 | unpinned, 09-29 | in-game (T7) |
+|---|---:|---:|---:|---:|---:|
+| mandelbrot | 0.0661/0.0676 | 0.0830/0.0893 | 0.0889/0.1187 | 0.0746/0.1341 | 0.0626 |
+| binarytrees | 0.5168/0.6081 | 0.8280/0.9930 | 0.7760/1.0700 | 0.7146/0.8649 | 0.5586 (rep 1) |
+| trampoline | 0.2276/0.2346 | 0.2887/0.3616 | 0.2814/0.3586 | 0.2756/0.3406 | — |
+| matmul | 0.1049/0.1202 | 0.1629/0.1979 | 0.1179/0.2374 | 0.1608/0.1963 | 0.1031 |
+| strings2 | 0.2636/0.2761 | 0.2847/0.3659 | 0.3771/0.4384 | 0.3046/0.4236 | — |
+| nqueens | 0.5639/1.0871 | 0.7376/1.4677 | 0.8272/1.7375 | 0.6765/1.6082 | — |
+| sha256 | 0.0495/0.0536 | 0.0554/0.0870 | 0.0587/0.0643 | 0.0669/0.0939 | — |
+
+Ratios of the mins to the P arm, and the P arm over the capped host r3c of
+09-29 (section 5's rung 4/r3c in brackets):
+
+| benchmark | E/P | unpinned 10-02/P | unpinned 09-29/P | in-game/P | P/r3c |
+|---|---:|---:|---:|---:|---:|
+| mandelbrot | 1.256 | 1.345 | 1.129 | 0.947 | 1.017 [1.148] |
+| binarytrees | 1.602 | 1.502 | 1.383 | 1.081 | 1.273 [1.760] |
+| trampoline | 1.268 | 1.236 | 1.211 | — | 28.5 [34.45] |
+| matmul | 1.553 | 1.124 | 1.533 | 0.983 | 1.070 [1.641] |
+| strings2 | 1.080 | 1.431 | 1.156 | — | 1.182 [1.366] |
+| nqueens | 1.308 | 1.467 | 1.200 | — | 0.529 [0.635] |
+| sha256 | 1.119 | 1.186 | 1.352 | — | 1.031 [1.394] |
+
+Spreads (max/min): P 1.02–1.18x (nqueens 1.93x), E 1.08–1.57x (nqueens
+1.99x), unpinned 10-02 1.10–2.01x (nqueens 2.10x).
+
+The standalone control, r1, min–max seconds:
+
+| benchmark | P | E | unpinned | E/P | unpinned/P |
+|---|---:|---:|---:|---:|---:|
+| mandelbrot | 0.0650–0.0660 | 0.0680–0.0700 | 0.0650 (all five) | 1.05 | 1.00 |
+| matmul | 0.0800–0.0840 | 0.0890–0.0910 | 0.0810–0.0830 | 1.11 | 1.01 |
+| binarytrees | 0.1950–0.2010 | 0.2130–0.2210 | 0.1880–0.1970 | 1.09 | 0.96 |
+
+- **Pinned to the performance cores, the harness reproduces the game:**
+  mandelbrot 0.0661 against the game's 0.0626, matmul 0.1049 against
+  0.1031, binarytrees 0.5168 against the game's first rep, 0.5586 —
+  in-game/P 0.947, 0.983 and 1.081, where against the unpinned rung 4 of
+  09-29 they were 0.839, 0.641 and 0.782 — on cells of 1.02–1.18x. Unpinned,
+  its mins sit with the efficient-core arm's (1.12–1.50x the P arm, against
+  the E arm's 1.08–1.60x), and its cells include the widest of the three
+  (matmul 2.01x, nqueens 2.10x).
+- **Standalone processes do not need the pin.** Unpinned, r1 ran at
+  performance-core speed (0.96–1.01x the P arm; 1.05–1.11x on the efficient
+  cores), and 09-29's r1 mins (0.0650, 0.0800, 0.1920) match the P arm's
+  (0.0650, 0.0800, 0.1950) to within 2%. So
+  the hidden standalone processes of 09-29 ran at performance-core speed and
+  the hidden harness JVM did not — the condition "The reading" of the
+  in-game column set for placement to explain the harness's excess.
+- **The account these arms support**, without a per-thread record of where
+  the machine thread ran: the harness's machine thread, in a hidden
+  background JVM, lands on efficient cores, migrates between the two kinds,
+  or both; the game, the foreground window, and short CPU-bound standalone
+  processes get performance cores.
+- **The JVM-hosted machine is far more sensitive to the kind of core than
+  standalone LuaJIT**: E/P 1.26x on mandelbrot, 1.55x on matmul and 1.60x on
+  binarytrees in the harness, against 1.05–1.11x standalone. Not explained.
+- **The in-game column's list of candidates resolves to placement as the
+  main factor.** The JVM's flags and collector, the harness's poller and
+  ocelot-brain against GTNH OC were not tested separately, and are not
+  needed to explain the gap. What stays open is mandelbrot: the game's
+  0.0626 is still 2–5% faster than every standalone process, the P-pinned
+  ones included (0.0650–0.0660), and that is still not explained.
+
+**The consequence.** Every harness timing on this box must be pinned to the
+performance cores, and none of this project's was before 21:30 on
+2026-10-02: this document's rung-4 columns, compiler on and off, ran
+unpinned on this box, and the 09-22 document's on the old box. On this box
+the placement is in every rung-4 number above — section 5's residuals,
+section 6's in-machine column, "The box change, in numbers" — and is a
+candidate for the width of the in-machine cells ("What this does not say").
+Pinned, the residual over the capped host is mandelbrot 1.017, sha256 1.031,
+matmul 1.070, binarytrees 1.273, strings2 1.182 and trampoline 28.5, against
+section 5's 1.148, 1.394, 1.641, 1.760, 1.366 and 34.45 (a 10-02 harness run
+over 09-29's r3c; on these six benchmarks the standalone side moved about
+3% at most in those three days — the same evening's r3 read matmul 0.0940
+against 09-29's 0.0970 — and the P arm's standalone cells match 09-29's
+r1). The interpreter column and sieve were not re-run pinned, and whether
+placement mattered on 09-22's box was not tested. `smoke-test.sh` has no
+pinning knob yet; `affrun` lives in the scratchpad.
 
 ## What this does not say
 
@@ -1159,6 +1387,12 @@ above), so they may step down instead.
   and, new, the host with a cap small enough that sieve arms the emergency
   collector 160 times per run, to test whether the collections are what make
   the in-machine sieve faster than the host (sections 4 and 5).
+  **2026-10-02:** the first of these was run
+  ([results-allocator-2026-10-02.md](results-allocator-2026-10-02.md)), and
+  on it the allocator is the rung: r3u over the host on `lj_alloc` reads
+  sieve 2.647, binarytrees 1.785, strings2 1.177 and matmul 1.157. The r3u
+  and r3 rows in this document were measured on the pre-arena shim object
+  `8ef84b32…`. The other three arms still do not exist.
 * **One boot per JIT mode for seven benchmarks.** `arms=0` through the seven
   benchmarks in both boots (MEM-2, later in the JIT-on boot, arms it by
   design: 14 881; the JIT-off boot skips MEM-2), so the emergency collector
@@ -1251,8 +1485,23 @@ above), so they may step down instead.
   `t7reps/run-3/run.log` (r2 and r1 flushed,
   two processes each; r2 and r1 with `-joff`; r2 unflushed in the same run;
   r3 flushed and with `--joff`, one process each).
+- nqueens (2026-10-02, 21:26–21:27, Minecraft closed; md5, first eight hex
+  digits): `nqlead/nq-orig.lua` `55aa72da`, `nqlead/nq-flush.lua`
+  `c4d7bc69`, `nqlead/nq-hoist.lua` `e5e77c08`, `nqlead/run.lua`
+  `c75268fc`, and `nqlead/run-1/run.log` `895e4d7e` (a start line, a done
+  line and 24 process lines: arm, variant, CHECK, TIME and the six rep
+  times).
+- Core placement (2026-10-02, 21:30–21:35): `pcore/cpusets.c` `8b58febb` /
+  `cpusets.exe` `13e5b7e1` (the topology), `pcore/affrun.c` `79e7f120` /
+  `affrun.exe` `fc08cf01`, `pcore/chain.sh` `3dafe006` and `pcore/one.sh`
+  `5d42314f` (the three harness arms), `pcore/chain.log` `fb8f92ba` (the
+  affinity read-backs and every `PHASE1 ROW`), and `pcore/h-P/`, `h-E/`,
+  `h-U/` (each `run.log`, `native.md5`, `exit.txt`, `started.txt`,
+  `finished.txt`). The standalone placement cells' per-process times are
+  transcribed in the session's data notes, `docs-data-2026-10-02.md`
+  (section A); no run log for them was found on disk.
 
-`pf/`, `pf2/` and `t7reps/` are this session's scratchpad
+`pf/`, `pf2/`, `t7reps/`, `nqlead/` and `pcore/` are this session's scratchpad
 (`%LOCALAPPDATA%/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b355bc57-…/scratchpad/`);
 none of it is committed. The benchmark sources are `bench/oc/*.lua` and
 `bench/oc/compat.lua` (md5 `e8684d9c…`, unchanged since the 09-22 cap sweep).

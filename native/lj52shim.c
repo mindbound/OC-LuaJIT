@@ -209,6 +209,7 @@ typedef struct lj52_mem {
   int           accounting; /* jnlua asked for a capped state (ud != NULL)   */
   int           norefuse;   /* >0: charge, but never refuse -- see below     */
   long long     pending;    /* bytes moved while nobody could be told yet    */
+  void         *heap;       /* this state's own lj_alloc arena; NULL = libc  */
   /* -- the deadline watchdog; see its section below -- */
   lua_State    *L;          /* main thread: what the timer callback hooks    */
   double        wd_due;     /* ABSOLUTE ms of the next fire; 0 == disarmed.  */
@@ -279,13 +280,28 @@ static lj52_mem *lj52_memof(lua_State *L) {
   return lua_getallocf(L, &ud) == lj52_alloc ? (lj52_mem *)ud : NULL;
 }
 
-/* Plain libc, the allocator every one of our states is born on.  jnlua's
- * l_alloc_unchecked is realloc/free too, and so was lj52_defalloc before this,
- * so blocks stay interchangeable across every path including lua_close. */
+/* Plain libc: the FALLBACK backing store, used only by a state whose own
+ * lj_alloc arena could not be created (see lj52_back).  Until 2026-10-02 every
+ * state lived here -- jnlua's l_alloc_unchecked is realloc/free too, which is
+ * why it was the original choice -- and that cost up to 2.6x on
+ * allocation-heavy code against LuaJIT's own allocator
+ * (bench/results-allocator-2026-10-02.md). */
 static void *lj52_libc(void *ptr, size_t nsize) {
   if (nsize == 0) { free(ptr); return NULL; }
   return realloc(ptr, nsize);
 }
+
+/* THE BACKING STORE under the accounting.  Each state has its own lj_alloc
+ * arena -- LuaJIT's allocator, the one luaL_newstate would have given it --
+ * created in lj52_newstate before the state and destroyed in lj52_close after
+ * it; M->heap names it.  Every block of a state is allocated, resized and
+ * freed through that one arena for the state's whole life, lua_close
+ * included, so no block ever crosses allocators: the heap-corruption hazard
+ * the "allocator ownership" note in lj52shim.h describes needs a block to
+ * change hands, and none can.  A state whose arena could not be created
+ * (M->heap == NULL) lives on the C library instead, equally consistently.
+ * Defined below the LuaJIT-internal includes, which lj_alloc_f needs. */
+static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize);
 
 /* THE ALLOCATOR.  Reproduces l_alloc_checked's arithmetic exactly -- charge
  * nsize for a fresh block, nsize-osize for a resize, credit osize on free, and
@@ -351,7 +367,7 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
      * NativeLuaArchitecture as a machine with MORE memory than its cap, or as
      * a nonsense total.  Measured, before this was banked: used fell to
      * -387188 across an ordinary allocate-then-collect cycle. */
-    p = lj52_libc(ptr, nsize);
+    p = lj52_back(M, ptr, osize, nsize);
     if (p != NULL || nsize == 0) M->pending += delta;
     return p;
   }
@@ -369,7 +385,7 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
      * under the watermark, and the disarm check wants to see the heap as the
      * VM will see it at the next safepoint. */
     lj52_gc_pressure(M, total, used + delta);
-    free(ptr);
+    lj52_back(M, ptr, osize, 0);
     M->setmem(env, obj, lj52_clampi(used + delta));
     return NULL;
   }
@@ -382,7 +398,7 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     lj52_gc_pressure(M, total, used);
     return NULL;                        /* -> lj_err_mem -> LUA_ERRMEM */
   }
-  p = realloc(ptr, nsize);
+  p = lj52_back(M, ptr, osize, nsize);
   if (p != NULL) {
     M->setmem(env, obj, lj52_clampi(used + delta));
     lj52_gc_pressure(M, total, used + delta);
@@ -579,10 +595,18 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
 #endif
 
 /* LuaJIT internals, for the one thing the timer thread must do without
- * lua_sethook: see lj52_wd_inject. */
+ * lua_sethook (see lj52_wd_inject), and for each state's own allocator arena
+ * (lj_alloc.h, lj_prng.h: see lj52_back and lj52_newstate). */
 #include "lj_obj.h"
 #include "lj_dispatch.h"
 #include "lj_jit.h"
+#include "lj_alloc.h"
+#include "lj_prng.h"
+
+static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
+  if (M->heap != NULL) return lj_alloc_f(M->heap, ptr, osize, nsize);
+  return lj52_libc(ptr, nsize);
+}
 
 /* ===================================================================== */
 /* THE EMERGENCY COLLECTOR.                                              */
@@ -1410,7 +1434,8 @@ static int lj52_jitstats(lua_State *L) {
 
 /* _OCLJ_GCSTATS() -> arms, collects, bailouts, refusals, armed,
  *                    gc_total, gc_threshold, gc_stepmul, gc_state,
- *                    trace_flushes, flush_wanted, flush_refusals, flush_bytes
+ *                    trace_flushes, flush_wanted, flush_refusals, flush_bytes,
+ *                    heap
  *
  * THE INSTRUMENT FOR THE EMERGENCY COLLECTOR, and it is not optional.  A
  * `sieve` that passes with arms == 0 proves nothing about this code -- it
@@ -1440,6 +1465,14 @@ static int lj52_jitstats(lua_State *L) {
  * trace_flushes climbing resume after resume is a machine whose LIVE data
  * alone is past the watermark: nothing to reclaim, correctly interpreted.
  *
+ * The 14th, heap, appended 2026-10-02: 1 when this state's blocks live in its
+ * own lj_alloc arena (lj52_back), 0 when it fell back to the C library, -1
+ * when the state is not on lj52_alloc at all (no record: created outside
+ * lj52_newstate, or by its luaL_newstate fallback, unaccounted).  It is the
+ * fingerprint that says which allocator a measurement ran on.  It reports
+ * that the arena exists; lj52_back is the only path to memory and chooses by
+ * that same pointer, so existence is use.
+ *
  * Read-only, allocates nothing, raw global like _OCLJ_JITSTATS -- the sandbox
  * never sees raw _G. */
 static int lj52_gcstats(lua_State *L) {
@@ -1458,7 +1491,8 @@ static int lj52_gcstats(lua_State *L) {
   lua_pushboolean(L, M ? M->gc_flush_wanted : 0);
   lua_pushinteger(L, M ? M->gc_flushrefusals : -1);
   lua_pushnumber(L, M ? (lua_Number)M->gc_flushbytes : -1);
-  return 13;
+  lua_pushinteger(L, M ? (M->heap != NULL) : -1);
+  return 14;
 }
 
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
@@ -1486,8 +1520,21 @@ void lj52_close(lua_State *L) {
   /* STOP, not merely cancel: on Linux the timer thread must be JOINED before
    * lua_close, because lj52_wd_inject reaches into G(M->L) and the state is
    * about to stop existing. */
-  if (M != NULL) lj52_wd_stop(M);
+  if (M != NULL) {
+    lj52_wd_stop(M);
+    /* jnlua turns the accounting off before every lua_close already; doing it
+     * here as well means a close that skipped that step can never read the
+     * Java state through javaref -- which points into a userdata lua_close is
+     * about to free, and with the arena the page under it can be unmapped --
+     * nor charge a free to it. */
+    M->accounting = 0;
+    M->javaref = NULL;
+  }
   lua_close(L);
+  /* After lua_close, never before: close frees every block -- the GG_State
+   * last -- through lj52_alloc into this arena, and only then may the arena
+   * itself go. */
+  if (M != NULL && M->heap != NULL) lj_alloc_destroy(M->heap);
   free(M);
 }
 
@@ -1573,16 +1620,39 @@ lua_State *lj52_newstate(void) {
   /* The state is born on OUR allocator, with a per-state accounting record as
    * its ud, and that pairing is never changed again -- see the memory
    * accounting section above, and the "allocator ownership" comment in
-   * lj52shim.h for why the state cannot use LuaJIT's own lj_alloc. */
+   * lj52shim.h for why the state's allocf is not LuaJIT's lj_alloc_f.
+   *   Under the accounting, the blocks live in LuaJIT's own allocator all the
+   * same: one lj_alloc arena per state, made here BEFORE the state so that its
+   * very first allocation (the GG_State) lands in it.  lj_alloc_create uses
+   * the PRNG it is given for its first segment only and does NOT keep it, so
+   * the arena is pointed at the stack PRNG at once -- that one lives for the
+   * whole of lua_newstate -- and re-pointed at the state's own PRNG once it
+   * exists, as lj_state_newstate does for LJ_ALLOCF_INTERNAL.  The PRNG only
+   * steers mmap probing for low addresses: Windows never consults it, and on
+   * Linux x64 the first probe normally succeeds.  If the arena cannot be
+   * made, the state falls back to the C library for its whole life (M->heap
+   * stays NULL; lj52_back; _OCLJ_GCSTATS heap = 0). */
   lj52_mem *M = (lj52_mem *)calloc(1, sizeof(lj52_mem));
-  lua_State *L = M ? lua_newstate(lj52_alloc, M) : NULL;
+  lua_State *L = NULL;
+  if (M != NULL) {
+    PRNGState prng;
+    if (lj_prng_seed_secure(&prng)) M->heap = lj_alloc_create(&prng);
+    if (M->heap != NULL) lj_alloc_setprng(M->heap, &prng);
+    L = lua_newstate(lj52_alloc, M);
+    if (L != NULL && M->heap != NULL) lj_alloc_setprng(M->heap, &G(L)->prng);
+  }
   if (!L) {
+    if (M != NULL && M->heap != NULL) lj_alloc_destroy(M->heap);
     free(M);
     M = NULL;
     /* Non-GC64 LuaJIT refuses a foreign allocator on x64. build-native.sh
      * gates on this at stage 1b, so reaching here means someone linked a
-     * different libluajit.a. Fall back so the failure shows up as a
-     * crash-on-close rather than a silent NULL. */
+     * different libluajit.a, or memory ran out.  What this fallback hands
+     * back is a state on LuaJIT's internal allocator with NO accounting
+     * record: lj52_setallocf finds no record and returns, so the machine runs
+     * with its RAM cap silently unenforced (_OCLJ_GCSTATS reads -1 throughout;
+     * the harness's b2 and al-1 fail).  Pre-existing behaviour, kept as it
+     * was; whether it should return NULL instead is on the roadmap. */
     L = luaL_newstate();
     if (!L) return NULL;
   }

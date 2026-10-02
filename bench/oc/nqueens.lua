@@ -42,15 +42,39 @@
 -- 0.993 s (1.67x), and the whole table agrees with these numbers to within
 -- about 7%.
 --
--- WHAT CAUSES THE INVERSION IS NOT KNOWN, and this file previously claimed it
--- was.  The claim was that recursive solve() "trips a trace abort and
--- re-entry on every level".  Measured with a jit.attach("trace") counter, that
--- is false: the recorder starts 118 traces, completes 118, and aborts ZERO.
--- The probe is not blind -- a coroutine-switch positive control run through the
--- same counter reports 13 starts, 2 completions and 11 aborts.  So the
--- compiler records this workload cleanly and the compiled code still loses.
--- The row is reported as measured; the mechanism is left open rather than
--- guessed at.
+-- WHAT CAUSES THE INVERSION -- FOUND 2026-10-02, after this file had been
+-- wrong about it once.  The first claim was that recursive solve() "trips a
+-- trace abort and re-entry on every level".  Measured with a
+-- jit.attach("trace") counter, that is false: the recorder starts 118 traces,
+-- completes 118, and aborts ZERO.  The probe is not blind -- a coroutine-switch
+-- positive control run through the same counter reports 13 starts, 2
+-- completions and 11 aborts.  So the compiler records this workload cleanly
+-- and the compiled code still loses; the row was then reported as measured,
+-- with the mechanism left open rather than guessed at.
+--   The mechanism (bench/results-ladder-2026-09-29.md, "nqueens: the same
+-- mechanism"; docs/roadmap.md, the row on re-calling one loaded chunk):
+-- `local function solve` is defined INSIDE the rep loop below, so every rep
+-- makes a new closure over new tables while the traces compiled for the
+-- earlier reps' closures stay attached.
+-- Per-rep times, 3 fresh processes per cell, CHECK 85200 in every run: rep 1
+-- 0.057-0.060 s, rep 2 0.087-0.089, reps 3-6 0.226-0.237, our build and
+-- upstream LuaJIT alike; with -joff every rep 0.143-0.146.  Rep 1 compiled is
+-- 2.4x faster than interpreted; from rep 3 the reps run 1.6x SLOWER than
+-- interpreted, on the traces the earlier reps left behind.  A jit.flush()
+-- before each rep brings reps 3-6 to 0.076-0.082 (total 0.43 s against
+-- 1.06-1.09 s), and one solve hoisted out of the loop runs every rep at
+-- 0.056-0.066 (total 0.35 s, 2.5x faster than the interpreter's 0.87 s).
+-- What the flush leaves, ~1.3x over rep 1 from the third closure on, sits at
+-- LuaJIT's closure-count threshold (PROTO_CLC_POLY); what the flush removes
+-- is ~3x on top of it (reps 3-6 0.226-0.237 against 0.076-0.082 flushed;
+-- ~3.9x is the whole climb over rep 1).  The loop below is left as published
+-- (it must stay the same computation as bench/nqueens.lua); the inversion
+-- belongs to this shape, on upstream LuaJIT as on ours.  Still open: why this
+-- file reads faster inside a machine than standalone (six runs launched
+-- pinned on 2026-10-02: mins 0.43-0.56 s, maxes 1.09-1.14 s; 0.68 s unpinned
+-- on 09-29); candidate, untested: LuaJIT's own self-flush (1000 traces or
+-- 2 MB of mcode) landing mid-run in a machine that already holds the boot's
+-- traces.
 --
 -- MEMORY, measured, not estimated, and comfortably inside the 450 KB budget.
 -- Under `luajit -joff` with a count hook sampling collectgarbage("count"):

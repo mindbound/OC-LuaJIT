@@ -24,9 +24,13 @@
 #              the trace-abort penalty cache of the dying prototype's loop
 #              heads (native/luajit/patch-penalty-scrub.sh).  The cache is
 #              keyed by bytecode ADDRESS and upstream never clears it when a
-#              prototype dies, so on our CRT heap a program re-loaded from
-#              source inherits its predecessor's penalties and is blacklisted
-#              to the interpreter on the ~9th re-load (2026-09-22;
+#              prototype dies, so on a heap that hands a freed block straight
+#              back -- the machine's was the C library's until 2026-10-02,
+#              and is each state's own lj_alloc arena since, which usually
+#              does the same (docs/research/luajit-penalty-cache-report.md)
+#              -- a program re-loaded from source inherits its
+#              predecessor's penalties and is blacklisted to the interpreter
+#              on the ~9th re-load (2026-09-22;
 #              test/native/penalty_test.c).  Same shape as the jnlua patch:
 #              anchored, applied to the copy, asserted by content before make
 #              -- and the copy's lj_func.c is re-taken from the pristine
@@ -470,6 +474,11 @@ grep -q -- "-DLUAJIT_ENABLE_LUA52COMPAT" "$OCLJ_BUILD/luajit_build.log" \
   || fail "LUA52COMPAT never reached the compiler command line"
 grep -q -- "-DLUAJIT_ENABLE_CHECKHOOK" "$OCLJ_BUILD/luajit_build.log" \
   || fail "CHECKHOOK never reached the compiler command line"
+# And one flag must NOT be there: LUAJIT_USE_SYSMALLOC compiles lj_alloc out,
+# and the shim keeps every state's blocks in an lj_alloc arena (lj52_back).
+if grep -q -- "-DLUAJIT_USE_SYSMALLOC" "$OCLJ_BUILD/luajit_build.log"; then
+  fail "LUAJIT_USE_SYSMALLOC is on: lj_alloc is compiled out, and the shim's per-state arenas (lj52_back) need it"
+fi
 
 LJEXE=$LJ/luajit.exe; [ -x "$LJEXE" ] || LJEXE=$LJ/luajit
 [ -x "$LJEXE" ] || fail "no luajit interpreter was produced"
@@ -501,11 +510,12 @@ case "$CHN" in ''|*[!0-9]*) fail "checkhook probe produced no number: $CH" ;; es
          and will hang with the JIT on."
 
 # --------------------------------------------------------------- 1b
-# The shim creates the state with a libc allocator (lua_newstate) because
-# jnlua.c hands LuaJIT-owned blocks to libc free() at close time otherwise.
-# Only a GC64 build tolerates a foreign allocator on x64.  Prove it here,
-# at build time, rather than discovering it as a JVM-killing heap
-# corruption at close time.
+# The shim creates the state with its OWN allocf, lj52_alloc (lua_newstate),
+# and never swaps it, so no block ever changes allocators; since 2026-10-02 the
+# blocks underneath live in a per-state lj_alloc arena (lj52_back).  Only a
+# GC64 build accepts a caller-supplied allocf on x64.  This probe proves that
+# property with a plain realloc/free allocf -- the property, not our
+# allocator -- at build time rather than as a machine running unaccounted.
 say "=============== 1b. GC64 / foreign-allocator gate ==============="
 cat > "$OCLJ_BUILD/allocprobe.c" <<'EOF'
 #include <stdio.h>
@@ -530,8 +540,9 @@ PROBE=$("$OCLJ_BUILD/allocprobe.exe" 2>&1)
 say "    $PROBE"
 [ "$PROBE" = "FOREIGN-ALLOC-OK" ] \
   || fail "this LuaJIT refuses a foreign allocator (non-GC64 x64 build).
-         lj52_newstate() would silently fall back to LuaJIT's own allocator and
-         jnlua's close-time free() would corrupt the heap and kill the JVM."
+         lj52_newstate() would fall back to luaL_newstate: a state on LuaJIT's
+         internal allocator with no accounting record, the RAM cap silently
+         unenforced (_OCLJ_GCSTATS heap = -1; the harness's b2 and al-1 fail)."
 
 # --------------------------------------------------------------- 2
 say "=============== 2. lj52shim.c ==============="
@@ -545,6 +556,15 @@ rm -f "$OBJ/lj52shim.o"
 SW=$(grep -c 'warning:' "$OCLJ_BUILD/shim.err" || true)
 say "    -Wall -Wextra warnings = $SW"
 [ "$SW" = "0" ] || { grep -E 'warning:' "$OCLJ_BUILD/shim.err" | head -20; fail "the shim must compile warning-clean"; }
+# The per-state lj_alloc arena (lj52_back) binds to LuaJIT internals.  Prove
+# the object references them, so a change that quietly drops every state back
+# onto the C library -- measured up to 2.6x slower on allocation-heavy code --
+# cannot pass the build.  (The pre-arena object, 8ef84b32, references none.)
+for sym in lj_alloc_create lj_alloc_f lj_alloc_destroy lj_alloc_setprng lj_prng_seed_secure; do
+  nm -u "$OBJ/lj52shim.o" 2>/dev/null | grep -qw "$sym" \
+    || fail "lj52shim.o does not reference $sym: the per-state lj_alloc arena (lj52_back) is gone"
+done
+say "    lj_alloc arena symbols referenced: lj_alloc_create, lj_alloc_f, lj_alloc_destroy, lj_alloc_setprng, lj_prng_seed_secure"
 
 # --------------------------------------------------------------- 3
 say "=============== 3. OC-JNLua jnlua.c (checkout unmodified; one diagnostic line patched on a copy; shim force-included) ==============="

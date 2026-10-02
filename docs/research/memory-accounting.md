@@ -121,6 +121,36 @@ jnlua encodes its own intent in `ud`: `l_alloc_checked` is always installed with
 `ud != NULL`, so the close path correctly stops us writing through a weak ref
 the JVM is about to drop.
 
+**Where the blocks live, since 2026-10-02.** The pairing above is unchanged —
+`lj52_alloc` is still the state's allocf and the record still its `ud` — but
+`lj52_alloc` no longer calls `realloc`/`free` itself. Its three memory touches
+(the uncharged one, banked in `pending` while nobody can be told; the charged
+free; the charged allocation or resize) go through
+`lj52_back(M, ptr, osize, nsize)`, which hands them to
+`lj_alloc_f(M->heap, ...)` — LuaJIT's own allocator, one arena per state — or,
+when `M->heap` is NULL, to the C library. `lj52_newstate` creates the arena
+(`lj_prng_seed_secure` + `lj_alloc_create`) *before* `lua_newstate`, so the
+state's very first block, the `GG_State`, lands in it; points it at the stack
+PRNG at once (`lj_alloc_create` uses the PRNG it is given for its first
+segment and does not keep it); and re-points it at `G(L)->prng` once the state
+exists. `lj52_close` turns the accounting off and clears the Java reference,
+calls `lua_close` — which frees every block, the `GG_State` last, through
+`lj52_alloc` into the arena — and only then `lj_alloc_destroy`. So every block
+is allocated, resized and freed by one allocator for its whole life,
+`lua_close` included, and the close-time heap corruption the "allocator
+ownership" note in `lj52shim.h` guards against (a block changing allocators)
+cannot arise. If the arena cannot be created, the state lives on the C library
+for its whole life, accounted the same. That is not the `luaL_newstate`
+fallback taken when `lua_newstate` itself fails, which hands back a state with
+no record at all — unaccounted, pre-existing, open on the roadmap.
+`_OCLJ_GCSTATS` returns a 14th value, `heap`: 1 on the arena, 0 on the
+C-library fallback, -1 with no record. The charge is unchanged — requested
+sizes are counted, not the backing: one binarytrees run makes 14 076 162
+accounting gets on the arena host against 14 075 754 on the C library — and
+the C library had cost up to 2.6x on allocation-heavy code in a bare host
+(sieve) and 1.55x in the pinned harness (sieve 0.1612 against 0.1037 s;
+`bench/results-allocator-2026-10-02.md`).
+
 ## 5. Why this had to land with the `lua_pushcfunction` change
 
 jnlua pushes a static `*_protected` function at **38 sites**, each in a bare JNI
