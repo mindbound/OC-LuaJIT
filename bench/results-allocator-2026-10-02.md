@@ -3,7 +3,8 @@
 Date: 2026-10-02, 21:36–22:16, on the box of
 [results-ladder-2026-09-29.md](results-ladder-2026-09-29.md) (Intel Core Ultra
 9 285HX: 8 performance and 16 efficient cores, no SMT; Windows 11 Pro), with
-Minecraft closed (0 `javaw` processes) for every timing below. This document
+Minecraft closed (0 `javaw` processes) for every timing below but the
+in-game section's (T8, added 2026-10-03). This document
 answers the question that ladder's section 2 left open, describes the change
 the answer led to, and records the gates the change passed. Every in-machine
 timing here was taken with the harness JVM launched pinned to the performance
@@ -11,8 +12,11 @@ cores, for the reason in the ladder's
 [2026-10-02 evening addendum](results-ladder-2026-09-29.md#addendum-2026-10-02-evening-the-harness-was-on-the-efficient-cores);
 the java process's affinity was read back on the chain runs, not on the gate
 runs ("What this does not say").
-Every number is in a file under this session's scratchpad (Files, at the end;
-the churn times survive only in the session's data notes there).
+Every number outside the in-game section is in a file under this session's
+scratchpad (Files, at the end; the churn times survive only in the session's
+data notes there); that section's T8 figures are transcribed from a
+screenshot of the game, and what it quotes from the ladder (T7, r1, r3c, the
+shared-VM reps, the 09-29 call counts) is that document's.
 The same evening's two other findings — that the unpinned harness had been
 reading in the efficient-core arm's range, and that nqueens'
 compiled-slower-than-interpreted reading is the stale-trace mechanism — are
@@ -300,6 +304,151 @@ against 0.0661; nqueens 0.4339 against 0.5639). Standalone processes needed
 no pin: unpinned, they ran at performance-core speed in the
 same addendum.
 
+## In game (T8, 2026-10-03)
+
+The game's side of the A/B above: T8 in
+[docs/in-game-tests.md](../docs/in-game-tests.md), run on 2026-10-03 in the
+game session that began at 10:20 (the instance's `latest.log`: world joined
+10:24:36, screenshot saved 10:25:10, so the run lies between the two), on
+this box, in the same world and on the same 16 MB machine as T7, a day and
+one game session after it. Checked before this section was written: the only
+`ocluajit-*.jar` in the instance's `mods/` is
+`ocluajit-d20a14d-master+d20a14d376-dirty.jar` (780 887 B), whose Windows
+native is `88b50796…`, the shipping DLL of the gates and of the
+fingerprinted A/B above; and the runner on the computer's disk is
+byte-identical to the repo's `bench/oc/ingame-ladder.lua` (`a20fdf67`), the
+version that loads the file afresh for every rep. Nothing in the game reads
+`heap` (the sandbox never sees `_OCLJ_GCSTATS`), so that the game's machine
+ran on the arena rests on the jar, not on a reading. Transcribed from a
+screenshot of the computer's screen:
+
+```
+OpenOS 1.8.9 (16384k RAM)
+/home # ./ingame-ladder.lua
+machine RAM total=16384 KB free=16133 KB  jit global=false
+mandelbrot   CHECK=37904620  min=0.0637 s  reps: 0.064 0.066 0.066 0.065 0.067
+matmul       CHECK=481.0000  min=0.0946 s  reps: 0.097 0.095 0.116 0.095 0.097
+binarytrees  CHECK=7038400   min=0.4202 s  reps: 0.420 0.424 0.432 0.428 0.426
+```
+
+All three CHECKs equal the references. Min of 5, seconds. T7 is the
+2026-10-02 run on the pre-arena DLL `bcf8715c…` with the load-once runner
+(binarytrees: its first rep, the only comparable one); ship-1 and ship-2 are
+the fingerprinted shipping runs in "In the machine"; r1 is plain LuaJIT
+(the ladder's, 09-29) and r3l the arena host with the 64 MB accounting
+(above), both min of 5 fresh processes:
+
+| benchmark | T8 `88b50796` | T7 `bcf8715c` | ship-1 / ship-2 | T8/T7 | r1 | T8/r1 | r3l | T8/r3l |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| mandelbrot | 0.0637 | 0.0626 | 0.0637 / 0.0638 | 1.018 | 0.0650 | 0.980 | 0.0650 | 0.980 |
+| matmul | 0.0946 | 0.1031 | 0.0978 / 0.0954 | **0.918** | 0.0800 | 1.183 | 0.0850 | 1.113 |
+| binarytrees | 0.4202 | 0.5586 | 0.4295 / 0.4127 | **0.752** | 0.1920 | 2.189 | 0.2370 | 1.773 |
+
+- **The prediction is met.** The expectation T8 printed before the run, if
+  the game tracked the pinned harness as it did at T7: binarytrees from
+  T7's 0.5586 toward about 0.44 s, matmul toward about 0.095 s, mandelbrot
+  not at all. binarytrees read 0.4202 (0.752x; its first rep against T7's
+  first, 0.420/0.559, 0.751x), a little below the expectation; matmul
+  0.0946 (0.918x); mandelbrot, which makes under 800 allocator calls a run,
+  1.018x, inside the 0.0632–0.0671 that the pinned harness's mins of the
+  two DLLs spread over in all six of its runs (base-1, base-2, ship-1,
+  ship-2, the P arm and the gate run). That is about what the harness
+  moved: shipping over pre-arena reads 0.728–0.797 on binarytrees and
+  0.866–0.935 on matmul across the two fingerprinted shipping runs and the
+  two pre-arena ones (base-1, base-2). Within the 23:07 chain alone
+  (base-2) the ranges are 0.728–0.757 and 0.866–0.887: binarytrees' 0.752
+  falls inside its range, matmul's 0.918 only with base-1, from the 21:38
+  chain.
+- **The pinned harness predicted the game again.** binarytrees' 0.4202 sits
+  between the two shipping runs' mins (0.4127, 0.4295), mandelbrot's 0.0637
+  on them (0.0637, 0.0638), and matmul's 0.0946 0.8% below the faster
+  (0.0954), inside the prototype's 0.0942–0.0946. As at T7 it is one game
+  run against one chain; the game has now tracked the pinned harness twice,
+  on two DLLs.
+- **binarytrees' reps are flat**: 0.420, 0.424, 0.432, 0.428, 0.426
+  (1.03x), where T7's climbed 0.559 → 0.717 → 0.941 (1.68x). This is
+  consistent in game with the ladder's runner-shape finding
+  ([binarytrees' reps](results-ladder-2026-09-29.md#binarytrees-reps-the-runners-shape-by-the-standalone-reproduction)):
+  standalone, the climb belonged to one loaded chunk called five times, and
+  the per-rep runner loads the chunk afresh. Two things changed between T7
+  and T8, the DLL and the runner, and this run alone does not separate them;
+  but the climb is a within-run shape, and standalone one loaded chunk
+  climbed on `lj_alloc` (r2) and on the C library (r3) alike while fresh
+  loads did not climb on either, so the allocator is not needed to explain
+  it (the arena host itself was not run in the load-once shape). At the
+  first rep binarytrees' own chunk is a fresh load in both runs; the runners
+  differ in what the earlier benchmarks left in the VM before it (five loads
+  each of mandelbrot and matmul at T8, one each, called five times, at T7).
+  No arm varied that, and what attributes the first rep's drop to the DLL
+  is the pinned harness's A/B (ship over base 0.728–0.797, the first reps'
+  0.751 inside it). T8's first rep is also its min — no
+  step down after it, as on `lj_alloc` standalone (r2 fresh 0.193–0.210 s),
+  where the C-library host's fresh reps had run up to 1.27x faster than its
+  first.
+- **matmul's third rep read 0.116** against 0.095–0.097 for the other four
+  (1.23x the min); one rep, not explained. mandelbrot's reps spread
+  0.064–0.067 (1.05x), where T7 printed 0.063 five times.
+- **Cumulative against plain LuaJIT** (r1): mandelbrot 0.980, matmul 1.183,
+  binarytrees 2.189x, against T7's 0.963, 1.289 and 2.909x. mandelbrot is
+  still faster in the game than every standalone process: on the 1 ms clock
+  r1's 0.0650 means 0.0640–0.0660, so 0.5–3.5% faster (T7: 2.2–5.2%); not
+  explained. Over the arena host the game reads 0.980, 1.113 and 1.773, as
+  the pinned prototype did (0.969, 1.113 and 1.737; "In the machine").
+
+**What remains on binarytrees, on both DLLs.** Take the bare host from the
+game: T7 sat 0.153 s a run above the C-library host with the cap (0.5586
+against the ladder's r3c, 0.4060, 09-29), T8 sits 0.183 s above the arena
+host with the accounting (0.4202 against r3l, 0.2370). Both host readings
+are one rep per cold process. On the C library that is the host's slow first
+run: in one process its later fresh loads ran 0.339–0.375 s (r3, 64 MB; the
+ladder's side result, a step of 1.12–1.27x), a step the long-lived machine
+may already have paid, and against them T7's remainder would be 0.18–0.22 s.
+No arm looked for such a step on the arena host (`luajit.exe` on `lj_alloc`
+showed none). The allocator change took its cost out of the host (0.4060 →
+0.2370 s standalone) and the game fell with it; an in-machine cost of about
+0.15–0.18 s a run over cold host processes (0.18–0.22 s for T7 on the
+later-loads reading) remained on both DLLs. Spread over the run's 14.08 M
+accounted allocator calls (the standalone count; no in-game count was read),
+that is about 11–13 ns a call (up to 16 ns on that reading) — a per-call
+equivalent, not a per-call measurement.
+
+Across the benchmarks it grows with allocation. mandelbrot, 472–497 calls a
+run, shows none of it (0.980x the arena host); in the game matmul, about
+0.82 M calls, sits 0.0096 s above r3l, 11.8 ns a call, against binarytrees'
+13.0 ns. Over r3l the pinned harness's shipping runs (ship-1, ship-2) come to
+12.5–13.7 ns a call on binarytrees, 12.7–15.7 on matmul and 15.8–19.7 on
+strings2 (3.19 M calls), near enough to fit one per-call cost; sieve does
+not, at about 210 ns (0.1013 against 0.0860 s over 72.5 K calls), in its own
+machine (the sieve machines above armed the emergency collector 640–800
+times). The ladder's 09-29 arithmetic (the unpinned harness, the compiler
+off, an assumed pure-loop factor) put binarytrees and strings2 2.5–3x apart
+per call (19–24 against 48–68 ns) and read that as against a single
+per-allocation cost; pinned, with the compiler on, they are 1.2–1.6x apart.
+Candidates, none separated by any arm here, and not ranked by these figures,
+which any cost that grows with allocation would fit: the JNI crossing on
+every allocation — in a machine each accounted call goes through jnlua's
+`getthreadenv`, `getluamemory` and `setluamemory`, which the bare host
+replaces with plain C accessors on a struct; the machine's arena, long-lived
+and already used by OpenOS's boot and the earlier benchmarks, against each
+host process's fresh one ("In the machine" names the long-lived heap for the
+harness's smaller gain too); the collections binarytrees triggers, which in
+a machine traverse a state that also holds OpenOS and the kernel; the
+sandbox (OC's replaced builtins, OpenOS's patched globals, the per-resume
+watchdog arm/disarm, in-sandbox trace aborts); the JVM. The crossing is
+unmeasured: for it to be all of the remainder, a call through the JNI
+accessors would have to cost about 11–13 ns more than through the plain C
+ones, where the plain-C accounting as a whole costs about 2 ns a call on the
+arena (r3l/r3ul, above). The arm that would measure it is a host on jnlua's
+real JNI accessors under a JVM, or a batched-publish prototype (the
+roadmap's "Benchmark the accounting's cost" row). The 0.03 s between the two
+remainders is the machine gaining fewer seconds than the host — the game
+0.138 s, the host 0.169 s — as in the harness ("In the machine": 0.127
+against 0.167 s), across two days, two game sessions and two host baselines
+(r3c on 09-29, r3l on 10-02). It is no larger than what the choice of T7's
+host reading moves: against the later loads the host would gain
+0.10–0.14 s, no more than the game's 0.138. The host's first-run step is a
+candidate for it, as "In the machine" names it for the harness's gap.
+
 ## Where it loses
 
 Two synthetic loops, `bigchurn.lua` and `smallchurn.lua`
@@ -396,13 +545,17 @@ working tree with the review's fixes applied:
 
 ## What this does not say
 
-* **No in-game number yet.** T8 in
-  [docs/in-game-tests.md](../docs/in-game-tests.md), the in-game run on the
-  shipping jar, has not been made. If the game tracks the pinned harness as it did at T7
-  (mandelbrot 0.0626 against 0.0661, matmul 0.1031 against 0.1049,
-  binarytrees 0.5586 against 0.5168), binarytrees would move from T7's
-  0.5586 toward about 0.44 s, matmul toward about 0.095 s, and mandelbrot
-  not at all. That is an expectation, not a measurement.
+* **One in-game run on the arena.** T8 ([In game](#in-game-t8-2026-10-03))
+  is one game session against one fingerprinted chain, a day after T7 and
+  with the runner changed as well as the DLL (the standalone runs put
+  binarytrees' later reps on the runner; at its first rep the runners differ
+  in what the earlier benchmarks left in the VM, which no arm varied).
+  Nothing in the game reads `heap`, so that the game's machine ran on the
+  arena rests on the jar. The 0.15–0.18 s a run the game pays over cold
+  bare-host processes on binarytrees, on both DLLs (0.18–0.22 s for T7
+  against the C-library host's later loads), is not separated; the JNI
+  crossing, the machine's long-lived arena and collections over the OpenOS
+  heap are among its candidates, none measured and none ranked.
 * **Resident memory across many machines is unmeasured.** The review's three
   notes (each arena held near its peak until close, no reuse across machines,
   a 128 KB first segment per machine) come from the source; no run here had

@@ -757,7 +757,13 @@ binarytrees  CHECK=7038400   min=0.5586 s  reps: 0.559 0.717 0.941 0.898 0.921
 ```
 
 All three CHECKs equal the references and every standalone and harness arm
-above.
+above. **2026-10-03:** T8 re-ran the three files in the same world on the
+arena DLL `88b50796…` with the per-rep runner — mandelbrot 0.0637, matmul
+0.0946, binarytrees 0.4202 s (0.980 / 1.183 / 2.189x r1), binarytrees' reps
+flat at 0.420–0.432 s
+([results-allocator-2026-10-02.md](results-allocator-2026-10-02.md#in-game-t8-2026-10-03),
+"In game (T8, 2026-10-03)"); the column below stays T7's, measured on the
+pre-arena DLL `bcf8715c…` with the load-once runner.
 
 ### What ran
 
@@ -929,7 +935,11 @@ The in-game reps climb 0.559 → 0.717 → 0.941, 0.898, 0.921: 1.28x the first
 at the second call and 1.61–1.68x at the third to fifth. That is the shape
 one loaded chunk called repeatedly produces standalone, on all three builds
 run (r1 upstream, r2, r3); the in-game run with the per-rep runner, which
-would test this there, has not been made. The shared-VM runs (`t7reps`,
+would test this there, has not been made (**2026-10-03:** made, as T8, on
+the arena DLL `88b50796…`: reps 0.420, 0.424, 0.432, 0.428, 0.426 s, flat —
+consistent with this, though the DLL changed as well;
+[results-allocator-2026-10-02.md](results-allocator-2026-10-02.md#in-game-t8-2026-10-03)).
+The shared-VM runs (`t7reps`,
 2026-10-02, 15:32–15:35, with Minecraft open in-world in the background):
 `reps.lua` runs one benchmark for N reps in one process under the driver's
 sandbox denials except `arg`, either calling one loaded chunk every rep
@@ -1130,7 +1140,11 @@ after this run; its header says why). The copy on the experiment world's
 disk is still the load-once version; a re-run should copy the new file first
 and expect binarytrees' reps not to climb; on the C-allocator host the fresh
 reps after the first ran up to 1.27x faster than the first (the side result
-above), so they may step down instead.
+above), so they may step down instead. **2026-10-03:** T8 ran the new copy,
+on the arena DLL `88b50796…`: binarytrees' reps 0.420–0.432 s, the first
+of them the min — flat, no step down, as on `lj_alloc` standalone (r2
+`fresh`, above;
+[results-allocator-2026-10-02.md](results-allocator-2026-10-02.md#in-game-t8-2026-10-03)).
 
 ### nqueens: the same mechanism
 

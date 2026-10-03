@@ -289,7 +289,8 @@ sit in every in-game ratio — and the largest factor in binarytrees' 2.9x is
 still the allocator rung (1.92x), not the in-game rung (1.38x)
 (**2026-10-02:** each machine's own `lj_alloc` arena removes most of that
 rung — 1.92x to 1.08x our `luajit.exe` standalone, and binarytrees 0.539 to
-0.411 s in the pinned harness; not yet re-measured in game, see T8).
+0.411 s in the pinned harness; not yet re-measured in game, see T8;
+**2026-10-03:** T8 reads 0.4202 s in game, against this run's 0.5586).
 binarytrees' reps climbed (0.559 → 0.717 → 0.941 / 0.898 / 0.921) the way one
 loaded chunk called five times climbs standalone on all three builds run,
 upstream included. Standalone, a `jit.flush()` before each call removed the
@@ -349,4 +350,37 @@ from T7's 0.5586 s (its first rep) toward ~0.44 s, matmul from 0.1031 toward
 harness as it did at T7. With a fresh load per rep, binarytrees' reps should
 not climb.
 
-**Result: pending.**
+**Result: measured 2026-10-03**, in the game session that began at 10:20
+(`latest.log`: world joined 10:24:36, screenshot saved 10:25:10), in the same
+world and on the same 16 MB machine as T7.
+Checked before the result was written: the `d20a14d` jar (780 887 bytes) is
+the only `ocluajit-*.jar` in `mods/`, and its Windows native is `88b50796`,
+the shipping DLL the pinned harness ran; the runner on the disk is
+byte-identical to the repo's `bench/oc/ingame-ladder.lua` (`a20fdf67`, the
+per-rep one). CHECKs as expected. Min of 5, seconds; T7's binarytrees is its
+first rep:
+
+| benchmark | T8 | T7 | pinned harness, shipping DLL (ship-1 / ship-2) | T8/T7 |
+|---|---:|---:|---:|---:|
+| mandelbrot | 0.0637 | 0.0626 | 0.0637 / 0.0638 | 1.018 |
+| matmul | 0.0946 | 0.1031 | 0.0978 / 0.0954 | 0.918 |
+| binarytrees | 0.4202 | 0.5586 | 0.4295 / 0.4127 | 0.752 |
+
+The prediction is met: binarytrees fell to 0.4202 s, a little below the
+~0.44 expected (rep 1 against rep 1, the only comparable pair, 0.751x),
+matmul to 0.0946, and mandelbrot, which barely allocates, read 1.018x. The
+pinned harness predicted the game again: binarytrees (between 0.4127 and
+0.4295) and mandelbrot (on 0.0637–0.0638) sit within the two shipping runs'
+mins, matmul 0.8% below the faster. binarytrees' reps are flat — 0.420,
+0.424, 0.432, 0.428, 0.426 (1.03x), where T7's climbed to 1.68x the first —
+consistent in game with the climb being the load-once runner's shape, as
+the standalone runs predicted (T7's result); the DLL changed too, but
+standalone the climb appeared on `lj_alloc` and the C library alike while
+fresh loads did not climb on either. T8's first rep is its min: no step down either.
+matmul's third rep read 0.116 against 0.095–0.097 for the other four; one
+rep, not explained. Against plain LuaJIT the game now reads 0.98 / 1.18 /
+2.19x (T7: 0.96 / 1.29 / 2.91x); what it pays over the arena host on
+binarytrees, about 0.18 s a run, is not separated (the candidates are in the
+detail).
+Detail: [bench/results-allocator-2026-10-02.md](../bench/results-allocator-2026-10-02.md#in-game-t8-2026-10-03),
+"In game (T8, 2026-10-03)".
