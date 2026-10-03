@@ -304,6 +304,39 @@ per rep.
 Detail: [bench/results-ladder-2026-09-29.md](../bench/results-ladder-2026-09-29.md),
 "The in-game column".
 
+## T9 — the accounting without a JNI crossing, in game
+
+Shape: until this change every allocation a machine made crossed into the JVM
+to keep jnlua's two memory fields current; now `LuaStateLuaJIT` hands the cap
+to the shim and reads the used figure back only when `getFreeMemory()` is
+called, and the allocations in between are plain C
+([docs/accounting-sync.md](accounting-sync.md),
+[bench/results-accounting-2026-10-03.md](../bench/results-accounting-2026-10-03.md)).
+In the ocelot-brain harness pinned to the performance cores -- which predicted
+T7 and T8 -- with the class the only difference: binarytrees 0.2500–0.2564 s
+against 0.4239–0.4247, matmul 0.0881–0.0888 against 0.0947–0.0957,
+mandelbrot 0.0643–0.0665 against 0.0632–0.0636. So the prediction for the
+game: binarytrees near 0.25 s (T8: 0.4202), matmul near 0.089 (T8: 0.0946),
+mandelbrot unchanged (T8: 0.0637). A measurement, not a pass/fail, beyond the
+CHECKs.
+
+1. **With the game closed**, in
+   `C:/Games/Minecraft/instances/Main/minecraft/mods/` remove
+   `ocluajit-d20a14d-master+d20a14d376-dirty.jar` (T8's) and put
+   `build/libs/ocluajit-0c656ac-master+0c656aca22-dirty.jar` in its place
+   (782 707 bytes; the non-`-dev` one). It carries the DLL `cb29485d`; the
+   serializer hash (`8c5a1168`) and the kernel (`089dcbde`) are unchanged, so
+   T8's world loads as it was. `bench/oc/ingame-ladder.lua` has not changed
+   since T8 and stays.
+2. Launch, load the world, open the computer and power-cycle it (Before every
+   test, step 3).
+3. At the shell: `ingame-ladder` (or `lua /home/ingame-ladder.lua`).
+
+Also worth a glance, not part of the measurement: `computer.freeMemory()` at
+the shell still falls as a program allocates and recovers after it ends, as
+before -- the figure is now read from the shim, and the harness asserts it is
+exact to the byte.
+
 ## T8 — the allocator change in game
 
 Shape: until 2026-10-02 every machine's heap was the C library's

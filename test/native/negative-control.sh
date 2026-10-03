@@ -334,13 +334,22 @@ build_variant_mem stopgap
 # M6b  a RAW push is NOT refused -- which makes M6a vacuous, and saying so is
 #      the point of asserting both halves rather than one
 # M7   the push is not charged
-expect_mem stopgap "a discarded allocator swap is caught" 1 M3 M3b M4 M4c M5 M6b M7
+# P1a, P2a-c, P2e-h  (since the trace flush, 2026-09-22; this list predated
+#      them and the script had not run since) no emergency cycle can arm
+#      against a cap nobody charges, so nothing downstream of the arm happens
+# M3c, M9, C0b, C0d, C3a, C4b, C5a, C5b, C6  (since the accounting's C side,
+#      2026-10-03) the native figure and Java's no longer agree, nothing crosses
+#      JNI, and in C mode too nothing is refused and no cycle arms
+expect_mem stopgap "a discarded allocator swap is caught" 1 \
+  M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a C5b C6
 
 
 # --- 4.2 nopending: drop the pre-binding bytes instead of banking them
 mkdir -p "$WORK/nopending"
 cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/nopending/"
-sed -i 's|^    if (p != NULL \|\| nsize == 0) M->pending += delta;$|    /* sabotage: the bytes are dropped */|' \
+# The banking line sits in a block since the accounting's C side (2026-10-03):
+# the bank is dropped, the native figure (M->used) on the line after it kept.
+sed -i 's|^      M->pending += delta;$|      /* sabotage: the bytes are dropped */|' \
   "$WORK/nopending/lj52shim.c"
 grep -q 'sabotage: the bytes are dropped' "$WORK/nopending/lj52shim.c" \
   || fail "nopending: the sabotage patch did not apply"
@@ -359,7 +368,14 @@ build_variant_mem nopending
 #     positive again, so the cap taken from it is tight and the raw push really
 #     is refused.  A control that expected everything downstream to fail would
 #     be asserting noise rather than the defect.
-expect_mem nopending "dropping pre-binding bytes is caught" 1 M4b M5
+# M7  also fails, and did on HEAD's tree before the accounting's C side
+#     (2026-10-03): by M7 the runaway M5 has left about a gigabyte of garbage,
+#     and the check measures the push's NET effect on `used`.  The likely
+#     reading, not verified: a collector step inside the push frees more than
+#     the push charges.
+# M3c, C0b  (since 2026-10-03) the native figure keeps the bytes Java's drops:
+#     the two disagree, in the M state and at the C state's handover.
+expect_mem nopending "dropping pre-binding bytes is caught" 1 M4b M5 M7 M3c C0b
 
 # --- 4.3 norefuse: remove the pushcfunction window.  MUST DIE. -------
 mkdir -p "$WORK/norefuse"

@@ -16,8 +16,11 @@ import java.io.OutputStream;
  * That is how OpenComputers runs 5.2, 5.3 and 5.4 side by side in one JVM, and
  * it is what lets OC-LuaJIT be ADDITIVE rather than a replacement.
  *
- * No behavioural overrides, deliberately: we are 5.2-class, so the base class's
- * arith/gc enum numbering is already correct and inheriting it is the point.
+ * Three behavioural overrides, and only these: the capped constructor,
+ * getFreeMemory() and setTotalMemory(int) keep the memory accounting's figures
+ * on the native side, so an allocation never crosses JNI to account for itself
+ * (docs/accounting-sync.md). Nothing else is overridden: we are 5.2-class, so
+ * the base class's arith/gc enum numbering is already correct.
  *
  * The nested LuaDebug is MANDATORY: jnlua.c JNI_OnLoad does
  * referenceclass(JNI_LUASTATE_CLASS "$LuaDebug") at :1741 and fails the
@@ -32,7 +35,48 @@ public class LuaStateLuaJIT extends LuaState {
 
     public LuaStateLuaJIT(int memory) {
         super(memory);
+        // Hand the cap to the native side: from here on an allocation does not
+        // cross JNI to account for itself. Outside the monitor, and safely so:
+        // this object has not yet escaped its constructor.
+        ocljSetTotalMemory(memory);
     }
+
+    /* ---- the memory accounting's Java boundary: docs/accounting-sync.md ---- */
+
+    /**
+     * The native side's figure once the state has handed over, which every
+     * allocation keeps exact; jnlua's own before that and after close, where
+     * the native side answers -1. An uncapped state never hands over, so it
+     * asks no native at all: exactly jnlua's behaviour, and a library built
+     * before these natives still serves it (computer.lua.limitMemory=false).
+     */
+    @Override
+    public synchronized int getFreeMemory() {
+        if (super.getTotalMemory() < 1) {
+            return super.getFreeMemory();
+        }
+        long used = ocljUsedMemory();
+        if (used < 0) {
+            return super.getFreeMemory();
+        }
+        return (int) Math.max(0L, (long) super.getTotalMemory() - used);
+    }
+
+    /**
+     * jnlua's validation and its refusal on an uncapped state run first; the
+     * native side then holds the new cap for the very next allocation.
+     */
+    @Override
+    public synchronized void setTotalMemory(int value) {
+        super.setTotalMemory(value);
+        ocljSetTotalMemory(super.getTotalMemory());
+    }
+
+    /** The native side's used figure; -1 before the handover, after close. */
+    private native long ocljUsedMemory();
+
+    /** Hands the cap to the native side, switching it to native accounting. */
+    private native void ocljSetTotalMemory(int total);
 
     /* ---- the 82 inherited natives, redeclared so they bind to OUR library ---- */
 

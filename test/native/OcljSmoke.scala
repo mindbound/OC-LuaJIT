@@ -1670,9 +1670,14 @@ object Smoke {
    * never raises.  Every assertion here is one that build fails.
    */
   def memoryProbes(): Unit = {
-    val opt = LuaStateFactory.Lua52.createState()
+    // ON THE ARM'S OWN FACTORY (since 2026-10-03).  Before that this read
+    // LuaStateFactory.Lua52 in every arm, and in the additive arm Lua52 is
+    // OpenComputers' bundled PUC native -- so the additive arm's e-group was
+    // measuring PUC's accounting, never ours.
+    val opt = armFactory.createState()
     if (opt.isEmpty) { milestone("e0-state-available", ok = false, "createState() returned None"); return }
     val lua = opt.get
+    p("e-group state: " + lua.getClass.getName + " (factory " + armFactory.getClass.getSimpleName + ")")
     try {
       val total0 = lua.getTotalMemory
       val free0 = lua.getFreeMemory
@@ -1742,6 +1747,245 @@ object Smoke {
       case t: Throwable => milestone("e9-probes-completed", ok = false, "memory probes threw: " + t)
     } finally {
       try { lua.setTotalMemory(Int.MaxValue); lua.close() } catch { case _: Throwable => }
+    }
+  }
+
+  /** The factory this arm's states come from: ours in the additive arm (where
+    * OC's own 5.2 factory resolves to its bundled PUC native), OC's 5.2 factory
+    * otherwise -- our dropin DLL in the luajit arm, PUC in stock. */
+  def armFactory: LuaStateFactory =
+    if (nativeMode == "additive") { ocljit.arch.OCLuaJITStateFactory.ensureInitialized(); ocljit.arch.OCLuaJITStateFactory }
+    else LuaStateFactory.Lua52
+
+  /** _OCLJ_GCSTATS through the API rather than a chunk -- evalStr loads and
+    * concatenates, which allocates, and these reads want the figures as they
+    * stand.  1-based as in Lua; index 0 holds the count; an absent value reads
+    * -1, as mem_test's statn does.  The caller holds the machine's lock when
+    * `lua` is a machine's. */
+  def gcstats(lua: LuaState): Array[Double] = {
+    val out = Array.fill(21)(-1.0)
+    if (lua == null) { out(0) = -2; return out }
+    // getTop INSIDE the try, for evalStr's reason: on a closed state it throws.
+    var base = -1
+    try {
+      base = lua.getTop
+      lua.getGlobal("_OCLJ_GCSTATS")
+      if (lua.isFunction(-1)) {
+        lua.call(0, LuaState.MULTRET)
+        val n = lua.getTop - base
+        out(0) = n
+        var i = 1
+        while (i <= n && i <= 20) {
+          if (lua.isNumber(base + i)) out(i) = lua.toNumber(base + i)
+          i += 1
+        }
+      } else out(0) = 0
+    } catch { case _: Throwable => out(0) = -2 }
+    finally if (base >= 0) try lua.setTop(base) catch { case _: Throwable => }
+    out
+  }
+
+  /** acc-1 / acc-1r: the per-arm handover verdict on a machine's state. */
+  def accHandover(id: String, s: Array[Double], javaTotal: Int): Unit = {
+    val additive = nativeMode == "additive"
+    val ok =
+      if (additive) s(0) == 20 && s(17) == 1 && s(15) == javaTotal
+      else s(0) == 20 && s(17) == 0
+    milestone(id, ok,
+      "_OCLJ_GCSTATS count=" + s(0).toInt + " csync=" + s(17).toInt + " native cap=" + s(15).toLong +
+        " Java getTotalMemory=" + javaTotal +
+        (if (additive) "  (want csync 1 and the caps equal: LuaStateLuaJIT handed over)"
+         else "  (want csync 0: OpenComputers' own LuaState stays in legacy mode)") +
+        (if (ok) ""
+         else if (s(0) >= 0 && s(0) < 20) "   <- a " + s(0).toInt + "-value _OCLJ_GCSTATS: a native from before the accounting change"
+         else if (s(0) < 0) "   <- the read failed"
+         else if (additive && s(17) != 1) "   <- the class never handed over: LuaStateLuaJIT without its overrides?"
+         else if (additive) "   <- the shim's cap is not Java's: setTotalMemory did not reach it"
+         else "   <- the dropin left legacy mode, which nothing on OC's own class can cause"))
+  }
+
+  /**
+   * THE ACCOUNTING'S JAVA BOUNDARY, on private states (docs/accounting-sync.md).
+   * The machine-level halves are acc-1, acc-1r and acc-2.
+   *
+   *   acc-3  getFreeMemory() is EXACT inside a Lua->Java callback in the
+   *          middle of running code -- how the game reads it (computer.freeMemory)
+   *          -- against LuaJIT's own byte count taken in the same callback.
+   *          ocelot-brain also reads it between slices, which would hide a
+   *          figure that is only synchronised at slice boundaries; this cannot.
+   *   acc-4  the constructor alone hands the cap over and it bites, with no
+   *          setTotalMemory call and no JNI crossing during the run      [additive]
+   *   acc-5  an uncapped state never hands over: free 0, total 0, and
+   *          setTotalMemory still throws first                           [additive]
+   *   acc-6  after close() the figures are jnlua's own (free == total) and
+   *          setTotalMemory is harmless
+   *   acc-7  the overrides are synchronized and the natives private      [additive]
+   *
+   * Each additive-only one has a sabotaged LuaStateLuaJIT.java that fails it
+   * (OCLJ_JAVA_SRC); see the change's gate log.
+   */
+  def accountingProbes(): Unit = {
+    if (nativeMode == "stock") {
+      p("MILESTONE acc-3..7: SKIP -- native=stock: PUC's accounting is jnlua's own (not counted)")
+      return
+    }
+    val additive = nativeMode == "additive"
+
+    // ---- acc-3 ----
+    try {
+      val opt = armFactory.createState()
+      if (opt.isEmpty) milestone("acc-3-freemem-exact-mid-call", ok = false, "createState() returned None")
+      else {
+        val lua = opt.get
+        try {
+          lua.pushJavaFunction(new li.cil.repack.com.naef.jnlua.JavaFunction {
+            override def invoke(l: LuaState): Int = {
+              // LuaJIT's count FIRST, and the probe warmed by one call before
+              // it is believed: jnlua's gc() pushes gc_protected, and the first
+              // push in a state allocates the shim's memo entry for it -- a
+              // 48-byte GCfunc, inside the call that reads the count.  The
+              // first draft read getFreeMemory first and came out 48 bytes
+              // short on its first reading only, in the dropin arm as well.
+              val kb = l.gc(LuaState.GcAction.COUNT, 0)
+              val b = l.gc(LuaState.GcAction.COUNTB, 0)
+              val free = l.getFreeMemory
+              val total = l.getTotalMemory
+              l.pushNumber((total.toLong - free).toDouble)
+              l.pushNumber((kb.toLong * 1024 + b).toDouble)
+              2
+            }
+          })
+          lua.setGlobal("__accprobe")
+          val r = evalStr(lua,
+            "__accprobe() " +
+            "local t = {} for i = 1, 20000 do t[i] = {i, i} end " +
+            "local u1, g1 = __accprobe() " +
+            "local s = string.rep('x', 100000) " +
+            "local u2, g2 = __accprobe() " +
+            "t = nil collectgarbage() collectgarbage() " +
+            "local u3, g3 = __accprobe() " +
+            "return string.format('%d:%d:%d:%d:%d:%d', u1, g1, u2, g2, u3, g3)")
+          val v = try r.split(":").map(_.toLong) catch { case _: Throwable => Array[Long]() }
+          val ok = v.length == 6 && v(0) == v(1) && v(2) == v(3) && v(4) == v(5) &&
+                   v(2) - v(0) >= 100000 && v(2) - v(4) > 500000
+          milestone("acc-3-freemem-exact-mid-call", ok,
+            "inside one call, total-free vs LuaJIT's count: after 20000 tables " +
+              (if (v.length == 6) v(0) + " vs " + v(1) + "; after a 100000-byte string " + v(2) + " vs " + v(3) +
+                 "; after dropping both and collecting " + v(4) + " vs " + v(5)
+               else "<" + r + ">") +
+              (if (ok) ""
+               else if (v.length != 6) "   <- the probe did not run"
+               else if (v(2) - v(0) < 100000) "   <- the figure did not move with the allocation: getFreeMemory is not reading a live figure"
+               else "   <- getFreeMemory() disagrees with LuaJIT's own count mid-call: the figure Java reads is stale"))
+        } finally { try { lua.setTop(0); lua.close() } catch { case _: Throwable => } }
+      }
+    } catch { case t: Throwable => milestone("acc-3-freemem-exact-mid-call", ok = false, "threw: " + t) }
+
+    if (!additive) {
+      p("MILESTONE acc-4/5/7: SKIP -- native=" + nativeMode + ": they test LuaStateLuaJIT, which the dropin arm does not use (not counted)")
+    } else {
+      // ---- acc-4 ----
+      try {
+        val cap = 4 * 1024 * 1024
+        val s = new li.cil.repack.com.naef.jnlua.LuaStateLuaJIT(cap)
+        try {
+          val st0 = gcstats(s)                // before ANY setTotalMemory
+          var raised = ""
+          try {
+            s.load(new ByteArrayInputStream(
+              "local t = {} for i = 1, 100000000 do t[i] = {i, i} end".getBytes(StandardCharsets.UTF_8)), "=eat", "t")
+            s.call(0, 0)
+          } catch { case t: Throwable => raised = t.getClass.getSimpleName + ": " + String.valueOf(t.getMessage) }
+          try s.setTop(0) catch { case _: Throwable => }
+          // The NATIVE figure, unclamped: total - getFreeMemory() is at most the
+          // cap by construction, so it could not show a refusal that overshot.
+          // A few bytes over are legitimate -- jnlua's unrefusable pushes while
+          // it raises are charged (mem_test M7, C6) -- a doubling is not.
+          val st1 = gcstats(s)
+          val nUsed = st1(16).toLong
+          // And the override's clamp: a cap lowered below what is held reads
+          // free 0, never negative, and reaches the shim at once.
+          s.setTotalMemory(cap / 4)
+          val freeLow = s.getFreeMemory
+          val st2 = gcstats(s)
+          val refused = raised.startsWith("LuaMemoryAllocationException")
+          val ok = st0(17) == 1 && st0(15) == cap && refused && nUsed <= cap + 4096 && nUsed > cap / 2 &&
+                   st1(20) == st0(20) && freeLow == 0 && st2(15) == cap / 4
+          milestone("acc-4-constructor-cap-bites", ok,
+            "new LuaStateLuaJIT(" + cap + "), no setTotalMemory: csync " + st0(17).toInt + ", native cap " +
+              st0(15).toLong + "; unbounded allocation " + (if (raised.nonEmpty) "raised " + raised.take(100) else "RAN TO COMPLETION") +
+              " at native used " + nUsed + "; JNI crossings during it " + (st1(20) - st0(20)).toLong +
+              "; cap lowered to " + (cap / 4) + ": free " + freeLow + ", native cap " + st2(15).toLong +
+              (if (ok) ""
+               else if (st0(17) != 1) "   <- the constructor did not hand over"
+               else if (!refused || nUsed > cap + 4096 || nUsed <= cap / 2) "   <- the constructor's cap was not what stopped the allocation"
+               else if (st1(20) != st0(20)) "   <- the run crossed JNI: not on the C path"
+               else if (freeLow != 0) "   <- getFreeMemory() under a lowered cap is not clamped at 0"
+               else "   <- setTotalMemory did not reach the shim"))
+        } finally { try s.close() catch { case _: Throwable => } }
+      } catch { case t: Throwable => milestone("acc-4-constructor-cap-bites", ok = false, "threw: " + t) }
+
+      // ---- acc-5 ----
+      try {
+        val u = new li.cil.repack.com.naef.jnlua.LuaStateLuaJIT()
+        try {
+          val r = evalStr(u, "local t = {} for i = 1, 20000 do t[i] = {i} end return #t")
+          val free = u.getFreeMemory
+          val total = u.getTotalMemory
+          val st = gcstats(u)
+          var threw = "<nothing>"
+          try u.setTotalMemory(1 << 20) catch { case t: Throwable => threw = t.getClass.getSimpleName }
+          val st2 = gcstats(u)
+          val ok = r == "20000" && free == 0 && total == 0 && st(17) == 0 &&
+                   threw == "IllegalStateException" && st2(17) == 0 && st2(15) == 0
+          milestone("acc-5-uncapped-stays-legacy", ok,
+            "new LuaStateLuaJIT(): 20000 tables -> " + r + "; free " + free + ", total " + total +
+              ", csync " + st(17).toInt + "; setTotalMemory threw " + threw + ", then csync " + st2(17).toInt +
+              ", native cap " + st2(15).toLong +
+              (if (ok) "" else "   <- an uncapped state must read 0/0, stay in legacy mode and refuse a cap as jnlua does"))
+        } finally { try u.close() catch { case _: Throwable => } }
+      } catch { case t: Throwable => milestone("acc-5-uncapped-stays-legacy", ok = false, "threw: " + t) }
+    }
+
+    // ---- acc-6 ----
+    try {
+      val opt = armFactory.createState()
+      if (opt.isEmpty) milestone("acc-6-closed-state", ok = false, "createState() returned None")
+      else {
+        val c = opt.get
+        val r = evalStr(c, "__x = {} for i = 1, 10000 do __x[i] = {i} end return 'ok'")
+        c.setTop(0)
+        c.close()
+        val f = c.getFreeMemory
+        val t = c.getTotalMemory
+        c.setTotalMemory(t / 2)
+        val f2 = c.getFreeMemory
+        val t2 = c.getTotalMemory
+        val ok = r == "ok" && f == t && t2 == t / 2 && f2 == t2
+        milestone("acc-6-closed-state", ok,
+          "after close(): free " + f + " total " + t + "; setTotalMemory(" + (t / 2) + ") -> free " + f2 + " total " + t2 +
+            (if (ok) "" else "   <- a closed state must report jnlua's own figures and take a cap harmlessly"))
+      }
+    } catch { case t: Throwable => milestone("acc-6-closed-state", ok = false, "threw: " + t) }
+
+    // ---- acc-7 ----
+    if (additive) {
+      try {
+        import java.lang.reflect.Modifier
+        val k = classOf[li.cil.repack.com.naef.jnlua.LuaStateLuaJIT]
+        val gf = k.getDeclaredMethod("getFreeMemory")
+        val stm = k.getDeclaredMethod("setTotalMemory", java.lang.Integer.TYPE)
+        val nu = k.getDeclaredMethod("ocljUsedMemory")
+        val ns = k.getDeclaredMethod("ocljSetTotalMemory", java.lang.Integer.TYPE)
+        def mods(m: java.lang.reflect.Method) = Modifier.toString(m.getModifiers)
+        val ok = Modifier.isSynchronized(gf.getModifiers) && Modifier.isSynchronized(stm.getModifiers) &&
+                 Modifier.isNative(nu.getModifiers) && Modifier.isPrivate(nu.getModifiers) &&
+                 Modifier.isNative(ns.getModifiers) && Modifier.isPrivate(ns.getModifiers)
+        milestone("acc-7-overrides-synchronized", ok,
+          "getFreeMemory [" + mods(gf) + "], setTotalMemory [" + mods(stm) + "], ocljUsedMemory [" + mods(nu) +
+            "], ocljSetTotalMemory [" + mods(ns) + "]" +
+            (if (ok) "" else "   <- jnlua's exactness rests on the monitor: both overrides must be synchronized"))
+      } catch { case t: Throwable => milestone("acc-7-overrides-synchronized", ok = false, "threw: " + t) }
     }
   }
 
@@ -3289,6 +3533,8 @@ object Smoke {
     // value says which one this machine runs on.  A native from before the
     // change returns 13 values and fails here; that is this milestone's
     // negative control.  PUC has no _OCLJ_GCSTATS at all, so stock skips it.
+    // Values appended later (15-20, the accounting's C side, 2026-10-03) do
+    // not move the 14th, so the count is asserted as AT LEAST 14.
     if (nativeMode == "stock") {
       p("MILESTONE al-1-machine-heap-is-lj-alloc: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)")
     } else {
@@ -3297,9 +3543,10 @@ object Smoke {
         "local t = {_OCLJ_GCSTATS()} return #t .. ':' .. tostring(t[14])")
       val heapCount = try heapRaw.split(":")(0).toInt catch { case _: Throwable => -1 }
       val heapVal = if (heapRaw.contains(":")) heapRaw.split(":", 2)(1) else ""
-      milestone("al-1-machine-heap-is-lj-alloc", heapRaw == "14:1",
-        "_OCLJ_GCSTATS count:heap = " + heapRaw + " (want 14:1, the state's own lj_alloc arena)" +
-          (if (heapRaw == "14:1") ""
+      val heapOk = heapCount >= 14 && heapVal == "1"
+      milestone("al-1-machine-heap-is-lj-alloc", heapOk,
+        "_OCLJ_GCSTATS count:heap = " + heapRaw + " (want >=14:1, the state's own lj_alloc arena)" +
+          (if (heapOk) ""
            else if (heapRaw == "absent") "   <- no _OCLJ_GCSTATS: this native is not our shim"
            else if (heapRaw.startsWith("<error")) "   <- the read failed; nothing was observed"
            else if (heapCount >= 0 && heapCount < 14) "   <- a " + heapCount + "-value _OCLJ_GCSTATS: a native from before the arena change"
@@ -3307,6 +3554,21 @@ object Smoke {
            else if (heapVal == "-1") "   <- the state is not on lj52_alloc at all: no accounting record, the RAM cap unenforced"
            else "   <- unrecognised reading"))
     }
+    // --- (acc-1) the accounting's Java boundary, on the live machine -------
+    // docs/accounting-sync.md.  In the additive arm the machine's state is a
+    // LuaStateLuaJIT, which hands its cap to the shim in its constructor and
+    // on every setTotalMemory: the shim then holds the figures (csync 1) and
+    // its cap mirrors Java's.  In the dropin arm it is OpenComputers' own
+    // LuaState, which cannot carry the overrides: legacy mode (csync 0), as
+    // asserted too -- a dropin out of legacy mode would be accounting where
+    // nothing Java reads could see it.  The counters read here are compared
+    // again before mem-2 (acc-2), over everything the machine ran in between.
+    val accBoot: (Array[Double], Int) =
+      if (nativeMode == "stock") null
+      else computer.machine.synchronized { (gcstats(mLua), mLua.getTotalMemory) }
+    if (nativeMode == "stock")
+      p("MILESTONE acc-1-machine-handover: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)")
+    else accHandover("acc-1-machine-handover", accBoot._1, accBoot._2)
     var qj = 0
     quiesced(computer.machine, "the JIT probe read-out")
     if (jitMode == "off")
@@ -4570,6 +4832,18 @@ object Smoke {
            else if (km2 == 1) "   <- the restored machine is sized from the FLOOR of 1: it has no RAM"
            else "   <- restored kernelMemory is not a real measurement"))
 
+      // (acc-1r) a RESTORED machine hands over too: NativeLuaArchitecture.load
+      // builds a fresh state through the factory and sets its cap afresh.
+      if (nativeMode == "stock")
+        p("MILESTONE acc-1r-restored-machine-handover: SKIP -- native=stock (not counted)")
+      else if (arch2 == null || !arch2.isInstanceOf[NativeLuaArchitecture] || luaOf(arch2) == null)
+        milestone("acc-1r-restored-machine-handover", ok = false, "no restored Lua state to read")
+      else {
+        val l2 = luaOf(arch2)
+        val (rs, rt) = computer2.machine.synchronized { (gcstats(l2), l2.getTotalMemory) }
+        accHandover("acc-1r-restored-machine-handover", rs, rt)
+      }
+
       milestone("f4-restore-no-error", computer2.machine.lastError == null,
         "restored lastError=" + computer2.machine.lastError)
     }
@@ -4592,6 +4866,46 @@ object Smoke {
     syncCallSave(ws, computer, screen,
       expect = nativeMode match { case "additive" => "bundle"; case "stock" => "stock"; case _ => "dropin" })
 
+    // --- (acc-2) the fast path stayed live through everything above -----
+    // From acc-1's reading at boot to here the machine ran the whole suite,
+    // the persistence milestones and their saves -- each save raising the cap
+    // to Integer.MAX_VALUE and putting it back.  Additive: allocator calls in
+    // the millions, NONE through JNI, the shim's cap still Java's, and one
+    // getFreeMemory() is exactly one read of the native figure.  Dropin:
+    // every call through JNI and no native reads, as before the change.
+    val arch3 = computer.machine.architecture
+    val lua3 = if (arch3 == null || !arch3.isInstanceOf[NativeLuaArchitecture]) null else luaOf(arch3)
+    if (nativeMode != "stock" && accBoot != null && lua3 == null)
+      milestone("acc-2-fast-path-live", ok = false, "no live Lua state on the original machine to read")
+    else if (nativeMode != "stock" && accBoot != null) {
+      val (s2, jt2, reads) = computer.machine.synchronized {
+        val a = gcstats(lua3)
+        lua3.getFreeMemory
+        val b = gcstats(lua3)
+        (b, lua3.getTotalMemory, b(18) - a(18))
+      }
+      val same = lua3 eq mLua
+      val s1 = accBoot._1
+      val calls = s2(19) - s1(19)
+      val jni = s2(20) - s1(20)
+      val additive = nativeMode == "additive"
+      val ok =
+        if (additive) same && calls > 100000 && jni == 0 && s2(15) == jt2 && s2(17) == 1 && reads == 1
+        else same && calls > 100000 && jni == calls && s2(17) == 0 && reads == 0
+      milestone("acc-2-fast-path-live", ok,
+        "since boot: allocator calls +" + calls.toLong + ", of them through JNI +" + jni.toLong +
+          "; native cap " + s2(15).toLong + " vs Java " + jt2 + "; csync " + s2(17).toInt +
+          "; one getFreeMemory() -> native reads +" + reads.toLong +
+          (if (additive) "  (want: JNI +0, caps equal, reads +1)" else "  (want: every call through JNI, reads +0)") +
+          (if (ok) ""
+           else if (!same) "   <- the machine's state was replaced since boot; the counters are not comparable"
+           else if (calls <= 100000) "   <- the allocator barely ran: the counters are not counting"
+           else if (additive && jni > 0) "   <- allocations crossed JNI after the handover: the C path is not taken"
+           else if (additive && s2(15) != jt2) "   <- the shim's cap is not Java's: a setTotalMemory (a save's?) never reached it"
+           else if (additive && reads != 1) "   <- getFreeMemory() did not read the native figure: the override is missing"
+           else "   <- legacy mode is not behaving as before the change"))
+    }
+
     // --- (mem-2) the trace flush under memory pressure -----------------
     // LAST on the original machine, on purpose: the program drives the
     // machine to within 64 KB of its cap and every resume from then on
@@ -4605,6 +4919,10 @@ object Smoke {
     p("--- allowBytecode gate (on a private LuaState) ---")
     computer.machine.stop()
     bytecodeGate()
+    // accountingProbes BEFORE memoryProbes: with the cap not reaching the shim
+    // (a setTotalMemory that does not forward), e4's unbounded allocation runs
+    // until the harness's timeout, and nothing after it would report.
+    accountingProbes()
     memoryProbes()
 
     finish()

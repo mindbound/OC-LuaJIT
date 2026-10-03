@@ -251,6 +251,13 @@ void lj52_setallocf(lua_State *L, lua_Alloc f, void *ud,
 void lj52_close(lua_State *L);
 #define lua_close(L) lj52_close(L)
 
+/* The accounting's Java boundary (docs/accounting-sync.md): the cores behind
+ * LuaStateLuaJIT's ocljUsedMemory / ocljSetTotalMemory natives, exposed so the
+ * native tests can drive them.  lj52_mem_used returns -1 until the state has
+ * handed over, and for a state the shim did not create. */
+long long lj52_mem_used(lua_State *L);
+void lj52_mem_settotal(lua_State *L, long long total);
+
 /* The one write we have to watch: newstate_protected binds the Java LuaState
  * into registry[JNLUA_JAVASTATE] as a full userdata holding a weak global ref,
  * and close_protected sets that key to nil.  Caching the userdata's address

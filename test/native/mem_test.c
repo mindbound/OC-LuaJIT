@@ -55,6 +55,38 @@
  *   traces remain, the stats are absent) and P1's behavioural half passes;
  *   the log of that run is kept next to the change.
  *
+ * And the accounting's C MODE (docs/accounting-sync.md): once LuaStateLuaJIT
+ * hands the cap over, the figures live in the shim and no allocation crosses
+ * into the JVM.  M1-M8 and P0-P2 above keep testing LEGACY mode -- the
+ * dropin's, and every state's before the handover -- unchanged; M3c and M9
+ * check that legacy mode keeps the native figure ready and never hands over
+ * by itself.  On a state of its own, bound and handed over exactly as jnlua
+ * and LuaStateLuaJIT(int) do it:
+ *   C0  before the handover the state is in legacy mode and its allocations
+ *       cross JNI (C1's control, counted two ways that must agree); at the
+ *       handover the native cap and figure equal Java's and LuaJIT's own
+ *   C1  after it, an allocation burst makes no JNI call at all
+ *   C2  the native figure is LuaJIT's g->gc.total to the byte, through
+ *       growth and through a collection; getFreeMemory reads it once
+ *   C3  a lowered cap bites on the next allocation, a raised one admits
+ *   C4  OC's save pattern: setTotalMemory(Integer.MAX_VALUE), a persist
+ *       that allocates past the machine's cap, the cap put back -- free reads
+ *       0 and refuses until the garbage is collected
+ *   C5  the emergency collector arms against the native cap and completes,
+ *       and raises flush_wanted when live data holds the headroom down
+ *   C6  at an exhausted native cap the raw push is refused while
+ *       lua_pushcfunction succeeds and is still charged
+ *   C7  with the accounting off (jnlua's close) nothing is refused and the
+ *       figure still tracks
+ *   C8  -1 from the core for no state, a state on a foreign allocator, and an
+ *       uncapped state that never handed over; settotal on those is a no-op
+ *   FAIL-FIRST: -DMEMTEST_OLD (run-mem.sh: OCLJ_MEMTEST_CFLAGS) turns the
+ *   LuaStateLuaJIT model below into the class as it was, with no overrides
+ *   and no cores to call, so the suite links against the object from before
+ *   the change: C0, C1, C2, C7, M3c and M9 fail there and the behavioural
+ *   cases C3-C6 pass on the legacy path.  Sabotaged copies of the C path
+ *   make C2-C7 fail one by one; see the change's gate log.
+ *
  * Build: see run-mem.sh next to this file.  Exit status 0 iff every case passes.
  */
 #include <stdio.h>
@@ -80,8 +112,12 @@
 typedef struct { jint total; jint used; int gets; int sets; } FakeState;
 static FakeState FS;
 static JNIEnv FAKE_ENV = NULL;   /* JNIEnv is itself a pointer type in C */
+/* Calls of jnlua's getthreadenv: the third JVM touch a legacy allocation makes
+ * (JavaVM->GetEnv in jnlua), priced with the two field accesses at about a
+ * third of the crossing.  C1 asserts C mode makes none of these either. */
+static int ENVCALLS = 0;
 
-static JNIEnv *getthreadenv(void) { return &FAKE_ENV; }
+static JNIEnv *getthreadenv(void) { ENVCALLS++; return &FAKE_ENV; }
 
 static void getluamemory(JNIEnv *env, jobject obj, jint *total, jint *used) {
   FakeState *s = (FakeState *)obj;
@@ -96,6 +132,47 @@ static void setluamemory(JNIEnv *env, jobject obj, jint used) {
   (void)env;
   s->sets++;
   s->used = used;
+}
+
+/* ---- and we are pretending to be LuaStateLuaJIT ---------------------------
+ * Its accounting overrides, in C (the class is emitted by
+ * native/jnlua/gen-luastate-subclass.py; docs/accounting-sync.md): the capped
+ * constructor and setTotalMemory write jnlua's field and then hand the cap to
+ * the native side; getFreeMemory asks the native side for the used figure and
+ * falls back to jnlua's field when it answers -1.
+ *
+ * Under -DMEMTEST_OLD these model the class as it was before the change -- no
+ * overrides, no cores -- so that the suite links against the previous
+ * lj52shim.o, which defines neither core, and the cases that test the C mode
+ * are seen failing there. */
+static long long j_core_used(lua_State *L) {
+#ifdef MEMTEST_OLD
+  (void)L;
+  return -1;
+#else
+  return lj52_mem_used(L);              /* ocljUsedMemory() */
+#endif
+}
+
+static void j_settotal(lua_State *L, FakeState *s, jint v) {
+  s->total = v;                         /* super.setTotalMemory(value) */
+#ifdef MEMTEST_OLD
+  (void)L;
+#else
+  lj52_mem_settotal(L, v);              /* ocljSetTotalMemory(getTotalMemory()) */
+#endif
+}
+
+/* What Java takes the used figure to be: the native one, else jnlua's field. */
+static long long j_used(lua_State *L, FakeState *s) {
+  long long u = j_core_used(L);
+  return u >= 0 ? u : (long long)s->used;
+}
+
+/* getFreeMemory(): clamped at zero, by jnlua and by the override alike. */
+static long long j_free(lua_State *L, FakeState *s) {
+  long long f = (long long)s->total - j_used(L, s);
+  return f < 0 ? 0 : f;
 }
 
 /* ---- harness ------------------------------------------------------------ */
@@ -147,9 +224,32 @@ static long long lj_bytes(lua_State *L) {
   return (long long)lua_gc(L, LUA_GCCOUNT, 0) * 1024 + (long long)lua_gc(L, LUA_GCCOUNTB, 0);
 }
 
-/* Two distinct C functions to push.  Only their identity matters. */
+/* Distinct C functions to push.  Only their identity matters; c_cfunc is
+ * pushed by C6 alone, so its memo entry is cold there. */
 static int a_cfunc(lua_State *L) { lua_pushinteger(L, 7); return 1; }
 static int b_cfunc(lua_State *L) { lua_pushinteger(L, 8); return 1; }
+static int c_cfunc(lua_State *L) { lua_pushinteger(L, 9); return 1; }
+
+/* alloc_tables, except that a refused LOAD reports its own status: below an
+ * exhausted cap even the chunk cannot be parsed, and that is a refusal too.
+ * Leaves the stack as it found it. */
+static int try_tables(lua_State *L, long n) {
+  char buf[192];
+  int s, top = lua_gettop(L);
+  sprintf(buf, "local t = {} for i = 1, %ld do t[i] = {i, i} end __hold = t", n);
+  s = luaL_loadstring(L, buf);
+  if (s == 0) s = lua_pcall(L, 0, 0, 0);
+  lua_settop(L, top);
+  return s;
+}
+
+/* An allocator that is not the shim's, for a state lj52_memof cannot know. */
+static void *foreign_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  (void)ud;
+  (void)osize;
+  if (nsize == 0) { free(ptr); return NULL; }
+  return realloc(ptr, nsize);
+}
 
 /* Pushes a C closure the RAW way -- LuaJIT's own lua_pushcclosure, with
  * nothing suspended -- so that its allocation is refusable.  Run under pcall
@@ -194,6 +294,18 @@ static double statn(lua_State *L, const char *global, int n) {
   lua_settop(L, top);
   return v;
 }
+/* How many values a raw global such as _OCLJ_GCSTATS returns; -1 if absent. */
+static int statcount(lua_State *L, const char *global) {
+  int n, top = lua_gettop(L);
+  lua_getglobal(L, global);
+  if (!lua_isfunction(L, -1) || lua_pcall(L, 0, LUA_MULTRET, 0) != 0) {
+    lua_settop(L, top);
+    return -1;
+  }
+  n = lua_gettop(L) - top;
+  lua_settop(L, top);
+  return n;
+}
 /* _OCLJ_GCSTATS positions.  1-9 are the original nine; 10-13 were appended
  * with the trace flush (lj52shim.c lj52_gcstats) and read -1 before it. */
 #define GC_ARMS(L)       statn(L, "_OCLJ_GCSTATS", 1)
@@ -208,6 +320,33 @@ static double statn(lua_State *L, const char *global, int n) {
 /* Position 14, appended 2026-10-02: 1 = the state's blocks live in its own
  * lj_alloc arena, 0 = the C library fallback; -1 (absent) on an older shim. */
 #define GC_HEAP(L)       statn(L, "_OCLJ_GCSTATS", 14)
+/* Positions 15-20, appended 2026-10-03 (docs/accounting-sync.md): the native
+ * cap and used figure, whether the state has handed over (1) or not (0), how
+ * often the Java side read the figure, and every allocator call against the
+ * ones that crossed into the JVM.  -1 (absent) on an older shim. */
+#define GC_CTOTAL(L)     statn(L, "_OCLJ_GCSTATS", 15)
+#define GC_CUSED(L)      statn(L, "_OCLJ_GCSTATS", 16)
+#define GC_CSYNC(L)      statn(L, "_OCLJ_GCSTATS", 17)
+#define GC_UREADS(L)     statn(L, "_OCLJ_GCSTATS", 18)
+#define GC_ACALLS(L)     statn(L, "_OCLJ_GCSTATS", 19)
+#define GC_AJNI(L)       statn(L, "_OCLJ_GCSTATS", 20)
+
+/* Settle a latched emergency cycle before a case that wants to see a FRESH
+ * one.  The latch disarms when an allocation finds the white flipped at the
+ * pause; one full collection flips it once, so collect-then-allocate
+ * resolves it -- but two collections flip it back, and the latch then waits
+ * forever (the first draft of C5 did exactly that: the trace flush at the
+ * safe point re-arms a cycle, two collections hid its end, and the churn
+ * stopped on the stale disarm instead of arming anew).  A few rounds at most;
+ * returns the armed flag, 0 when settled. */
+static double settle_gc(lua_State *L) {
+  int i;
+  for (i = 0; i < 4 && GC_ARMED(L) != 0; i++) {
+    lua_gc(L, LUA_GCCOLLECT, 0);
+    try_tables(L, 10);
+  }
+  return GC_ARMED(L);
+}
 /* _OCLJ_JITSTATS position 5: traces_live, the non-NULL J->trace[] slots. */
 #define JIT_LIVE(L)      statn(L, "_OCLJ_JITSTATS", 5)
 
@@ -346,6 +485,18 @@ int main(void) {
           (long)((used1 - used0) - (gc1 - gc0)));
   ok((long long)(used1 - used0) == gc1 - gc0,
      "M3b charged to the byte, vs lua_gc(GCCOUNT)", d);
+
+  /* M3c -- legacy mode keeps the NATIVE figure as well, absolute and to the
+   * byte, so that a handover at any moment starts C mode on the right number
+   * (docs/accounting-sync.md, "Handover").  Read the stat first: if reading it
+   * allocated, Java's field and LuaJIT's count, taken after, would both move. */
+  {
+    double cu = GC_CUSED(L);
+    long long gb = lj_bytes(L);
+    sprintf(d, "native used %.0f, Java's field %ld, LuaJIT %ld", cu, (long)FS.used, (long)gb);
+    ok(cu == (double)gb && cu == (double)FS.used,
+       "M3c legacy mode keeps the native figure too, exact", d);
+  }
 
   /* ---- M4: THE ANTI-RATCHET CONTROL --------------------------------- */
   lua_pushnil(L);
@@ -576,6 +727,264 @@ int main(void) {
     clear_javastate(P);
     lua_close(P);                       /* -> lj52_close: stops the timer too */
   }
+
+  /* ================================================================== *
+   * C MODE: the figures held natively after the handover
+   * (docs/accounting-sync.md).  A state of its own, bound exactly as jnlua
+   * binds a capped one and handed over exactly as LuaStateLuaJIT(int) hands
+   * it over: LuaState's constructor runs controlled_newstate (lua_setallocf,
+   * then newstate_protected binds the javastate), does its own allocating
+   * work in legacy mode, and only then does the subclass constructor call
+   * ocljSetTotalMemory.  LuaStateFactory.createState opens the libraries
+   * after that.
+   * ================================================================== */
+  {
+    FakeState CS;
+    lua_State *C;
+    jint legacyUsed, cap;
+    long long u0, u1, u2, g0, g1, g2, f0, f1, f2, base;
+    double calls0, calls1, jni0, jni1, jniL0, reads0, reads1, arms0, coll0;
+    double armed0, armedC, want0, wantC, steps;
+    int gets0, sets0, getsL0, env0, envL0, nstat, st2, pushed;
+
+    memset(&CS, 0, sizeof CS);
+    C = luaL_newstate();                /* -> lj52_newstate */
+    if (!C) { printf("  FAIL  luaL_newstate returned NULL for the C state\n"); return 1; }
+    CS.total = 64 * 1024 * 1024;        /* LuaState(int): luaMemoryTotal = memory */
+    lua_setallocf(C, NULL, C);          /* controlled_newstate: the capped form */
+    bind_javastate(C, (void *)&CS);     /* newstate_protected */
+
+    /* ---- C0: legacy until the handover, then the native figures --------- */
+    sprintf(d, "csync=%.0f, native used=%ld (-1 = not handed over)",
+            GC_CSYNC(C), (long)j_core_used(C));
+    ok(GC_CSYNC(C) == 0 && j_core_used(C) == -1,
+       "C0a a freshly bound state is in legacy mode", d);
+
+    getsL0 = CS.gets;
+    envL0 = ENVCALLS;
+    jniL0 = GC_AJNI(C);
+    st = alloc_tables(C, 3000);         /* the LuaState constructor's own work */
+    lua_settop(C, 0);
+    sprintf(d, "3000 tables in legacy mode: getluamemory calls %+d, getthreadenv %+d, allocator calls through JNI %+.0f",
+            CS.gets - getsL0, ENVCALLS - envL0, GC_AJNI(C) - jniL0);
+    ok(st == 0 && CS.gets - getsL0 > 3000 && GC_AJNI(C) - jniL0 == (double)(CS.gets - getsL0)
+         && ENVCALLS - envL0 == CS.gets - getsL0,
+       "C0d legacy allocations cross JNI, counted three ways", d);
+
+    legacyUsed = CS.used;
+    g0 = lj_bytes(C);
+    j_settotal(C, &CS, CS.total);       /* LuaStateLuaJIT(int): ocljSetTotalMemory(memory) */
+    u0 = j_core_used(C);
+    sprintf(d, "csync=%.0f, native cap %.0f (Java %ld); used: native %ld, Java's field %ld, LuaJIT %ld",
+            GC_CSYNC(C), GC_CTOTAL(C), (long)CS.total, (long)u0, (long)legacyUsed, (long)g0);
+    ok(GC_CSYNC(C) == 1 && GC_CTOTAL(C) == (double)CS.total && u0 == (long long)legacyUsed && u0 == g0,
+       "C0b the handover: native cap and figure are Java's and LuaJIT's", d);
+    nstat = statcount(C, "_OCLJ_GCSTATS");
+    sprintf(d, "%d values (14 before 2026-10-03)", nstat);
+    ok(nstat == 20, "C0c _OCLJ_GCSTATS returns 20 values", d);
+
+    /* ---- C1: THE POINT OF THE CHANGE ---------------------------------- */
+    gets0 = CS.gets; sets0 = CS.sets; env0 = ENVCALLS;
+    calls0 = GC_ACALLS(C); jni0 = GC_AJNI(C);
+    luaL_openlibs(C);                   /* LuaStateFactory.createState */
+    st = alloc_tables(C, 20000);
+    lua_settop(C, 0);
+    calls1 = GC_ACALLS(C); jni1 = GC_AJNI(C);
+    sprintf(d, "openlibs + 20000 tables: allocator calls %+.0f, of them through JNI %+.0f; "
+            "getluamemory %+d, setluamemory %+d, getthreadenv %+d",
+            calls1 - calls0, jni1 - jni0, CS.gets - gets0, CS.sets - sets0, ENVCALLS - env0);
+    ok(st == 0 && calls1 - calls0 > 20000 && jni1 == jni0 && CS.gets == gets0 && CS.sets == sets0
+         && ENVCALLS == env0,
+       "C1 after the handover no allocation crosses into the JVM", d);
+
+    /* ---- C2: exact, to the byte, absolute ----------------------------- */
+    u1 = j_core_used(C); g1 = lj_bytes(C); f1 = j_free(C, &CS);
+    sprintf(d, "native used %ld, LuaJIT %ld (difference %ld); getFreeMemory %ld",
+            (long)u1, (long)g1, (long)(u1 - g1), (long)f1);
+    ok(u1 == g1 && f1 == (long long)CS.total - g1,
+       "C2a the native figure is LuaJIT's own count, to the byte", d);
+    reads0 = GC_UREADS(C);
+    f0 = j_free(C, &CS);
+    reads1 = GC_UREADS(C);
+    sprintf(d, "getFreeMemory=%ld; used reads %.0f -> %.0f", (long)f0, reads0, reads1);
+    ok(reads1 - reads0 == 1, "C2b getFreeMemory reads the native figure, once", d);
+    lua_pushnil(C);
+    lua_setglobal(C, "__hold");
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    u2 = j_core_used(C); g2 = lj_bytes(C);
+    sprintf(d, "used %ld -> %ld (%ld reclaimed); LuaJIT %ld (difference %ld)",
+            (long)u1, (long)u2, (long)(u1 - u2), (long)g2, (long)(u2 - g2));
+    ok(u2 == g2 && u1 - u2 > 200000, "C2c frees are credited, to the byte", d);
+
+    /* ---- C3: the cap moves both ways, at once ------------------------- */
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    u0 = j_used(C, &CS);
+    cap = (jint)(u0 + 192 * 1024);
+    j_settotal(C, &CS, cap);            /* setTotalMemory(lower) */
+    st = alloc_tables(C, 10000000L);
+    lua_settop(C, 0);
+    u1 = j_used(C, &CS);
+    sprintf(d, "cap lowered to used+192 KB = %ld: status %d (LUA_ERRMEM=%d), used %ld, native cap %.0f",
+            (long)cap, st, LUA_ERRMEM, (long)u1, GC_CTOTAL(C));
+    ok(st == LUA_ERRMEM && u1 <= cap, "C3a a lowered cap refuses on the next allocations", d);
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    j_settotal(C, &CS, 64 * 1024 * 1024);   /* setTotalMemory(higher) */
+    st = alloc_tables(C, 20000);
+    lua_settop(C, 0);
+    sprintf(d, "cap raised to 64 MB: status %d, used %ld", st, (long)j_used(C, &CS));
+    ok(st == 0, "C3b a raised cap admits at once", d);
+
+    /* ---- C4: OC's save pattern ---------------------------------------- */
+    /* NativeLuaArchitecture.save: setTotalMemory(Integer.MAX_VALUE), persist
+     * (which allocates freely), finally setTotalMemory(the machine's cap). */
+    lua_pushnil(C);
+    lua_setglobal(C, "__hold");
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    u0 = j_used(C, &CS);
+    cap = (jint)(u0 + 64 * 1024);
+    j_settotal(C, &CS, cap);            /* the machine's cap */
+    j_settotal(C, &CS, 2147483647);     /* save(): Integer.MAX_VALUE */
+    st = alloc_tables(C, 20000);        /* the persist, far past the machine's cap */
+    lua_settop(C, 0);
+    u1 = j_used(C, &CS);
+    f0 = j_free(C, &CS);
+    sprintf(d, "under Integer.MAX_VALUE: status %d, used %ld (machine cap %ld), free %ld",
+            st, (long)u1, (long)cap, (long)f0);
+    ok(st == 0 && u1 > cap && f0 == 2147483647LL - u1,
+       "C4a the save's raised cap lets the persist allocate past the machine's", d);
+    j_settotal(C, &CS, cap);            /* finally: the machine's cap again */
+    f1 = j_free(C, &CS);
+    st2 = try_tables(C, 1000);
+    sprintf(d, "cap restored to %ld under used %ld: free %ld, next growth status %d (LUA_ERRMEM=%d)",
+            (long)cap, (long)j_used(C, &CS), (long)f1, st2, LUA_ERRMEM);
+    ok(f1 == 0 && st2 == LUA_ERRMEM, "C4b the restored cap reads free 0 and refuses growth", d);
+    lua_pushnil(C);
+    lua_setglobal(C, "__hold");
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    f2 = j_free(C, &CS);
+    st2 = try_tables(C, 100);
+    sprintf(d, "after collecting the persist's garbage: free %ld, status %d", (long)f2, st2);
+    ok(f2 > 0 && st2 == 0, "C4c once that garbage is collected the machine runs again", d);
+
+    /* ---- C5: the emergency collector against the native cap ----------- */
+    /* C3a and C4b ran cycles at the wall, which raise flush_wanted; the
+     * kernel's safe point consumes it, as it would before the next resume. */
+    st = runstr(C, ARM_DISARM);
+    lua_settop(C, 0);
+    j_settotal(C, &CS, 64 * 1024 * 1024);   /* room, so the settling cannot arm anew */
+    armed0 = settle_gc(C);
+    lua_gc(C, LUA_GCCOLLECT, 0);        /* the live set, as P1 and P2 take it */
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    base = j_used(C, &CS);
+    arms0 = GC_ARMS(C); coll0 = GC_COLLECTS(C);
+    j_settotal(C, &CS, (jint)(base + 1024 * 1024));
+    steps = churn(C, 8192, coll0, 400, &st);
+    sprintf(d, "%.0f steps of 64 KB garbage under a native cap of used+1 MB (status %d; armed before %.0f): "
+            "arms %.0f -> %.0f, collects %.0f -> %.0f",
+            steps, st, armed0, arms0, GC_ARMS(C), coll0, GC_COLLECTS(C));
+    ok(st == 0 && armed0 == 0 && GC_ARMS(C) > arms0 && GC_COLLECTS(C) > coll0,
+       "C5a the emergency cycle arms against the native cap and completes", d);
+
+    st = runstr(C, ARM_DISARM);
+    lua_settop(C, 0);
+    j_settotal(C, &CS, 64 * 1024 * 1024);
+    armed0 = settle_gc(C);
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    want0 = GC_FLUSHWANT(C);
+    base = j_used(C, &CS);
+    coll0 = GC_COLLECTS(C);
+    j_settotal(C, &CS, (jint)(base + 256 * 1024));
+    lua_createtable(C, 20480, 0);       /* 160 KB LIVE: headroom under the floor */
+    lua_setfield(C, LUA_REGISTRYINDEX, "__live");
+    armedC = GC_ARMED(C);
+    steps = churn(C, 0, coll0, 10000, &st);
+    wantC = GC_FLUSHWANT(C);
+    sprintf(d, "before: armed %.0f, flush_wanted %.0f; 160 KB live under used+256 KB: armed=%.0f, %.0f steps (status %d), "
+            "collects %.0f -> %.0f, headroom %ld (watermark %ld), flush_wanted=%.0f",
+            armed0, want0, armedC, steps, st, coll0, GC_COLLECTS(C),
+            (long)((long long)CS.total - j_used(C, &CS)), wmark(CS.total), wantC);
+    ok(armed0 == 0 && want0 == 0 && armedC == 1 && st == 0 && GC_COLLECTS(C) > coll0 && wantC == 1,
+       "C5b live data under the watermark: armed, proven, flush wanted", d);
+    lua_pushnil(C);
+    lua_setfield(C, LUA_REGISTRYINDEX, "__live");
+    st = runstr(C, ARM_DISARM);
+    lua_settop(C, 0);
+
+    /* ---- C6: the coupling, at an exhausted native cap ----------------- */
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    j_settotal(C, &CS, 64 * 1024 * 1024);
+    lua_settop(C, 0);
+    lua_pushcfunction(C, raw_push);     /* memo warm for raw_push on this state */
+    lua_checkstack(C, 20);
+    u0 = j_used(C, &CS);
+    j_settotal(C, &CS, (jint)u0);       /* not one byte to spare */
+    rawStatus = lua_pcall(C, 0, 1, 0);  /* raw_push -> lua_pushcclosure */
+    lua_settop(C, 0);
+    u1 = j_used(C, &CS);
+    lua_pushcfunction(C, c_cfunc);      /* -> lj52_pushcfunction, cold */
+    pushed = lua_isfunction(C, -1);
+    u2 = j_used(C, &CS);
+    lua_settop(C, 0);
+    sprintf(d, "native cap == used == %ld: raw push status %d (LUA_ERRMEM=%d); memo push %s, used %ld -> %ld",
+            (long)u0, rawStatus, LUA_ERRMEM, pushed ? "succeeded" : "REFUSED", (long)u1, (long)u2);
+    ok(rawStatus == LUA_ERRMEM && pushed && u2 > u1,
+       "C6 exhausted cap: raw push refused, memo push succeeds, charged", d);
+
+    /* ---- C7: the accounting switched off, as jnlua's close does ------- */
+    u0 = j_used(C, &CS);
+    j_settotal(C, &CS, (jint)u0);       /* still not one byte to spare */
+    lua_setallocf(C, NULL, NULL);       /* close: lua_setallocf(L, l_alloc_unchecked, NULL) */
+    gets0 = CS.gets; sets0 = CS.sets;
+    st = alloc_tables(C, 5000);
+    lua_settop(C, 0);
+    u1 = j_core_used(C); g1 = lj_bytes(C);
+    sprintf(d, "status %d; getluamemory %+d, setluamemory %+d; native used %ld, LuaJIT %ld",
+            st, CS.gets - gets0, CS.sets - sets0, (long)u1, (long)g1);
+    ok(st == 0 && CS.gets == gets0 && CS.sets == sets0 && u1 == g1,
+       "C7 accounting off: nothing refused, the figure still tracks", d);
+
+    CS.total = 64 * 1024 * 1024;
+    clear_javastate(C);
+    lua_close(C);                       /* -> lj52_close, in C mode */
+
+    /* ---- C8: the -1 answers ------------------------------------------- */
+    {
+      FakeState US;
+      lua_State *F = lua_newstate(foreign_alloc, NULL);   /* LuaJIT's own: not the shim's allocator */
+      lua_State *U = luaL_newstate();                      /* the shim's, never capped */
+      long long nNull, nF, nU, fU;
+      double syncU;
+      if (!F || !U) { printf("  FAIL  a C8 state could not be created\n"); return 1; }
+      memset(&US, 0, sizeof US);
+      st = alloc_tables(U, 1000);
+      lua_settop(U, 0);
+#ifndef MEMTEST_OLD
+      lj52_mem_settotal(NULL, 12345);   /* a closed state: no-ops, and no crash */
+      lj52_mem_settotal(F, 12345);
+#endif
+      nNull = j_core_used(NULL);
+      nF = j_core_used(F);
+      nU = j_core_used(U);
+      fU = j_free(U, &US);
+      syncU = GC_CSYNC(U);
+      sprintf(d, "no state %ld, foreign allocator %ld (after settotal), uncapped %ld; "
+              "uncapped getFreeMemory %ld, csync %.0f",
+              (long)nNull, (long)nF, (long)nU, (long)fU, syncU);
+      ok(st == 0 && nNull == -1 && nF == -1 && nU == -1 && fU == 0 && syncU == 0,
+         "C8 -1 where there is no handed-over record", d);
+      lua_close(F);                     /* -> lj52_close: no record, a plain close */
+      lua_close(U);
+    }
+  }
+
+  /* M9 -- the M state never handed over, and nothing in the shim does it
+   * behind Java's back: its allocations took the JNI path to the end. */
+  sprintf(d, "csync=%.0f; allocator calls %.0f, of them through JNI %.0f",
+          GC_CSYNC(L), GC_ACALLS(L), GC_AJNI(L));
+  ok(GC_CSYNC(L) == 0 && GC_AJNI(L) > 0 && GC_ACALLS(L) > GC_AJNI(L),
+     "M9 a state that never hands over stays in legacy mode", d);
 
   snprintf(d, sizeof d, "_OCLJ_GCSTATS heap=%g after every case above", GC_HEAP(L));
   ok(GC_HEAP(L) == 1, "M0c the first state is still on its arena at the end", d);

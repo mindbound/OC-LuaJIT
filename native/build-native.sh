@@ -549,7 +549,12 @@ say "=============== 2. lj52shim.c ==============="
 rm -f "$OBJ/lj52shim.o"
 # -I the JDK headers: the shim includes <jni.h> so its allocator can use
 # jnlua's own getluamemory/setluamemory to publish the machine's RAM use.
-"$CC" -c -O2 $PICFLAG -Wall -Wextra -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
+# -DLJ52_ADDITIVE compiles in the two JNI natives LuaStateLuaJIT declares for
+# the accounting's Java boundary (docs/accounting-sync.md).  The dropin backs
+# OpenComputers' own LuaState, which declares neither, so it must not export them.
+SHIMDEF=
+[ "$OCLJ_VARIANT" = additive ] && SHIMDEF=-DLJ52_ADDITIVE
+"$CC" -c -O2 $PICFLAG -Wall -Wextra $SHIMDEF -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
   -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" \
   "$OCLJ_SHIM/lj52shim.c" -o "$OBJ/lj52shim.o" 2>"$OCLJ_BUILD/shim.err"
 [ -f "$OBJ/lj52shim.o" ] || { cat "$OCLJ_BUILD/shim.err"; fail "shim did not compile"; }
@@ -565,6 +570,23 @@ for sym in lj_alloc_create lj_alloc_f lj_alloc_destroy lj_alloc_setprng lj_prng_
     || fail "lj52shim.o does not reference $sym: the per-state lj_alloc arena (lj52_back) is gone"
 done
 say "    lj_alloc arena symbols referenced: lj_alloc_create, lj_alloc_f, lj_alloc_destroy, lj_alloc_setprng, lj_prng_seed_secure"
+# THE ACCOUNTING'S JAVA BOUNDARY (docs/accounting-sync.md).  The two cores are in
+# every build; the two JNI natives over them only in the additive, the one whose
+# class declares them.  Counted on the OBJECT, before any link: a shim that lost
+# them, or a dropin that grew them, is named here rather than as an export count.
+for sym in lj52_mem_used lj52_mem_settotal; do
+  nm --defined-only "$OBJ/lj52shim.o" 2>/dev/null | grep -qw "$sym" \
+    || fail "lj52shim.o does not define $sym: the accounting's C side (docs/accounting-sync.md) is gone"
+done
+NOCLJ=$(nm --defined-only "$OBJ/lj52shim.o" 2>/dev/null | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_oclj(UsedMemory|SetTotalMemory)$' || true)
+if [ "$OCLJ_VARIANT" = additive ]; then
+  [ "$NOCLJ" = "2" ] || fail "the additive lj52shim.o defines $NOCLJ of the 2 accounting natives
+         (ocljUsedMemory, ocljSetTotalMemory): LuaStateLuaJIT would throw
+         UnsatisfiedLinkError from its capped constructor"
+else
+  [ "$NOCLJ" = "0" ] || fail "the dropin lj52shim.o defines $NOCLJ accounting natives of LuaStateLuaJIT, a class it does not back"
+fi
+say "    accounting boundary: lj52_mem_used, lj52_mem_settotal defined; LuaStateLuaJIT oclj* natives = $NOCLJ (variant=$OCLJ_VARIANT)"
 
 # --------------------------------------------------------------- 3
 say "=============== 3. OC-JNLua jnlua.c (checkout unmodified; one diagnostic line patched on a copy; shim force-included) ==============="
@@ -586,6 +608,28 @@ if [ "$OCLJ_VARIANT" = additive ]; then
     || fail "the jnlua repack refused (see above)"
   PATCH_IN="$OCLJ_BUILD/jnlua-luajit.repack.c"
   JNLUA_SRC="$OCLJ_BUILD/jnlua-luajit.c"
+  # THE CLASS THIS LIBRARY BACKS MUST BE THE GENERATOR'S OUTPUT, BYTE FOR BYTE.
+  # LuaStateLuaJIT.java declares the natives this build exports -- jnlua's 82,
+  # redeclared, and the accounting's two -- and is generated from this same
+  # OC-JNLua checkout.  A hand edit, or a generator change never regenerated,
+  # would pair a class and a library that disagree, to be found at best as an
+  # UnsatisfiedLinkError in a player's game.
+  GEN_PY=
+  for c in "${OCLJ_PYTHON:-}" python3 python; do
+    [ -n "$c" ] || continue
+    [ "$("$c" -c 'print(6*7, end="")' 2>/dev/null)" = "42" ] && { GEN_PY=$c; break; }
+  done
+  [ -n "$GEN_PY" ] || fail "no working Python (python3 or python; or set OCLJ_PYTHON): the additive
+         build regenerates LuaStateLuaJIT.java to check the committed copy"
+  GEN_JAVA="$OCLJ_REPO/src/main/java/li/cil/repack/com/naef/jnlua/LuaStateLuaJIT.java"
+  rm -f "$OCLJ_BUILD/LuaStateLuaJIT.regen.java"
+  "$GEN_PY" "$OCLJ_REPO/native/jnlua/gen-luastate-subclass.py" "$OCLJ_JNLUA" "$OCLJ_BUILD/LuaStateLuaJIT.regen.java" >/dev/null \
+    || fail "gen-luastate-subclass.py refused (see above)"
+  cmp -s "$OCLJ_BUILD/LuaStateLuaJIT.regen.java" "$GEN_JAVA" \
+    || fail "$GEN_JAVA is not what native/jnlua/gen-luastate-subclass.py emits from
+         $OCLJ_JNLUA (diff it against $OCLJ_BUILD/LuaStateLuaJIT.regen.java).
+         Edit the generator, never the class, and regenerate."
+  say "    LuaStateLuaJIT.java == the generator's output ($GEN_PY)"
 else
   JNLUA_SRC="$OCLJ_BUILD/jnlua-dropin.c"
 fi
@@ -773,15 +817,30 @@ if command -v objdump >/dev/null 2>&1 && command -v nm >/dev/null 2>&1; then
   # count is not 89 and pinning it to 89 would fail every Linux build. What is
   # invariant across both -- and what actually matters -- is the JNI surface:
   # the 87 Java_* names plus the two JNI_On* hooks. That is asserted on both.
-  [ "$EXPORTS" = "87" ] || fail "Java_* export count is $EXPORTS, expected 87.  The ABI surface no
-         longer matches OC-JNLua da3d4d45.  Either jnlua.c was bumped (update this
-         number deliberately) or a translation unit failed to link in."
+  #
+  # THE ADDITIVE EXPORTS TWO MORE: LuaStateLuaJIT's own accounting natives,
+  # ocljUsedMemory and ocljSetTotalMemory (docs/accounting-sync.md), asserted
+  # by exact name -- 89 Java_* and 91 PE names.  The dropin exports neither.
+  OCLJN=$(syms | grep -cxE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_oclj(UsedMemory|SetTotalMemory)')
+  if [ "$OCLJ_VARIANT" = additive ]; then
+    WANT_J=89; WANT_PE=91
+    [ "$OCLJN" = "2" ] || fail "the additive exports $OCLJN of LuaStateLuaJIT's 2 accounting natives
+         (ocljUsedMemory, ocljSetTotalMemory); its capped constructor would throw"
+  else
+    WANT_J=87; WANT_PE=89
+    [ "$OCLJN" = "0" ] || fail "the dropin exports $OCLJN accounting natives of LuaStateLuaJIT"
+  fi
+  [ "$EXPORTS" = "$WANT_J" ] || fail "Java_* export count is $EXPORTS, expected $WANT_J ($OCLJ_VARIANT).  The ABI surface no
+         longer matches OC-JNLua da3d4d45 plus the accounting natives.  Either
+         jnlua.c was bumped (update this number deliberately) or a translation
+         unit failed to link in."
   syms | grep -qx JNI_OnLoad   || fail "no JNI_OnLoad export"
   syms | grep -qx JNI_OnUnload || fail "no JNI_OnUnload export"
   if [ "$OCLJ_OS" = windows ]; then
-    [ "$NSYM" = "89" ] || fail "PE export table holds $NSYM names, expected exactly 89
-         (87 Java_* + JNI_OnLoad + JNI_OnUnload).  Something else became visible."
+    [ "$NSYM" = "$WANT_PE" ] || fail "PE export table holds $NSYM names, expected exactly $WANT_PE
+         ($WANT_J Java_* + JNI_OnLoad + JNI_OnUnload).  Something else became visible."
   fi
+  say "    ABI surface: Java_* = $EXPORTS (want $WANT_J), accounting natives = $OCLJN, total = $NSYM"
 else
   say "    SKIPPED: objdump and nm are both needed to verify the symbol surface"
   say "    (this build has NOT been checked for the dropin/additive mix-up)"
@@ -837,7 +896,11 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #    pinned to upstream 1ee778a4 PLUS the CHECKHOOK patch (lj_record.c).
 #    A stock LuaJIT clone will NOT work -- the preflight rejects it.
 #
-# 5. Nothing else.  eris_lj.c and lj52shim.c are in this repo.
+# 5. For OCLJ_VARIANT=additive only: Python 3 (python3 or python on PATH, or
+#    OCLJ_PYTHON), to regenerate LuaStateLuaJIT.java and compare it with the
+#    committed copy.  Any Python 3; the generator uses the standard library.
+#
+# 6. Nothing else.  eris_lj.c and lj52shim.c are in this repo.
 #
 # The smoke test needs three more things (ocelot-brain, its jar deps, and a
 # Scala compiler); see the header of smoke-test.sh.

@@ -148,6 +148,32 @@ val verifyModAssets by tasks.registering {
             logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources (" + want + ")")
         }
 
+        // THE NATIVE MUST BACK THE CLASS IN THIS TREE.  LuaStateLuaJIT declares two
+        // natives of its own for the memory accounting's Java boundary
+        // (docs/accounting-sync.md) and calls one from its capped constructor, so a
+        // native built before them would stop every LuaJIT machine from starting,
+        // with an UnsatisfiedLinkError.  The names are plain ASCII both in a PE
+        // export table and in an ELF dynamic string table.
+        if (ours.isNotEmpty()) {
+            val need = listOf(
+                "Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljUsedMemory",
+                "Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljSetTotalMemory",
+            )
+            val lacking = ours.filter { f ->
+                val bytes = String(f.readBytes(), Charsets.ISO_8859_1)
+                need.any { !bytes.contains(it) }
+            }
+            if (lacking.isNotEmpty()) {
+                throw GradleException(
+                    "OC-LuaJIT: " + lacking.joinToString { it.name } + " does not export the " +
+                        "memory-accounting natives LuaStateLuaJIT declares (ocljUsedMemory, " +
+                        "ocljSetTotalMemory). It was built before them, and every LuaJIT machine " +
+                        "would fail to start. Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh"
+                )
+            }
+            logger.lifecycle("OC-LuaJIT: native exports the accounting natives LuaStateLuaJIT declares")
+        }
+
         if (!kernelFile.isFile) {
             logger.lifecycle(
                 "OC-LuaJIT: no patched kernel in '$kernelName' -- this jar will carry none, so " +

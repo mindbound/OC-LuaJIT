@@ -7,6 +7,11 @@
 #   OCLJ_SHIMOBJ=<file>   link THIS lj52shim.o instead of the build's, for a
 #                         fail-first A/B against a copy of the previous object
 #                         (the same trick run-penalty.sh's OCLJ_LJLIB plays)
+#   OCLJ_MEMTEST_CFLAGS   extra flags for mem_test.c.  -DMEMTEST_OLD models
+#                         LuaStateLuaJIT as it was before the accounting moved
+#                         native (docs/accounting-sync.md): no overrides, no
+#                         cores to link -- the switch that lets this suite run
+#                         against an object from before that change
 #
 # Needs build-native.sh to have run first: it consumes that build's
 # libluajit.a and lj52shim.o, so the test exercises exactly the objects the
@@ -55,6 +60,7 @@ esac
 LJ=$OCLJ_BUILD/luajit-$PLATFORM/src
 OBJ=$OCLJ_BUILD/obj-$PLATFORM
 : "${OCLJ_SHIMOBJ:=$OBJ/lj52shim.o}"
+: "${OCLJ_MEMTEST_CFLAGS:=}"
 
 if [ -z "$OCLJ_JNI" ]; then
   for c in "${JAVA_HOME:-}/include" /usr/lib/jvm/*/include /c/Program\ Files/Java/*/include; do
@@ -66,14 +72,14 @@ fi
 [ -f "$OCLJ_SHIMOBJ" ]   || fail "no $OCLJ_SHIMOBJ -- run build-native.sh first (on THIS platform)"
 [ -f "$OBJ/eris_lj.o" ]  || fail "no $OBJ/eris_lj.o -- run build-native.sh first (on THIS platform)"
 
-echo "mem_test: linking $OCLJ_SHIMOBJ ($(md5sum < "$OCLJ_SHIMOBJ" | cut -c1-32), $(wc -c < "$OCLJ_SHIMOBJ" | tr -d ' ') bytes)"
+echo "mem_test: linking $OCLJ_SHIMOBJ ($(md5sum < "$OCLJ_SHIMOBJ" | cut -c1-32), $(wc -c < "$OCLJ_SHIMOBJ" | tr -d ' ') bytes)${OCLJ_MEMTEST_CFLAGS:+  cflags: $OCLJ_MEMTEST_CFLAGS}"
 
 # -include lj52shim.h, exactly as jnlua.c is compiled, so the test exercises
 # the lua_setallocf / lua_setfield / lua_close MACROS and not merely the
 # functions behind them.  mem_test.c supplies the jnlua-side names those
 # macros reach for, which is also how their signatures stay pinned.
 "$CC" -O2 -Wall -Wextra -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" \
-  -include "$OCLJ_SHIM/lj52shim.h" \
+  -include "$OCLJ_SHIM/lj52shim.h" $OCLJ_MEMTEST_CFLAGS \
   "$SELF_DIR/mem_test.c" "$OCLJ_SHIMOBJ" "$OBJ/eris_lj.o" \
   "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$OCLJ_BUILD/mem_test$EXE" || fail "test did not build"
 

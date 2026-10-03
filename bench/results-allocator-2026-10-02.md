@@ -642,6 +642,15 @@ boundary where Java can write or read them (the proposal in the roadmap's
 accounting row), and C's 0.25 s is what that would be worth on binarytrees if
 the boundaries cost nothing.
 
+**Built 2026-10-03:** [results-accounting-2026-10-03.md](results-accounting-2026-10-03.md).
+The figures moved into the shim's record, synchronised at jnlua's three
+accessors rather than at every Java<->Lua boundary (the accessors turned out
+to be the only readers and writers of the two fields, so the boundary is
+closed: [docs/accounting-sync.md](../docs/accounting-sync.md)). In this arm,
+capped binarytrees 0.217–0.234 s against the shipping pair's 0.385–0.399, and
+the uncapped 0.207–0.219; in the pinned harness machine 0.2500–0.2564 s
+against 0.4239–0.4247 with only the class differing; exact throughout.
+
 ## Where it loses
 
 Two synthetic loops, `bigchurn.lua` and `smallchurn.lua`

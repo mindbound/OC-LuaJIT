@@ -34,10 +34,22 @@ merely satisfying the loader: the base's getName()/getNameWhat() dispatch
 virtually to the overridden natives, so a handle from our lua_getstack is read
 by OUR library instead of OpenComputers' PUC code.
 
-WHAT IT DOES NOT NEED.  Behavioural overrides.  LuaStateFiveThree overrides
+WHAT IT DOES NOT NEED.  Enum renumbering.  LuaStateFiveThree overrides
 arith_operator_id and gc_action_id because 5.3 renumbered those enums; the base
 carries the 5.2 numbering (LuaState.java:141, :154) and we ARE 5.2-class --
 LuaJIT is 5.1 plus partial 5.2 compat.  Inheriting is correct.
+
+WHAT IT DOES CARRY: THE MEMORY ACCOUNTING'S JAVA BOUNDARY.  Three overrides and
+two natives of our own (docs/accounting-sync.md): the capped constructor and
+setTotalMemory(int) hand the cap to the native side, and getFreeMemory() reads
+the used figure back from it, so that an allocation never crosses JNI to
+account for itself -- which it did on every call until 2026-10-03, and which
+cost binarytrees 0.39 s against 0.21 s without the accounting.  jnlua's own
+private fields stay the figures for a state that has not handed over: the
+uncapped no-argument constructor, and the window inside super(memory).
+`synchronized` is not inherited, so it is emitted on both overrides; jnlua's
+exactness argument rests on every allocation and every read happening under
+the LuaState's monitor.
 
     python3 native/jnlua/gen-luastate-subclass.py <OC-JNLua> [out.java]
 """
@@ -162,8 +174,11 @@ def main() -> int:
     w(" * That is how OpenComputers runs 5.2, 5.3 and 5.4 side by side in one JVM, and")
     w(" * it is what lets OC-LuaJIT be ADDITIVE rather than a replacement.")
     w(" *")
-    w(" * No behavioural overrides, deliberately: we are 5.2-class, so the base class's")
-    w(" * arith/gc enum numbering is already correct and inheriting it is the point.")
+    w(" * Three behavioural overrides, and only these: the capped constructor,")
+    w(" * getFreeMemory() and setTotalMemory(int) keep the memory accounting's figures")
+    w(" * on the native side, so an allocation never crosses JNI to account for itself")
+    w(" * (docs/accounting-sync.md). Nothing else is overridden: we are 5.2-class, so")
+    w(" * the base class's arith/gc enum numbering is already correct.")
     if nested:
         w(" *")
         w(" * The nested LuaDebug is MANDATORY: jnlua.c JNI_OnLoad does")
@@ -179,7 +194,48 @@ def main() -> int:
     w("")
     w("\tpublic %s(int memory) {" % CLASS)
     w("\t\tsuper(memory);")
+    w("\t\t// Hand the cap to the native side: from here on an allocation does not")
+    w("\t\t// cross JNI to account for itself. Outside the monitor, and safely so:")
+    w("\t\t// this object has not yet escaped its constructor.")
+    w("\t\tocljSetTotalMemory(memory);")
     w("\t}")
+    w("")
+    w("\t/* ---- the memory accounting's Java boundary: docs/accounting-sync.md ---- */")
+    w("")
+    w("\t/**")
+    w("\t * The native side's figure once the state has handed over, which every")
+    w("\t * allocation keeps exact; jnlua's own before that and after close, where")
+    w("\t * the native side answers -1. An uncapped state never hands over, so it")
+    w("\t * asks no native at all: exactly jnlua's behaviour, and a library built")
+    w("\t * before these natives still serves it (computer.lua.limitMemory=false).")
+    w("\t */")
+    w("\t@Override")
+    w("\tpublic synchronized int getFreeMemory() {")
+    w("\t\tif (super.getTotalMemory() < 1) {")
+    w("\t\t\treturn super.getFreeMemory();")
+    w("\t\t}")
+    w("\t\tlong used = ocljUsedMemory();")
+    w("\t\tif (used < 0) {")
+    w("\t\t\treturn super.getFreeMemory();")
+    w("\t\t}")
+    w("\t\treturn (int) Math.max(0L, (long) super.getTotalMemory() - used);")
+    w("\t}")
+    w("")
+    w("\t/**")
+    w("\t * jnlua's validation and its refusal on an uncapped state run first; the")
+    w("\t * native side then holds the new cap for the very next allocation.")
+    w("\t */")
+    w("\t@Override")
+    w("\tpublic synchronized void setTotalMemory(int value) {")
+    w("\t\tsuper.setTotalMemory(value);")
+    w("\t\tocljSetTotalMemory(super.getTotalMemory());")
+    w("\t}")
+    w("")
+    w("\t/** The native side's used figure; -1 before the handover, after close. */")
+    w("\tprivate native long ocljUsedMemory();")
+    w("")
+    w("\t/** Hands the cap to the native side, switching it to native accounting. */")
+    w("\tprivate native void ocljSetTotalMemory(int total);")
     w("")
     w("\t/* ---- the %d inherited natives, redeclared so they bind to OUR library ---- */" % len(own))
     w("")
@@ -246,7 +302,10 @@ def main() -> int:
     if len(sys.argv) > 2:
         dest = Path(sys.argv[2])
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(out, encoding="utf-8", newline="\n")
+        # open(), not Path.write_text(newline=): that keyword is Python 3.10+,
+        # and build-native.sh runs this with whatever Python 3 it finds.
+        with open(dest, "w", encoding="utf-8", newline="\n") as f:
+            f.write(out)
         print("wrote %s  (%d redeclared, %d nested excluded: %s)"
               % (dest, len(own), len(nested), ", ".join(nested_names) or "-"))
     else:

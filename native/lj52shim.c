@@ -210,6 +210,13 @@ typedef struct lj52_mem {
   int           norefuse;   /* >0: charge, but never refuse -- see below     */
   long long     pending;    /* bytes moved while nobody could be told yet    */
   void         *heap;       /* this state's own lj_alloc arena; NULL = libc  */
+  /* -- the accounting's C side; see docs/accounting-sync.md -- */
+  long long     used;       /* every successful delta since birth, BOTH modes */
+  long long     total;      /* the cap Java handed over; valid once csync     */
+  int           csync;      /* 1 = C owns the figures: no JNI per allocation  */
+  long long     mem_reads;  /* lj52_mem_used calls that returned the figure   */
+  long long     mem_calls;  /* lj52_alloc calls on this record                */
+  long long     mem_jni;    /* ... of which crossed into the JVM (legacy)     */
   /* -- the deadline watchdog; see its section below -- */
   lua_State    *L;          /* main thread: what the timer callback hooks    */
   double        wd_due;     /* ABSOLUTE ms of the next fire; 0 == disarmed.  */
@@ -349,8 +356,44 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
                                     : (long long)nsize - (long long)osize);
 
   if (M == NULL) return lj52_libc(ptr, nsize);
+  M->mem_calls++;
 
-  /* Ordered so the JNI call is the LAST thing tried, not the first: this runs
+  /* C MODE (docs/accounting-sync.md): once the Java side has handed the cap
+   * over (lj52_mem_settotal, from LuaStateLuaJIT's capped constructor and its
+   * setTotalMemory override), the figures live here and nothing below crosses
+   * into the JVM.  The arithmetic, the refusal and the emergency collector's
+   * trip-wire are the legacy path's own, under one predicate: the accounting
+   * flag jnlua flips off before close, and a cap.  Java reads `used` back
+   * through lj52_mem_used when, and only when, getFreeMemory() runs -- the
+   * one reader of the figure jnlua has. */
+  if (M->csync) {
+    int acct = M->accounting && M->total > 0;
+    if (nsize == 0) {
+      /* BEFORE the free, as below: the disarm check wants the post-free heap. */
+      if (acct) lj52_gc_pressure(M, M->total, M->used + delta);
+      lj52_back(M, ptr, osize, 0);
+      M->used += delta;
+      return NULL;
+    }
+    if (acct && delta > 0 && !M->norefuse && M->total - M->used < delta) {
+      M->gc_refusals++;
+      lj52_gc_pressure(M, M->total, M->used);
+      return NULL;                      /* -> lj_err_mem -> LUA_ERRMEM */
+    }
+    p = lj52_back(M, ptr, osize, nsize);
+    if (p != NULL) {
+      M->used += delta;
+      if (acct) lj52_gc_pressure(M, M->total, M->used);
+    }
+    return p;
+  }
+
+  /* LEGACY MODE, every state until it hands over and forever on the dropin
+   * (OpenComputers' own LuaState class cannot carry the overrides).  Exactly
+   * the per-allocation JNI path this file always had, plus M->used kept in
+   * step, so that at a handover C already holds the figure Java holds.
+   *
+   * Ordered so the JNI call is the LAST thing tried, not the first: this runs
    * on every allocation, and during lua_close -- where jnlua disarms us and
    * then frees the entire heap -- getthreadenv() would otherwise be called
    * once per block for nothing. */
@@ -368,10 +411,14 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
      * a nonsense total.  Measured, before this was banked: used fell to
      * -387188 across an ordinary allocate-then-collect cycle. */
     p = lj52_back(M, ptr, osize, nsize);
-    if (p != NULL || nsize == 0) M->pending += delta;
+    if (p != NULL || nsize == 0) {
+      M->pending += delta;
+      M->used += delta;
+    }
     return p;
   }
 
+  M->mem_jni++;
   M->getmem(env, obj, &jtotal, &jused);
   total = jtotal;
   used = jused;
@@ -387,6 +434,7 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     lj52_gc_pressure(M, total, used + delta);
     lj52_back(M, ptr, osize, 0);
     M->setmem(env, obj, lj52_clampi(used + delta));
+    M->used += delta;
     return NULL;
   }
   if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse)) {
@@ -401,10 +449,75 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
   p = lj52_back(M, ptr, osize, nsize);
   if (p != NULL) {
     M->setmem(env, obj, lj52_clampi(used + delta));
+    M->used += delta;
     lj52_gc_pressure(M, total, used + delta);
   }
   return p;
 }
+
+/* THE CORES of the accounting's Java boundary (docs/accounting-sync.md),
+ * keyed by lua_State so native tests can drive them without a JVM; the JNI
+ * wrappers below only find the state.  Both call nothing but lua_getallocf
+ * (through lj52_memof): no Lua API call that can raise or allocate, and never
+ * the watchdog mutex.  They run under the Java LuaState's monitor, as every
+ * allocation does.
+ *
+ * lj52_mem_used: the figure, or -1 when there is no record (a state not made
+ * by lj52_newstate, or its luaL_newstate fallback) or the state has not handed
+ * over -- the Java side then falls back to jnlua's own figure, which legacy
+ * mode keeps current and which is 0 on an uncapped state.
+ *
+ * lj52_mem_settotal: records the cap and hands the figures over for good. */
+long long lj52_mem_used(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  if (M == NULL || !M->csync) return -1;
+  M->mem_reads++;
+  return M->used;
+}
+
+void lj52_mem_settotal(lua_State *L, long long total) {
+  lj52_mem *M = lj52_memof(L);
+  if (M == NULL) return;
+  M->total = total;
+  M->csync = 1;
+}
+
+#ifdef LJ52_ADDITIVE
+/* THE JNI WRAPPERS, additive build only: they are natives of LuaStateLuaJIT,
+ * a class the dropin never sees (build-native.sh pins its export set with no
+ * LuaStateLuaJIT_* name).  The state comes from jnlua's own `luaState` field --
+ * fixed from newstate until close zeroes it before lua_close -- not
+ * `luaThread`, which jnlua swaps on every Java-function call.  GetObjectClass,
+ * not FindClass, so no class-loader context is involved; the field ID is the
+ * same for every instance and is cached with relaxed atomics (machine threads
+ * hold DIFFERENT monitors).  A NULL ID returns at once and leaves the pending
+ * NoSuchFieldError to Java. */
+static lua_State *lj52_jstate(JNIEnv *env, jobject obj) {
+  static jfieldID cached;
+  jfieldID f = __atomic_load_n(&cached, __ATOMIC_RELAXED);
+  if (f == NULL) {
+    jclass c = (*env)->GetObjectClass(env, obj);
+    if (c == NULL) return NULL;
+    f = (*env)->GetFieldID(env, c, "luaState", "J");
+    (*env)->DeleteLocalRef(env, c);
+    if (f == NULL) return NULL;
+    __atomic_store_n(&cached, f, __ATOMIC_RELAXED);
+  }
+  return (lua_State *)(uintptr_t)(*env)->GetLongField(env, obj, f);
+}
+
+JNIEXPORT jlong JNICALL
+Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljUsedMemory(JNIEnv *env, jobject obj) {
+  lua_State *L = lj52_jstate(env, obj);
+  return L != NULL ? (jlong)lj52_mem_used(L) : (jlong)-1;
+}
+
+JNIEXPORT void JNICALL
+Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljSetTotalMemory(JNIEnv *env, jobject obj, jint total) {
+  lua_State *L = lj52_jstate(env, obj);
+  if (L != NULL) lj52_mem_settotal(L, (long long)total);
+}
+#endif
 
 /* jnlua's three lua_setallocf sites, intercepted.  We install nothing: the
  * (lj52_alloc, record) pairing set at newstate must survive, because it is how
@@ -1435,7 +1548,8 @@ static int lj52_jitstats(lua_State *L) {
 /* _OCLJ_GCSTATS() -> arms, collects, bailouts, refusals, armed,
  *                    gc_total, gc_threshold, gc_stepmul, gc_state,
  *                    trace_flushes, flush_wanted, flush_refusals, flush_bytes,
- *                    heap
+ *                    heap, c_total, c_used, csync, used_reads, alloc_calls,
+ *                    alloc_jni
  *
  * THE INSTRUMENT FOR THE EMERGENCY COLLECTOR, and it is not optional.  A
  * `sieve` that passes with arms == 0 proves nothing about this code -- it
@@ -1492,7 +1606,19 @@ static int lj52_gcstats(lua_State *L) {
   lua_pushinteger(L, M ? M->gc_flushrefusals : -1);
   lua_pushnumber(L, M ? (lua_Number)M->gc_flushbytes : -1);
   lua_pushinteger(L, M ? (M->heap != NULL) : -1);
-  return 14;
+  /* 15-20, appended 2026-10-03 (docs/accounting-sync.md): the C-owned cap and
+   * figure, whether the state has handed over, how often Java read the figure,
+   * and every allocator call against the ones that crossed into the JVM.  In C
+   * mode alloc_jni stops moving while alloc_calls climbs: the fingerprint that
+   * the fast path is live.  Twenty values is LUA_MINSTACK, so no checkstack and
+   * no allocation. */
+  lua_pushnumber(L, M ? (lua_Number)M->total : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->used : -1);
+  lua_pushinteger(L, M ? M->csync : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->mem_reads : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->mem_calls : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->mem_jni : -1);
+  return 20;
 }
 
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
