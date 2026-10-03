@@ -41,9 +41,9 @@ import scala.Option;
  * with nothing OpenComputers ships, and build-native.sh fails the build if our
  * library exports a single symbol in OpenComputers' LuaState family.
  *
- * NOT YET RUN. Compiled, and structurally identical to the ocelot-brain
- * adapter in test/native/OcljArch.scala which boots a real machine today.
- * Exercising THIS file needs a Minecraft instance.
+ * RUN IN GAME since 2026-09-16: OpenComputers' loader found our library under
+ * that path and logged it (docs/roadmap.md, THE FIRST IN-GAME RUN). Same shape
+ * as the ocelot-brain adapter in test/native/OcljArch.scala, which the harness runs.
  */
 public final class LuaJITStateFactory extends LuaStateFactory {
 

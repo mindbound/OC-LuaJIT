@@ -67,17 +67,17 @@ import scala.Enumeration;
  * NoSuchMethodError or AbstractMethodError at class load -- a startup crash,
  * not the compile error above. Bounding the dependency is on the roadmap; it is
  * left undone rather than guessed at, because a malformed FML version range
- * stops the mod loading at all and nothing in this repository can run FML to
- * check one.
+ * stops the mod loading at all; try a candidate in the game instance the
+ * in-game tests use (docs/in-game-tests.md), not in the build.
  *
- * PROVEN, THOUGH NOT HERE. The identical construction runs today against
+ * PROVEN IN BOTH HOSTS. The identical construction runs today against
  * ocelot-brain -- see test/native/OcljArch.scala -- where a real machine boots
  * AxisOS on our LuaState while OpenComputers' own PUC-Lua 5.2 native is loaded
  * in the same JVM and reports itself as a different VM. ocelot-brain is a port
  * of this code and its class is if anything MORE restrictive than this one
  * (there, lua/kernelMemory/ramScale are private[machine]; here they are public),
- * so what compiles against it compiles against this. What has NOT been run is
- * this file, because running it needs a Minecraft instance.
+ * so what compiles against it compiles against this. This file itself has run
+ * in game since 2026-09-16 (docs/in-game-tests.md, T1 onwards).
  */
 @Architecture.Name("LuaJIT")
 public class LuaJITArchitecture extends NativeLuaArchitecture {
@@ -152,17 +152,17 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
 
         final InputStream patched = LuaJITArchitecture.class.getResourceAsStream(KERNEL_RESOURCE);
         if (patched == null) {
-            // NOT silent, and not fatal. OpenComputers' own kernel runs fine on
-            // our VM -- that is the harness's stock-kernel arm -- but it
-            // reinstates the standing count hook, which is what stops traces
-            // being entered at all. A hundredfold slowdown is not something a
-            // server operator should have to discover from a benchmark.
+            // NOT silent. OpenComputers' own kernel is not known to work here:
+            // under the harness's twin of this class it failed after one tick
+            // ("Faulty architecture implementation for synchronized calls";
+            // docs/research/hook-vs-jit.md, 2026-09-29), and where it runs its
+            // standing count hook makes the JIT thrash. Say so, loudly.
             io.github.astronfo.ocluajit.OCLuaJIT.LOG.warn(
                 "No patched kernel at " + KERNEL_RESOURCE
                     + " in this jar: falling back to "
                     + "OpenComputers' own machine.lua and its standing deadline hook. Computers "
-                    + "will run, but the JIT will thrash. This is a packaging fault, not a "
-                    + "configuration one.");
+                    + "may stop after their first tick, and the JIT will thrash. This is a "
+                    + "packaging fault, not a configuration one.");
             return true;
         }
 
