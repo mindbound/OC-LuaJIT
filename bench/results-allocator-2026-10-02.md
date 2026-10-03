@@ -440,14 +440,207 @@ accessors would have to cost about 11–13 ns more than through the plain C
 ones, where the plain-C accounting as a whole costs about 2 ns a call on the
 arena (r3l/r3ul, above). The arm that would measure it is a host on jnlua's
 real JNI accessors under a JVM, or a batched-publish prototype (the
-roadmap's "Benchmark the accounting's cost" row). The 0.03 s between the two
-remainders is the machine gaining fewer seconds than the host — the game
+roadmap's "Benchmark the accounting's cost" row). The first of those has
+since run ([the JNI crossing](#what-the-machine-still-pays-per-allocation-the-jni-crossing-2026-10-03),
+2026-10-03): in a plain JVM the crossing costs about 0.15 s a binarytrees
+run, about 10.6 ns a call more than the plain C accessors (0.149 s against
+the matched cell at the mins), and binarytrees with it reads 0.389–0.399 s,
+0.024–0.041 s under the machine's mins.
+The 0.03 s between T7's and T8's remainders is the machine gaining fewer seconds
+than the host — the game
 0.138 s, the host 0.169 s — as in the harness ("In the machine": 0.127
 against 0.167 s), across two days, two game sessions and two host baselines
 (r3c on 09-29, r3l on 10-02). It is no larger than what the choice of T7's
 host reading moves: against the later loads the host would gain
 0.10–0.14 s, no more than the game's 0.138. The host's first-run step is a
 candidate for it, as "In the machine" names it for the harness's gap.
+
+## What the machine still pays per allocation: the JNI crossing (2026-10-03)
+
+Arms for three of the candidates T8's remainder names, run on 2026-10-03,
+11:07–11:10, on the same box: two chains, each starting with 0 java
+processes, every process launched through `affrun` with the
+performance-core mask. Each knob varies one candidate for binarytrees'
+0.183 s a run over the arena host at T8 and leaves out everything else a
+machine has: a live ballast and a prewarm in a bare host and `luajit.exe`,
+the crossing in a plain JVM through jnlua's real JNI accessors. binarytrees
+only, the file loaded afresh for every rep. Both
+chains time with `os.clock`, which here is the C library's `clock()` (1 ms
+steps), as in every standalone table above; the machine's is
+`machine.cpuTime` (the ladder's "Two clocks": both wall time).
+
+**Ballast and prewarm, in a bare process.** `residual/residual.lua` builds
+an optional LIVE ballast held for the whole run — small tables and strings,
+grown until `collectgarbage("count")` reads N KB more than at the start,
+with a full collect every 64 entries, then measured after two more full
+collects (it read 400 and 1200 to the KB in every process) — so
+every collection binarytrees triggers has that much more to traverse, as a
+machine's do over OpenOS and the kernel; and an optional prewarm, mandelbrot
+and matmul loaded and run five times each first, the in-game runner's order,
+so the heap binarytrees allocates into has been used before. 400 KB is about
+a machine's resident heap: the harness's b2 milestone read `used` 364 973 and
+383 157 B in ship-1 and ship-2 (339 184–444 925 B across the nine chain runs
+of 10-02); 1200 KB is three times that. Three arms: the arena host relinked
+against the shipping shim object (`residual/ladder_host_ship.exe`
+`5a51bef8…`, `lj52shim.o` `e3392678…`) with the 64 MB accounting and with it
+off, and our `luajit.exe` (`c6f70712…`, rebuilt by the gates; r2). Two
+processes per cell, 5 reps each, every CHECK `7038400`. Min–max over the 10
+reps, seconds (`residual/run-1/run.log`, 11:07:21–11:08:16):
+
+| live ballast | prewarm | host, accounting | host, accounting off | r2 `luajit.exe` |
+|---:|:---:|---:|---:|---:|
+| 0 | — | 0.2370–0.2560 | 0.2060–0.2190 | 0.1930–0.2010 |
+| 0 | yes | 0.2330–0.2440 | 0.2070–0.2230 | 0.1940–0.2020 |
+| 400 KB | — | 0.2350–0.2450 | 0.2070–0.2210 | 0.1900–0.1980 |
+| 400 KB | yes | 0.2340–0.2410 | 0.2100–0.2180 | 0.1920–0.2040 |
+| 1200 KB | — | 0.2410–0.2620 | 0.2180–0.2280 | 0.2000–0.2110 |
+| 1200 KB | yes | 0.2430–0.2510 | 0.2210–0.2270 | 0.2030–0.2180 |
+
+**The JNI crossing, in a plain JVM.** `residual/jni/JniArm.java` loads the
+shipping additive DLL (`88b50796…`, its md5 logged at the chain's start)
+with `System.load` into a plain JVM — Temurin JDK 8.0.504, the harness's;
+no OC, no OpenOS, no sandbox, no machine thread — and creates the state
+through our `LuaStateLuaJIT`, compiled with OC-JNLua's Java sources, as
+OC's factory does. `new LuaStateLuaJIT(67108864)` installs jnlua's capped
+allocator, which the shim intercepts by turning its own accounting on, so
+every allocation calls jnlua's `getthreadenv`, `getluamemory` (two
+`GetIntField`s) and `setluamemory` (one `SetIntField`) through JNI
+(`lj52_alloc`); `new LuaStateLuaJIT()` leaves the accounting off, and
+nothing crosses per allocation. The arm opens whichever of jnlua's
+libraries the native accepts, hands the benchmark sources in as a global,
+and runs `jnidriver.lua`, `residual.lua`'s loop without ballast or prewarm,
+on the JVM's main thread through `L.call`. Every JVM read `_OCLJ_GCSTATS`
+`heap = 1` and every CHECK was `7038400`; at the end the accounting JVMs'
+`getFreeMemory()` read 66 844 386–66 954 214 of 67 108 864 (the shim
+publishing into jnlua's fields), the others 0 of 0. Three JVMs per arm,
+alternating; min/max of each JVM's 5 reps, seconds
+(`residual/jni/run-2/run.log`, 11:09:59–11:10:09):
+
+| arm | JVM 1 | JVM 2 | JVM 3 | all 15 reps |
+|---|---:|---:|---:|---:|
+| accounting on, `LuaStateLuaJIT(67108864)` | 0.3920/0.3990 | 0.3890/0.3970 | 0.3900/0.3970 | **0.389–0.399** |
+| accounting off, `LuaStateLuaJIT()` | 0.2180/0.2220 | 0.2130/0.2220 | 0.2090/0.2140 | **0.209–0.222** |
+
+A first attempt (`residual/jni/run-1/`, 11:09:16) stopped in every JVM at
+jnlua's `openLibs()` with `illegal library`: the native accepts only OC's
+set. It is recorded here, not a measurement.
+
+- **Ballast and prewarm move binarytrees by a few milliseconds.** With 400 KB,
+  with the prewarm, or with both, every arm's min is 0.983–1.019x its min
+  with neither (−0.004 to +0.004 s), every pair of cells overlapping. 1200 KB
+  costs 1.017–1.068x against no ballast at the same prewarm setting
+  (0.004–0.014 s; one pair of the six disjoint, r2 with the prewarm). As
+  this run reproduces them, collections over a resident heap of a machine's
+  size and a heap the earlier benchmarks have used account for at most
+  about 0.004 s of the 0.183 s, and 0.014 s at three times the size.
+- **In a plain JVM, the crossing is most of the rest's size.** In the JVM
+  the accounting costs 0.180 s a run at the mins (0.389 against 0.209;
+  0.167–0.190 across the reps), 12.8 ns a call (11.9–13.5) over
+  binarytrees' 14.08 M accounted calls (the host's count, 70.38–70.39 M
+  gets per five-rep process without the prewarm). In the bare host the same
+  pair, on plain C accessors, is 0.031 s at the mins with neither ballast
+  nor prewarm (0.022–0.031 s across the six cells; 2.2 ns a call, as
+  r3l/r3ul's 0.028 s on 10-02). Net of that, the JNI crossing costs about
+  0.15 s a run: 0.149 s against that matched cell at the mins, 10.6 ns a
+  call; with both pairs' spreads in that cell (JVM 0.167–0.190 s, host
+  0.018–0.050 s), 0.117–0.172 s, 8.3–12.2 ns — near the 11–13 ns T8 said it
+  would need to be all of the remainder.
+- **The JVM adds nothing measurable with the accounting off**: 0.209–0.222 s
+  against the bare host's 0.206–0.219 (mins 1.015x, cells overlapping).
+  Loading the native into a JVM and driving the state through jnlua's Java
+  layer costs about 0.003 s here, no more, when nothing crosses per
+  allocation.
+- **About 0.03 s remains.** The JVM with the accounting (0.389–0.399) sits
+  0.024–0.041 s under the machine's binarytrees mins: the pinned harness's
+  shipping runs, 0.4127 (ship-2) and 0.4295 (ship-1), and T8's 0.4202
+  (0.031 s). Of T8's 0.183 s over the arena host (r3l, 0.2370; this run's
+  accounting min reads 0.2370 too), the JVM arm reproduces 0.152 s (0.389
+  − 0.237). The other 0.024–0.041 s is unseparated (min to min; against the
+  JVM arm's max, 0.399, it is 0.014–0.031 s, and ship-1 and ship-2 alone
+  differ by 0.017 s); its candidates are the sandbox, OpenOS, the machine's
+  executor and coroutine resume, the per-resume watchdog and the rest of
+  T8's list; the ballast arm puts collections over a resident heap of
+  OpenOS's size at about 0.004 s of it at most, as reproduced.
+
+What these arms do not say:
+
+- **That the machine pays the same 0.15 s is inferred**, from the JVM arm's
+  agreement with the machine, not measured in a machine: no machine has run
+  without the crossing. A batched-publish prototype in the machine would be
+  that arm; the roadmap's "Benchmark the accounting's cost" row carries the
+  proposal and its open questions.
+- **One arm per candidate, one benchmark, one box**: n = 3 JVMs per arm and 2
+  processes per ballast cell. The other allocating benchmarks were not run
+  through the JVM: over r3l, matmul's in-machine cost comes to 11.8 ns a
+  call at T8 and 12.7–15.7 in the harness, strings2's to 15.8–19.7 in the
+  harness, against binarytrees' 12.5–13.7, and how much of each the same
+  crossing is was not measured; sieve's ~210 ns is far beyond it and still
+  not explained.
+- **The 14.08 M calls are the bare host's count**; the JVM arm read none, and
+  its per-call figures assume the same benchmark makes the same calls there.
+  Netting the host pair from the JVM pair assumes the accounting's
+  arithmetic costs the same in both: the same `lj52_alloc`, handed different
+  accessors.
+- **The two proxies are proxies.** The ballast is small tables and strings,
+  not OpenOS's mix of closures, prototypes and strings; its size is LuaJIT's
+  own count after two full collects, where b2's is the accounted `used` at
+  boot, and a machine's live heap at binarytrees' turn was not read. The
+  prewarm is two benchmarks in a fresh process, not OpenOS's boot and a
+  machine's life.
+- **The bare host read no `heap`.** No build log for `ladder_host_ship.exe`
+  is on disk; that it ran on the arena rests on its link and on its times
+  (accounting 0.2370 at the min, r3l's on 10-02 exactly; accounting off
+  0.2060 against r3ul's 0.2090 and the C-library host's 0.3730). The JVM
+  arm read `heap = 1`.
+- **Neither chain read affinity back.** The host chain sent `affrun`'s
+  stderr to `/dev/null` and the JVM chain's log keeps only the benchmark's
+  lines; that every process ran on the performance cores rests on the mask
+  and on the times (the JVM with the accounting off reads like the bare
+  host, and the bare host like r3l and r3ul).
+- **The JVM arm is not a machine in other ways**: the benchmark runs on the
+  JVM's main thread through `L.call`, not in a coroutine a machine thread
+  resumes; no watchdog is armed; the cap is 64 MB, as r3l's, where the
+  harness's machine has about 3.5 MB (b2's `totalMemory`) and T8's 16 MB; and
+  which libraries opened is not logged (the run script kept only the `FP`,
+  `REP` and `JVM` lines; `os` was among them, since the driver found
+  `os.clock`). Nor is the JIT state: the JVM arm logged none (the host's
+  `HOST end` lines read `jit=on`). By the source nothing in `JniArm`, the
+  driver or `LuaStateLuaJIT` sets it, so it is the same in both JVM arms and
+  the on/off pair is unaffected; that the JVM with the accounting off reads
+  like the bare host suggests it was on.
+- **A 1 ms clock.** Every time in this section is a whole number of
+  milliseconds; the ballast and prewarm readings at 400 KB are up to four
+  ticks.
+
+### What each part of the crossing costs: three prototypes (2026-10-03)
+
+Three scratch copies of the shim, each built into its own DLL by
+`build-native.sh` (`OCLJ_SHIM`/`OCLJ_BUILD` in the scratchpad; the repo was
+not touched), timed in the same JVM arm (binarytrees, 64 MB cap, 5 fresh
+loads per JVM, 3 JVMs per variant, round-robin, pinned; `jnivar/run-1/run.log`,
+11:13-11:14) and run against `mem_test` (`OCLJ_SHIMOBJ` = each variant's object):
+
+| variant | per allocation | binarytrees, s | mem_test |
+|---|---|---:|---|
+| shipping `88b50796` | `getthreadenv` + 2 `GetIntField` + 1 `SetIntField` | 0.385-0.397 | 29/0 |
+| A `d746243e` | `getthreadenv` + 1 `SetIntField`; total/used cached, re-read every 4096 calls and before refusing | 0.354-0.383 | 29/3: M6b, P1a, P2a |
+| B `4735055a` | A, publishing `used` only after 1 KB of drift | 0.296-0.303 | 29/6: + M3b, M4c, M7 |
+| C `a9e7390e` | B, calling `getthreadenv` only when a read or publish is due | 0.250-0.259 | 29/6: as B |
+| shipping, accounting off | none | 0.208-0.218 | - |
+
+By difference, of the ~0.18 s: the two reads ~0.03 s, the write ~0.06 s,
+`getthreadenv` ~0.05 s, and the accounting arithmetic and the cache ~0.04 s
+(the bare host's on/off pair is 0.022-0.031 s). The failures are the point:
+A's cached total misses the caps `mem_test` sets from the Java side between
+steps, so the cap was not tight (M6b) and the emergency collector never armed
+(P1a, P2a: `used` read past `total` because `total` was stale) -- the same
+thing OC does around every save (`setTotalMemory(Int.MaxValue)` and back).
+B and C add a `freeMemory` up to 1 KB stale (M3b, M4c, M7 read the Java field
+right after an allocation). So a per-allocation cache is not shippable as
+built; the precise variant needs `total` read and `used` published at every
+boundary where Java can write or read them (the proposal in the roadmap's
+accounting row), and C's 0.25 s is what that would be worth on binarytrees if
+the boundaries cost nothing.
 
 ## Where it loses
 
@@ -555,7 +748,13 @@ working tree with the review's fixes applied:
   bare-host processes on binarytrees, on both DLLs (0.18–0.22 s for T7
   against the C-library host's later loads), is not separated; the JNI
   crossing, the machine's long-lived arena and collections over the OpenOS
-  heap are among its candidates, none measured and none ranked.
+  heap are among its candidates, none measured and none ranked. Since
+  measured outside a machine, for T8's 0.183 s on the arena DLL
+  ([the JNI crossing](#what-the-machine-still-pays-per-allocation-the-jni-crossing-2026-10-03)):
+  the crossing at about 0.15 s in a plain JVM; a live 400 KB ballast and a
+  prewarmed arena at a few milliseconds, as a bare host reproduces them. No
+  arm ran on the C-library DLL (T7's), where the host's first-run step is
+  1.12–1.27x; in a machine none is separated yet.
 * **Resident memory across many machines is unmeasured.** The review's three
   notes (each arena held near its peak until close, no reuse across machines,
   a 128 KB first segment per machine) come from the source; no run here had
@@ -634,6 +833,17 @@ none of it committed. md5, first eight hex digits:
   `dfa3215a` and per-step logs and harness runs under `ljalloc/gates/`;
   `ljalloc/gates2.sh` `3c4fc52b` with `ljalloc/gates2/summary.txt`
   `6c22f01d` and the same under `ljalloc/gates2/`.
+- The JNI-crossing section (2026-10-03), under `residual/`: `residual.lua`
+  `8758aaec`, `run-ab.sh` `342c2058`, `summ.py` `cf24219d` (the per-cell
+  min–max), `ladder_host_ship.exe` `5a51bef8` (no build log on disk),
+  `run-1/run.log` `b01b5c3c`; `jni/JniArm.java` `445221f9` and
+  `jni/jnidriver.lua` `f2656e9d` (the versions run-2 compiled and ran;
+  run-1's `JniArm` called `openLibs()` and drove `residual.lua`),
+  `jni/build-run.sh` `93d48695` (run-1), `jni/build-run2.sh` `0610192e`
+  (run-2), `jni/sources.txt` `b76a3fa1` (the 25 sources compiled),
+  `jni/run-1/run.log` `b4c828d6` (the failed attempt), `jni/run-2/run.log`
+  `aa3ad46b`. `luajit.exe` `c6f70712` is the repo's build output
+  (`build/native/luajit-windows-x86_64/src/luajit.exe`), not committed.
 - Repo outputs of the gates, not committed:
   `build/native/libdir-additive/libjnluajit52-windows-x86_64.dll`
   `88b50796`, `build/native/obj-windows-x86_64/lj52shim.o` `e3392678`,
