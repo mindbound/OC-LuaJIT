@@ -753,7 +753,7 @@ OpenOS 1.8.9 (16384k RAM)
 machine RAM total=16384 KB free=16146 KB  jit global=false
 mandelbrot   CHECK=37904620  min=0.0626 s  reps: 0.063 0.063 0.063 0.063 0.063
 matmul       CHECK=481.0000  min=0.1031 s  reps: 0.105 0.109 0.103 0.103 0.106
-binarytrees  CHECK=7038400   min=0.5586 s  reps: 0.559 0.717 0.941 0.898 0.921
+binarytrees  CHECK=7038400  min=0.5586 s  reps: 0.559 0.717 0.941 0.898 0.921
 ```
 
 All three CHECKs equal the references and every standalone and harness arm

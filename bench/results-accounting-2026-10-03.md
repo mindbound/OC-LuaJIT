@@ -114,7 +114,8 @@ arm: none through JNI with the new class, every one with HEAD's.
 
 mandelbrot's cells are disjoint, the new class's 1–5% slower, but it makes
 under 800 allocator calls a run, so the accounting cannot account for it; in
-h2 the same comparison read 0.995. Not separated.
+h2 the same comparison read 0.995. Not separated. (Five runs a cell after T9
+do not reproduce it: 1.003 at the medians, [below](#the-three-arm-chain-after-t9-accsynch4).)
 
 Also in h2, additive: JIT off binarytrees 0.3431 s (the 10-02 shipping DLL,
 JIT off, read 0.5025 in its own chain), sieve 0.1041 s (0.1007 then): sieve's
@@ -122,6 +123,130 @@ JIT off, read 0.5025 in its own chain), sieve 0.1041 s (0.1007 then): sieve's
 `acc-2` counted 92 374 662 allocator calls between boot and the end of the
 persistence milestones, none through JNI; the dropin arm, 92 385 582, every
 one through JNI.
+
+## In game (T9, 2026-10-03)
+
+T9 in [docs/in-game-tests.md](../docs/in-game-tests.md), run in the game
+session that began at 15:36 (the instance's `latest.log`: world joined
+15:39:50, screenshot saved 15:41:02, game stopped 15:43:09), in the same
+world and on the same 16 MB machine as T7 and T8. Checked before this section
+was written: the only `ocluajit-*.jar` in the instance's `mods/` is
+`ocluajit-0c656ac-master+0c656aca22-dirty.jar` (782 707 B), whose Windows
+native is `cb29485d` and whose kernel is `089dcbde`; the runner on the
+computer's disk is byte-identical to the repo's `bench/oc/ingame-ladder.lua`
+(`a20fdf67`). Nothing in the game reads `csync` (the sandbox never sees
+`_OCLJ_GCSTATS`), so that the game's machine ran in C mode rests on the jar
+and on the harness, where every state the additive factory makes hands over
+(`acc-1`, `acc-1r`). Transcribed from a screenshot of the computer's screen:
+
+```
+/home # ./ingame-ladder.lua
+machine RAM total=16384 KB free=15888 KB  jit global=false
+mandelbrot   CHECK=37904620  min=0.0657 s  reps: 0.067 0.067 0.068 0.066 0.066
+matmul       CHECK=481.0000  min=0.0862 s  reps: 0.089 0.086 0.088 0.086 0.087
+binarytrees  CHECK=7038400  min=0.2521 s  reps: 0.252 0.254 0.260 0.259 0.256
+```
+
+All three CHECKs equal the references. Min of 5, seconds; T8 and T7 as in
+the allocator document's T8 table (T7's binarytrees its first rep); r1 plain
+LuaJIT and r3l the arena host with the 64 MB accounting, both min of 5 fresh
+processes from that table:
+
+| benchmark | T9 `cb29485d` | T8 `88b50796` | T7 `bcf8715c` | T9/T8 | T9/r1 | T9/r3l |
+|---|---:|---:|---:|---:|---:|---:|
+| mandelbrot | 0.0657 | 0.0637 | 0.0626 | 1.031 | 1.011 | 1.011 |
+| matmul | 0.0862 | 0.0946 | 0.1031 | **0.911** | 1.078 | 1.014 |
+| binarytrees | 0.2521 | 0.4202 | 0.5586 | **0.600** | 1.313 | 1.064 |
+
+- **The prediction is met on binarytrees and beaten on matmul**: T9
+  printed binarytrees near 0.25 s and matmul near 0.089 before the run; they
+  read 0.2521 and 0.0862. binarytrees' first rep is its min and its reps are
+  flat (0.252–0.260, 1.03x); matmul's are 0.086–0.089.
+- **The pinned harness tracked the game a third time, closely rather than
+  exactly.** Before the game, h3's two runs (the source of the prediction)
+  read binarytrees 0.2500–0.2564, which holds the game's 0.2521, and matmul
+  0.0881–0.0888, which the game's 0.0862 is 2.2% below (T8's matmul was 0.8%
+  below its chain's faster run). In the three-arm chain run after the game
+  (below), T9's pair reads binarytrees 0.2431–0.2485 (the game 1.4% above the
+  slowest, which is the disturbed run below; 1.7% above the slowest of the
+  other four, 0.2480) and matmul 0.0862–0.0934 (the game on the fastest). T9
+  over T8 in the game, 0.600 on binarytrees and 0.911 on matmul, against that
+  chain's 0.569–0.595 (0.594 without the disturbed run) and 0.878–0.996
+  between the two pairs' runs (0.578 and 0.923 at the medians): matmul's
+  inside, binarytrees' just above the top, as its time is above the slowest
+  run.
+- **mandelbrot read 1.031x T8**, where T9 predicted no change. It is not this
+  change, by three readings: mandelbrot makes under 800 allocator calls a
+  run; in the chain below, with the class the only difference, it reads 1.003
+  at the medians; and between the two libraries the harness moves it the
+  other way (the new DLL 0.958x the old at the medians, cells overlapping at
+  0.0641–0.0651). The game's three runs read 0.0626, 0.0637 and 0.0657, on
+  three jars and in three sessions; one pair's five runs in one harness chain
+  spread up to 3.4% leaving out the disturbed run below (T8's pair,
+  0.0641–0.0663; T9's pair 2.9% without it, 15.8% with it). Read as variation between
+  game sessions; not separated.
+- **What remains over the bare host is now small.** Against r3l the game pays
+  0.0151 s a binarytrees run (T8: 0.1832 s) and 0.0012 s on matmul (T8:
+  0.0096): 1.064x and 1.014x. The crossing was about 92% of T8's binarytrees
+  remainder; what is left is about 1.1 ns a call spread over binarytrees'
+  14.08 M (a per-call equivalent). r3l is the 10-02 host, cold processes, in
+  another session; the rest is not separated.
+- **`free=15888 KB` at the runner's start**, against T8's 16 133 and T7's
+  16 146 KB: the sandbox held 496 KB above the kernel's share where T8's held
+  251 KB (OpenComputers' units: installed RAM minus free). The figure is now
+  the shim's, so the harness was checked for a dependence on the mode and
+  shows none: in the fifteen runs below, the machine's `getFreeMemory()`
+  right after boot (`b2`) took the same two values, 3 140 697 and 3 114 676
+  bytes, in all three arms, and the kernel's boot-time measurement spread
+  alike in the two arms that differ only in the mode (the new DLL in legacy
+  mode 335 193–412 601, T9's pair 334 601–413 193). T8's pair, on the old
+  DLL, stayed within 339 281–347 861; the four readings above 350 K came in
+  rounds 4 and 5, on the new DLL in both modes, while T8's pair read 347 093
+  and 346 069 in the same rounds, and the eleven earlier runs on `cb29485d`
+  today (h2 and h3, leaving out h2's `getFreeMemory` sabotage, which measures
+  its own stale figure) read 334 513–357 545; not separated. In the game it is one
+  reading of what the
+  sandbox held when the runner started, which garbage not yet collected
+  moves; not separated.
+
+### The three-arm chain after T9 (`accsync/h4`)
+
+15:44–16:10, after the game had been closed: no other java process at the
+start or at the end (the fingerprint listing them was proven on a JDK 17
+process before being trusted), every harness JVM's affinity read back
+`0xC03C03` 25 s into its run. Five rounds of three arms in rotating order,
+the full suite, JIT on, min of 5 per run; each cell is the five runs'
+minimums, min–max (median). The old class is `0c656ac`'s, from before the
+change; `acc-2` counted 92.4–92.5 M allocator calls a run in the new DLL's
+arms, every one through JNI with the old class and none with the new.
+
+| benchmark | T8's pair: `88b50796` + old class | new DLL + old class (legacy) | T9's pair: `cb29485d` + new class | T9/T8, medians |
+|---|---:|---:|---:|---:|
+| mandelbrot | 0.0641–0.0663 (0.0661) | 0.0631–0.0651 (0.0633) | 0.0631–0.0731 (0.0635) | 0.961 |
+| binarytrees | 0.4173–0.4270 (0.4217) | 0.4169–0.4446 (0.4208) | 0.2431–0.2485 (0.2438) | **0.578** |
+| trampoline | 0.2223–0.2252 (0.2248) | 0.2202–0.2259 (0.2246) | 0.2226–0.2315 (0.2247) | 1.000 |
+| matmul | 0.0938–0.0982 (0.0949) | 0.0940–0.0987 (0.0969) | 0.0862–0.0934 (0.0876) | **0.923** |
+| strings2 | 0.2305–0.2451 (0.2377) | 0.2247–0.2460 (0.2322) | 0.1849–0.2022 (0.1968) | **0.828** |
+| nqueens | 0.4534–0.5506 (0.5376) | 0.4863–0.5602 (0.5458) | 0.4463–0.5480 (0.5425) | cells overlap |
+| sha256 | 0.0483–0.0497 (0.0486) | 0.0484–0.0498 (0.0493) | 0.0472–0.0496 (0.0487) | 1.002 |
+
+- **The library's legacy path costs nothing measurable.** The new DLL in
+  legacy mode against T8's pair: binarytrees 0.998 at the medians, strings2
+  0.977, matmul 1.021, every cell overlapping. That is the path the dropin
+  stays on, and every state before its hand-over.
+- **h3's mandelbrot hint does not reproduce.** With the class the only
+  difference mandelbrot reads 1.003 at the medians here, where h3's two runs
+  a cell had read 1.01–1.05x.
+- **T9's pair's first run (t9-1, 15:48–15:49) was disturbed**: its pair's
+  highest maxima on every benchmark but sha256 (mandelbrot 0.0833, binarytrees
+  0.3127, matmul 0.1182; on mandelbrot, matmul and nqueens the chain's highest
+  too) and its pair's highest mandelbrot, binarytrees, trampoline and matmul
+  minimums (mandelbrot's 0.0731 and trampoline's 0.2315 the chain's highest).
+  Without it the pair reads mandelbrot 0.0631–0.0649, binarytrees
+  0.2431–0.2480, trampoline 0.2226–0.2264 and matmul 0.0862–0.0882. What ran then was not identified.
+  Most medians are not its values, but strings2's is: its 0.1968 is the
+  pair's median, and without it the other four's median, 0.1939, reads 0.816
+  of T8's rather than 0.828 -- so the table's 0.828 is the conservative end.
 
 ## Exact, everywhere it was read
 
@@ -208,14 +333,16 @@ logic. What it found, and what was done:
 
 ## What this does not say
 
-- **Not measured in game.** T9 in [docs/in-game-tests.md](../docs/in-game-tests.md)
-  is the game's side; the pinned harness predicted T8 and T7.
+- **One game run.** T9 is one run in one session; the comparisons rest on
+  the harness's interleaved chains, which the game has now tracked three
+  times.
 - **The dropin keeps the old cost**, by design. It is the harness's default
   arm; numbers from it are legacy-mode numbers from now on.
 - **macOS** was not built.
-- What remains of binarytrees' in-machine cost over the bare host is not
-  re-separated here: the arena host with the accounting read 0.2370 s on
-  10-02, the machine reads 0.2451 now, in different runs.
+- What remains of binarytrees' in-machine cost over the bare host -- 0.015 s
+  in game against the 10-02 arena host, a cold-process baseline from another
+  session -- is not separated: the sandbox, OpenOS, the machine's executor
+  and the host's own baseline are all in it.
 
 ## Files
 
@@ -224,5 +351,5 @@ logic. What it found, and what was done:
 `native/build-native.sh`, `build.gradle.kts`, `test/native/mem_test.c`,
 `test/native/run-mem.sh`, `test/native/OcljSmoke.scala`,
 `test/native/negative-control.sh`, `docs/accounting-sync.md`. Run logs in the
-session scratchpad under `accsync/` (`g1`, `h1`, `h2`, `h3`, `jni/run-1`,
-`jni/run-2`, `ff-mem-1`, `b1`).
+session scratchpad under `accsync/` (`g1`, `h1`, `h2`, `h3`, `h4`,
+`jni/run-1`, `jni/run-2`, `ff-mem-1`, `b1`).

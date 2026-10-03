@@ -328,7 +328,7 @@ OpenOS 1.8.9 (16384k RAM)
 machine RAM total=16384 KB free=16133 KB  jit global=false
 mandelbrot   CHECK=37904620  min=0.0637 s  reps: 0.064 0.066 0.066 0.065 0.067
 matmul       CHECK=481.0000  min=0.0946 s  reps: 0.097 0.095 0.116 0.095 0.097
-binarytrees  CHECK=7038400   min=0.4202 s  reps: 0.420 0.424 0.432 0.428 0.426
+binarytrees  CHECK=7038400  min=0.4202 s  reps: 0.420 0.424 0.432 0.428 0.426
 ```
 
 All three CHECKs equal the references. Min of 5, seconds. T7 is the
@@ -454,6 +454,12 @@ against 0.167 s), across two days, two game sessions and two host baselines
 host reading moves: against the later loads the host would gain
 0.10–0.14 s, no more than the game's 0.138. The host's first-run step is a
 candidate for it, as "In the machine" names it for the harness's gap.
+
+**Answered 2026-10-03 (T9):** the crossing was most of it. With the
+accounting kept in the shim
+([results-accounting-2026-10-03.md](results-accounting-2026-10-03.md#in-game-t9-2026-10-03)),
+the game reads binarytrees 0.2521 s, 0.015 s above r3l (T8: 0.183 s), and
+matmul 0.0862, 0.0012 s above it (T8: 0.0096).
 
 ## What the machine still pays per allocation: the JNI crossing (2026-10-03)
 
@@ -763,7 +769,14 @@ working tree with the review's fixes applied:
   the crossing at about 0.15 s in a plain JVM; a live 400 KB ballast and a
   prewarmed arena at a few milliseconds, as a bare host reproduces them. No
   arm ran on the C-library DLL (T7's), where the host's first-run step is
-  1.12–1.27x; in a machine none is separated yet.
+  1.12–1.27x; in a machine none is separated yet. **Separated in a machine
+  on the arena DLL, 2026-10-03**
+  ([results-accounting-2026-10-03.md](results-accounting-2026-10-03.md#in-game-t9-2026-10-03)):
+  with the `LuaStateLuaJIT` class the only difference, the pinned harness
+  machine reads binarytrees 0.2500–0.2564 s without the crossing against
+  0.4239–0.4247 with it, and in game T9 reads 0.2521 s, 0.015 s over r3l
+  against T8's 0.183 s; the remaining 0.015 s is not separated, and the
+  C-library DLL's remainder was not revisited.
 * **Resident memory across many machines is unmeasured.** The review's three
   notes (each arena held near its peak until close, no reuse across machines,
   a 128 KB first segment per machine) come from the source; no run here had

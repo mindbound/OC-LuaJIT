@@ -337,6 +337,42 @@ the shell still falls as a program allocates and recovers after it ends, as
 before -- the figure is now read from the shim, and the harness asserts it is
 exact to the byte.
 
+**Result: measured 2026-10-03**, in the game session that began at 15:36
+(`latest.log`: world joined 15:39:50, screenshot saved 15:41:02), in the same
+world and on the same 16 MB machine as T7 and T8. Checked before the result
+was written: the `0c656ac` jar (782 707 bytes) is the only `ocluajit-*.jar`
+in `mods/`, its Windows native is `cb29485d` and its kernel `089dcbde`; the
+runner on the disk is byte-identical to the repo's
+`bench/oc/ingame-ladder.lua` (`a20fdf67`). CHECKs as expected. Min of 5,
+seconds; the harness column is T9's pair in the pinned three-arm chain run
+right after the game (five runs, min–max of their minimums):
+
+| benchmark | T9 | T8 | T7 | pinned harness, T9's pair | T9/T8 |
+|---|---:|---:|---:|---:|---:|
+| mandelbrot | 0.0657 | 0.0637 | 0.0626 | 0.0631–0.0731 | 1.031 |
+| matmul | 0.0862 | 0.0946 | 0.1031 | 0.0862–0.0934 | 0.911 |
+| binarytrees | 0.2521 | 0.4202 | 0.5586 | 0.2431–0.2485 | 0.600 |
+
+The prediction is met on binarytrees, which fell to 0.2521 s (predicted near
+0.25), and beaten on matmul, 0.0862 (near 0.089); binarytrees' reps are flat
+(0.252–0.260) and its first rep is its min. The pinned harness tracked the
+game a third time, closely rather than exactly: before the game, h3's two runs
+held binarytrees (0.2500–0.2564) and read matmul 2.2% above it
+(0.0881–0.0888); the chain after it reads matmul on the game's value and
+binarytrees 1.4% under it (1.7% leaving out one disturbed run). mandelbrot read 1.031x,
+not the "unchanged" predicted, and not this change: it makes under 800
+allocator calls a run, the chain reads it 1.003 with the class the only
+difference, and the library change moves it the other way in the harness
+(0.958 at the medians); read as variation between game sessions (0.0626,
+0.0637, 0.0657 across T7–T9), not separated. Against the arena host with the
+accounting the game now reads 1.011 / 1.014 / 1.064x, and what binarytrees
+pays over it fell from 0.183 s a run to 0.015 s. The runner's first line read
+`free=15888 KB` (T8: 16133); the harness shows no dependence of the
+post-boot figures on the mode, so this is one reading of what the sandbox
+held at that moment.
+Detail: [bench/results-accounting-2026-10-03.md](../bench/results-accounting-2026-10-03.md#in-game-t9-2026-10-03),
+"In game (T9, 2026-10-03)".
+
 ## T8 — the allocator change in game
 
 Shape: until 2026-10-02 every machine's heap was the C library's
