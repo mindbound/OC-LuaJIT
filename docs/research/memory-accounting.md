@@ -861,7 +861,7 @@ it**, and §12's entry is amended rather than deleted.
 installed RAM. It exists because objects are bigger on a 64-bit VM than on the
 32-bit one the module sizes were written for, and OC ships **1.8**, calibrated
 for 64-bit PUC Lua. LuaJIT GC64 needs more — the OC kernel alone measures
-~320 KB here.
+~320 KB here. **Corrected 2026-10-03: measured, and OC's 1.8 is enough on the current native** ([bench/results-ramscale-2026-10-03.md](../../bench/results-ramscale-2026-10-03.md)). LuaJIT GC64 objects are mostly smaller than PUC 5.2's, not larger, and `kernelMemory`, however large, is granted on top of the scaled RAM, so it is not what the scale pays for. The table below predates the emergency collector, the arena and the shim-held accounting and did not reproduce: the shipped configuration booted OpenOS at 1.8 on 192, 256 and 1024 KB sticks in every run and, counting only arms whose `kernelMemory` holds no kernel-init traces, holds at least what stock holds in every measured cell but closures on a 1024 KB stick (about 0.92-0.98x). The architecture inherits OC's scale and the harness runs at 1.8. What the measurement found instead is the collector's behaviour at the wall (the roadmap's collector-at-the-wall row).
 
 Now that the cap is enforced, that stops being a detail. A 1024 KB machine
 booting OpenOS 1.8.9, same build, same everything but the scale:
@@ -935,7 +935,7 @@ Do it by measurement rather than arithmetic: peak `used` over a full boot of
 OpenOS *and* the three census OSes (QuickOS, axis-os, MineOS), with margin for
 the run-to-run variance in §9, and set our architecture's default from that.
 Until then `smoke-test.sh` pins 3.0. This is a config value we own; nothing
-else waits on it.
+else waits on it. **Done 2026-10-03, and the arithmetic above was wrong twice:** the scale pays only for what is allocated after `kernelMemory` is taken (OC adds the kernel on top), so the kernel ratio is not its input; and measured, LuaJIT's objects are mostly the smaller ones. By capacity at OC's 1.8 -- objects held before the allocator refuses, on the 192, 256 and 1024 KB sticks -- ours holds at least what stock PUC 5.2 holds in every cell but closures at 1024 KB (about 0.92-0.98x once stock's own holder-doubling refusal is allowed for), so no override: see [bench/results-ramscale-2026-10-03.md](../../bench/results-ramscale-2026-10-03.md).
 
 ### The emergency GC -- real, bounded, a milestone of its own
 

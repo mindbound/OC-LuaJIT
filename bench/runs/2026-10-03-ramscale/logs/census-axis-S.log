@@ -1,0 +1,97 @@
+[smoke]     OCLJ_NATIVE=stock -- ocelot-brain's own PUC-Lua 5.2 native (the baseline a player runs today); kernel forced to stock
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = <none: stock arm, ocelot-brain bundled PUC-Lua only>
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +0s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +1s  LuaStateLuaJIT compiled
+[smoke] +3s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-S/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-S/work/libdir-stock
+[smoke]     kernel  = stock (OC's own machine.lua, standing deadline hook)
+[smoke]     ramScale= 1.8   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+CENSUS| =============== AxisOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b3c2bf14-9324-494a-a9cb-2700e7c43afc\scratchpad\ramscale\runs\census-axis-S\os\axis-os\src\kernel
+CENSUS|     boot        = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-S/os/axis-os/eeprom/boot.lua
+CENSUS|     entries     = bin, boot, dev, drivers, etc, home, kco.lua, kernel.lua, lib, opt, sys, system, usr
+CENSUS|     native      = stock
+CENSUS|     ticks       = 14000
+CENSUS|     ram         = 1 x ExtendedTier.ThreeHalf = 1024 KB advertised
+CENSUS|     boot fs     = c2c17ca5-6aa3-4c1e-a8c4-2fa8df6bd13f
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+CENSUS| native marker  = <stock PUC>
+CENSUS| watchdog       = false   kernel = <stock>
+CENSUS| kernel (final) = <stock>
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 2062042 B   kernelMemory = 174605 B
+CENSUS| PEAK USED      = 2051197 B REAL   (min free 10845 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = absent (stock native)
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 2374 non-blank glyphs, 9 distinct cell colours
+CENSUS| ---------------- SCREEN [AxisOS] ----------------
+[  18.2000] [  OK  ] Metatable Hypervisor loaded (freeze, snapshot, verify)
+[  18.9500] [ FAIL ] Failed to parse PatchGuard: patchguard:204: 'end' expected near '~'
+[  18.9500] [ WARN ] PatchGuard not available — no runtime integrity monitoring
+[  19.4500] [ INFO ] [EXSi] Hardware sealing key derived (32 bytes)
+[  19.4500] [ INFO ] [EXSi] EXSi v2 initialized
+[  19.4500] [ INFO ] [EXSi]   Max enclaves: 32
+[  19.4500] [ INFO ] [EXSi]   SHA-256:      available
+[  19.4500] [ INFO ] [EXSi]   Sealing:      available
+[  19.4500] [ INFO ] [EXSi]   Data Card:    Tier 0 (Quote signing: HMAC)
+[  19.4500] [ INFO ] [EXSi]   Secure Chan:  available
+[  19.5000] [ INFO ] [EXSi]   ETT Throttle: ACTIVE (default 100/10s)
+[  19.5000] [  OK  ] EXSi Enclaved Kernel eXecution Isolation loaded
+[  19.5000] [ INFO ] [EXSi] Creating handle PRNG enclave...
+[  19.5000] [ INFO ] [EXSi] Enclave created: handle=1 MRENCLAVE=a83f68ad378e6da6... MRSIGNER=none SVN=0 owner=PID 0 (1620B)
+[  19.5000] [  OK  ] [EXSi] Handle PRNG enclave ACTIVE (MRENCLAVE=a83f68ad378e6da6...)
+[  19.5000] [  OK  ]   PRNG state is sealed inside enclave upvalues
+[  19.5000] [  OK  ]   Batch size: 64 tokens per enclave call
+[  19.5000] [ INFO ] Reading fstab from /etc/fstab.lua...
+[  19.5000] [  OK  ] Mounted root filesystem on b40e1090-01ba...
+[  19.5000] [  OK  ] Mounted root filesystem on b40e1090-01ba...
+[  19.5000] [  OK  ] Kernel process registered as PID 1
+[  19.6500] [ INFO ] Starting Ring 1 services...
+[  19.6500] [ INFO ] Creating process 2 ('/lib/pipeline_manager.lua') at Ring 1
+[  19.6500] [ PROC ] spawn image=/lib/pipeline_manager.lua parent=1 pid=2 ring=1
+[  20.0500] [  OK  ] Ring 1 Pipeline Manager started as PID 2
+[  20.0500] [ SEC  ] ????????????????????????????????????????????
+[  20.0500] [ SEC  ] ?  SECURITY SUBSYSTEM STATUS               ?
+[  20.0500] [ SEC  ] ????????????????????????????????????????????
+[  20.0500] [ SEC  ]   ObManager:     ACTIVE
+[  20.0500] [ SEC  ]   Hypervisor:    ACTIVE
+[  20.0500] [ SEC  ]   Preemption:    ACTIVE (Q=50ms, I=128)
+[  20.0500] [ SEC  ]   IPC:           ACTIVE
+[  20.0500] [ SEC  ]   PatchGuard:    UNAVAILABLE
+[  20.0500] [ SEC  ]   EXSi:          ACTIVE (max=32, sealing=YES)
+[  20.0500] [ SEC  ]   Data Card:     TIER 3 (ECDSA)
+[  20.0500] [ SEC  ]   EEPROM:        PRESENT (no AXCF data)
+[  20.0500] [ SEC  ]   SecureBoot:    DISABLED
+[  20.0500] [ SEC  ]   sMLTR:         ACTIVE
+[  20.0500] [ SEC  ]   Sandbox:       3-layer proxy (protected metatable)
+[  20.0500] [ SEC  ]
+[  20.1000] [ INFO ] [OLR] Using file-based storage (/etc/.olr.dat)
+[  20.1000] [ INFO ] [KSR] Using file-based storage (/etc/.ksr.dat)
+[  20.2000] [ INFO ] [KSR] Boot counter: 1
+[  22.8000] [ INFO ] Handing off control to scheduler...
+[  22.8000] [  OK  ] Entering main event loop. Kernel is now running.
+[  22.8000]
+[  23.3000] [ INFO ] [GDI] GPU 1 -> d3eb3b52 (160x50)
+[SECURE BOOT FAILURE [GDI] v3.3 initialized: 1 GPU(s), 1 screen(s)
+[PANIC: not enough memory] Graphics Device Interface loaded
+[  23.3000] [  OK  ] Swap space HMAC key derived (per-boot)
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: PANIC OR OOM ON SCREEN  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+  java exit=1 (124 = timed out)
+  panic text on screen
+[smoke] +218s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-S/work/smoke.log
+CENSUS FAIL

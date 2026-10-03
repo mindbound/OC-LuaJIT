@@ -152,7 +152,7 @@
 --
 -- ONE STEP IS AN INFERENCE, flagged as such.  3064 KB is real bytes, which is
 -- what collectgarbage("count") and lj52_alloc both count.  OC divides by
--- `ramScaleFor64Bit` (pinned to 3.0 here) before the sandbox sees it --
+-- `ramScaleFor64Bit` (3.0 when this was measured; OC's 1.8 since 2026-10-03) before the sandbox sees it --
 -- inferred from memory-accounting.md's `setTotalMemory(kernelMemory +
 -- ceil(memoryBytes * ramScale))` together with Phase 0 reading "1024/865" on a
 -- 1024 KB machine, NOT from reading OC's source, which is not in this repo.

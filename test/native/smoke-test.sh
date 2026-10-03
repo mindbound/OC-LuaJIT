@@ -73,7 +73,14 @@
 #                 replaces OCLJ_JITOFF, which exported an env var the shim
 #                 deliberately never reads; it had been dead since the shim
 #                 lost its getenv() hatches.)
-#   OCLJ_PROBE    unset (default) | grace.  "grace" boots OpenOS exactly as the
+#   OCLJ_PROBE    unset (default) | grace | capacity.  "capacity" boots with a
+#                 heartbeat-only autorun and runs only the capacity probe: an
+#                 idle window, the post-GC live set, then a fill of
+#                 OCLJ_CAP_SHAPE (record|array|string|closure) until the
+#                 allocator refuses (OcljSmoke.scala, capacityProbe).
+#                 OCLJ_JIT_EARLY=off keeps the compiler off through kernel
+#                 init (OcljArch), so kernelMemory holds no traces.
+#                 "grace" boots OpenOS exactly as the
 #                 default run does, then runs ONLY the grace-expiry program
 #                 (catch the first "too long without yielding", keep running
 #                 1 s past the 0.5 s grace without yielding) and reports one
@@ -148,29 +155,25 @@ stamp() { echo "[smoke] +$(( $(date +%s) - T0 ))s  $*"; }
 # the memory milestones below, for instance, are calibration-sensitive, and
 # "does it still boot with a different ramScaleFor64Bit" is a question the
 # suite must be able to ask rather than assume.
-# THE MACHINE'S RAM SCALE, pinned deliberately rather than inherited.
+# THE MACHINE'S RAM SCALE: OC's own default, 1.8, the value every player runs.
 #
 # ramScaleFor64Bit is how many real bytes OC charges per apparent byte of
-# installed RAM; it exists because objects are bigger on a 64-bit VM than on
-# the 32-bit one the module sizes were written for.  OC ships 1.8, calibrated
-# for 64-bit PUC Lua.  LuaJIT GC64 needs more, and now that the RAM cap is
-# actually ENFORCED that is no longer a detail: measured on this harness, a
-# 1024K machine booting OpenOS 1.8.9 --
-#
-#     ramScale 1.8 (OC's default)   1 pass  in 6
-#     ramScale 2.5                  6 passes in 6
-#     ramScale 3.0                  5 passes in 5
-#
-# -- so at OC's own default the machine runs out of RAM during boot most of the
-# time.  That is a real finding about the architecture, recorded in
-# docs/research/memory-accounting.md and on the roadmap; it is NOT something
-# this harness should rediscover flakily on every run, because a suite that
-# fails at random tells you nothing about the change under test.  So the scale
-# is pinned here, above the break-even point, and printed.  Set OCLJ_RAM_SCALE
-# to reproduce the finding (OCLJ_RAM_SCALE=1.8), or OCLJ_CONF_EXTRA to override
-# anything at all -- it is appended last and HOCON lets the later assignment
-# win.
-: "${OCLJ_RAM_SCALE:=3.0}"
+# installed RAM.  Until 2026-10-03 this harness pinned 3.0, because on
+# 2026-09-03 a 1024K machine booting OpenOS 1.8.9 at 1.8 booted 1 time in 6.
+# That was measured before the emergency collector (2026-09-15), the
+# per-machine lj_alloc arena (2026-10-02) and the shim-held accounting
+# (2026-10-03).  On the current native the capacity probe (OCLJ_PROBE=capacity)
+# booted OpenOS at 1.8 on the 192K, 256K and 1024K sticks in every run of the
+# shipped configuration; and, counting only arms whose kernelMemory holds no
+# kernel-init traces, held at least what stock PUC 5.2 holds at 1.8 in every
+# cell but closures on 1024K, about 0.92-0.98x
+# (bench/results-ramscale-2026-10-03.md).  So the architecture inherits OC's
+# scale and the harness runs at it.  Memory figures from runs before
+# 2026-10-03 were taken at 3.0 and are not comparable with later ones.  Set
+# OCLJ_RAM_SCALE to run at another scale (the probe's direction check ran at
+# 1.0), or OCLJ_CONF_EXTRA to override anything at all -- it is appended last
+# and HOCON lets the later assignment win.
+: "${OCLJ_RAM_SCALE:=1.8}"
 
 # GC PACING, for the rate-contest experiment (memory-accounting.md section 8).
 # 0 = leave the VM's own LUAI_GCMUL / LUAI_GCPAUSE alone, which is the control.
@@ -499,7 +502,7 @@ else
   rm -f "$OCLJ_WORK/classes/assets/opencomputers/lua/machine.lua"         "$OCLJ_WORK/classes/assets/ocluajit/lua/machine.lua"
   say "    kernel  = stock (OC's own machine.lua, standing deadline hook)"
 fi
-say "    ramScale= $OCLJ_RAM_SCALE   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)"
+say "    ramScale= $OCLJ_RAM_SCALE   (OC's default is 1.8, which the architecture inherits -- see the comment above)"
 
 # --------------------------------------------------------------- 4
 say "=============== 4. boot OpenOS ==============="
@@ -512,8 +515,9 @@ case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT
 # run the default suite and report on the wrong thing.  The harness reads the
 # variable itself; this only refuses unknown values and names the mode.
 : "${OCLJ_PROBE:=}"
-case $OCLJ_PROBE in ""|grace) ;; *) fail "OCLJ_PROBE must be unset or grace, not '$OCLJ_PROBE'";; esac
+case $OCLJ_PROBE in ""|grace|capacity) ;; *) fail "OCLJ_PROBE must be unset, grace or capacity, not '$OCLJ_PROBE'";; esac
 [ "$OCLJ_PROBE" = "grace" ] && say "    OCLJ_PROBE=grace -- boot, then ONLY the grace-expiry probe (k6); no suite, no persist"
+[ "$OCLJ_PROBE" = "capacity" ] && say "    OCLJ_PROBE=capacity -- boot (heartbeat-only autorun), then ONLY the capacity probe (cap-1): shape=${OCLJ_CAP_SHAPE:-record} jitearly=${OCLJ_JIT_EARLY:--}"
 # Validated for the same reason again, and the harness refuses it a second
 # time: a run filed under the wrong tier is worse than no run.
 : "${OCLJ_RAM_TIER:=threehalf}"

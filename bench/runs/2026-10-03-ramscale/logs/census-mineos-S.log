@@ -1,0 +1,95 @@
+[smoke]     OCLJ_NATIVE=stock -- ocelot-brain's own PUC-Lua 5.2 native (the baseline a player runs today); kernel forced to stock
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = <none: stock arm, ocelot-brain bundled PUC-Lua only>
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +1s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +1s  LuaStateLuaJIT compiled
+[smoke] +4s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-S/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-S/work/libdir-stock
+[smoke]     kernel  = stock (OC's own machine.lua, standing deadline hook)
+[smoke]     ramScale= 1.8   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+CENSUS| =============== MineOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b3c2bf14-9324-494a-a9cb-2700e7c43afc\scratchpad\ramscale\runs\census-mineos-S\os\MineOS-installed
+CENSUS|     boot        = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-S/os/MineOS-installed/EFI/Minified.lua
+CENSUS|     entries     = .github, .gitignore, Applications, EFI, Icons, Installer, Libraries, LICENSE, Localizations, OS.lua, README-ru_RU.md, README-zh_CN.md, README.md, Users, Wallpapers
+CENSUS|     native      = stock
+CENSUS|     ticks       = 14000
+CENSUS|     ram         = 2 x ExtendedTier.ThreeHalf = 2048 KB advertised
+CENSUS|     boot fs     = d2a32aeb-95f2-40f2-be19-544fe682e2b3
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+CENSUS| native marker  = <stock PUC>
+CENSUS| watchdog       = false   kernel = <stock>
+CENSUS| kernel (final) = <stock>
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 3949479 B   kernelMemory = 174605 B
+CENSUS| PEAK USED      = 3688906 B REAL   (min free 260573 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = absent (stock native)
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 78 non-blank glyphs, 7 distinct cell colours
+CENSUS| ---------------- SCREEN [MineOS] ----------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                         ??    Failed to update file list: no such file or directory:
+                                        ?  ?   /Users/root/Desktop
+                                       ?Cyka?
+                                                                                                             ?   OK   ?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+[smoke] +219s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-S/work/smoke.log
+CENSUS PASS -- the system ran to the tick limit on the pinned architecture, without error.

@@ -1,0 +1,246 @@
+== 20:55:46 chain1 start; java procs: 0
+one-record-r1-S exit=0 APACITY| shape=record native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=262 why=not_enough_memory t_first5=0.0014 t_last5=0.0014 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1488 queued=true running=true lastError=<null>
+    one-record-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-record-r1-S CAP-LIVE| used=430605 kernelMemory=174605 user=256000 count(3 collects)=433000/433000/433000 total=528500 traces_live=-1
+one-record-r1-D exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=405193 held=1259 why=not_enough_memory t_first5=0.0105 t_last5=0.1152 batches=13 last/first=10.97 freeKB_at_end/totalKB=0/192 arms=+2848 refusals=+2 trace_flushes=+8 fill_ms=1734 queued=true running=true lastError=<null>
+    one-record-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 109 -> 119 running=true
+    one-record-r1-D CAP-LIVE| used=464801 kernelMemory=405193 user=59608 count(3 collects)=464753/464753/464753 total=759088 traces_live=119
+one-record-r1-E exit=0 APACITY| shape=record native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=499 why=not_enough_memory t_first5=0.0640 t_last5=0.0640 batches=5 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+2007 refusals=+1 trace_flushes=+8 fill_ms=1488 queued=true running=true lastError=<null>
+    one-record-r1-E CAP-IDLE| ticks=400 arms=+1390 refusals=+0 trace_flushes=+29 traces_live 4 -> 22 running=true
+    one-record-r1-E CAP-LIVE| used=381647 kernelMemory=164393 user=217254 count(3 collects)=381599/381599/381599 total=518288 traces_live=22
+one-record-r1-O exit=0 APACITY| shape=record native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=547 why=not_enough_memory t_first5=0.0782 t_last5=0.1018 batches=6 last/first=1.30 freeKB_at_end/totalKB=0/192 arms=+2336 refusals=+1 trace_flushes=+0 fill_ms=1488 queued=true running=true lastError=<null>
+    one-record-r1-O CAP-IDLE| ticks=400 arms=+61 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-record-r1-O CAP-LIVE| used=352955 kernelMemory=164393 user=188562 count(3 collects)=352907/352907/352907 total=518288 traces_live=0
+one-array-r1-S exit=0 APACITY| shape=array native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=287 why=not_enough_memory t_first5=0.0010 t_last5=0.0010 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1493 queued=true running=true lastError=<null>
+    one-array-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-array-r1-S CAP-LIVE| used=430600 kernelMemory=174605 user=255995 count(3 collects)=432995/432995/432995 total=528500 traces_live=-1
+one-array-r1-D exit=1 APACITY| shape=array native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=403253 held=? why=? t_first5=0.0069 t_last5=0.0600 batches=19 last/first=8.70 freeKB_at_end/totalKB=0/192 arms=+3017 refusals=+2 trace_flushes=+11 fill_ms=249879 queued=true running=true lastError=<null>
+    one-array-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 107 -> 116 running=true
+    one-array-r1-D CAP-LIVE| used=470544 kernelMemory=403253 user=67291 count(3 collects)=470496/470496/470496 total=757148 traces_live=116
+one-array-r1-E exit=1 APACITY| shape=array native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0418 t_last5=0.0452 batches=6 last/first=1.08 freeKB_at_end/totalKB=-1/-1 arms=+2065 refusals=+3 trace_flushes=+6 fill_ms=252 queued=true running=false lastError=not enough memory
+    one-array-r1-E CAP-IDLE| ticks=400 arms=+1934 refusals=+0 trace_flushes=+28 traces_live 11 -> 19 running=true
+    one-array-r1-E CAP-LIVE| used=379554 kernelMemory=164393 user=215161 count(3 collects)=379506/379506/379506 total=518288 traces_live=19
+one-array-r1-O exit=0 APACITY| shape=array native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=789 why=not_enough_memory t_first5=0.0351 t_last5=0.0527 batches=8 last/first=1.50 freeKB_at_end/totalKB=0/192 arms=+2154 refusals=+1 trace_flushes=+0 fill_ms=1496 queued=true running=true lastError=<null>
+    one-array-r1-O CAP-IDLE| ticks=400 arms=+62 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-array-r1-O CAP-LIVE| used=352850 kernelMemory=164393 user=188457 count(3 collects)=352802/352802/352802 total=518288 traces_live=0
+one-string-r1-S exit=0 APACITY| shape=string native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=1024 why=not_enough_memory t_first5=0.0010 t_last5=0.0012 batches=11 last/first=1.20 freeKB_at_end/totalKB=4/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1499 queued=true running=true lastError=<null>
+    one-string-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-string-r1-S CAP-LIVE| used=430498 kernelMemory=174605 user=255893 count(3 collects)=432893/432893/432893 total=528500 traces_live=-1
+one-string-r1-D exit=0 APACITY| shape=string native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=413193 held=4776 why=not_enough_memory t_first5=0.0003 t_last5=0.1234 batches=48 last/first=411.33 freeKB_at_end/totalKB=0/192 arms=+6878 refusals=+1 trace_flushes=+25 fill_ms=2990 queued=true running=true lastError=<null>
+    one-string-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 108 -> 117 running=true
+    one-string-r1-D CAP-LIVE| used=465723 kernelMemory=413193 user=52530 count(3 collects)=465675/465675/465675 total=767088 traces_live=117
+one-string-r1-E exit=1 APACITY| shape=string native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0226 t_last5=0.0610 batches=19 last/first=2.70 freeKB_at_end/totalKB=-1/-1 arms=+5162 refusals=+3 trace_flushes=+18 fill_ms=656 queued=true running=false lastError=not enough memory
+    one-string-r1-E CAP-IDLE| ticks=400 arms=+2964 refusals=+0 trace_flushes=+16 traces_live 22 -> 6 running=true
+    one-string-r1-E CAP-LIVE| used=367609 kernelMemory=164393 user=203216 count(3 collects)=367561/367561/367561 total=518288 traces_live=6
+one-string-r1-O exit=0 APACITY| shape=string native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=2048 why=not_enough_memory t_first5=0.0010 t_last5=0.0674 batches=21 last/first=67.40 freeKB_at_end/totalKB=6/192 arms=+5403 refusals=+1 trace_flushes=+0 fill_ms=1995 queued=true running=true lastError=<null>
+    one-string-r1-O CAP-IDLE| ticks=400 arms=+60 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-string-r1-O CAP-LIVE| used=352833 kernelMemory=164393 user=188440 count(3 collects)=352785/352785/352785 total=518288 traces_live=0
+one-closure-r1-S exit=0 APACITY| shape=closure native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=508 why=not_enough_memory t_first5=0.0017 t_last5=0.0021 batches=6 last/first=1.24 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1498 queued=true running=true lastError=<null>
+    one-closure-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-closure-r1-S CAP-LIVE| used=430778 kernelMemory=174605 user=256173 count(3 collects)=433173/433173/433173 total=528500 traces_live=-1
+one-closure-r1-D exit=0 APACITY| shape=closure native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=356865 held=1593 why=not_enough_memory t_first5=0.0053 t_last5=0.0886 batches=16 last/first=16.72 freeKB_at_end/totalKB=0/192 arms=+3110 refusals=+1 trace_flushes=+10 fill_ms=1637 queued=true running=true lastError=<null>
+    one-closure-r1-D CAP-IDLE| ticks=400 arms=+20 refusals=+0 trace_flushes=+0 traces_live 96 -> 105 running=true
+    one-closure-r1-D CAP-LIVE| used=470521 kernelMemory=356865 user=113656 count(3 collects)=470473/470473/470473 total=710760 traces_live=105
+one-closure-r1-E exit=1 APACITY| shape=closure native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0503 t_last5=0.0599 batches=7 last/first=1.19 freeKB_at_end/totalKB=0/192 arms=+51695 refusals=+2 trace_flushes=+748 fill_ms=249887 queued=true running=true lastError=<null>
+    one-closure-r1-E CAP-IDLE| ticks=400 arms=+1959 refusals=+0 trace_flushes=+28 traces_live 3 -> 8 running=true
+    one-closure-r1-E CAP-LIVE| used=371939 kernelMemory=164393 user=207546 count(3 collects)=371891/371891/371891 total=518288 traces_live=8
+one-closure-r1-O exit=0 APACITY| shape=closure native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=757 why=not_enough_memory t_first5=0.0452 t_last5=0.0641 batches=8 last/first=1.42 freeKB_at_end/totalKB=0/192 arms=+2084 refusals=+1 trace_flushes=+0 fill_ms=1738 queued=true running=true lastError=<null>
+    one-closure-r1-O CAP-IDLE| ticks=400 arms=+61 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-closure-r1-O CAP-LIVE| used=353083 kernelMemory=164393 user=188690 count(3 collects)=353035/353035/353035 total=518288 traces_live=0
+one-record-r2-S exit=0 APACITY| shape=record native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=262 why=not_enough_memory t_first5=0.0014 t_last5=0.0014 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1496 queued=true running=true lastError=<null>
+    one-record-r2-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-record-r2-S CAP-LIVE| used=430671 kernelMemory=174605 user=256066 count(3 collects)=433066/433066/433066 total=528500 traces_live=-1
+one-record-r2-D exit=1 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=339181 held=? why=? t_first5=0.0099 t_last5=0.0934 batches=11 last/first=9.43 freeKB_at_end/totalKB=0/192 arms=+2481 refusals=+2 trace_flushes=+7 fill_ms=249879 queued=true running=true lastError=<null>
+    one-record-r2-D CAP-IDLE| ticks=400 arms=+20 refusals=+0 trace_flushes=+0 traces_live 108 -> 116 running=true
+    one-record-r2-D CAP-LIVE| used=454521 kernelMemory=339181 user=115340 count(3 collects)=454473/454473/454473 total=693076 traces_live=116
+one-record-r2-E exit=1 APACITY| shape=record native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0564 t_last5=0.0564 batches=5 last/first=1.00 freeKB_at_end/totalKB=-1/-1 arms=+1831 refusals=+4 trace_flushes=+4 fill_ms=190 queued=true running=false lastError=not enough memory
+    one-record-r2-E CAP-IDLE| ticks=400 arms=+2040 refusals=+0 trace_flushes=+27 traces_live 29 -> 0 running=true
+    one-record-r2-E CAP-LIVE| used=365507 kernelMemory=164393 user=201114 count(3 collects)=365459/365459/365459 total=518288 traces_live=0
+one-record-r2-O exit=0 APACITY| shape=record native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=546 why=not_enough_memory t_first5=0.0677 t_last5=0.0769 batches=6 last/first=1.14 freeKB_at_end/totalKB=0/192 arms=+2336 refusals=+1 trace_flushes=+0 fill_ms=1499 queued=true running=true lastError=<null>
+    one-record-r2-O CAP-IDLE| ticks=400 arms=+61 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-record-r2-O CAP-LIVE| used=353279 kernelMemory=164393 user=188886 count(3 collects)=353231/353231/353231 total=518288 traces_live=0
+one-array-r2-S exit=0 APACITY| shape=array native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=287 why=not_enough_memory t_first5=0.0010 t_last5=0.0010 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1495 queued=true running=true lastError=<null>
+    one-array-r2-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-array-r2-S CAP-LIVE| used=430534 kernelMemory=174605 user=255929 count(3 collects)=432929/432929/432929 total=528500 traces_live=-1
+one-array-r2-D exit=0 APACITY| shape=array native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=340193 held=1566 why=not_enough_memory t_first5=0.0071 t_last5=0.0547 batches=16 last/first=7.70 freeKB_at_end/totalKB=0/192 arms=+2718 refusals=+1 trace_flushes=+12 fill_ms=1746 queued=true running=true lastError=<null>
+    one-array-r2-D CAP-IDLE| ticks=400 arms=+20 refusals=+0 trace_flushes=+0 traces_live 97 -> 109 running=true
+    one-array-r2-D CAP-LIVE| used=458768 kernelMemory=340193 user=118575 count(3 collects)=458720/458720/458720 total=694088 traces_live=109
+one-array-r2-E exit=0 APACITY| shape=array native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=732 why=not_enough_memory t_first5=0.0385 t_last5=0.0396 batches=8 last/first=1.03 freeKB_at_end/totalKB=0/192 arms=+2360 refusals=+1 trace_flushes=+9 fill_ms=1744 queued=true running=true lastError=<null>
+    one-array-r2-E CAP-IDLE| ticks=400 arms=+2507 refusals=+0 trace_flushes=+22 traces_live 18 -> 24 running=true
+    one-array-r2-E CAP-LIVE| used=380170 kernelMemory=164393 user=215777 count(3 collects)=380122/380122/380122 total=518288 traces_live=24
+one-array-r2-O exit=0 APACITY| shape=array native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=788 why=not_enough_memory t_first5=0.0332 t_last5=0.0499 batches=8 last/first=1.50 freeKB_at_end/totalKB=0/192 arms=+2156 refusals=+1 trace_flushes=+0 fill_ms=1489 queued=true running=true lastError=<null>
+    one-array-r2-O CAP-IDLE| ticks=400 arms=+61 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-array-r2-O CAP-LIVE| used=352966 kernelMemory=164393 user=188573 count(3 collects)=352918/352918/352918 total=518288 traces_live=0
+one-string-r2-S exit=0 APACITY| shape=string native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=853 why=not_enough_memory t_first5=0.0014 t_last5=0.0029 batches=9 last/first=2.07 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1490 queued=true running=true lastError=<null>
+    one-string-r2-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-string-r2-S CAP-LIVE| used=430498 kernelMemory=174605 user=255893 count(3 collects)=432893/432893/432893 total=528500 traces_live=-1
+one-string-r2-D exit=0 APACITY| shape=string native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=367173 held=4096 why=not_enough_memory t_first5=0.0006 t_last5=0.1195 batches=41 last/first=199.17 freeKB_at_end/totalKB=14/192 arms=+6553 refusals=+1 trace_flushes=+22 fill_ms=2491 queued=true running=true lastError=<null>
+    one-string-r2-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 113 -> 120 running=true
+    one-string-r2-D CAP-LIVE| used=462275 kernelMemory=367173 user=95102 count(3 collects)=462227/462227/462227 total=721068 traces_live=120
+one-string-r2-E exit=1 
+    one-string-r2-E BOOT-FAIL SMOKE| lastError = not enough memory
+one-string-r2-O exit=0 APACITY| shape=string native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=2048 why=not_enough_memory t_first5=0.0009 t_last5=0.0663 batches=21 last/first=73.67 freeKB_at_end/totalKB=5/192 arms=+5397 refusals=+1 trace_flushes=+0 fill_ms=1993 queued=true running=true lastError=<null>
+    one-string-r2-O CAP-IDLE| ticks=400 arms=+60 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-string-r2-O CAP-LIVE| used=352625 kernelMemory=164393 user=188232 count(3 collects)=352577/352577/352577 total=518288 traces_live=0
+one-closure-r2-S exit=0 APACITY| shape=closure native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=508 why=not_enough_memory t_first5=0.0014 t_last5=0.0022 batches=6 last/first=1.57 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1496 queued=true running=true lastError=<null>
+    one-closure-r2-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-closure-r2-S CAP-LIVE| used=430712 kernelMemory=174605 user=256107 count(3 collects)=433107/433107/433107 total=528500 traces_live=-1
+one-closure-r2-D exit=0 APACITY| shape=closure native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=335961 held=1489 why=not_enough_memory t_first5=0.0107 t_last5=0.0923 batches=15 last/first=8.63 freeKB_at_end/totalKB=0/192 arms=+3147 refusals=+1 trace_flushes=+10 fill_ms=1748 queued=true running=true lastError=<null>
+    one-closure-r2-D CAP-IDLE| ticks=400 arms=+20 refusals=+0 trace_flushes=+0 traces_live 106 -> 119 running=true
+    one-closure-r2-D CAP-LIVE| used=471521 kernelMemory=335961 user=135560 count(3 collects)=471473/471473/471473 total=689856 traces_live=119
+one-closure-r2-E exit=1 APACITY| shape=closure native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0506 t_last5=0.0595 batches=7 last/first=1.18 freeKB_at_end/totalKB=0/192 arms=+43032 refusals=+2 trace_flushes=+726 fill_ms=249885 queued=true running=true lastError=<null>
+    one-closure-r2-E CAP-IDLE| ticks=400 arms=+2384 refusals=+0 trace_flushes=+21 traces_live 27 -> 17 running=true
+    one-closure-r2-E CAP-LIVE| used=376303 kernelMemory=164393 user=211910 count(3 collects)=376255/376255/376255 total=518288 traces_live=18
+one-closure-r2-O exit=1 APACITY| shape=closure native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0398 t_last5=0.0579 batches=8 last/first=1.45 freeKB_at_end/totalKB=0/192 arms=+4080 refusals=+2 trace_flushes=+0 fill_ms=249856 queued=true running=true lastError=<null>
+    one-closure-r2-O CAP-IDLE| ticks=400 arms=+61 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-closure-r2-O CAP-LIVE| used=352759 kernelMemory=164393 user=188366 count(3 collects)=352711/352711/352711 total=518288 traces_live=0
+one-record-r3-S exit=0 APACITY| shape=record native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=262 why=not_enough_memory t_first5=0.0013 t_last5=0.0013 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1498 queued=true running=true lastError=<null>
+    one-record-r3-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-record-r3-S CAP-LIVE| used=430671 kernelMemory=174605 user=256066 count(3 collects)=433066/433066/433066 total=528500 traces_live=-1
+one-record-r3-D exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=338501 held=1031 why=not_enough_memory t_first5=0.0017 t_last5=0.0875 batches=11 last/first=51.47 freeKB_at_end/totalKB=0/192 arms=+2296 refusals=+1 trace_flushes=+8 fill_ms=1741 queued=true running=true lastError=<null>
+    one-record-r3-D CAP-IDLE| ticks=400 arms=+20 refusals=+0 trace_flushes=+0 traces_live 97 -> 105 running=true
+    one-record-r3-D CAP-LIVE| used=455409 kernelMemory=338501 user=116908 count(3 collects)=455361/455361/455361 total=692396 traces_live=105
+one-record-r3-E exit=0 APACITY| shape=record native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=512 why=not_enough_memory t_first5=0.0610 t_last5=0.0563 batches=6 last/first=0.92 freeKB_at_end/totalKB=0/192 arms=+2385 refusals=+5 trace_flushes=+8 fill_ms=1494 queued=true running=true lastError=<null>
+    one-record-r3-E CAP-IDLE| ticks=400 arms=+2319 refusals=+0 trace_flushes=+28 traces_live 25 -> 13 running=true
+    one-record-r3-E CAP-LIVE| used=376379 kernelMemory=164393 user=211986 count(3 collects)=376331/376331/376331 total=518288 traces_live=13
+one-record-r3-O exit=0 APACITY| shape=record native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=547 why=not_enough_memory t_first5=0.0699 t_last5=0.0795 batches=6 last/first=1.14 freeKB_at_end/totalKB=0/192 arms=+2334 refusals=+1 trace_flushes=+0 fill_ms=1501 queued=true running=true lastError=<null>
+    one-record-r3-O CAP-IDLE| ticks=400 arms=+60 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-record-r3-O CAP-LIVE| used=353003 kernelMemory=164393 user=188610 count(3 collects)=352955/352955/352955 total=518288 traces_live=0
+one-array-r3-S exit=0 APACITY| shape=array native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=286 why=not_enough_memory t_first5=0.0009 t_last5=0.0009 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1492 queued=true running=true lastError=<null>
+    one-array-r3-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-array-r3-S CAP-LIVE| used=430600 kernelMemory=174605 user=255995 count(3 collects)=432995/432995/432995 total=528500 traces_live=-1
+one-array-r3-D exit=1 APACITY| shape=array native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=347773 held=? why=? t_first5=0.0075 t_last5=0.0587 batches=16 last/first=7.83 freeKB_at_end/totalKB=0/192 arms=+2816 refusals=+2 trace_flushes=+10 fill_ms=249879 queued=true running=true lastError=<null>
+    one-array-r3-D CAP-IDLE| ticks=400 arms=+9 refusals=+0 trace_flushes=+0 traces_live 96 -> 106 running=true
+    one-array-r3-D CAP-LIVE| used=453292 kernelMemory=347773 user=105519 count(3 collects)=453244/453244/453244 total=701668 traces_live=106
+one-array-r3-E exit=1 APACITY| shape=array native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0390 t_last5=0.0381 batches=8 last/first=0.98 freeKB_at_end/totalKB=0/192 arms=+52711 refusals=+2 trace_flushes=+779 fill_ms=249983 queued=true running=true lastError=<null>
+    one-array-r3-E CAP-IDLE| ticks=400 arms=+1696 refusals=+0 trace_flushes=+28 traces_live 20 -> 21 running=true
+    one-array-r3-E CAP-LIVE| used=379934 kernelMemory=164393 user=215541 count(3 collects)=379886/379886/379886 total=518288 traces_live=22
+one-array-r3-O exit=0 APACITY| shape=array native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=790 why=not_enough_memory t_first5=0.0331 t_last5=0.0537 batches=8 last/first=1.62 freeKB_at_end/totalKB=0/192 arms=+2155 refusals=+1 trace_flushes=+0 fill_ms=1485 queued=true running=true lastError=<null>
+    one-array-r3-O CAP-IDLE| ticks=400 arms=+60 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-array-r3-O CAP-LIVE| used=352642 kernelMemory=164393 user=188249 count(3 collects)=352594/352594/352594 total=518288 traces_live=0
+one-string-r3-S exit=0 APACITY| shape=string native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=1024 why=not_enough_memory t_first5=0.0010 t_last5=0.0012 batches=11 last/first=1.20 freeKB_at_end/totalKB=4/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1494 queued=true running=true lastError=<null>
+    one-string-r3-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-string-r3-S CAP-LIVE| used=430498 kernelMemory=174605 user=255893 count(3 collects)=432893/432893/432893 total=528500 traces_live=-1
+one-string-r3-D exit=0 APACITY| shape=string native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=402273 held=4598 why=not_enough_memory t_first5=0.0003 t_last5=0.1260 batches=46 last/first=420.00 freeKB_at_end/totalKB=0/192 arms=+6966 refusals=+1 trace_flushes=+23 fill_ms=2744 queued=true running=true lastError=<null>
+    one-string-r3-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 89 -> 99 running=true
+    one-string-r3-D CAP-LIVE| used=446475 kernelMemory=402273 user=44202 count(3 collects)=446427/446427/446427 total=756168 traces_live=99
+one-string-r3-E exit=0 APACITY| shape=string native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=1995 why=not_enough_memory t_first5=0.0214 t_last5=0.0599 batches=20 last/first=2.80 freeKB_at_end/totalKB=0/192 arms=+5310 refusals=+1 trace_flushes=+27 fill_ms=1993 queued=true running=true lastError=<null>
+    one-string-r3-E CAP-IDLE| ticks=400 arms=+1858 refusals=+0 trace_flushes=+21 traces_live 26 -> 29 running=true
+    one-string-r3-E CAP-LIVE| used=383305 kernelMemory=164393 user=218912 count(3 collects)=383257/383257/383257 total=518288 traces_live=29
+one-string-r3-O exit=0 APACITY| shape=string native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=2048 why=not_enough_memory t_first5=0.0014 t_last5=0.0769 batches=21 last/first=54.93 freeKB_at_end/totalKB=6/192 arms=+5403 refusals=+1 trace_flushes=+0 fill_ms=1998 queued=true running=true lastError=<null>
+    one-string-r3-O CAP-IDLE| ticks=400 arms=+63 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-string-r3-O CAP-LIVE| used=352833 kernelMemory=164393 user=188440 count(3 collects)=352785/352785/352785 total=518288 traces_live=0
+one-closure-r3-S exit=0 APACITY| shape=closure native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=508 why=not_enough_memory t_first5=0.0016 t_last5=0.0020 batches=6 last/first=1.25 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1495 queued=true running=true lastError=<null>
+    one-closure-r3-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    one-closure-r3-S CAP-LIVE| used=430712 kernelMemory=174605 user=256107 count(3 collects)=433107/433107/433107 total=528500 traces_live=-1
+one-closure-r3-D exit=0 APACITY| shape=closure native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=351661 held=1573 why=not_enough_memory t_first5=0.0023 t_last5=0.1190 batches=16 last/first=51.74 freeKB_at_end/totalKB=0/192 arms=+2936 refusals=+1 trace_flushes=+10 fill_ms=1994 queued=true running=true lastError=<null>
+    one-closure-r3-D CAP-IDLE| ticks=400 arms=+1 refusals=+0 trace_flushes=+0 traces_live 86 -> 94 running=true
+    one-closure-r3-D CAP-LIVE| used=443057 kernelMemory=351661 user=91396 count(3 collects)=443009/443009/443009 total=705556 traces_live=94
+one-closure-r3-E exit=0 APACITY| shape=closure native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=698 why=not_enough_memory t_first5=0.0540 t_last5=0.0638 batches=7 last/first=1.18 freeKB_at_end/totalKB=0/192 arms=+2385 refusals=+1 trace_flushes=+8 fill_ms=1494 queued=true running=true lastError=<null>
+    one-closure-r3-E CAP-IDLE| ticks=400 arms=+1837 refusals=+0 trace_flushes=+26 traces_live 18 -> 17 running=true
+    one-closure-r3-E CAP-LIVE| used=377199 kernelMemory=164393 user=212806 count(3 collects)=377151/377151/377151 total=518288 traces_live=17
+one-closure-r3-O exit=1 APACITY| shape=closure native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0508 t_last5=0.0707 batches=8 last/first=1.39 freeKB_at_end/totalKB=0/192 arms=+4073 refusals=+2 trace_flushes=+0 fill_ms=249873 queued=true running=true lastError=<null>
+    one-closure-r3-O CAP-IDLE| ticks=400 arms=+60 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    one-closure-r3-O CAP-LIVE| used=352967 kernelMemory=164393 user=188574 count(3 collects)=352919/352919/352919 total=518288 traces_live=0
+onehalf-record-r1-S exit=0 APACITY| shape=record native=stock jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=174605 held=536 why=not_enough_memory t_first5=0.0024 t_last5=0.0038 batches=6 last/first=1.58 freeKB_at_end/totalKB=0/256 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1495 queued=true running=true lastError=<null>
+    onehalf-record-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    onehalf-record-r1-S CAP-LIVE| used=430671 kernelMemory=174605 user=256066 count(3 collects)=433066/433066/433066 total=646465 traces_live=-1
+onehalf-record-r1-D exit=1 APACITY| shape=record native=additive jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=336193 held=? why=? t_first5=0.0011 t_last5=0.1186 batches=15 last/first=107.82 freeKB_at_end/totalKB=0/256 arms=+3015 refusals=+2 trace_flushes=+9 fill_ms=249788 queued=true running=true lastError=<null>
+    onehalf-record-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 51 -> 65 running=true
+    onehalf-record-r1-D CAP-LIVE| used=416219 kernelMemory=336193 user=80026 count(3 collects)=416171/416171/416171 total=808053 traces_live=65
+onehalf-record-r1-E exit=0 APACITY| shape=record native=additive jit=on jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=863 why=not_enough_memory t_first5=0.0271 t_last5=0.0797 batches=9 last/first=2.94 freeKB_at_end/totalKB=6/256 arms=+2193 refusals=+1 trace_flushes=+8 fill_ms=1745 queued=true running=true lastError=<null>
+    onehalf-record-r1-E CAP-IDLE| ticks=400 arms=+239 refusals=+0 trace_flushes=+0 traces_live 111 -> 119 running=true
+    onehalf-record-r1-E CAP-LIVE| used=466548 kernelMemory=164393 user=302155 count(3 collects)=466500/466500/466500 total=636253 traces_live=119
+onehalf-record-r1-O exit=1 APACITY| shape=record native=additive jit=off jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0356 t_last5=0.1255 batches=8 last/first=3.53 freeKB_at_end/totalKB=-1/-1 arms=+2920 refusals=+6 trace_flushes=+0 fill_ms=375 queued=true running=false lastError=not enough memory
+    onehalf-record-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    onehalf-record-r1-O CAP-LIVE| used=352655 kernelMemory=164393 user=188262 count(3 collects)=352607/352607/352607 total=636253 traces_live=0
+onehalf-array-r1-S exit=0 APACITY| shape=array native=stock jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=174605 held=533 why=not_enough_memory t_first5=0.0008 t_last5=0.0017 batches=6 last/first=2.13 freeKB_at_end/totalKB=0/256 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1501 queued=true running=true lastError=<null>
+    onehalf-array-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    onehalf-array-r1-S CAP-LIVE| used=430534 kernelMemory=174605 user=255929 count(3 collects)=432929/432929/432929 total=646465 traces_live=-1
+onehalf-array-r1-D exit=1 APACITY| shape=array native=additive jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=339861 held=? why=? t_first5=0.0008 t_last5=0.0701 batches=21 last/first=87.62 freeKB_at_end/totalKB=0/256 arms=+3013 refusals=+3 trace_flushes=+12 fill_ms=249967 queued=true running=true lastError=<null>
+    onehalf-array-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 55 -> 67 running=true
+    onehalf-array-r1-D CAP-LIVE| used=420398 kernelMemory=339861 user=80537 count(3 collects)=420350/420350/420350 total=811721 traces_live=67
+onehalf-array-r1-E exit=1 APACITY| shape=array native=additive jit=on jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0038 t_last5=0.0546 batches=13 last/first=14.37 freeKB_at_end/totalKB=0/256 arms=+2899 refusals=+2 trace_flushes=+9 fill_ms=250011 queued=true running=true lastError=<null>
+    onehalf-array-r1-E CAP-IDLE| ticks=400 arms=+156 refusals=+0 trace_flushes=+0 traces_live 110 -> 114 running=true
+    onehalf-array-r1-E CAP-LIVE| used=459562 kernelMemory=164393 user=295169 count(3 collects)=459514/459514/459514 total=636253 traces_live=114
+onehalf-array-r1-O exit=0 APACITY| shape=array native=additive jit=off jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=1339 why=not_enough_memory t_first5=0.0010 t_last5=0.0527 batches=14 last/first=52.70 freeKB_at_end/totalKB=0/256 arms=+2674 refusals=+1 trace_flushes=+0 fill_ms=1751 queued=true running=true lastError=<null>
+    onehalf-array-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    onehalf-array-r1-O CAP-LIVE| used=352438 kernelMemory=164393 user=188045 count(3 collects)=352390/352390/352390 total=636253 traces_live=0
+onehalf-string-r1-S exit=0 APACITY| shape=string native=stock jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=174605 held=2048 why=not_enough_memory t_first5=0.0014 t_last5=0.0020 batches=21 last/first=1.43 freeKB_at_end/totalKB=10/256 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1745 queued=true running=true lastError=<null>
+    onehalf-string-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    onehalf-string-r1-S CAP-LIVE| used=430432 kernelMemory=174605 user=255827 count(3 collects)=432827/432827/432827 total=646465 traces_live=-1
+onehalf-string-r1-D exit=0 APACITY| shape=string native=additive jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=349913 held=5665 why=not_enough_memory t_first5=0.0005 t_last5=0.1242 batches=57 last/first=248.40 freeKB_at_end/totalKB=0/256 arms=+9539 refusals=+4 trace_flushes=+32 fill_ms=3238 queued=true running=true lastError=<null>
+    onehalf-string-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 72 -> 83 running=true
+    onehalf-string-r1-D CAP-LIVE| used=424797 kernelMemory=349913 user=74884 count(3 collects)=424749/424749/424749 total=821773 traces_live=83
+onehalf-string-r1-E exit=0 APACITY| shape=string native=additive jit=on jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=2912 why=not_enough_memory t_first5=0.0105 t_last5=0.0566 batches=30 last/first=5.39 freeKB_at_end/totalKB=25/256 arms=+5425 refusals=+1 trace_flushes=+21 fill_ms=2238 queued=true running=true lastError=<null>
+    onehalf-string-r1-E CAP-IDLE| ticks=400 arms=+120 refusals=+0 trace_flushes=+0 traces_live 103 -> 106 running=true
+    onehalf-string-r1-E CAP-LIVE| used=457507 kernelMemory=164393 user=293114 count(3 collects)=457459/457459/457459 total=636253 traces_live=106
+onehalf-string-r1-O exit=0 APACITY| shape=string native=additive jit=off jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=2914 why=not_enough_memory t_first5=0.0005 t_last5=0.0660 batches=30 last/first=132.00 freeKB_at_end/totalKB=32/256 arms=+5084 refusals=+1 trace_flushes=+0 fill_ms=2242 queued=true running=true lastError=<null>
+    onehalf-string-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    onehalf-string-r1-O CAP-LIVE| used=352257 kernelMemory=164393 user=187864 count(3 collects)=352209/352209/352209 total=636253 traces_live=0
+onehalf-closure-r1-S exit=0 APACITY| shape=closure native=stock jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=174605 held=1039 why=not_enough_memory t_first5=0.0016 t_last5=0.0036 batches=11 last/first=2.25 freeKB_at_end/totalKB=0/256 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1498 queued=true running=true lastError=<null>
+    onehalf-closure-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    onehalf-closure-r1-S CAP-LIVE| used=430712 kernelMemory=174605 user=256107 count(3 collects)=433107/433107/433107 total=646465 traces_live=-1
+onehalf-closure-r1-D exit=0 APACITY| shape=closure native=additive jit=on jitearly=- tier=256KB scale=1.8 kernelMemory=367853 held=2048 why=not_enough_memory t_first5=0.0005 t_last5=0.1071 batches=21 last/first=214.20 freeKB_at_end/totalKB=5/256 arms=+3972 refusals=+1 trace_flushes=+12 fill_ms=1995 queued=true running=true lastError=<null>
+    onehalf-closure-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 74 -> 86 running=true
+    onehalf-closure-r1-D CAP-LIVE| used=430479 kernelMemory=367853 user=62626 count(3 collects)=430431/430431/430431 total=839713 traces_live=86
+onehalf-closure-r1-E exit=1 APACITY| shape=closure native=additive jit=on jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0119 t_last5=0.0871 batches=12 last/first=7.32 freeKB_at_end/totalKB=-1/-1 arms=+2745 refusals=+3 trace_flushes=+8 fill_ms=379 queued=true running=false lastError=not enough memory
+    onehalf-closure-r1-E CAP-IDLE| ticks=400 arms=+196 refusals=+0 trace_flushes=+0 traces_live 108 -> 117 running=true
+    onehalf-closure-r1-E CAP-LIVE| used=463996 kernelMemory=164393 user=299603 count(3 collects)=463948/463948/463948 total=636253 traces_live=117
+onehalf-closure-r1-O exit=0 APACITY| shape=closure native=additive jit=off jitearly=off tier=256KB scale=1.8 kernelMemory=164393 held=1288 why=not_enough_memory t_first5=0.0010 t_last5=0.0755 batches=13 last/first=75.50 freeKB_at_end/totalKB=0/256 arms=+2538 refusals=+1 trace_flushes=+0 fill_ms=1739 queued=true running=true lastError=<null>
+    onehalf-closure-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    onehalf-closure-r1-O CAP-LIVE| used=352391 kernelMemory=164393 user=187998 count(3 collects)=352343/352343/352343 total=636253 traces_live=0
+threehalf-record-r1-S exit=0 APACITY| shape=record native=stock jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=174605 held=4255 why=not_enough_memory t_first5=0.0013 t_last5=0.0067 batches=43 last/first=5.15 freeKB_at_end/totalKB=0/1024 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1992 queued=true running=true lastError=<null>
+    threehalf-record-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    threehalf-record-r1-S CAP-LIVE| used=430604 kernelMemory=174605 user=255999 count(3 collects)=432999/432999/432999 total=2062042 traces_live=-1
+threehalf-record-r1-D exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=335513 held=6058 why=not_enough_memory t_first5=0.0005 t_last5=0.4540 batches=61 last/first=908.00 freeKB_at_end/totalKB=0/1024 arms=+9313 refusals=+3 trace_flushes=+23 fill_ms=4497 queued=true running=true lastError=<null>
+    threehalf-record-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 355 -> 364 running=true
+    threehalf-record-r1-D CAP-LIVE| used=632351 kernelMemory=335513 user=296838 count(3 collects)=632303/632303/632303 total=2222950 traces_live=364
+threehalf-record-r1-E exit=0 APACITY| shape=record native=additive jit=on jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=5448 why=not_enough_memory t_first5=0.0004 t_last5=0.3016 batches=55 last/first=754.00 freeKB_at_end/totalKB=0/1024 arms=+6669 refusals=+1 trace_flushes=+20 fill_ms=3744 queued=true running=true lastError=<null>
+    threehalf-record-r1-E CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 105 -> 112 running=true
+    threehalf-record-r1-E CAP-LIVE| used=463355 kernelMemory=164393 user=298962 count(3 collects)=463307/463307/463307 total=2051830 traces_live=112
+threehalf-record-r1-O exit=1 APACITY| shape=record native=additive jit=off jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0005 t_last5=0.4443 batches=56 last/first=888.60 freeKB_at_end/totalKB=0/1024 arms=+10025 refusals=+2 trace_flushes=+0 fill_ms=250065 queued=true running=true lastError=<null>
+    threehalf-record-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    threehalf-record-r1-O CAP-LIVE| used=352475 kernelMemory=164393 user=188082 count(3 collects)=352427/352427/352427 total=2051830 traces_live=0
+threehalf-array-r1-S exit=0 APACITY| shape=array native=stock jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=174605 held=4440 why=not_enough_memory t_first5=0.0012 t_last5=0.0038 batches=45 last/first=3.17 freeKB_at_end/totalKB=0/1024 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1995 queued=true running=true lastError=<null>
+    threehalf-array-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    threehalf-array-r1-S CAP-LIVE| used=430533 kernelMemory=174605 user=255928 count(3 collects)=432928/432928/432928 total=2062042 traces_live=-1
+threehalf-array-r1-D exit=0 APACITY| shape=array native=additive jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=413193 held=9019 why=not_enough_memory t_first5=0.0004 t_last5=0.1122 batches=91 last/first=280.50 freeKB_at_end/totalKB=0/1024 arms=+7344 refusals=+1 trace_flushes=+29 fill_ms=3746 queued=true running=true lastError=<null>
+    threehalf-array-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 346 -> 350 running=true
+    threehalf-array-r1-D CAP-LIVE| used=694966 kernelMemory=413193 user=281773 count(3 collects)=694918/694918/694918 total=2300630 traces_live=350
+threehalf-array-r1-E exit=0 APACITY| shape=array native=additive jit=on jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=8095 why=not_enough_memory t_first5=0.0004 t_last5=0.1278 batches=81 last/first=319.50 freeKB_at_end/totalKB=0/1024 arms=+6354 refusals=+1 trace_flushes=+22 fill_ms=3500 queued=true running=true lastError=<null>
+    threehalf-array-r1-E CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 112 -> 121 running=true
+    threehalf-array-r1-E CAP-LIVE| used=465378 kernelMemory=164393 user=300985 count(3 collects)=465330/465330/465330 total=2051830 traces_live=121
+threehalf-array-r1-O exit=0 APACITY| shape=array native=additive jit=off jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=8091 why=not_enough_memory t_first5=0.0004 t_last5=0.2353 batches=81 last/first=588.25 freeKB_at_end/totalKB=0/1024 arms=+9800 refusals=+1 trace_flushes=+0 fill_ms=4241 queued=true running=true lastError=<null>
+    threehalf-array-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    threehalf-array-r1-O CAP-LIVE| used=352162 kernelMemory=164393 user=187769 count(3 collects)=352114/352114/352114 total=2051830 traces_live=0
+threehalf-string-r1-S exit=0 APACITY| shape=string native=stock jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=174605 held=14822 why=not_enough_memory t_first5=0.0009 t_last5=0.0082 batches=149 last/first=9.11 freeKB_at_end/totalKB=0/1024 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=3738 queued=true running=true lastError=<null>
+    threehalf-string-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    threehalf-string-r1-S CAP-LIVE| used=430497 kernelMemory=174605 user=255892 count(3 collects)=432892/432892/432892 total=2062042 traces_live=-1
+threehalf-string-r1-D exit=0 APACITY| shape=string native=additive jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=413193 held=23792 why=not_enough_memory t_first5=0.0005 t_last5=0.4374 batches=238 last/first=874.80 freeKB_at_end/totalKB=0/1024 arms=+26414 refusals=+1 trace_flushes=+79 fill_ms=14715 queued=true running=true lastError=<null>
+    threehalf-string-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 359 -> 366 running=true
+    threehalf-string-r1-D CAP-LIVE| used=709602 kernelMemory=413193 user=296409 count(3 collects)=709554/709554/709554 total=2300630 traces_live=366
+threehalf-string-r1-E exit=1 APACITY| shape=string native=additive jit=on jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0005 t_last5=0.4257 batches=195 last/first=851.40 freeKB_at_end/totalKB=-1/-1 arms=+15526 refusals=+5 trace_flushes=+44 fill_ms=8705 queued=true running=false lastError=not enough memory
+    threehalf-string-r1-E CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 104 -> 108 running=true
+    threehalf-string-r1-E CAP-LIVE| used=459537 kernelMemory=164393 user=295144 count(3 collects)=459489/459489/459489 total=2051830 traces_live=108
+threehalf-string-r1-O exit=0 APACITY| shape=string native=additive jit=off jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=19870 why=not_enough_memory t_first5=0.0005 t_last5=0.4625 batches=199 last/first=925.00 freeKB_at_end/totalKB=0/1024 arms=+25747 refusals=+1 trace_flushes=+0 fill_ms=13473 queued=true running=true lastError=<null>
+    threehalf-string-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    threehalf-string-r1-O CAP-LIVE| used=352145 kernelMemory=164393 user=187752 count(3 collects)=352097/352097/352097 total=2051830 traces_live=0
+threehalf-closure-r1-S exit=0 APACITY| shape=closure native=stock jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=174605 held=8192 why=not_enough_memory t_first5=0.0008 t_last5=0.0029 batches=82 last/first=3.62 freeKB_at_end/totalKB=23/1024 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=2749 queued=true running=true lastError=<null>
+    threehalf-closure-r1-S CAP-IDLE| ticks=400 arms=+n/a refusals=+n/a trace_flushes=+n/a traces_live -1 -> -1 running=true
+    threehalf-closure-r1-S CAP-LIVE| used=430711 kernelMemory=174605 user=256106 count(3 collects)=433106/433106/433106 total=2062042 traces_live=-1
+threehalf-closure-r1-D exit=0 APACITY| shape=closure native=additive jit=on jitearly=- tier=1024KB scale=1.8 kernelMemory=348453 held=8263 why=not_enough_memory t_first5=0.0006 t_last5=0.3505 batches=83 last/first=584.17 freeKB_at_end/totalKB=0/1024 arms=+9774 refusals=+1 trace_flushes=+26 fill_ms=5233 queued=true running=true lastError=<null>
+    threehalf-closure-r1-D CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 363 -> 367 running=true
+    threehalf-closure-r1-D CAP-LIVE| used=646931 kernelMemory=348453 user=298478 count(3 collects)=646883/646883/646883 total=2235890 traces_live=367
+threehalf-closure-r1-E exit=1 APACITY| shape=closure native=additive jit=on jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0006 t_last5=0.3543 batches=77 last/first=590.50 freeKB_at_end/totalKB=-1/-1 arms=+9902 refusals=+4 trace_flushes=+25 fill_ms=3588 queued=true running=false lastError=not enough memory
+    threehalf-closure-r1-E CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 107 -> 114 running=true
+    threehalf-closure-r1-E CAP-LIVE| used=465863 kernelMemory=164393 user=301470 count(3 collects)=465815/465815/465815 total=2051830 traces_live=114
+threehalf-closure-r1-O exit=0 APACITY| shape=closure native=additive jit=off jitearly=off tier=1024KB scale=1.8 kernelMemory=164393 held=7779 why=not_enough_memory t_first5=0.0003 t_last5=0.3431 batches=78 last/first=1143.67 freeKB_at_end/totalKB=0/1024 arms=+9442 refusals=+1 trace_flushes=+0 fill_ms=4734 queued=true running=true lastError=<null>
+    threehalf-closure-r1-O CAP-IDLE| ticks=400 arms=+0 refusals=+0 trace_flushes=+0 traces_live 0 -> 0 running=true
+    threehalf-closure-r1-O CAP-LIVE| used=352279 kernelMemory=164393 user=187886 count(3 collects)=352231/352231/352231 total=2051830 traces_live=0
+one-record-scale1.0-S exit=1 
+    one-record-scale1.0-S BOOT-FAIL SMOKE| lastError = not enough memory
+one-record-scale1.0-D exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.0 kernelMemory=400913 held=775 why=not_enough_memory t_first5=0.0324 t_last5=0.0723 batches=8 last/first=2.23 freeKB_at_end/totalKB=0/192 arms=+2100 refusals=+1 trace_flushes=+7 fill_ms=1741 queued=true running=true lastError=<null>
+    one-record-scale1.0-D CAP-IDLE| ticks=400 arms=+101 refusals=+0 trace_flushes=+0 traces_live 75 -> 84 running=true
+    one-record-scale1.0-D CAP-LIVE| used=423019 kernelMemory=400913 user=22106 count(3 collects)=422971/422971/422971 total=597521 traces_live=84
+== 22:22:37 chain1 done

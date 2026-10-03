@@ -1,0 +1,28 @@
+== 00:02:28 chain4 start; java procs: 0
+full18-additive-on-r2 exit=0
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  mandelbrot/ok/37904620/0.0663/0.0702/616/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  binarytrees/ok/7038400/0.2515/0.2688/659/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  trampoline/ok/247388/0.2270/0.2482/690/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  matmul/ok/481.0000/0.0880/0.1098/788/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  strings2/ok/12582912-3852468224/0.1858/0.2078/563/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  nqueens/ok/85200/1.1298/1.2293/412/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.0488/0.0529/699/5
+    SMOKE| MEM-2 reads: traces_live distribution 1x8 2x9 3x4 4x1 7x2 9x1 10x3 11x1 12x1 13x1 14x1 17x1 19x1 25x1 29x1 33x1 35x1 38x1 498x3 500x2 502x7 503x8 539x1; min=1 at row grow/38/1187/273/none; first 0 at poll -1 row  
+    SMOKE| CHECKS: 65   FAILURES: 0   WALL: 93.4s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+full18-additive-on-r3 exit=0
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  mandelbrot/ok/37904620/0.0659/0.0718/604/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  binarytrees/ok/7038400/0.2457/0.3046/638/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  trampoline/ok/247388/0.2277/0.2414/775/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  matmul/ok/481.0000/0.0921/0.1223/787/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  strings2/ok/12582912-3852468224/0.2043/0.2105/455/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  nqueens/ok/85200/0.5945/1.2442/414/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.0500/0.0581/558/5
+    SMOKE| MEM-2 reads: traces_live distribution 0x2 1x10 2x6 3x2 4x2 5x1 6x1 7x2 8x1 9x3 12x2 13x1 19x1 22x1 26x1 27x1 29x1 30x1 31x1 501x4 503x6 504x8 506x2; min=0 at row hold/52/1558/66/none; first 0 at poll 176 row hold/
+    SMOKE| CHECKS: 65   FAILURES: 0   WALL: 92.9s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+== 00:05:44 chain4 done

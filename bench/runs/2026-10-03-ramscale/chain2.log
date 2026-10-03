@@ -1,0 +1,38 @@
+== 22:24:27 chain2 start; java procs: 0
+census-axis-S exit=1
+    CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+    CENSUS| native marker  = <stock PUC>
+    CENSUS| ticks run      = 14000 of 14000   (running=true)
+    CENSUS| totalMemory    = 2062042 B   kernelMemory = 174605 B
+    CENSUS| PEAK USED      = 2051197 B REAL   (min free 10845 B)   <- section 11 calibration input
+    CENSUS| lastError      = <none>
+    CENSUS| GC PRESSURE    = absent (stock native)
+    CENSUS| VERDICT: PANIC OR OOM ON SCREEN  (running=true, lastError=none)
+census-axis-D exit=1
+    CENSUS| architecture   = ocljit.arch.OCLuaJITArchitecture
+    CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+    CENSUS| ticks run      = 14000 of 14000   (running=true)
+    CENSUS| totalMemory    = 2222630 B   kernelMemory = 335193 B
+    CENSUS| PEAK USED      = 1655964 B REAL   (min free 566666 B)   <- section 11 calibration input
+    CENSUS| lastError      = <none>
+    CENSUS| GC PRESSURE    = arms=37 collects=37 bailouts=0 refusals=1 armed=false trace_flushes=2
+    CENSUS| VERDICT: PANIC OR OOM ON SCREEN  (running=true, lastError=none)
+census-mineos-S exit=0
+    CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+    CENSUS| native marker  = <stock PUC>
+    CENSUS| ticks run      = 14000 of 14000   (running=true)
+    CENSUS| totalMemory    = 3949479 B   kernelMemory = 174605 B
+    CENSUS| PEAK USED      = 3688906 B REAL   (min free 260573 B)   <- section 11 calibration input
+    CENSUS| lastError      = <none>
+    CENSUS| GC PRESSURE    = absent (stock native)
+    CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+census-mineos-D exit=0
+    CENSUS| architecture   = ocljit.arch.OCLuaJITArchitecture
+    CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+    CENSUS| ticks run      = 14000 of 14000   (running=true)
+    CENSUS| totalMemory    = 4178707 B   kernelMemory = 403833 B
+    CENSUS| PEAK USED      = 1031222 B REAL   (min free 3147485 B)   <- section 11 calibration input
+    CENSUS| lastError      = <none>
+    CENSUS| GC PRESSURE    = arms=0 collects=0 bailouts=0 refusals=0 armed=false trace_flushes=0
+    CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+== 22:39:03 chain2 done

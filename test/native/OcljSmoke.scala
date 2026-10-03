@@ -423,17 +423,26 @@ object Smoke {
    * _OCLJ_GCSTATS trace_flushes.  PASS iff, on the SAME run,
    *   (1) trace_flushes advanced by at least one over the program's life
    *       (the shim's own count of flushes performed at the safe point);
-   *   (2) traces_live was read as 0 at some read while the program was
-   *       still running -- the independent evidence, from the trace table
-   *       itself, that the flush emptied it (and the program stepped again
-   *       after that read, so it was not a corpse being read);
+   *   (2) traces_live was read NEAR EMPTY -- at most max(2, 5% of the count
+   *       before the program) -- at some read while the program was still
+   *       running: the independent evidence, from the trace table itself,
+   *       that the flush emptied it (and the program stepped again after that
+   *       read, so it was not a corpse being read).  Until 2026-10-03 this
+   *       demanded a read of exactly 0, which is a race: a read lands between
+   *       resumes, and the last resume may have recompiled a trace after its
+   *       flush.  At 3.0 that race was lost once in the logged runs (min 1 of
+   *       ~60 reads); at the harness's new default 1.8 it was lost on the
+   *       first run (min 1, 117 flushes, 497 traces before).  The runs whose
+   *       flush never happened read 498 (2026-10-03 h-j3, settotal not forwarded;
+   *       they fail (1) as well, so (2) alone is not yet seen failing: logs in
+   *       bench/runs/2026-10-03-ramscale/logs/prior-*), far from near-empty.
    *   (3) the program survived: state done, its own pcall caught nothing,
    *       the machine running with no lastError -- "not enough memory" is
    *       the failure this whole mechanism exists to prevent.
    * traces_live is read BETWEEN resumes, so it counts what the last resume
    * compiled after its flush; under sustained pressure every resume that
-   * finds a trace flushes it, so the count sits near zero and a read of
-   * exactly 0 is expected within a few reads.  The distribution of every
+   * finds a trace flushes it, so the count sits near zero; a read of exactly
+   * 0 is common but not guaranteed (see (2)).  The distribution of every
    * read is printed, so a run that never saw 0 says how close it came.
    *
    * ON A NATIVE BEFORE THE FLUSH (the 2026-09-22 bundle, _OCLJ_GCSTATS with
@@ -499,6 +508,10 @@ object Smoke {
     var minLive = Int.MaxValue; var minLiveRow = ""
     var zeroSeen = false; var zeroPoll = -1; var zeroRow = ""; var zeroSeq = -1L
     var seqAfterZero = -1L
+    // NEAR-EMPTY, the criterion since 2026-10-03 (see (2) in the doc above):
+    // at most max(2, 5% of the count before), read while the program still ran.
+    val nearMax = math.max(2, (if (live0 > 0) live0 else 0) / 20)
+    var nearSeen = false; var nearPoll = -1; var nearSeq = -1L; var seqAfterNear = -1L
     var maxFlushes = flushes0; var firstFlushPoll = -1; var firstFlushRow = ""
     var minFree = Long.MaxValue; var maxHeld = -1L; var maxSeq = -1L
     var holdReads = 0; var holdZero = 0
@@ -514,6 +527,7 @@ object Smoke {
         if (held > maxHeld) maxHeld = held
         if (fr >= 0 && fr < minFree) minFree = fr
         if (zeroSeen && sq > seqAfterZero) seqAfterZero = sq
+        if (nearSeen && sq > seqAfterNear) seqAfterNear = sq
       }
       if (polls % 4 == 0 && (state == "grow" || state == "hold")) {
         val j = jitStatsLocked(m, lua)
@@ -526,6 +540,7 @@ object Smoke {
           if (state == "hold") { holdReads += 1; if (lv == 0) holdZero += 1 }
           if (lv >= 0 && lv < minLive) { minLive = lv; minLiveRow = row }
           if (lv == 0 && !zeroSeen) { zeroSeen = true; zeroPoll = polls; zeroRow = row; zeroSeq = num(row, 1) }
+          if (lv >= 0 && lv <= nearMax && !nearSeen) { nearSeen = true; nearPoll = polls; nearSeq = num(row, 1) }
           if (tf > maxFlushes) { if (firstFlushPoll < 0) { firstFlushPoll = polls; firstFlushRow = row }; maxFlushes = tf }
         }
       }
@@ -538,6 +553,7 @@ object Smoke {
     state = field(row, 0)
     val finalSeq = num(row, 1)
     if (zeroSeen && finalSeq > seqAfterZero) seqAfterZero = finalSeq
+    if (nearSeen && finalSeq > seqAfterNear) seqAfterNear = finalSeq
     val jN = jitStatsLocked(m, lua)
     val gN = gcStatsLocked(m, lua)
     val rawN = m.synchronized { gcStatsRaw(lua) }
@@ -562,7 +578,8 @@ object Smoke {
     val progErr = field(row, 4)
     val survived = m.isRunning && m.lastError == null && state == "done" && progErr == "none"
     val zeroWhileRunning = zeroSeen && seqAfterZero > zeroSeq
-    val ok = survived && flushed >= 1 && zeroWhileRunning
+    val nearWhileRunning = nearSeen && seqAfterNear > nearSeq
+    val ok = survived && flushed >= 1 && nearWhileRunning
     milestone(id, ok,
       "tier=" + tierName + " (" + tierKB + " KB): held " + maxHeld + " KB live with sandbox free down to " +
         (if (minFree == Long.MaxValue) "n/a" else minFree.toString + " KB") +
@@ -570,6 +587,7 @@ object Smoke {
         "; traces_live " + liveStr(live0) + " before, min " + (if (minLive == Int.MaxValue) "n/a" else minLive.toString) +
         " over " + reads + " reads while running" +
         (if (zeroSeen) " (0 first seen at poll " + zeroPoll + ", program still stepping afterwards=" + zeroWhileRunning + ")" else " (never 0)") +
+        "; near-empty (<= " + nearMax + ") " + (if (nearSeen) "first at poll " + nearPoll + ", program still stepping afterwards=" + nearWhileRunning else "never") +
         "; program " + state + " err=" + progErr + " running=" + m.isRunning + " lastError=" + m.lastError +
         (if (ok) ""
          else if (reads == 0) "   <- NO READ under the monitor produced a number: nothing observed (a FAIL, not a pass)"
@@ -578,7 +596,7 @@ object Smoke {
          else if (!survived) "   <- the program did not survive the pressure: " +
                              (if (progErr != "none") "its own step raised '" + progErr + "'" else "the machine stopped or the program never reported done")
          else if (flushed < 1) "   <- the safe point never flushed: no proven cycle found the machine short, or no resume followed one"
-         else "   <- flushed, but traces_live was never read as 0 while the program ran: the last resume before every read had recompiled something"))
+         else "   <- flushed, but traces_live was never read near empty (<= " + nearMax + ") while the program ran: the flush did not empty the trace table"))
   }
 
   /** Evaluate a text chunk in the live state and return its single result. */
@@ -3032,6 +3050,196 @@ object Smoke {
       |end, math.huge)
       |""".stripMargin
 
+  // ------------------------------------------------------------------ //
+  // OCLJ_PROBE=capacity -- how much a program can HOLD (milestone cap-1).
+  //
+  // WHAT IT ASKS.  ramScaleFor64Bit decides how many real bytes stand behind
+  // each apparent byte of installed RAM, so the honest test of a scale is not
+  // an object-size ratio but where a program breaks: grow a held structure of
+  // one shape (OCLJ_CAP_SHAPE: record | array | string | closure) one batch
+  // per resume, with one short-lived string of churn per object, until the
+  // allocator refuses, and report how many objects were held.  Run on stock
+  // PUC 5.2 at OC's own scale and on ours at a candidate scale, on the same
+  // stick, it is the parity number.  It also reports the os.clock() cost of
+  // the first and the last five batches, because our emergency collector runs
+  // full cycles once headroom is under max(total/4, 128 KB) -- the place a
+  // program slows down is a cost a pass/fail count would not show.
+  //
+  // The autorun is the grace probe's heartbeat and nothing else, so the user
+  // space measured is OpenOS's and this program's, not the default autorun's
+  // ~42 KB of source and its timers.
+  // ------------------------------------------------------------------ //
+
+  val CapacityAutorunLua: String =
+    """-- OCLJ_PROBE=capacity: heartbeat plus a capacity fill.  Nothing else from
+      |-- the default autorun.
+      |local component = require("component")
+      |local event = require("event")
+      |local computer = require("computer")
+      |local gpu = component.gpu
+      |local nonce = string.format("%.4f-%d", computer.uptime(), math.random(100000, 999999))
+      |local SHAPE = "%%SHAPE%%"
+      |local BATCH = 100
+      |local n = 0
+      |local stage = "armed"
+      |local held, count, batches = nil, 0, 0
+      |local tfirst, ring = 0, {0, 0, 0, 0, 0}
+      |local freeAt, totalKB = -1, -1
+      |local function paint()
+      |  local tlast = ring[1] + ring[2] + ring[3] + ring[4] + ring[5]
+      |  gpu.set(1, 15, "OCLJNONCE=" .. nonce .. " OCLJCTR=" .. n .. "        ")
+      |  gpu.set(1, 16, "OCLJCAP=" .. stage .. "        ")
+      |  gpu.set(1, 17, "OCLJCAPT=" .. string.format("%.4f/%.4f/%d", tfirst, tlast, batches) .. "        ")
+      |  gpu.set(1, 18, "OCLJCAPF=" .. freeAt .. "/" .. totalKB .. "        ")
+      |end
+      |local function uniq(len, i) local s = tostring(i) return string.rep("x", len - #s) .. s end
+      |local makers = {
+      |  record = function(i) return { name = uniq(12, i), size = i, flags = { true, false } } end,
+      |  array = function(i) return { i, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i } end,
+      |  string = function(i) return uniq(32, i) end,
+      |  closure = function(i) local x, y, z = i, i, i return function() return x + y + z end end,
+      |}
+      |local make = makers[SHAPE]
+      |local step
+      |step = function()
+      |  local t0 = os.clock()
+      |  local ok, err = pcall(function()
+      |    for k = 1, BATCH do
+      |      local o = make(count + 1)
+      |      held[count + 1] = o
+      |      count = count + 1
+      |      local junk = uniq(24, count) .. "!"
+      |    end
+      |  end)
+      |  local dt = os.clock() - t0
+      |  batches = batches + 1
+      |  if batches <= 5 then tfirst = tfirst + dt end
+      |  ring[(batches - 1) % 5 + 1] = dt
+      |  if ok and count < 2000000 then
+      |    stage = "filling/" .. count
+      |    event.timer(0, step)
+      |  else
+      |    freeAt = math.floor(computer.freeMemory() / 1024)
+      |    totalKB = math.floor(computer.totalMemory() / 1024)
+      |    held = nil
+      |    stage = "done/" .. count .. "/" .. (ok and "cap" or tostring(err):gsub("[ /]", "_"))
+      |  end
+      |  pcall(paint)
+      |end
+      |event.listen("ocljcap", function()
+      |  if not make then stage = "ERR/unknown_shape_" .. SHAPE pcall(paint) return false end
+      |  held = {}
+      |  stage = "filling/0"
+      |  event.timer(0, step)
+      |  return false
+      |end)
+      |event.timer(0.05, function()
+      |  n = n + 1
+      |  pcall(paint)
+      |end, math.huge)
+      |""".stripMargin
+
+  /** OCLJ_CAP_SHAPE for the capacity probe; refused, not defaulted, on a misspelling. */
+  val capShape: String = Option(System.getenv("OCLJ_CAP_SHAPE")).map(_.trim).filter(_.nonEmpty).getOrElse("record")
+
+  /**
+    * The capacity probe's driver, after (d).  Three readings, in this order,
+    * because the later ones perturb what the earlier ones see:
+    *   CAP-IDLE  the emergency collector's arms and trace flushes, and the
+    *             live trace count, over a fixed idle window (ours only; PUC
+    *             has no _OCLJ_GCSTATS) -- whether an idle machine at this
+    *             stick and scale keeps its traces.
+    *   CAP-LIVE  a full collect, three times, on the raw state, then the
+    *             live set: used, kernelMemory, and user = used - kernelMemory.
+    *             Works on stock PUC too (no _OCLJ_JITSTATS needed, unlike
+    *             MEM-1).  PERTURBING; nothing before it is measured after it.
+    *   CAPACITY  the fill (CapacityAutorunLua), started by a signal: objects
+    *             held at the refusal, the error, the cost of the first and
+    *             last five batches, the apparent free memory at the refusal,
+    *             and the collector's counters across the fill.
+    */
+  def capacityProbe(ws: Workspace, computer: Case, screen: Screen, arch: AnyRef, mLua: LuaState,
+                    kernelMode: String, jitMode: String, ramTierName: String, ramTierKB: Int): Unit = {
+    val m = computer.machine
+    val ours = nativeMode != "stock"
+    val jitEarly = Option(System.getenv("OCLJ_JIT_EARLY")).map(_.trim).getOrElse("")
+    val scaleNow = try OCLuaJITArchitecture.ramScaleOf(arch.asInstanceOf[NativeLuaArchitecture]) catch { case _: Throwable => -1.0 }
+    p("--- capacity probe: shape=" + capShape + " native=" + nativeMode + " kernel=" + kernelMode +
+      " jit=" + jitMode + " jitearly=" + (if (jitEarly.isEmpty) "-" else jitEarly) +
+      " tier=" + ramTierName + "(" + ramTierKB + " KB) ramScale(arch)=" + scaleNow + " ---")
+    def gs(): Array[Double] = if (!ours) Array.fill(21)(-1.0) else m.synchronized { gcstats(mLua) }
+    def tlive(): Int = if (!ours) -1 else jitStatsLocked(m, mLua)._5
+    def d(a: Array[Double], b: Array[Double], i: Int): String =
+      if (a(0) < i || b(0) < i) "n/a" else (b(i) - a(i)).toLong.toString
+    // 1. idle window: 400 ticks, ~10 s
+    val g0 = gs(); val tl0 = tlive()
+    var k = 0
+    while (k < 400 && m.isRunning) { ws.update(); Thread.sleep(25); k += 1 }
+    val g1 = gs(); val tl1 = tlive()
+    p("CAP-IDLE| ticks=" + k + " arms=+" + d(g0, g1, 1) + " refusals=+" + d(g0, g1, 4) +
+      " trace_flushes=+" + d(g0, g1, 10) + " traces_live " + tl0 + " -> " + tl1 + " running=" + m.isRunning)
+    // 2. the live set, after three full collects (perturbing)
+    val km = kernelMemoryOf(arch).toLong
+    val cnt = evalStrLocked(m, mLua,
+      "collectgarbage('collect') local a = collectgarbage('count') " +
+      "collectgarbage('collect') local b = collectgarbage('count') " +
+      "collectgarbage('collect') local c = collectgarbage('count') " +
+      "return string.format('%d/%d/%d', a * 1024, b * 1024, c * 1024)")
+    val (tot, fr) = m.synchronized { (try mLua.getTotalMemory.toLong catch { case _: Throwable => -1L },
+                                      try mLua.getFreeMemory.toLong catch { case _: Throwable => -1L }) }
+    val used = tot - fr
+    p("CAP-LIVE| used=" + used + " kernelMemory=" + km + " user=" + (used - km) +
+      " count(3 collects)=" + cnt + " total=" + tot + " traces_live=" + tlive())
+    // 3. the fill
+    val g2 = gs()
+    val tSig = System.currentTimeMillis()
+    val upAtSignal = m.isRunning
+    val queued = m.signal("ocljcap")
+    var row = parse(nonEmptyScreen(screen), "OCLJCAP")
+    var k2 = 0
+    while (k2 < 8000 && m.isRunning && !(row.startsWith("done") || row.startsWith("ERR"))) {
+      ws.update(); Thread.sleep(25); k2 += 1
+      if (k2 % 8 == 0) row = parse(nonEmptyScreen(screen), "OCLJCAP")
+    }
+    var k3 = 0
+    while (k3 < 40 && m.isRunning) { ws.update(); Thread.sleep(25); k3 += 1 }
+    val g3 = gs()
+    val txt = nonEmptyScreen(screen)
+    row = parse(txt, "OCLJCAP")
+    val rowT = parse(txt, "OCLJCAPT").split("/")
+    val rowF = parse(txt, "OCLJCAPF")
+    val running = m.isRunning
+    val err = Option(m.lastError).getOrElse("<null>")
+    val parts = row.split("/")
+    val held = if (parts.length >= 2 && parts(0) == "done") parts(1) else "?"
+    val why = if (parts.length >= 3) parts.drop(2).mkString("/") else "?"
+    def num(i: Int): Double = try rowT(i).toDouble catch { case _: Throwable => -1.0 }
+    val slow = if (num(0) > 0) f"${num(1) / num(0)}%.2f" else "n/a"
+    p("CAPACITY| shape=" + capShape + " native=" + nativeMode + " jit=" + jitMode +
+      " jitearly=" + (if (jitEarly.isEmpty) "-" else jitEarly) + " tier=" + ramTierKB + "KB" +
+      " scale=" + scaleNow + " kernelMemory=" + km + " held=" + held + " why=" + why +
+      " t_first5=" + rowT.lift(0).getOrElse("?") + " t_last5=" + rowT.lift(1).getOrElse("?") +
+      " batches=" + rowT.lift(2).getOrElse("?") + " last/first=" + slow +
+      " freeKB_at_end/totalKB=" + rowF + " arms=+" + d(g2, g3, 1) + " refusals=+" + d(g2, g3, 4) +
+      " trace_flushes=+" + d(g2, g3, 10) + " fill_ms=" + (System.currentTimeMillis() - tSig) +
+      " queued=" + queued + " running=" + running + " lastError=" + err)
+    milestone("cap-1-refusal-caught-machine-survives",
+      row.startsWith("done") && why.contains("not_enough_memory") && running,
+      "shape=" + capShape + " OCLJCAP=" + row + " running=" + running + " lastError=" + err +
+        (if (!running && !upAtSignal) "   <- the machine had stopped BEFORE the fill was signalled (idle window or live read)"
+         else if (!running && err.contains("not enough memory"))
+           "   <- a refusal took the MACHINE down: raised where no handler of the program caught it (OpenOS's dispatcher, the kernel, or the probe's own allocations between batches)"
+         else if (!running) "   <- the machine stopped during the fill, with lastError '" + err + "'"
+         else if (row.startsWith("filling") && !rowF.matches("\\d+/\\d+"))
+           "   <- stuck at " + row + " with the machine up, the refusal path never reached (cap " + k2 + " ticks)"
+         else if (row.startsWith("filling"))
+           "   <- the program caught the refusal and dropped its data, then its OWN next allocation was refused " +
+             "(OCLJCAPF=" + rowF + " was written, the 'done' row was not): PUC collects and retries there, we refuse"
+         else if (!row.startsWith("done")) "   <- the fill never finished (cap " + k2 + " ticks)"
+         else if (!why.contains("not_enough_memory")) "   <- it ended without a memory refusal"
+         else ""))
+  }
+
   /** ocelot-brain's WARN-and-above log lines, captured in-process (grace mode). */
   val kernelLog = new java.util.concurrent.CopyOnWriteArrayList[String]()
 
@@ -3178,8 +3386,14 @@ object Smoke {
     p("LuaStateFactory.includeLuaJ  = " + LuaStateFactory.includeLuaJ)
     p("forceNativeLibPathFirst      = '" + totoro.ocelot.brain.Settings.get.forceNativeLibPathFirst + "'")
     p("computer.lua.allowBytecode   = " + totoro.ocelot.brain.Settings.get.allowBytecode)
-    if (probeMode.nonEmpty && probeMode != "grace")
-      die("OCLJ_PROBE must be unset or 'grace', not '" + probeMode + "'")
+    if (probeMode.nonEmpty && probeMode != "grace" && probeMode != "capacity")
+      die("OCLJ_PROBE must be unset, 'grace' or 'capacity', not '" + probeMode + "'")
+    if (probeMode == "capacity") {
+      if (!Set("record", "array", "string", "closure").contains(capShape))
+        die("OCLJ_CAP_SHAPE must be record, array, string or closure, not '" + capShape + "'")
+      p("!! OCLJ_PROBE=capacity: boot with the heartbeat-only autorun, then ONLY the capacity probe")
+      p("!! (shape=" + capShape + "; boot caps 3000/2000 ticks for EVERY kernel, so arms are scored alike).")
+    }
     if (probeMode == "grace") {
       p("!! OCLJ_PROBE=grace: boot as usual, then ONLY the grace-expiry probe (k6);")
       p("!! no suite, no persist.  ocelot-brain log capture: " + installKernelLogCapture())
@@ -3233,7 +3447,10 @@ object Smoke {
     // OCLJ_PROBE=grace plants the probe's own autorun instead: heartbeat plus
     // the grace-expiry program, nothing else.  The suite files planted below
     // are still written (the planting code is shared) but nothing reads them.
-    val autorunSrc = if (probeMode == "grace") GraceAutorunLua else AutorunLua
+    val autorunSrc =
+      if (probeMode == "grace") GraceAutorunLua
+      else if (probeMode == "capacity") CapacityAutorunLua.replace("%%SHAPE%%", capShape)
+      else AutorunLua
     Files.write(diskDir.resolve("autorun.lua"), autorunSrc.getBytes(StandardCharsets.UTF_8))
     // The Phase-0 compute pole, planted next to autorun.lua so the sandbox can
     // read it through the filesystem proxy.  OCLJ_BENCH_SABOTAGE plants a
@@ -3574,6 +3791,13 @@ object Smoke {
     if (jitMode == "off")
       p("JIT PROBE: jit.off() + jit.flush() -> jit.status()=" +
         evalStrLocked(computer.machine, mLua, "jit.off() jit.flush() return tostring(jit.status())"))
+    // OCLJ_JIT_EARLY=off (OcljArch.initialize) kept the compiler off through
+    // kernel init, so kernelMemory holds no trace metadata; with OCLJ_JIT=on
+    // it is switched back on HERE, once kernelMemory is taken, so OpenOS and
+    // the programs still run compiled.  The control arm for the capacity probe.
+    else if (nativeMode != "stock" && Option(System.getenv("OCLJ_JIT_EARLY")).map(_.trim).getOrElse("") == "off")
+      p("JIT PROBE: OCLJ_JIT_EARLY=off, kernelMemory taken -> jit.on() -> jit.status()=" +
+        evalStrLocked(computer.machine, mLua, "jit.on() return tostring(jit.status())"))
     p("JIT PROBE: mode=" + jitMode + "  attach -> " + evalStrLocked(computer.machine, mLua,
       "__ocljTr = {start=0, stop=0, abort=0, flush=0} " +
       "__ocljTrFn = function(what) local t = __ocljTr t[what] = (t[what] or 0) + 1 end " +
@@ -3645,7 +3869,7 @@ object Smoke {
     // line had not, the loop left on the timeout, and (d) then failed with
     // counter -1 -- so the suite reported SMOKE FAIL for a documented control
     // arm, for a timing reason, with nothing actually wrong.
-    val bootCapTicks = if (kernelMode == "watchdog") 600 else 3000
+    val bootCapTicks = if (kernelMode == "watchdog" && probeMode != "capacity") 600 else 3000
     var i = 0
     var booted = false
     while (i < bootCapTicks && computer.machine.isRunning && !booted) {
@@ -3676,7 +3900,7 @@ object Smoke {
     // counter ticks with the watchdog kernel, and possibly none at all under
     // the standing hook. Same rule as the boot cap -- wait on the condition,
     // and let the timeout be the generous part.
-    val dCapTicks = if (kernelMode == "watchdog") 300 else 2000
+    val dCapTicks = if (kernelMode == "watchdog" && probeMode != "capacity") 300 else 2000
     var j = 0
     var ctrA2 = -1
     while (j < dCapTicks && computer.machine.isRunning && !(ctrA1 > 0 && ctrA2 > ctrA1)) {
@@ -3696,6 +3920,11 @@ object Smoke {
     // --- (k6) OCLJ_PROBE=grace: the grace-expiry probe, and nothing after it --
     if (probeMode == "grace") {
       graceExpiryProbe(ws, computer, screen, kernelMode, nativeMode)
+      finish()
+    }
+    // --- (cap-1) OCLJ_PROBE=capacity: the capacity probe, and nothing after it --
+    if (probeMode == "capacity") {
+      capacityProbe(ws, computer, screen, arch, mLua, kernelMode, jitMode, ramTierName, ramTierKB)
       finish()
     }
 

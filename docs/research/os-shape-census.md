@@ -270,7 +270,7 @@ The two rows are different systems and are not a like-for-like VM comparison,
 but the AxisOS figure is the one that matters for the default: **a real system
 needs better than 2.2x, which rules out OpenComputers' stock 1.8** and is
 consistent with the 1.8-boots-1-in-6 result of section 9. Our pinned 3.0 holds
-with margin.
+with margin. **Corrected 2026-10-03:** the 2.2x is the emergency collector's watermark, not AxisOS's demand: the collector arms once headroom falls below total/4, and the run's minimum free (850 656 B) sat just under total/4 (867 953 B), so the peak tracked the cap (2.19x measured, against the watermark's 2.17x in the same terms -- 0.75 x (3.0 + kernel/RAM) - kernel/RAM; the naive 0.75 x 3.0 = 2.25x ignores the kernel). At OC's 1.8, AxisOS on one stick fails on stock PUC 5.2 (11 KB from its cap) and on ours, but the two boots did different work -- PUC 5.2 could not parse PatchGuard and skipped it, ours was refused inside PatchGuard's file hashing with about a quarter of its cap free -- so only stock is shown to need more than one stick, and measured by capacity OC's 1.8 is enough, so the architecture inherits it ([../../bench/results-ramscale-2026-10-03.md](../../bench/results-ramscale-2026-10-03.md)). The 1-in-6 did not reproduce.
 
 # Follow-up measurements
 

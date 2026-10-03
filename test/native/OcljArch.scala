@@ -83,6 +83,19 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
     */
   override def initialize(): Boolean = {
     if (!super.initialize()) return false
+    // OCLJ_JIT_EARLY=off -- HARNESS ONLY, the capacity probe's control arm.
+    // The compiler off before the kernel's first resume, so kernelMemory,
+    // which OC takes after kernel init, holds no trace metadata (in the
+    // default arm it holds the ~200 traces the bogomips loop and the sandbox
+    // build compile, which the pressure flush can later hand back as user
+    // headroom).  OcljSmoke switches it back on once kernelMemory is taken
+    // unless OCLJ_JIT=off.  The mod has no such switch.
+    if (Option(System.getenv("OCLJ_JIT_EARLY")).map(_.trim).getOrElse("") == "off") {
+      val l0 = OCLuaJITArchitecture.luaOf(this)
+      l0.load(new java.io.ByteArrayInputStream("jit.off() jit.flush()".getBytes("UTF-8")), "=jitearly", "t")
+      l0.call(0, 0)
+      System.err.println("[ocljit] OCLJ_JIT_EARLY=off: jit.off() + jit.flush() before kernel init")
+    }
     // The state exists and eris is open (openLibs): set the for-in diagnostic
     // mode HERE, before the kernel swap, so both branches below get it.  The
     // mod does the same at the same point (LuaJITArchitecture.initialize).

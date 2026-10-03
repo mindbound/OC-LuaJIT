@@ -1,0 +1,106 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = /c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-windows-x86_64.dll (832530 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +0s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +1s  LuaStateLuaJIT compiled
+[smoke] +3s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-D/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-D/work/libdir-additive
+patch-machine-lua: ok  46451 -> 53561 bytes, 12 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-D/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+CENSUS| =============== MineOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b3c2bf14-9324-494a-a9cb-2700e7c43afc\scratchpad\ramscale\runs\census-mineos-D\os\MineOS-installed
+CENSUS|     boot        = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-D/os/MineOS-installed/EFI/Minified.lua
+CENSUS|     entries     = .github, .gitignore, Applications, EFI, Icons, Installer, Libraries, LICENSE, Localizations, OS.lua, README-ru_RU.md, README-zh_CN.md, README.md, Users, Wallpapers
+CENSUS|     native      = additive
+CENSUS|     ticks       = 14000
+2026-10-03T19:35:28.427Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-03T19:35:28.471Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-03T19:35:28.503Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+CENSUS| ADDITIVE ARM: pinned to ocljit.arch.OCLuaJITArchitecture (LuaStateLuaJIT,
+CENSUS| libjnluajit52).  OpenComputers' own PUC 5.2 native is loaded alongside it.
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+CENSUS|     ram         = 2 x ExtendedTier.ThreeHalf = 2048 KB advertised
+CENSUS|     boot fs     = c81a5b13-0330-47cd-848b-1c238f8652bc
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = ocljit.arch.OCLuaJITArchitecture
+CENSUS| coexistence    = OpenComputers' own LuaState reports <stock PUC>   (expected <stock PUC>)
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 4178707 B   kernelMemory = 403833 B
+CENSUS| PEAK USED      = 1031222 B REAL   (min free 3147485 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = arms=0 collects=0 bailouts=0 refusals=0 armed=false trace_flushes=0
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 793 non-blank glyphs, 3 distinct cell colours
+CENSUS| ---------------- SCREEN [MineOS] ----------------
+
+
+
+
+
+
+
+
+
+
+                                                                          MineOS EFI
+
+                                     /Libraries/Filesystem.lua:661: /Libraries/Color.lua:63: attempt to call a nil value
+                                                                       stack traceback:
+                                                                [C]: in function 'errorCapture'
+                                                             machine:863: in function <machine:859>
+                                                             /Libraries/Color.lua:63: in main chunk
+                                                                [C]: in function 'errorCapture'
+                                                               machine:869: in function 'xpcall'
+                                                      /Libraries/Filesystem.lua:656: in function 'dofile'
+                                                              /OS.lua:85: in function 'UIRequire'
+                                                                   /OS.lua:145: in main chunk
+                                                                [C]: in function 'errorCapture'
+                                                               machine:869: in function 'xpcall'
+                                                                    bios:1: in function 'C'
+                                                                    bios:1: in function 'D'
+                                                                     bios:1: in main chunk
+                                                                       stack traceback:
+                                                                [C]: in function 'errorCapture'
+                                                             machine:863: in function <machine:859>
+                                                                    [C]: in function 'error'
+                                                      /Libraries/Filesystem.lua:661: in function 'dofile'
+                                                              /OS.lua:85: in function 'UIRequire'
+                                                                   /OS.lua:145: in main chunk
+                                                                [C]: in function 'errorCapture'
+                                                               machine:869: in function 'xpcall'
+                                                                    bios:1: in function 'C'
+                                                                    bios:1: in function 'D'
+                                                                     bios:1: in main chunk
+
+
+
+
+
+
+
+
+
+
+
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+[smoke] +218s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-mineos-D/work/smoke.log
+CENSUS PASS -- the system ran to the tick limit on the pinned architecture, without error.

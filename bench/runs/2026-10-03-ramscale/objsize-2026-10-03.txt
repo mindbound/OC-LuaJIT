@@ -1,0 +1,48 @@
+=== lua52/lua52.exe
+SIZE| empty table {}                     n=20000      56.00 B/obj   (count unsettled)
+SIZE| array table, 4 numbers             n=20000     120.00 B/obj
+SIZE| array table, 16 numbers            n=5000      312.00 B/obj
+SIZE| array table, 256 numbers (grown)   n=500      4152.10 B/obj
+SIZE| hash table, 4 string keys          n=20000     216.00 B/obj
+SIZE| hash table, 16 string keys         n=5000      696.01 B/obj
+SIZE| string, 8 bytes (unique)           n=20000      45.90 B/obj
+SIZE| string, 32 bytes (unique)          n=20000      68.47 B/obj   (count unsettled)
+SIZE| string, 256 bytes (unique)         n=5000      275.27 B/obj   (count unsettled)
+SIZE| closure, 1 fresh upvalue           n=20000      80.00 B/obj
+SIZE| closure, 3 fresh upvalues          n=20000     176.00 B/obj
+SIZE| coroutine (suspended, fresh)       n=2000      991.90 B/obj
+SIZE| record {name=str,size=n,flags={..}} n=10000     353.70 B/obj
+SIZE| OS prototypes (openos)             files=126 (failed 1) source=358377 B  live=738862 B  2.062 B per source byte   (count unsettled)
+VM| Lua 5.2  baseline count after settle: 40665 B
+=== C:/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe -joff
+SIZE| empty table {}                     n=20000      64.00 B/obj
+SIZE| array table, 4 numbers             n=20000     104.00 B/obj
+SIZE| array table, 16 numbers            n=5000      200.00 B/obj
+SIZE| array table, 256 numbers (grown)   n=500      2120.00 B/obj
+SIZE| hash table, 4 string keys          n=20000     160.00 B/obj
+SIZE| hash table, 16 string keys         n=5000      448.00 B/obj
+SIZE| string, 8 bytes (unique)           n=20000      48.90 B/obj
+SIZE| string, 32 bytes (unique)          n=20000      72.70 B/obj   (count unsettled)
+SIZE| string, 256 bytes (unique)         n=5000      295.47 B/obj   (count unsettled)
+SIZE| closure, 1 fresh upvalue           n=20000      96.00 B/obj   (count unsettled)
+SIZE| closure, 3 fresh upvalues          n=20000     208.00 B/obj
+SIZE| coroutine (suspended, fresh)       n=2000      520.00 B/obj
+SIZE| record {name=str,size=n,flags={..}} n=10000     300.29 B/obj
+SIZE| OS prototypes (openos)             files=126 (failed 1) source=358377 B  live=506804 B  1.414 B per source byte   (count unsettled)
+VM| LuaJIT 2.1.ROLLING  baseline count after settle: 54682 B
+=== C:/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe
+SIZE| empty table {}                     n=20000      64.03 B/obj
+SIZE| array table, 4 numbers             n=20000     104.07 B/obj
+SIZE| array table, 16 numbers            n=5000      200.46 B/obj
+SIZE| array table, 256 numbers (grown)   n=500      2126.05 B/obj
+SIZE| hash table, 4 string keys          n=20000     160.05 B/obj
+SIZE| hash table, 16 string keys         n=5000      448.32 B/obj
+SIZE| string, 8 bytes (unique)           n=20000      48.95 B/obj
+SIZE| string, 32 bytes (unique)          n=20000      72.75 B/obj   (count unsettled)
+SIZE| string, 256 bytes (unique)         n=5000      295.70 B/obj   (count unsettled)
+SIZE| closure, 1 fresh upvalue           n=20000      96.02 B/obj   (count unsettled)
+SIZE| closure, 3 fresh upvalues          n=20000     208.00 B/obj
+SIZE| coroutine (suspended, fresh)       n=2000      520.27 B/obj   (count unsettled)
+SIZE| record {name=str,size=n,flags={..}} n=10000     300.45 B/obj   (count unsettled)
+SIZE| OS prototypes (openos)             files=126 (failed 1) source=358377 B  live=508048 B  1.418 B per source byte   (count unsettled)
+VM| LuaJIT 2.1.ROLLING  baseline count after settle: 78150 B

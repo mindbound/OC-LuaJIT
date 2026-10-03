@@ -1,0 +1,108 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = /c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-windows-x86_64.dll (832530 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +0s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +1s  LuaStateLuaJIT compiled
+[smoke] +3s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-D/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-D/work/libdir-additive
+patch-machine-lua: ok  46451 -> 53561 bytes, 12 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-D/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC ships 1.8; LuaJIT GC64 needs more -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+CENSUS| =============== AxisOS ===============
+CENSUS|     kernel root = C:\Users\astro\AppData\Local\Temp\claude\C--Users-astro-Downloads-OC-LuaJIT\b3c2bf14-9324-494a-a9cb-2700e7c43afc\scratchpad\ramscale\runs\census-axis-D\os\axis-os\src\kernel
+CENSUS|     boot        = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-D/os/axis-os/eeprom/boot.lua
+CENSUS|     entries     = bin, boot, dev, drivers, etc, home, kco.lua, kernel.lua, lib, opt, sys, system, usr
+CENSUS|     native      = additive
+CENSUS|     ticks       = 14000
+2026-10-03T19:28:10.951Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-03T19:28:10.996Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-03T19:28:11.028Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+CENSUS| ADDITIVE ARM: pinned to ocljit.arch.OCLuaJITArchitecture (LuaStateLuaJIT,
+CENSUS| libjnluajit52).  OpenComputers' own PUC 5.2 native is loaded alongside it.
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+CENSUS|     ram         = 1 x ExtendedTier.ThreeHalf = 1024 KB advertised
+CENSUS|     boot fs     = 679ee43a-4b95-4ce0-90a6-cef4925fb445
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = ocljit.arch.OCLuaJITArchitecture
+CENSUS| coexistence    = OpenComputers' own LuaState reports <stock PUC>   (expected <stock PUC>)
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 14000 of 14000   (running=true)
+CENSUS| totalMemory    = 2222630 B   kernelMemory = 335193 B
+CENSUS| PEAK USED      = 1655964 B REAL   (min free 566666 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = arms=37 collects=37 bailouts=0 refusals=1 armed=false trace_flushes=2
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 2632 non-blank glyphs, 8 distinct cell colours
+CENSUS| ---------------- SCREEN [AxisOS] ----------------
+[  15.5500] [ INFO ] Copyright (C) 2026 AxisOS
+[  15.5500]
+[  15.6000] [  OK  ] Pure-Lua SHA-256 loaded (/lib/sha256.lua)
+[  15.7500] [ INFO ] Kernel entering initialization sequence (Ring 0).
+[  16.3000] [  OK  ] Object Manager initialised.  Namespace: \, \Device, \DosDevices
+[  16.3000] [  OK  ] sMLTR (Synapse Message Layer Token Randomisation) active.
+[  16.9000] [  OK  ] Virtual Registry (@VT) initialised.
+[  17.3000] [  OK  ] Preemptive scheduler active  (quantum=50ms, interval=128, no debug hooks)
+[  18.1500] [ INFO ] [IPC] Kernel IPC subsystem initialized
+[  18.1500] [ INFO ] [IPC]   IRQL, DPC, Timers, Events, Mutexes, Semaphores
+[  18.1500] [ INFO ] [IPC]   Pipes, Shared Memory, Message Queues, Signals
+[  18.1500] [ INFO ] [IPC]   WaitForMultipleObjects, Process Groups
+[  18.1500] [  OK  ] Kernel IPC subsystem online (Events, Mutexes, Semaphores,
+[  18.2000] [  OK  ]   Pipes, Sections, MQueues, Signals, WaitMultiple, DPC, IRQL)
+[  18.4500] [  OK  ] Metatable Hypervisor loaded (freeze, snapshot, verify)
+[  19.3000] [  OK  ] PatchGuard loaded — will arm after boot completes
+[  19.7000] [ INFO ] [EXSi] Hardware sealing key derived (32 bytes)
+[  19.7000] [ INFO ] [EXSi] EXSi v2 initialized
+[  19.7000] [ INFO ] [EXSi]   Max enclaves: 32
+[  19.7000] [ INFO ] [EXSi]   SHA-256:      available
+[  19.7000] [ INFO ] [EXSi]   Sealing:      available
+[  19.7000] [ INFO ] [EXSi]   Data Card:    Tier 0 (Quote signing: HMAC)
+[  19.7000] [ INFO ] [EXSi]   Secure Chan:  available
+[  19.7000] [ INFO ] [EXSi]   ETT Throttle: ACTIVE (default 100/10s)
+[  19.7000] [  OK  ] EXSi Enclaved Kernel eXecution Isolation loaded
+[  19.7000] [ INFO ] [EXSi] Creating handle PRNG enclave...
+[  19.7000] [ INFO ] [EXSi] Enclave created: handle=1 MRENCLAVE=a83f68ad378e6da6... MRSIGNER=none SVN=0 owner=PID 0 (1620B)
+[  19.7000] [  OK  ] [EXSi] Handle PRNG enclave ACTIVE (MRENCLAVE=a83f68ad378e6da6...)
+[  19.7000] [  OK  ]   PRNG state is sealed inside enclave upvalues
+[  19.7000] [  OK  ]   Batch size: 64 tokens per enclave call
+[  19.7000] [ INFO ] Reading fstab from /etc/fstab.lua...
+[  19.8000] [  OK  ] Mounted root filesystem on b40e1090-01ba...
+[  19.8000] [  OK  ] Mounted root filesystem on b40e1090-01ba...
+[  19.8000] [  OK  ] Kernel process registered as PID 1
+[  19.8000] [ INFO ] Starting Ring 1 services...
+[  19.8000] [ INFO ] Creating process 2 ('/lib/pipeline_manager.lua') at Ring 1
+[  19.8000] [ PROC ] spawn image=/lib/pipeline_manager.lua parent=1 pid=2 ring=1
+[  20.2000] [  OK  ] Ring 1 Pipeline Manager started as PID 2
+[  20.2000] [ SEC  ] PatchGuard XOR key: 32 bytes from hardware RNG
+[  20.2000] [ SEC  ] [PG] PatchGuard v3 initializing...
+[  20.2000] [ SEC  ] [PG]   SHA-256: /lib/sha256 (pure Lua)
+[  20.2000] [ SEC  ] [PG]   XOR key: 32 bytes from hardware RNG
+[  20.2000] [ SEC  ] [PG]   Check rotation: 3 variants (alpha/beta/gamma)
+[  20.2000] [ SEC  ] [PG]   Syscall profiler: ACTIVE
+[  20.2000] [ SEC  ] [PG] Taking snapshot...
+[  20.3000] [ SEC  ] [PG] Tier1: syscall table, overrides, self, rings...
+[  20.3500] [ SEC  ] [PG] Tier2: frozen libs, OB namespace...
+[SECURE BOOT FAILURE [PG] Tier3: SecureBoot, EEPROM...
+[PANIC: not enough memory Tier3-files: initial hash...
+[  20.5000] [ SEC  ] [PG] Tier3-files: hashing 22 files (XOR key: active, 32B)...
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: PANIC OR OOM ON SCREEN  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+  java exit=1 (124 = timed out)
+  panic text on screen
+[smoke] +218s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/ramscale/runs/census-axis-D/work/smoke.log
+CENSUS FAIL
