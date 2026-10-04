@@ -366,7 +366,8 @@ static int churn_cf(lua_State *L) {
   for (i = 1; i <= a->max; i++) {
     lua_createtable(L, a->asize, 0);
     lua_pop(L, 1);
-    if (GC_COLLECTS(L) > a->until) { a->steps = i; return 0; }
+    a->steps = i;                       /* kept current: a refusal reports how far it got */
+    if (GC_COLLECTS(L) > a->until) return 0;
   }
   a->steps = i - 1;
   return 0;
@@ -409,6 +410,63 @@ static const char *TRACE_CHUNK =
 static const char *ARM_DISARM =
   "local t = _OCLJ_WATCHDOG.arm(3600, function() end, true) "
   "_OCLJ_WATCHDOG.disarm(t)";
+
+/* ---- the collector at the wall (the W cases) ------------------------------
+ * _OCLJ_GCSTATS positions the earlier cases do not read, and _OCLJ_WALLSTATS
+ * (docs/roadmap.md, "THE COLLECTOR AT THE WALL"): its 4th value counts parked
+ * arms restarted.  Every WALL value reads -1 on a shim older than 2026-10-04. */
+#define GC_GTOTAL(L)        statn(L, "_OCLJ_GCSTATS", 6)
+#define GC_THRESH(L)        statn(L, "_OCLJ_GCSTATS", 7)
+#define GC_STEPMUL(L)       statn(L, "_OCLJ_GCSTATS", 8)
+#define GC_STATE(L)         statn(L, "_OCLJ_GCSTATS", 9)
+#define WALL_PARKRESETS(L)  statn(L, "_OCLJ_WALLSTATS", 4)
+/* lj_gc.h's GC states, by value (the shim spells GCSpause as 0 too). */
+#define W_GCSPAUSE 0
+#define W_GCSSWEEP 4
+
+/* A fresh state as LuaStateLuaJIT makes one: the capped constructor, the
+ * JavaState bound, the cap handed to the native side (C mode), the libraries
+ * open.  With handover = 0 it stays on the legacy path, as the dropin's
+ * states do for their whole life. */
+static lua_State *w_newstate(FakeState *s, jint total, int handover) {
+  lua_State *W = luaL_newstate();
+  if (!W) return NULL;
+  memset(s, 0, sizeof *s);
+  s->total = total;
+  lua_setallocf(W, NULL, W);
+  bind_javastate(W, (void *)s);
+  if (handover) j_settotal(W, s, total);
+  luaL_openlibs(W);
+  /* Keep "_OCLJ_WALLSTATS" interned.  On a shim that does not define it,
+   * lua_getglobal would intern the name afresh -- an allocation -- and at an
+   * exhausted cap that is a refusal in a bare C frame, which kills the test
+   * (it did, the first time the wall cases ran against the previous object). */
+  lua_pushliteral(W, "_OCLJ_WALLSTATS");
+  lua_setfield(W, LUA_REGISTRYINDEX, "__wallname");
+  return W;
+}
+
+/* Set the cap the way Java does in either mode. */
+static void w_setcap(lua_State *W, FakeState *s, long long cap, int handover) {
+  if (handover) j_settotal(W, s, (jint)cap);
+  else s->total = (jint)cap;
+}
+
+/* One lua_createtable of `narray` slots under cpcall: the status, and the
+ * table left on the stack when it succeeded (keep = 1) or popped. */
+typedef struct { int narray; int keep; } WTab;
+static int w_tab_cf(lua_State *L) {
+  WTab *a = (WTab *)lua_touserdata(L, 1);
+  lua_createtable(L, a->narray, 0);
+  if (a->keep) { lua_setfield(L, LUA_REGISTRYINDEX, "__wkeep"); }
+  else lua_pop(L, 1);
+  return 0;
+}
+static int w_tab(lua_State *L, int narray, int keep) {
+  WTab a;
+  a.narray = narray; a.keep = keep;
+  return lua_cpcall(L, w_tab_cf, &a);
+}
 
 int main(void) {
   lua_State *L;
@@ -977,6 +1035,87 @@ int main(void) {
       lua_close(F);                     /* -> lj52_close: no record, a plain close */
       lua_close(U);
     }
+  }
+
+  /* ==================================================================
+   * W: THE COLLECTOR AT THE WALL (docs/roadmap.md; bench/results-ramscale-
+   * 2026-10-03.md).  Each case on its own fresh state, in C mode unless it
+   * says legacy.  Written to FAIL on the shim of 2026-10-03 (cb29485d) and
+   * seen to, before any pass counted.
+   * ================================================================== */
+  {
+    FakeState WS;
+    lua_State *W;
+    long long cap, u0;
+    double coll0, bail0, arms0, st9, thr, gtot, steps;
+    int round, st2;
+
+    /* ---- W5: the parked collector (P3) ------------------------------- */
+    /* An arm that lands while the collector sweeps: the next checkpoint
+     * finishes the OLD cycle without atomic(), stops at the pause with the
+     * threshold at 2 x estimate, and the white has not flipped, so the record
+     * stays armed.  With the live set over half the cap nothing reaches that
+     * threshold again: the collector is parked until the 65 536-call valve. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W5: no state\n"); return 1; }
+    runstr(W, "local t = {} for i = 1, 10000 do t[i] = {i} end __live5 = t");
+    runstr(W, "for i = 1, 1500 do local x = {i} end");
+    lua_settop(W, 0);
+    for (round = 0; round < 200000 && GC_STATE(W) != W_GCSSWEEP; round++)
+      lua_gc(W, LUA_GCSTEP, 0);
+    u0 = j_used(W, &WS);
+    cap = u0 + 200 * 1024;              /* headroom under the watermark */
+    w_setcap(W, &WS, cap, 1);
+    st9 = GC_STATE(W);                  /* read BEFORE the arm: reading it after */
+    arms0 = GC_ARMS(W);                 /* one w_tab already sees the pause     */
+    /* Each w_tab is two allocator calls: lua_cpcall's closure, which arms in
+     * the sweep, then lua_createtable's checkpoint, which ends the OLD cycle
+     * at the pause, then its table.  Two of them cover the case where the
+     * closure is not the arming call. */
+    w_tab(W, 0, 0);
+    w_tab(W, 0, 0);
+    thr = GC_THRESH(W); gtot = GC_GTOTAL(W);
+    sprintf(d, "state %.0f before; arms %.0f -> %.0f; after two checkpoints: state %.0f, armed %.0f, stepmul %.0f, "
+            "threshold %.0f vs gc.total %.0f, park resets %.0f",
+            st9, arms0, GC_ARMS(W), GC_STATE(W), GC_ARMED(W), GC_STEPMUL(W), thr, gtot, WALL_PARKRESETS(W));
+    ok(st9 == W_GCSSWEEP && GC_ARMS(W) > arms0 && (thr <= gtot || GC_ARMED(W) == 0)
+         && WALL_PARKRESETS(W) >= 1,
+       "W5a an arm in the sweep does not leave the collector parked", d);
+    /* 1.28 MB of 64 B garbage through 200 KB of headroom, over 1 MB live:
+     * LuaJIT's own threshold (2 x the estimate) is past the cap, so only the
+     * emergency cycle can collect it.  Parked, nothing does until the cap. */
+    coll0 = GC_COLLECTS(W); bail0 = GC_BAILOUTS(W);
+    steps = churn(W, 0, 1e18, 20000, &st);
+    sprintf(d, "20000 x 64 B: status %d (LUA_ERRMEM=%d) after %.0f steps; collects %.0f -> %.0f, bailouts %.0f -> %.0f",
+            st, LUA_ERRMEM, steps, coll0, GC_COLLECTS(W), bail0, GC_BAILOUTS(W));
+    ok(st == 0 && GC_COLLECTS(W) > coll0 && GC_BAILOUTS(W) == bail0,
+       "W5b and the churn after it collects, never refused", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* W5c: the valve must count attempts, not the armed cycle's own sweep. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W5c: no state\n"); return 1; }
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCSTOP, 0);
+    /* 6.4 MB of garbage, uncollected.  Interpreted: compiled, the table is
+     * sunk and the loop allocates nothing (the first draft of this case
+     * passed on the previous object for exactly that reason). */
+    runstr(W, "jit.off() for i = 1, 100000 do local x = {} end jit.on()");
+    lua_settop(W, 0);
+    u0 = j_used(W, &WS);
+    w_setcap(W, &WS, u0 + 100 * 1024, 1);
+    lua_gc(W, LUA_GCRESTART, 0);
+    coll0 = GC_COLLECTS(W); bail0 = GC_BAILOUTS(W);
+    st = try_tables(W, 2);
+    st2 = try_tables(W, 2);
+    sprintf(d, "%ld B held, then an armed cycle: statuses %d/%d, collects %.0f -> %.0f, bailouts %.0f -> %.0f",
+            (long)u0, st, st2, coll0, GC_COLLECTS(W), bail0, GC_BAILOUTS(W));
+    ok(GC_BAILOUTS(W) == bail0 && GC_COLLECTS(W) > coll0,
+       "W5c a sweep that frees 100000 blocks is not a bailout", d);
+    clear_javastate(W);
+    lua_close(W);
+
   }
 
   /* M9 -- the M state never handed over, and nothing in the shim does it

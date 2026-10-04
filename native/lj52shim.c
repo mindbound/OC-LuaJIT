@@ -267,6 +267,8 @@ typedef struct lj52_mem {
   volatile long gc_collects;   /* arms that were PROVEN to complete a cycle   */
   volatile long gc_bailouts;   /* arms abandoned by the safety valve          */
   volatile long gc_refusals;   /* allocations refused -> lj_err_mem           */
+  int           gc_moved;      /* the collector left GCSpause since the arm   */
+  volatile long gc_parkresets; /* parked arms restarted; THE PARK RESET below */
   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
   int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
                                   /* flush at the next safe point (wd_arm)    */
@@ -278,7 +280,12 @@ typedef struct lj52_mem {
 static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
 /* Defined below the LuaJIT-internal includes -- it needs G(), LJ_MAX_MEM and
  * HOOK_GC -- but called from lj52_alloc, which is above them. */
-static void lj52_gc_pressure(lj52_mem *M, long long total, long long used);
+static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int kind);
+/* What an allocator call was, for lj52_gc_pressure.  Only ATTEMPTS to grow
+ * count toward the safety valve: see THE VALVE COUNTS ATTEMPTS below. */
+#define LJ52_GP_FREE 0                  /* a free or a shrink               */
+#define LJ52_GP_GROW 1                  /* a growth that was granted        */
+#define LJ52_GP_TRY  2                  /* a growth that was refused        */
 
 /* The record for L, or NULL for a state this shim did not create. */
 static lj52_mem *lj52_memof(lua_State *L) {
@@ -370,20 +377,20 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     int acct = M->accounting && M->total > 0;
     if (nsize == 0) {
       /* BEFORE the free, as below: the disarm check wants the post-free heap. */
-      if (acct) lj52_gc_pressure(M, M->total, M->used + delta);
+      if (acct) lj52_gc_pressure(M, M->total, M->used + delta, LJ52_GP_FREE);
       lj52_back(M, ptr, osize, 0);
       M->used += delta;
       return NULL;
     }
     if (acct && delta > 0 && !M->norefuse && M->total - M->used < delta) {
       M->gc_refusals++;
-      lj52_gc_pressure(M, M->total, M->used);
+      lj52_gc_pressure(M, M->total, M->used, LJ52_GP_TRY);
       return NULL;                      /* -> lj_err_mem -> LUA_ERRMEM */
     }
     p = lj52_back(M, ptr, osize, nsize);
     if (p != NULL) {
       M->used += delta;
-      if (acct) lj52_gc_pressure(M, M->total, M->used);
+      if (acct) lj52_gc_pressure(M, M->total, M->used, delta > 0 ? LJ52_GP_GROW : LJ52_GP_FREE);
     }
     return p;
   }
@@ -431,7 +438,7 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     /* BEFORE the free, not after: a free is the one call that can take us back
      * under the watermark, and the disarm check wants to see the heap as the
      * VM will see it at the next safepoint. */
-    lj52_gc_pressure(M, total, used + delta);
+    lj52_gc_pressure(M, total, used + delta, LJ52_GP_FREE);
     lj52_back(M, ptr, osize, 0);
     M->setmem(env, obj, lj52_clampi(used + delta));
     M->used += delta;
@@ -443,14 +450,14 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
      * this refusal is survivable.  A refusal with gc_arms == 0 means the
      * trip-wire never fired and is a bug here, not a volume failure. */
     M->gc_refusals++;
-    lj52_gc_pressure(M, total, used);
+    lj52_gc_pressure(M, total, used, LJ52_GP_TRY);
     return NULL;                        /* -> lj_err_mem -> LUA_ERRMEM */
   }
   p = lj52_back(M, ptr, osize, nsize);
   if (p != NULL) {
     M->setmem(env, obj, lj52_clampi(used + delta));
     M->used += delta;
-    lj52_gc_pressure(M, total, used + delta);
+    lj52_gc_pressure(M, total, used + delta, delta > 0 ? LJ52_GP_GROW : LJ52_GP_FREE);
   }
   return p;
 }
@@ -859,6 +866,43 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  * at least the metadata; a garbage hold that a cycle DOES resolve never sets
  * the flag.  Both were first run against the shim before this section
  * existed, and the flush half failed there.
+ *
+ * THE PARK RESET (2026-10-04; docs/roadmap.md, "the collector at the wall").
+ * An arm that lands while the collector sweeps -- GCSsweepstring, GCSsweep or
+ * GCSfinalize, the normal state to arm from, per the paragraph on GCSpause
+ * above -- is honoured by the next checkpoint only up to the END OF THE OLD
+ * CYCLE: gc_onestep reaches GCSpause from the sweep without atomic(), and
+ * lj_gc_step then returns with threshold = 2 x estimate (lj_gc.c:742).  The
+ * white has not flipped, so the latch stays armed, stepmul stays 0 -- and
+ * with the live set over half the cap, gc.total never reaches that threshold
+ * again before the cap: no checkpoint fires, the collector is PARKED, and the
+ * machine is refused at the wall with its garbage uncollected until the
+ * valve below gives up or the kernel's own collect runs.  mem_test W5a/W5b
+ * reproduce it against the previous object: armed, state 0, stepmul 0,
+ * threshold twice gc.total, and a 64-byte churn refused after 3195 tables
+ * with not one collection.
+ *
+ * So in the armed branch: at GCSpause, the white unchanged, and the
+ * threshold past gc.total, write threshold = gc.total again.  That is the
+ * arm's own intent restored, and the next checkpoint starts a FRESH cycle at
+ * stepmul 0, which does pass through atomic() and is proven by the latch.
+ * It cannot fire inside a step: the only allocator calls a step makes are
+ * lj_str_resize in GCSsweepstring/GCSsweep, before the state reaches
+ * GCSpause, and lj_buf_shrink in atomic(); finalizers return early on
+ * HOOK_GC.  It fires only once the collector has been seen OUTSIDE GCSpause
+ * since the arm (gc_moved): an arm made AT the pause, followed by a free --
+ * lj_tab_resize allocates the new hash part and frees the old one -- leaves
+ * gc.total under the arm's threshold too, and that is not a park, only a
+ * free.  The same rule ends the two-flip alias mem_test's settle_gc works
+ * around (two full collections while armed flip the white back to the
+ * latched value), whenever any allocator call saw the collector mid-cycle.
+ *
+ * THE VALVE COUNTS ATTEMPTS.  LJ52_GC_ARMCAP counts allocator calls that
+ * try to GROW (granted or refused), never frees or shrinks.  An armed cycle
+ * that sweeps more than 65 536 dead blocks -- one sweep of a machine full of
+ * garbage -- used to trip it from its own frees and report a bailout, the
+ * signal reserved for a latch that is not seeing its flip (mem_test W5c:
+ * 100 000 garbage tables, bailouts 0 -> 1 on the previous object).
  */
 
 #define LJ52_GC_WMIN   (128 * 1024)     /* watermark floor                   */
@@ -877,7 +921,23 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  * "Order matters." */
 #define LJ52_GCS_PAUSE 0
 
-static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
+/* ARM: demand one whole cycle at the next checkpoint.  stepmul 0 makes
+ * lj_gc_step's budget LJ_MAX_MEM; threshold = gc.total, NOT 0 (see above).
+ * The white is latched for the proof, the state for THE PARK RESET.  The
+ * allocator and the flush at the safe point both arm through here. */
+static void lj52_gc_arm(lj52_mem *M, global_State *g)
+{
+  M->gc_savedmul = g->gc.stepmul;
+  M->gc_white    = g->gc.currentwhite;
+  g->gc.stepmul  = 0;
+  g->gc.threshold = g->gc.total;
+  M->gc_moved = g->gc.state != LJ52_GCS_PAUSE;
+  M->gc_armed = 1;
+  M->gc_armedcalls = 0;
+  M->gc_arms++;
+}
+
+static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int kind)
 {
   global_State *g;
   long long headroom, w;
@@ -900,6 +960,7 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
   }
 
   if (M->gc_armed) {
+    if (g->gc.state != LJ52_GCS_PAUSE) M->gc_moved = 1;
     if (g->gc.currentwhite != M->gc_white && g->gc.state == LJ52_GCS_PAUSE) {
       if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
       M->gc_armed = 0;
@@ -913,15 +974,25 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
       w = total / 4;
       if (w < LJ52_GC_WMIN) w = LJ52_GC_WMIN;
       if (total - used < w) M->gc_flush_wanted = 1;
-    } else if (++M->gc_armedcalls > LJ52_GC_ARMCAP) {
-      /* The safety valve.  While armed, EVERY lj_gc_step from any site is
-       * unbounded, so the window must not be allowed to persist if the latch
-       * somehow never resolves.  A nonzero bailouts count is a bug in this
-       * code, not a tuning signal: it means the white flip is not being seen
-       * and the disarm argument needs re-deriving. */
-      if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
-      M->gc_armed = 0;
-      M->gc_bailouts++;
+    } else {
+      if (M->gc_moved && g->gc.state == LJ52_GCS_PAUSE && g->gc.threshold > g->gc.total) {
+        /* THE PARK RESET: the old cycle ended without atomic(); start a
+         * fresh one at the next checkpoint.  See above. */
+        g->gc.threshold = g->gc.total;
+        M->gc_moved = 0;
+        M->gc_parkresets++;
+      }
+      if (kind != LJ52_GP_FREE && ++M->gc_armedcalls > LJ52_GC_ARMCAP) {
+        /* The safety valve.  While armed, EVERY lj_gc_step from any site is
+         * unbounded, so the window must not be allowed to persist if the
+         * latch somehow never resolves.  A nonzero bailouts count is a bug
+         * in this code, not a tuning signal: it means the white flip is not
+         * being seen and the disarm argument needs re-deriving.  Attempts
+         * only: see THE VALVE COUNTS ATTEMPTS. */
+        if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
+        M->gc_armed = 0;
+        M->gc_bailouts++;
+      }
     }
     M->gc_busy = 0;
     return;
@@ -930,15 +1001,7 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used)
   w = total / 4;
   if (w < LJ52_GC_WMIN) w = LJ52_GC_WMIN;
   headroom = total - used;
-  if (headroom < w) {
-    M->gc_savedmul = g->gc.stepmul;
-    M->gc_white    = g->gc.currentwhite;
-    g->gc.stepmul  = 0;                 /* -> lim = LJ_MAX_MEM: a whole cycle */
-    g->gc.threshold = g->gc.total;      /* NOT 0 -- see the comment above     */
-    M->gc_armed = 1;
-    M->gc_armedcalls = 0;
-    M->gc_arms++;
-  }
+  if (headroom < w) lj52_gc_arm(M, g);
   M->gc_busy = 0;
 }
 
@@ -990,15 +1053,7 @@ static void lj52_gc_flushtraces(lua_State *L, lj52_mem *M)
    * and latching it as gc_savedmul would make the disarm restore 0 -- and
    * under a host GCSTOP (threshold parked at LJ_MAX_MEM), which the VM
    * owns; both are the allocator's own rules. */
-  if (!M->gc_armed && g->gc.threshold != LJ_MAX_MEM) {
-    M->gc_savedmul = g->gc.stepmul;
-    M->gc_white    = g->gc.currentwhite;
-    g->gc.stepmul  = 0;
-    g->gc.threshold = g->gc.total;
-    M->gc_armed = 1;
-    M->gc_armedcalls = 0;
-    M->gc_arms++;
-  }
+  if (!M->gc_armed && g->gc.threshold != LJ_MAX_MEM) lj52_gc_arm(M, g);
 }
 
 #define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
@@ -1621,6 +1676,25 @@ static int lj52_gcstats(lua_State *L) {
   return 20;
 }
 
+/* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets
+ *
+ * The collector at the wall (docs/roadmap.md).  park_resets counts parked
+ * arms restarted (THE PARK RESET, in the collector section).  The 192 KB
+ * machines measured read 0, idle and through every fill (bench/results-
+ * wall-2026-10-04.md); a count that moves is a park the reset caught.  The
+ * first three belong to the bounded credit at the cap and read 0 in a shim
+ * without one.  A separate global, not more _OCLJ_GCSTATS positions: twenty values
+ * is LUA_MINSTACK, which is what lets that one push without a checkstack.
+ * Read-only, allocates nothing, raw global -- the sandbox never sees it. */
+static int lj52_wallstats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  lua_pushinteger(L, M ? 0 : -1);
+  lua_pushinteger(L, M ? 0 : -1);
+  lua_pushinteger(L, M ? 0 : -1);
+  lua_pushinteger(L, M ? M->gc_parkresets : -1);
+  return 4;
+}
+
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
 static void lj52_wd_install(lua_State *L) {
   lua_createtable(L, 0, 2);
@@ -1637,6 +1711,8 @@ static void lj52_wd_install(lua_State *L) {
   lua_setglobal(L, "_OCLJ_JITSTATS");
   lua_pushcclosure(L, lj52_gcstats, 0);
   lua_setglobal(L, "_OCLJ_GCSTATS");
+  lua_pushcclosure(L, lj52_wallstats, 0);
+  lua_setglobal(L, "_OCLJ_WALLSTATS");
 }
 
 /* lua_close does not free the record, so we do -- after making sure no timer

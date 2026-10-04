@@ -44,7 +44,33 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_SHIM:=$OCLJ_REPO/native}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
 : "${CC:=gcc}"
-LJ=$OCLJ_BUILD/luajit/src
+# THE SAME PLATFORM FACTS build-native.sh DERIVES (run-mem.sh, run-wd.sh):
+# the objects live in per-platform directories.  This script still named
+# $OCLJ_BUILD/luajit/src and $OCLJ_BUILD/obj after the per-platform move, so
+# it stopped at "run build-native.sh first" against a complete build and ran
+# only through a scratch mirror of the old layout (2026-10-03); fixed
+# 2026-10-04, before the collector-at-the-wall sabotages joined its memory
+# half.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT) OCLJ_OS=windows ;;
+  Linux)   OCLJ_OS=linux   ;;
+  Darwin)  OCLJ_OS=darwin  ;;
+  *) echo "NEGATIVE CONTROL SETUP FAIL: unsupported host system $(uname -s)" >&2; exit 2 ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)  OCLJ_ARCH=x86_64  ;;
+  aarch64|arm64) OCLJ_ARCH=aarch64 ;;
+  *) echo "NEGATIVE CONTROL SETUP FAIL: unsupported machine $(uname -m)" >&2; exit 2 ;;
+esac
+PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
+case $OCLJ_OS in
+  windows) JNI_MD=win32 ;;
+  darwin)  JNI_MD=darwin ;;
+  *)       JNI_MD=$OCLJ_OS ;;
+esac
+: "${OCLJ_JNI:=}"
+LJ=$OCLJ_BUILD/luajit-$PLATFORM/src
+OBJ=$OCLJ_BUILD/obj-$PLATFORM
 WORK=$OCLJ_BUILD/negctl
 
 bad=0
@@ -55,7 +81,8 @@ verdict() {  # verdict <ok?> <text>
 }
 
 [ -f "$LJ/libluajit.a" ]           || fail "no $LJ/libluajit.a -- run build-native.sh first"
-[ -f "$OCLJ_BUILD/obj/eris_lj.o" ] || fail "no eris_lj.o -- run build-native.sh first"
+[ -f "$OBJ/eris_lj.o" ]            || fail "no $OBJ/eris_lj.o -- run build-native.sh first"
+[ -n "$OCLJ_JNI" ] && [ -f "$OCLJ_JNI/jni.h" ] || fail "OCLJ_JNI must name a JDK include dir containing jni.h"
 [ -f "$OCLJ_SHIM/lj52shim.c" ]     || fail "no $OCLJ_SHIM/lj52shim.c"
 
 rm -rf "$WORK"
@@ -68,10 +95,10 @@ mkdir -p "$WORK" || fail "cannot create $WORK"
 build_variant() {
   v=$1
   d=$WORK/$v
-  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
-  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -include "$d/lj52shim.h" \
-    "$SELF_DIR/security_test.c" "$d/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
+    "$SELF_DIR/security_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
     "$LJ/libluajit.a" -lm -o "$d/security_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: security_test.c did not link"; }
 }
@@ -249,10 +276,10 @@ expect le51 "5.1 __le semantics are caught" 1 LE1 LE2 LE3 LE4
 build_variant_mem() {
   v=$1
   d=$WORK/$v
-  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
-  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -include "$d/lj52shim.h" \
-    "$SELF_DIR/mem_test.c" "$d/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
+    "$SELF_DIR/mem_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
     "$LJ/libluajit.a" -lm -o "$d/mem_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: mem_test.c did not link"; }
 }
@@ -340,8 +367,12 @@ build_variant_mem stopgap
 # M3c, M9, C0b, C0d, C3a, C4b, C5a, C5b, C6  (since the accounting's C side,
 #      2026-10-03) the native figure and Java's no longer agree, nothing crosses
 #      JNI, and in C mode too nothing is refused and no cycle arms
+# W5a, W5b, W5c  (since the collector at the wall, 2026-10-04) the same: an
+#      uncharged state never arms, so there is no cycle to park, restart or
+#      prove
 expect_mem stopgap "a discarded allocator swap is caught" 1 \
-  M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a C5b C6
+  M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a C5b C6 \
+  W5a W5b W5c
 
 
 # --- 4.2 nopending: drop the pre-binding bytes instead of banking them
@@ -387,6 +418,33 @@ grep -q '^  (void)M;$' "$WORK/norefuse/lj52shim.c" \
 build_variant_mem norefuse
 expect_death norefuse "without the window, a bare-frame push KILLS THE PROCESS"
 
+# --- 4.4 nopark: the collector at the wall's park reset removed (P3,
+#     2026-10-04).  An arm that lands in the sweep is honoured only to the
+#     end of the old cycle, and the record stays armed with the threshold at
+#     2 x estimate: parked.
+mkdir -p "$WORK/nopark"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/nopark/"
+sed -i 's|^      if (M->gc_moved \&\& g->gc.state == LJ52_GCS_PAUSE \&\& g->gc.threshold > g->gc.total) {$|      if (0) {  /* sabotage: no park reset */|' \
+  "$WORK/nopark/lj52shim.c"
+grep -q 'sabotage: no park reset' "$WORK/nopark/lj52shim.c" \
+  || fail "nopark: the sabotage patch did not apply -- the park reset has been reworded"
+build_variant_mem nopark
+# W5a the record stays armed at the pause, threshold twice gc.total
+# W5b and the churn after it is refused with no collection at all
+expect_mem nopark "a parked collector is caught" 1 W5a W5b
+
+# --- 4.5 freescount: the safety valve counting frees again (P3).  An armed
+#     sweep that frees more than LJ52_GC_ARMCAP blocks trips it on its own.
+mkdir -p "$WORK/freescount"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/freescount/"
+sed -i 's|^      if (kind != LJ52_GP_FREE \&\& ++M->gc_armedcalls > LJ52_GC_ARMCAP) {$|      if (++M->gc_armedcalls > LJ52_GC_ARMCAP) {  /* sabotage: frees counted */|' \
+  "$WORK/freescount/lj52shim.c"
+grep -q 'sabotage: frees counted' "$WORK/freescount/lj52shim.c" \
+  || fail "freescount: the sabotage patch did not apply -- the valve has been reworded"
+build_variant_mem freescount
+# W5c 100 000 dead blocks swept by one armed cycle: a bailout, no collect
+expect_mem freescount "a valve that counts the sweep's frees is caught" 1 W5c
+
 # =====================================================================
 # 6. THE WATCHDOG.  Two sabotages, each the design's own "before" picture:
 #    one keeps OC's standing hook (the JIT thrashes), one removes the async
@@ -396,10 +454,10 @@ expect_death norefuse "without the window, a bare-frame push KILLS THE PROCESS"
 build_variant_wd() {
   v=$1
   d=$WORK/$v
-  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
-  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/win32" -include "$d/lj52shim.h" \
-    "$SELF_DIR/wd_test.c" "$d/lj52shim.o" "$OCLJ_BUILD/obj/eris_lj.o" \
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
+    "$SELF_DIR/wd_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
     "$LJ/libluajit.a" -lm -o "$d/wd_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: wd_test.c did not link"; }
 }
@@ -460,8 +518,12 @@ expect_wd wdcanon "canonical shim passes every watchdog check" 0
 # stock kernel; and W8c, because the outermost arm's promise is "no hook is
 # set when a resume starts" and a standing hook is, by construction, a hook
 # that is set; and W12, because the standing hook the sabotage installs is
-# exactly the immediate hook W12 says a huge timeout must NOT produce.  All
-# three are the sabotage doing what it says, nothing else.
+# exactly the immediate hook W12 says a huge timeout must NOT produce.  And
+# W10g (added to wd_test after this script last ran; found when it was revived
+# on 2026-10-04, and failing the same way on that day's HEAD shim): the
+# standing hook keeps calling the parent's deadline callback -- thousands of
+# calls -- where the normal path promises the parent's callback is never
+# called.  All four are the sabotage doing what it says, nothing else.
 mkdir -p "$WORK/standinghook"
 cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/standinghook/"
 sed -i 's|^  M->wd_stack\[M->wd_depth\] = lj52_wd_now() + secs \* 1000.0;$|&\n  lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000); /* sabotage: OC standing hook */|' \
@@ -469,7 +531,7 @@ sed -i 's|^  M->wd_stack\[M->wd_depth\] = lj52_wd_now() + secs \* 1000.0;$|&\n  
 grep -q 'sabotage: OC standing hook' "$WORK/standinghook/lj52shim.c" \
   || fail "standinghook: the sabotage patch did not apply -- lj52_wd_arm has been reworded"
 build_variant_wd standinghook
-expect_wd standinghook "a standing hook is caught by W6b, W8c and W12" 1 W6b W8c W12
+expect_wd standinghook "a standing hook is caught by W6b, W8c, W10g and W12" 1 W6b W8c W10g W12
 
 # --- 6.2 notimer: the timer callback never installs the hook -------------
 # Remove the asynchronous injection and nothing ever interrupts

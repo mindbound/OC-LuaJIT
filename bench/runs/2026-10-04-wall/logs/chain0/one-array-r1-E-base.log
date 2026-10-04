@@ -1,0 +1,94 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/base/libdir-additive/libjnluajit52-windows-x86_64.dll (832530 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +0s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +2s  LuaStateLuaJIT compiled
+[smoke] +5s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runs0/one-array-r1-E-base/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runs0/one-array-r1-E-base/work/libdir-additive
+patch-machine-lua: ok  46451 -> 53561 bytes, 12 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runs0/one-array-r1-E-base/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+[smoke]     OCLJ_PROBE=capacity -- boot (heartbeat-only autorun), then ONLY the capacity probe (cap-1): shape=array jitearly=off
+[smoke]     OCLJ_RAM_TIER=one -- a smaller RAM stick than the 3.5 the reference numbers were taken at
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+SMOKE| ========================================================================
+SMOKE| OC-LuaJIT smoke test -- OpenOS on LuaJIT, persist, resume
+SMOKE| java=1.8.0_504 amd64  os=Windows 11
+SMOKE| conf=C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runs0/one-array-r1-E-base/work/ocljit.conf
+2026-10-04T06:18:06.886Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-04T06:18:06.934Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-04T06:18:06.964Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+SMOKE| LuaStateFactory.isAvailable  = true
+SMOKE| LuaStateFactory.include52    = true
+SMOKE| LuaStateFactory.includeLuaJ  = false
+SMOKE| forceNativeLibPathFirst      = 'C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runs0/one-array-r1-E-base/work/libdir-additive'
+SMOKE| computer.lua.allowBytecode   = false
+SMOKE| !! OCLJ_PROBE=capacity: boot with the heartbeat-only autorun, then ONLY the capacity probe
+SMOKE| !! (shape=array; boot caps 3000/2000 ticks for EVERY kernel, so arms are scored alike).
+SMOKE| RAM tier = one (192 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+SMOKE| quarantined, not in the default suite: sieve,strings   (run one with OCLJ_BENCH_ONLY=<name>)
+SMOKE| planted 10 more .lua from bench\oc; suite = mandelbrot,binarytrees,trampoline,matmul,strings2,nqueens,sha256 x3 reps; encore = mandelbrot every 5 s
+SMOKE| planted mandelbrot.lua (1972 B) and a 120-deep directory tree
+SMOKE| hdd real path = C:\Users\astro\AppData\Local\Temp\ocljit-smoke-hdd2590283056834137416 (autorun.lua planted, 2342 bytes)
+SMOKE| architecture pinned to ocljit.arch.OCLuaJITArchitecture   (ocljit.native=additive)
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+[ocljit] OCLJ_JIT_EARLY=off: jit.off() + jit.flush() before kernel init
+SMOKE| MILESTONE a-lua-state-opens: PASS -- LuaState created after 1 ticks
+SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164393 after 2 ticks; running=true; lastError=null
+SMOKE| quiesced after 3 spins, before the VM fingerprint
+SMOKE| GUARD OK. arch=ocljit.arch.OCLuaJITArchitecture
+SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164393  totalMemory=518288  freeMemory=322815  used=195473
+SMOKE| !! raw-state read on a dirty stack: getTop=2 (expected 1) -- something else is using this state
+SMOKE| MILESTONE k0-kernel-observed: PASS -- asked for watchdog, raw _G._OCLJ_KERNEL=watchdog
+SMOKE| !! raw-state read on a dirty stack: getTop=2 (expected 1) -- something else is using this state
+SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: PASS -- _OCLJ_GCSTATS count:heap = 20:1 (want >=14:1, the state's own lj_alloc arena)
+SMOKE| MILESTONE acc-1-machine-handover: PASS -- _OCLJ_GCSTATS count=20 csync=1 native cap=518288 Java getTotalMemory=518288  (want csync 1 and the caps equal: LuaStateLuaJIT handed over)
+SMOKE| quiesced after 0 spins, before the JIT probe read-out
+SMOKE| !! raw-state read on a dirty stack: getTop=2 (expected 1) -- something else is using this state
+SMOKE| JIT PROBE: OCLJ_JIT_EARLY=off, kernelMemory taken -> jit.on() -> jit.status()=true
+SMOKE| !! raw-state read on a dirty stack: getTop=2 (expected 1) -- something else is using this state
+SMOKE| JIT PROBE: mode=on  attach -> ok
+SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+SMOKE| SCREEN AFTER BOOT (240 ticks, 8.0s, running=true):
+????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (192k RAM)                                  ?
+? Most programs can be interrupted by pressing Ctrl+Alt+C. ?
+????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+OCLJNONCE=10.3000-580274 OCLJCTR=11
+OCLJCAP=armed
+OCLJCAPT=0.0000/0.0000/0
+OCLJCAPF=-1/-1
+SMOKE| lastError = null
+SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=10.3000-580274 counter 11 -> 31 in 10 of 2000 ticks
+SMOKE| --- capacity probe: shape=array native=additive kernel=watchdog jit=on jitearly=off tier=one(192 KB) ramScale(arch)=1.8 ---
+SMOKE| CAP-IDLE| ticks=400 arms=+2416 collects=+2416 bailouts=+0 refusals=+0 trace_flushes=+19 park_resets=+n/a traces_live 18 -> 25 armed=0 state=0 stepmul=200 threshold=759000 gctotal=384416 ccap=518288 cused=384416 parked=false wallstats=absent running=true
+SMOKE| CAP-LIVE| used=380090 kernelMemory=164393 user=215697 count(3 collects)=380042/380042/380042 total=518288 traces_live=25
+SMOKE| CAP-MID| snaps=1000 stepmul0=1 parked=0 last: armed=0 state=0 stepmul=200 threshold=761200 gctotal=386355 ccap=518288 cused=386355
+SMOKE| CAPACITY| shape=array native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164393 held=? why=? t_first5=0.0540 t_last5=0.0765 batches=8 last/first=1.42 freeKB_at_end/totalKB=0/192 arms=+42275 refusals=+2 trace_flushes=+666 fill_ms=249986 queued=true running=true lastError=<null>
+SMOKE| CAP-GC| collects=+42275 bailouts=+0 overdrafts=+n/a od_peak=n/a od_state=n/a park_resets=+n/a od_limit=n/a kslice=n/a backoffs=+n/a end: armed=0 state=0 stepmul=200 threshold=768400 gctotal=386587 ccap=518288 cused=386587 parked=false
+SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: FAIL -- shape=array OCLJCAP=filling/700 running=true lastError=<null>   <- the program caught the refusal and dropped its data, then its OWN next allocation was refused (OCLJCAPF=0/192 was written, the 'done' row was not): PUC collects and retries there, we refuse
+SMOKE| FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| CHECKS: 9   FAILURES: 1   WALL: 270.7s
+SMOKE| VERDICT: FAIL
+SMOKE| ========================================================================
+[smoke] =============== 5. verdict ===============
+  java exit=1 (124 = timed out)
+  the harness did not report a passing verdict
+  failing milestones:
+    SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: FAIL -- shape=array OCLJCAP=filling/700 running=true lastError=<null>   <- the program caught the refusal and dropped its data, then its OWN next allocation was refused (OCLJCAPF=0/192 was written, the 'done' row was not): PUC collects and retries there, we refuse
+[smoke] +276s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runs0/one-array-r1-E-base/work/smoke.log
+SMOKE FAIL

@@ -1780,21 +1780,34 @@ object Smoke {
     * stand.  1-based as in Lua; index 0 holds the count; an absent value reads
     * -1, as mem_test's statn does.  The caller holds the machine's lock when
     * `lua` is a machine's. */
-  def gcstats(lua: LuaState): Array[Double] = {
-    val out = Array.fill(21)(-1.0)
+  def gcstats(lua: LuaState): Array[Double] = rawstats(lua, "_OCLJ_GCSTATS", 20)
+
+  /** Any of the shim's raw stats globals, read as gcstats reads _OCLJ_GCSTATS.
+    * Booleans read 1/0, as mem_test's statn reads them (positions 5, armed,
+    * and 11, flush_wanted, are booleans; until 2026-10-04 this reader took
+    * only numbers and they read -1, which nothing here consulted).
+    *
+    * A global the native does not define is interned afresh by getGlobal --
+    * an allocation.  jnlua runs getGlobal under lua_pcall, so a refusal there
+    * is a caught exception (out(0) = -2), not a dead JVM; but a refusal ARMS
+    * the collector, so near the cap the caller must not ask for a name the
+    * DLL lacks: see capacityProbe's wall-stats guard. */
+  def rawstats(lua: LuaState, global: String, max: Int): Array[Double] = {
+    val out = Array.fill(max + 1)(-1.0)
     if (lua == null) { out(0) = -2; return out }
     // getTop INSIDE the try, for evalStr's reason: on a closed state it throws.
     var base = -1
     try {
       base = lua.getTop
-      lua.getGlobal("_OCLJ_GCSTATS")
+      lua.getGlobal(global)
       if (lua.isFunction(-1)) {
         lua.call(0, LuaState.MULTRET)
         val n = lua.getTop - base
         out(0) = n
         var i = 1
-        while (i <= n && i <= 20) {
-          if (lua.isNumber(base + i)) out(i) = lua.toNumber(base + i)
+        while (i <= n && i <= max) {
+          if (lua.isBoolean(base + i)) out(i) = if (lua.toBoolean(base + i)) 1 else 0
+          else if (lua.isNumber(base + i)) out(i) = lua.toNumber(base + i)
           i += 1
         }
       } else out(0) = 0
@@ -1910,8 +1923,14 @@ object Smoke {
           val st0 = gcstats(s)                // before ANY setTotalMemory
           var raised = ""
           try {
+            // The fill stays reachable (__eat), so the figure read after it
+            // is the fill's.  As a local it is garbage the moment the error
+            // unwinds, and the cycle the refusal leaves armed collects it
+            // before the read below: since the park reset (2026-10-04) that
+            // cycle runs, and this check read 23 858 B.  It passed before
+            // only because the collector was parked (HEAD read 4 194 319).
             s.load(new ByteArrayInputStream(
-              "local t = {} for i = 1, 100000000 do t[i] = {i, i} end".getBytes(StandardCharsets.UTF_8)), "=eat", "t")
+              "__eat = {} local t = __eat for i = 1, 100000000 do t[i] = {i, i} end".getBytes(StandardCharsets.UTF_8)), "=eat", "t")
             s.call(0, 0)
           } catch { case t: Throwable => raised = t.getClass.getSimpleName + ": " + String.valueOf(t.getMessage) }
           try s.setTop(0) catch { case _: Throwable => }
@@ -3168,16 +3187,37 @@ object Smoke {
       " jit=" + jitMode + " jitearly=" + (if (jitEarly.isEmpty) "-" else jitEarly) +
       " tier=" + ramTierName + "(" + ramTierKB + " KB) ramScale(arch)=" + scaleNow + " ---")
     def gs(): Array[Double] = if (!ours) Array.fill(21)(-1.0) else m.synchronized { gcstats(mLua) }
+    // _OCLJ_WALLSTATS (the collector at the wall, 2026-10-04): overdrafts,
+    // od_peak, od_state, park_resets, od_limit, kernel slice, back-offs.
+    // Asked for ONCE, at idle, with room to spare; on a DLL without it every
+    // later read is skipped, because getGlobal would intern the missing name
+    // -- an allocation, which at the wall is a refusal that arms the very
+    // collector being measured.
+    var hasWall = false
+    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(9)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 8) }
     def tlive(): Int = if (!ours) -1 else jitStatsLocked(m, mLua)._5
     def d(a: Array[Double], b: Array[Double], i: Int): String =
       if (a(0) < i || b(0) < i) "n/a" else (b(i) - a(i)).toLong.toString
+    def v(a: Array[Double], i: Int): String = if (a(0) < i) "n/a" else a(i).toLong.toString
+    // The collector's own state, for the park fingerprint (armed, at the
+    // pause, threshold past gc.total, stepmul 0): armed/state/stepmul/
+    // threshold/gc.total, and the native cap and figure.
+    def gcState(a: Array[Double]): String =
+      "armed=" + v(a, 5) + " state=" + v(a, 9) + " stepmul=" + v(a, 8) + " threshold=" + v(a, 7) +
+        " gctotal=" + v(a, 6) + " ccap=" + v(a, 15) + " cused=" + v(a, 16)
+    def parked(a: Array[Double]): Boolean =
+      a(0) >= 9 && a(5) == 1 && a(9) == 0 && a(8) == 0 && a(7) > a(6)
     // 1. idle window: 400 ticks, ~10 s
-    val g0 = gs(); val tl0 = tlive()
+    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 8) }(0) > 0
+    val g0 = gs(); val w0 = ws0(); val tl0 = tlive()
     var k = 0
     while (k < 400 && m.isRunning) { ws.update(); Thread.sleep(25); k += 1 }
-    val g1 = gs(); val tl1 = tlive()
-    p("CAP-IDLE| ticks=" + k + " arms=+" + d(g0, g1, 1) + " refusals=+" + d(g0, g1, 4) +
-      " trace_flushes=+" + d(g0, g1, 10) + " traces_live " + tl0 + " -> " + tl1 + " running=" + m.isRunning)
+    val g1 = gs(); val w1 = ws0(); val tl1 = tlive()
+    p("CAP-IDLE| ticks=" + k + " arms=+" + d(g0, g1, 1) + " collects=+" + d(g0, g1, 2) +
+      " bailouts=+" + d(g0, g1, 3) + " refusals=+" + d(g0, g1, 4) +
+      " trace_flushes=+" + d(g0, g1, 10) + " park_resets=+" + d(w0, w1, 4) +
+      " traces_live " + tl0 + " -> " + tl1 + " " + gcState(g1) + " parked=" + parked(g1) +
+      " wallstats=" + (if (!ours) "n/a" else if (hasWall) "present" else "absent") + " running=" + m.isRunning)
     // 2. the live set, after three full collects (perturbing)
     val km = kernelMemoryOf(arch).toLong
     val cnt = evalStrLocked(m, mLua,
@@ -3191,19 +3231,41 @@ object Smoke {
     p("CAP-LIVE| used=" + used + " kernelMemory=" + km + " user=" + (used - km) +
       " count(3 collects)=" + cnt + " total=" + tot + " traces_live=" + tlive())
     // 3. the fill
-    val g2 = gs()
+    val g2 = gs(); val w2 = ws0()
     val tSig = System.currentTimeMillis()
     val upAtSignal = m.isRunning
     val queued = m.signal("ocljcap")
     var row = parse(nonEmptyScreen(screen), "OCLJCAP")
     var k2 = 0
+    // Snapshots of the collector at every tick from the signal until the row
+    // reads done (parsed every 8 ticks, so up to 7 after it): how often it
+    // was armed with stepmul 0, and how often it was PARKED (P3: armed at the
+    // pause, threshold past gc.total).  Every tick, because a 192 KB fill can
+    // be over in 220 ms, under one 8-tick parse.  Taken under the machine's
+    // lock, so between slices; a park persists across them.
+    // Counted only while the machine runs: after it goes down the state is
+    // whatever the crash left (chain A's first harness counted those too).
+    var snaps = 0; var snapMul0 = 0; var snapParked = 0; var snapStopped = 0
+    var lastSnap = g2
     while (k2 < 8000 && m.isRunning && !(row.startsWith("done") || row.startsWith("ERR"))) {
       ws.update(); Thread.sleep(25); k2 += 1
+      if (ours) {
+        val s = gs()
+        snaps += 1
+        if (!m.isRunning) snapStopped += 1
+        else {
+          if (s(0) >= 9 && s(8) == 0) snapMul0 += 1
+          if (parked(s)) snapParked += 1
+        }
+        lastSnap = s
+      }
       if (k2 % 8 == 0) row = parse(nonEmptyScreen(screen), "OCLJCAP")
     }
     var k3 = 0
     while (k3 < 40 && m.isRunning) { ws.update(); Thread.sleep(25); k3 += 1 }
-    val g3 = gs()
+    val g3 = gs(); val w3 = ws0()
+    p("CAP-MID| snaps=" + snaps + " stopped=" + snapStopped + " stepmul0=" + snapMul0 + " parked=" + snapParked +
+      " last: " + gcState(lastSnap))
     val txt = nonEmptyScreen(screen)
     row = parse(txt, "OCLJCAP")
     val rowT = parse(txt, "OCLJCAPT").split("/")
@@ -3223,6 +3285,12 @@ object Smoke {
       " freeKB_at_end/totalKB=" + rowF + " arms=+" + d(g2, g3, 1) + " refusals=+" + d(g2, g3, 4) +
       " trace_flushes=+" + d(g2, g3, 10) + " fill_ms=" + (System.currentTimeMillis() - tSig) +
       " queued=" + queued + " running=" + running + " lastError=" + err)
+    // Appended on its own line so CAPACITY's fields, which analyze.py parses,
+    // keep their order and their meaning.
+    p("CAP-GC| collects=+" + d(g2, g3, 2) + " bailouts=+" + d(g2, g3, 3) +
+      " overdrafts=+" + d(w2, w3, 1) + " od_peak=" + v(w3, 2) + " od_state=" + v(w3, 3) +
+      " park_resets=+" + d(w2, w3, 4) + " od_limit=" + v(w3, 5) + " kslice=" + v(w3, 6) +
+      " backoffs=+" + d(w2, w3, 7) + " end: " + gcState(g3) + " parked=" + parked(g3))
     milestone("cap-1-refusal-caught-machine-survives",
       row.startsWith("done") && why.contains("not_enough_memory") && running,
       "shape=" + capShape + " OCLJCAP=" + row + " running=" + running + " lastError=" + err +

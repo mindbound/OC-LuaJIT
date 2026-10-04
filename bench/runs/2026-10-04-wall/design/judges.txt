@@ -1,0 +1,184 @@
+
+######## JUDGE safety
+
+== shim-only overall 6
+  R1 PARTLY: The probe's recovery shape works: lj_meta_cat (lj_meta.c:382-385) and string.rep (lib_string.c:101-102) allocate before they check, so the G/2 reserve covers them. Three gaps. (1) A refused allocate-first call retried in a tight pcall loop, e.g. `while not pcall(string.rep,'x',N) do end`, never reac
+  R2 PARTLY: Hysteresis gives about 2x stock's cycle count by derivation. The RESERVE band re-arms on every grant while used > total, so a program holding data over the cap pays one full cycle per checkpoint. Nothing has been measured.
+  R3 MET: Verified that the park reset cannot fire inside a step. The only allocator calls in a step are lj_str_resize in GCSsweep (lj_gc.c:696, before the pause transition at :700) and lj_buf_shrink in atomic. Finalizers are excluded by HOOK_GC. Counting only attempts toward the valve removes false bailouts 
+  R4 PARTLY: jit.flush() leaves the J->trace vector and irbuf/snapbuf charged (lj_trace.c:276-303 against :370-373), and their size depends on how many traces recorded. The flush predicate is still `total-used<w` at each proof (S:913-915), so on a 192 KB stick, where w is the 128 KiB floor, any program whose liv
+  R5 MET: The bound is absolute: used <= total+G+~1.5 KB with G <= 512 KB. It is charged, and Java clamps free memory (gen-luastate-subclass.py:221, verified). Sandbox code cannot ratchet it. No new refusal sites.
+  R6 MET: The allocator still writes only the same two scalars as today's arm. Nothing collects in the allocator, and on-trace behaviour is unchanged.
+  R7 MET: Zero LuaJIT lines, about 80 shim lines and one kernel site. The collector gate is untouched and GCSTATS stays at 20 values.
+  R8 PARTLY: GCSTOP and GCRESTART are handled. The RESERVE state lives only in lj52_mem and is reset at load, but the over-cap live data it permitted crosses eris. A machine saved with used in (total+G/2, total+G] reloads in BURST with zero credit, which happens to any program that filled until its first OOM and
+  R9 MET: The hot path gains one compare and the kind argument. Credit is computed only on the refusal path.
+  R10 PARTLY: Fail-first tests and sabotages are planned. W2c is shaped to pass, though: its retry checks before allocating. Nothing tests an allocate-first retry or a reload over the cap, which is exactly where this design breaks.
+  R11 MET: No knob; ramScale stays inherited.
+  FATAL: The reserve credit is history that does not cross eris, while the over-cap live data it allowed does. After a reload the first allocation is refused without a collection, typically a Java signal push or the kernel's table.pack, so the machine goes down.
+  FATAL: An allocate-first call refused in a checkpoint-free retry loop spins until the deadline, because the arm only ever runs at a checkpoint. Stock collects and succeeds on the first retry.
+
+== safe-point overall 7
+  R1 PARTLY: Strongest of the three. A refusal files a REFUSE request, so a full collection runs at the next instruction boundary and an immediate retry succeeds, including the allocate-first pcall loop. The kernel band cannot be reached by sandbox threads: cur_L is restored to the resumer at vm_x64.dasc:1624, a
+  R2 PARTLY: By derivation, about 2x stock under churn plus back-off in fills. Unmeasured. A new risk: each hook inject while the recorder is active aborts the recording (callhook calls lj_trace_abort, lj_dispatch.c:372, giving RECERR and penalty_pc at lj_trace.c:604-609). At the wall, repeated requests could bl
+  R3 MET: Park reset, plus the hook disarming explicitly after its full collection, plus a backstop at arm and disarm, end every arm within one boundary or one resume. Deleting the ARMCAP valve removes an alarm, not a safety property.
+  R4 MET: jit.off() for kernel init is the mod-side form of harness arm E (OcljArch.scala:85-97), already measured deterministic at 164 393 B. hookInterval is unused by the patched kernel (patch-machine-lua.lua:141-143), so calibrating it on the interpreter is harmless. Idle thrash is handled by gc_next and b
+  R5 MET: The bound is absolute: total+33.5 KiB, a compile-time constant, charged and clamped. The kernel band does not depend on refusal history. A refusal loop costs one collection per attempt, which is PUC's rate.
+  R6 MET: Verified. lua_gc(COLLECT) runs only from a count hook, which is ordinary API use: a hook calling collectgarbage. lj_dispatch_ins fixes top, MULTRES-aware, before callhook (lj_dispatch.c:417-433). Recording is aborted. HOOK_ACTIVE excludes finalizers (lj_obj.h:683; gc_call_finalizer lj_gc.c:505-530).
+  R7 PARTLY: Zero VM lines, but about 150 shim lines and coupling to the watchdog hook (hookown, wd_fired races). The gate is deliberately re-scoped to allow exactly one lua_gc site, with g1-g3 fail-first.
+  R8 MET: Nothing needs to cross a save. A fresh record reopens credit, and the kernel band is granted whenever wd_depth==0, which is the case at the post-load Java pushes. Under GCSTOP there are no grants and atsafe defers. GCRESTART is served at the next checkpoint or arm.
+  R9 MET: The checkpoint carrier is unchanged far from the wall, and P1a is unaffected. When no request is pending, arm and disarm pay one branch, so the W6b 20 ms bound is untouched.
+  R10 MET: X1-X9 are planned to fail on cb29485d, each part has a negative control, the gate gets fail-first sabotages, and the legacy variants cover the dropin. Missing: a stress mode with a must-crash canary for the hook carrier itself, and a check for trace blacklisting at the wall.
+  R11 MET: No setting is added.
+
+== vm-faithful overall 3
+  R1 PARTLY: Exact in the interpreter. But deleting the watermark arm means that with live > cap/2 the threshold (2 x estimate) is never reached, so the heap sits at the wall full of garbage. Every borrowing-context burst larger than L is then refused even though garbage would cover it: C library functions (stri
+  R2 MET: Stock-shaped by construction: one cycle per wall event, nothing in between. Unmeasured.
+  R3 MET: The re-poke while armed, plus a valve that counts only growing calls.
+  R4 PARTLY: Same jit.flush remainder as shim-only: recorder buffers and the trace vector stay charged. The idle arm loop is structurally gone.
+  R5 PARTLY: The 2L bound is fine. Host safety now rests on a hand audit of VM C paths: any miss is a use-after-free or a wrong-top mark inside the JVM process. A concrete hole is described under R6.
+  R6 NOT MET: The collection runs inside lj_mem_realloc, which R6 forbids, as the design itself admits. The written top-raise rule ('allocating thread's top to base + cur_topslot') is wrong in two places. Fast-function C halves run under INTERP (fff_fallback sets no vmstate, vm_x64.dasc:2190-2203), so curr_func i
+  R7 NOT MET: About 70 VM lines in 9 files, plus a 25-function audit to repeat on every LuaJIT bump.
+  R8 PARTLY: The REFUSED state's 2L allowance does not cross eris, but the data it allowed does. A reload with used in (total+L, total+2L] refuses C-context allocations, including Java pushes, so the machine goes down.
+  R9 MET: The success path is untouched.
+  R10 MET: The stress gate with must-crash canaries is the right method, and it would likely surface the top-slot hole quickly.
+  R11 MET: No knob is added.
+  FATAL: As specified, the emergency's top raise uses cur_topslot on frames that are not Lua frames. Concretely: ffh_resume calls lj_state_cpgrowstack(co) under INTERP with L=co, and fast-function C halves also run under INTERP. That is a crash path reachable from the kernel's own coroutine.resume at the wall.
+  FATAL: Deleting the watermark leaves the heap full of garbage at the wall whenever live > cap/2. The documented 'burst > L in a borrowing context' residual then becomes the common case, a regression from both today and stock.
+  FATAL: It violates R6 (collection inside the allocator path) and R7 (VM patch plus an audit repeated on every LuaJIT bump).
+
+RECOMMENDATION: Build safe-point. Shim-only is safer to write but has two failures that safe-point avoids by construction: credit lost across eris, and allocate-first retries that never reach a checkpoint. vm-faithful should not be built.
+
+Order, with each stage gated by its own fail-first against cb29485d:
+
+(0) Instrument first.
+- Make the CAP-* lines print stat positions 2, 3, 5, 7, 8, 9, 15 and 16 plus the new _OCLJ_GCWALL.
+- Show it reading -1 or absent on cb29485d, and showing stepmul 0 mid-fill.
+- Fix negative-control.sh's stale paths.
+
+(1) Scalar-only fixes shared by all three designs.
+- Every refusal arms (shape 2).
+- Park reset in the armed branch (GCSpause, unchanged white, threshold > gc.total).
+- Keep an ARMCAP valve that counts only growth attempts, as an alarm. Safe-point deletes it.
+- Gate on W5a/b/c and W2b.
+
+(2) The hook carrier as the only new collection site, before any overdraft.
+- lj52_gc_request / atsafe / the hook prefix / unhook.
+- The build gate allows exactly one `lua_gc(...LUA_GCCOLLECT)` inside atsafe, with awk-checked call sites. g1-g3 must each fail with their own message.
+- Test this FIRST: a stress build that files a request on every growing allocator call, so a full collection runs at nearly every instruction boundary. Run it with LUA_USE_ASSERT and freed-block poisoning over mem_test, shim_test, wd_test (35/0, W6b 20 ms) and TRACE_CHUNK, plus one harness arm.
+- Canary: a sabotage calling atsafe from inside lj52_alloc must crash. If it does not, the gate is blind.
+- Also measure recording aborts. callhook calls lj_trace_abort, which leads to penalty_pc and possible blacklisting. A JIT-hot fill loop must still hold its trace after the wall. If it does not, skip the inject while J->state != LJ_TRACE_IDLE and rely on the checkpoint carrier.
+- Also handle a request filed during atsafe's own fullgc. A string-table shrink crossing the cap would leave gc_req stale and lose the hook carrier until the next outermost arm.
+
+(3) Overdraft bands.
+- Sandbox band of 16 KiB with credit close/open; kernel band of 32 KiB keyed on cur_L / wd_depth.
+- Gate on X1 (including JIT-hot and record shapes), X2, X3, X8, X9.
+- Graft shim-only's W7 creep test, with a 'credit = total' sabotage that must fail.
+- Add a reload test: fill to OOM, keep the data, persist/unpersist with OC's lift and restore, then the next push must succeed.
+
+(4) P2: gc_next hysteresis and the back-off.
+- Gate on X4 and X6, then the 60-run capacity matrix from the main session under nohup plus Monitor: 0 recovery-refused, 0 down, t_last5 at most 3x stock, at most 3 collections per batch.
+
+(5) P4: kernel site 13 (jit.off first, jit.on after the baseline yield).
+- Only after (4) passes the 192 KB idle gate on arm E.
+- For the flush predicate, consider grafting vm-faithful's rule (flush when resident trace metadata is at least the post-cycle headroom) instead of the fixed 32 KiB, which is not cap-relative.
+
+If safe-point's hook coupling is rejected, build shim-only instead, with two fixes:
+- (a) Derive RESERVE from used > total + G/2 on the first call after settotal/load, so credit survives eris.
+- (b) Add a test of an allocate-first pcall retry loop, and accept it as a documented residual.
+
+QUESTIONS:
+- All three designs grant first and decide later. With safe-point, a request inside a pcall that goes past the cap by up to 16 KiB succeeds, and 'not enough memory' lands on the program's next allocation, possibly outside the pcall. Is that acceptable, or should a request that alone exceeds headroom plus the band be refused on the spot?
+- Safe-point needs build-native.sh's collector gate re-scoped to allow exactly one lua_gc(LUA_GCCOLLECT) in the shim, reachable only from the watchdog hook and from arm/disarm. Do you accept lifting that invariant, which has held since 8c279a3?
+- With the JIT off during kernel init (arm E), kernelMemory becomes 164 393 B, deterministic but about 10 KB below stock's 174 605 B, so users get slightly more RAM than on stock. Keep that, or pad the figure to match stock?
+- Safe-point ties the GC's safe point to the watchdog's count hook. With a foreign hook installed, for example the stock-kernel fallback, grants are disabled and behaviour reverts to today's refusals. Is that coupling acceptable?
+- Finalizers, which run only when sandbox __gc is allowed, would now also run inside the hook-carrier's full collection at an instruction boundary, earlier than today and still without a deadline, as on stock. Is that acceptable?
+
+######## JUDGE practice
+
+== shim-only overall 7
+  R1 PARTLY: It fixes the measured 'recovery refused' case by reading. lj_meta_cat and string.rep both run their GC check after they allocate (lj_meta.c:382-385, lib_string.c:101-102, verified), so the post-drop allocation is granted from RESERVE credit and the pending arm collects the dropped data. Because RESE
+  R2 PARTLY: Under churn it runs twice stock's cycle count. A fill runs about 16 cycles across the last quarter plus the band. Today's figures imply 56-238 us per cycle (t_last5 divided by 143-389 arms per batch), so that is roughly 1-3 ms over the last five batches, about 1.2-2x stock. This is arithmetic, not a
+  R3 MET: The park reset is benign, verified: the only allocator calls inside a step happen while the state is not GCSpause (lj_str_resize at lj_gc.c:696 runs in GCSsweep), and finalizers return early under HOOK_GC. It also clears the two-flip alias that settle_gc works around. Counting only allocation attemp
+  R4 PARTLY: lj_trace_flushall does not free irbuf, snapbuf, snapmapbuf or the J->trace vector; only lj_trace_freestate does (lj_trace.c:276-303 against :370-373, verified). So whether kernelMemory becomes deterministic is unproven; W6b only bounds it. The flush predicate stays 'headroom < w' at gate- and wall-a
+  R5 MET: The bound is absolute: used <= total + G + about 1.5 KB, with G = clamp(total/16, 32 KB, 512 KB). The excess is charged, Java clamps free memory at 0, sandbox code cannot ratchet it, and no new refusal site is added. Side effect: before its first refusal a program can hold up to G/2 (up to 256 KB, a
+  R6 MET: The allocator only writes the same two scalars as today's arm and never collects. On trace the existing asm_gc_check repays the credit. A trace exit's sunk-object restore draws on credit instead of raising ERRMEM.
+  R7 MET: About 80 shim lines and one kernel patch site. Zero VM lines. build-native.sh's collector gate and the 20-value _OCLJ_GCSTATS are untouched.
+  R8 MET: All state lives in lj52_mem. Credit is 0 under GCSTOP. The Int.MaxValue lift is handled by gc_low and the 512 KB ceiling on G. A state loaded through eris starts in BURST with no hysteresis.
+  R9 MET: By reading: the gate is w until the first proof, so P1a is unchanged. The hot path gains one compare and a kind argument, and credit is computed only on the refusal path. Not yet measured.
+  R10 MET: W1-W7, each with its own negative-control sabotage, plus a dropin mode for cap.sh. Missing: a test of recovery with no checkpoint, which is exactly where this design breaks. P4 is only bound-tested. The stale paths in negative-control.sh must be fixed before any sabotage run means anything.
+  R11 MET: No knob. ramScale stays inherited. All constants are compile-time.
+
+== safe-point overall 6
+  R1 PARTLY: The hook carrier collects at the next instruction boundary, so a recovery with no checkpoint works (X1f). The kernel band covers table.pack and signal pushes structurally: cur_L is restored to the resumer after vm_resume (vm_x64.dasc:1625, verified), and wd_depth is 0 between resumes. But by reading
+  R2 PARTLY: WALL and REFUSE requests are deduplicated, giving about stock's one collection per (cap - live) bytes. Hysteresis doubles that under churn. The back-off stops unproductive pre-emptive cycles in a fill, so a fill sees only a few collections near the wall, the best of the two shim designs. Not measure
+  R3 MET: The park reset, plus lj52_gc_atsafe disarming every arm and restoring stepmul within one instruction boundary, with arm and disarm as backstops. Deleting the 65 536-call valve removes a safety net. That is acceptable only because atsafe always restores stepmul.
+  R4 MET: By reading. jit.off() as the kernel's first statement and jit.on() after the baseline yield reproduces arm E, which read 164 393 B in every run already measured. Tying the flush predicate to 32 KiB instead of w removes idle flushes on small sticks. The idle arm rate under hysteresis is unmeasured. W
+  R5 MET: The bound is total + 33.5 KiB, a compile-time constant, and charged. Sandbox code can reach the kernel band only through sync-call results or an error object's __tostring, and the absolute bound still holds there.
+  R6 MET: It collects only at an instruction boundary, where lj_dispatch_ins has fixed L->top (lj_dispatch.c:420-422), aborted recording (:372) and left the trace. That is exactly a Lua debug hook calling collectgarbage(), which LuaJIT has to support; string.format's retry loop around __tostring exists for th
+  R7 PARTLY: Zero VM lines, but about 150 shim lines. The collector gate is re-scoped to allow one lua_gc, with its own fail-first. It edits lj52_wd_hook, wd_arm, wd_disarm and wd_program, which is the deadline-enforcement path whose thread filter took three tries. It adds about ten interacting flags (gc_kind, g
+  R9 MET: Far from the wall the checkpoint carrier is unchanged. Near the wall there is an untested cost: each request's hook call runs callhook, which calls lj_trace_abort (lj_dispatch.c:372) and penalises the start PC of any recording in flight. Repeated wall events could blacklist a hot fill loop. Neither 
+  R10 MET: The most complete plan: X1-X9, a sabotage per part, gate fail-firsts g1-g3, and X7 for the hook-ownership and deadline interplay. It lacks a test for allocating between catching and dropping, and a blacklisting check.
+  R11 MET: No knob. jit.on() is unconditional. That is fine today, because the mod has no JIT switch (OcljArch.scala:91-92) and the harness's JIT-off arm applies jit.off() after kernelMemory is taken. It should restore the prior state if OC config ever gains a JIT switch.
+  FATAL: By reading, the credit-close rule recreates the exact measured 'recovery refused' symptom whenever a program allocates between catching the refusal and dropping its data; the probe and X1 never exercise this. It can be fixed by grafting shim-only's RESERVE rule.
+
+== vm-faithful overall 3
+  R1 PARTLY: It is exact only under vmstate INTERP. With the JIT on, most hot code is a borrowing context. Deleting the watermark arm makes this worse than today: once live > cap/2, LuaJIT's own threshold (2 x estimate, lj_gc.c:742) can never fire, so the heap routinely reaches the wall full of garbage. Any C-co
+  R2 MET: By construction: one cycle per wall event and no watermark, which is stock's rate. Not measured.
+  R3 MET: Re-poking the threshold on every armed allocator call, plus a bailout that counts only growing calls.
+  R4 PARTLY: jit.flush leaves the recorder buffers (lj_trace.c:276-303), so determinism is unproven. Removing the watermark removes the idle arm loop structurally.
+  R5 PARTLY: The 2L excursion bound is cap-relative and charged. But host safety now rests on the VM audit: one missed unanchored object is a use-after-free inside the JVM process, strictly worse than today's refusal.
+  R6 NOT MET: It collects inside lj_mem_realloc, which breaks the requirement's explicit 'no collection inside the allocator'. C5 and C6 rest on a hand audit. A concrete gap: fast-function C fallbacks run under INTERP, because fff_fallback sets no vmstate (vm_x64.dasc:2189-2203, verified), and fff_newstr calls lj
+  R7 NOT MET: About 70 VM lines in 9 files, a sha-pinned patch script, and a re-audit of about 25 functions on every LuaJIT bump.
+  R8 MET: emerg uses spare GCState padding (lj_obj.h:599, verified), is 0 at rest and is zeroed in lj_err_throw. The shim's fields are per state.
+  R9 MET: The success path is untouched in both the VM and the shim.
+  R10 PARTLY: The hermetic T1-T6 checks are fine. VM safety additionally needs a stress build, crash canaries and a second reviewer, repeated on every bump.
+  R11 MET: No knob.
+  FATAL: Memory safety at the wall rests on a hand audit, and there is at least one apparent gap: stale-top fast-function frames under INTERP, where cur_topslot is undefined. A miss is a use-after-free that can take down the JVM, which violates R5's host-safety clause.
+  FATAL: R7 is NOT MET: a VM patch across 9 files, re-audited on every LuaJIT bump.
+  FATAL: Deleting the watermark makes refused C-context bursts larger than L more frequent than they are today.
+
+RECOMMENDATION: Build shim-only as the base, with four zero-gate grafts from safe-point. Keep safe-point's hook carrier as a conditional stage 2. Do not pursue vm-faithful.
+
+Rationale, against the weighted requirements: shim-only alone meets R7 (no gate change, no watchdog change, zero VM lines). Every advantage safe-point has on R2 and R4 comes from parts that can be lifted out of it without its costly hook machinery. The hook carrier buys only one thing: recovery when no checkpoint runs. The order below measures whether that is needed before paying the review cost of touching the deadline path.
+
+Order:
+
+0. Fix the instrument first.
+   - Fix the stale paths in negative-control.sh.
+   - Make the CAP-* lines print _OCLJ_GCSTATS positions 2, 3, 5, 7, 8, 9 and 15, plus the new stats.
+   - See them read on today's DLL cb29485d, including stepmul 0 mid-fill. That proves they can show the park fingerprint.
+   - Add a dropin mode to cap.sh.
+
+1. Write the hermetic fail-first tests in mem_test.c and run each against cb29485d via OCLJ_SHIMOBJ.
+   - From the designs: W5a, W5b and W5c (park); W2b and W2c (refusal with no arm); W1 and W1j (recovery); W3 (trace exit); W4 (cadence, with a same-run ratio).
+   - Three tests none of the designs had, placed where the mitigations break:
+     - (i) Catch the refusal, build 'err: '..err, drop the data, then allocate. This must pass. By reading it fails under safe-point's close-credit rule.
+     - (ii) A recovery with no checkpoint (X1f-style array growth), sized to exceed G/2 at the 192 KB cap. This is expected to fail in stage 1, and documents the residual.
+     - (iii) X9: the sandbox is refused, then the kernel does table.pack of 64 values.
+
+2. Commit A: P3 alone (park reset plus attempt-only bailout).
+   - Then run a reduced matrix (arm E, 192 KB, 12 runs) to see how much of the 7 'down' runs was parking, before anything else changes.
+
+3. Commit B: shim-only's P1 and P2, on both refusal sites (C and legacy), with these grafts:
+   - (a) safe-point's back-off for unproductive pre-emptive cycles, which cuts the cycles in a fill;
+   - (b) a small kernel-only slice of credit, identified by a scalar test (cur_L == the thread of the outermost arm, or wd_depth == 0) with no hook;
+   - (c) a flush predicate tied to a small fixed post-cycle headroom (safe-point's 32 KiB) instead of w, keeping 'flush-armed cycles never re-raise'.
+   - Keep shim-only's RESERVE-survives-proofs rule; that is what makes test (i) pass.
+   - Then run the full D/E/O matrix plus the dropin subset, in the same pinned chain as stock, from the main session under nohup and Monitor.
+
+4. Commit C: P4 using safe-point's mechanism, not jit.flush.
+   - jit.off() as the kernel's first statement and jit.on() after the baseline yield. This reproduces arm E, already measured deterministic at 164 393 B.
+   - Gate it on E: idle arms within the 63 bound and 0 flushes at 192 KB, 12 of 12 boots, and one unpinned run.
+
+5. Stage 2, only if test (ii) or the matrix shows refusals that the credit cannot cover.
+   - Add safe-point's hook carrier with its gate re-scope and the g1-g3 fail-firsts. Keep the RESERVE rule rather than close-on-decisive.
+   - Add a blacklisting check: jit.attach abort counts on a JIT-hot fill at the wall, because each hook call aborts and penalises any recording in flight.
+
+Test first: W5a with the instrument from step 0. It is the smallest change, independent of the others, and may explain part of the 'down' mode.
+
+QUESTIONS:
+- Over-cap excursion: is a cap-relative credit of up to cap/16 (at most 512 KB) acceptable? It means a program can hold up to about 3% more than its configured RAM before its first refusal, which shifts the capacity-parity numbers. The alternative is a small fixed bound such as safe-point's 32 KiB, which covers less recovery on large machines.
+- If stage 2 turns out to be needed, may the shim contain one lua_gc(COLLECT) inside the watchdog hook? That means re-scoping the build-native.sh collector gate and editing the deadline path.
+- P4: are you willing to run kernel init with the JIT off (deterministic kernelMemory of 164 393 B, about 10 KB under stock's 174 605 B, at some boot-speed cost)? And should the patch restore the prior JIT state rather than call jit.on() unconditionally, in case OC config later gains a JIT switch?
+- Will you accept the residual that a single allocation inside one C call or one instruction, larger than headroom plus credit and covered only by garbage, is refused once where stock would succeed?
+- Is a LuaJIT VM patch (vm-faithful's emergency collector) ruled out whatever fidelity it would buy?
+- Should P3 be measured alone first on a reduced matrix (arm E, 192 KB, about 12 runs) to attribute the 7 'down' runs before P1 and P2 land?
