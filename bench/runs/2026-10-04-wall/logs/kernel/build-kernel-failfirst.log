@@ -1,0 +1,10 @@
+[kernel] pinned OpenComputers = 1.12.58-GTNH
+[kernel] jar     = /c/Users/astro/.gradle/caches/modules-2/files-2.1/com.github.GTNewHorizons/OpenComputers/1.12.58-GTNH/6317dc8c8362cc4f00bc1b61f509356c351e7977/OpenComputers-1.12.58-GTNH-dev.jar
+[kernel] =============== 1. extract OpenComputers' kernel ===============
+[kernel]     stock kernel = 46483 bytes
+[kernel] =============== 2. patch ===============
+patch-machine-lua: ok  46483 -> 51952 bytes, 12 sites, 2 debug.sethook left, 0 next( left, LF endings
+[kernel] =============== 3. postflight ===============
+KERNEL BUILD FAIL: site 13 did not apply: no JIT switch before the kernel's first statement (switch at line
+       'none', hookInterval at '13').  Kernel init's traces would be counted in
+       kernelMemory again -- 335-414 KB where a trace-free kernel measures ~165 KB

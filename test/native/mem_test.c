@@ -886,10 +886,13 @@ int main(void) {
     lua_gc(P, LUA_GCCOLLECT, 0);
     base2 = PS.used;
     coll0 = GC_COLLECTS(P);
-    /* 256 KB of headroom, then a 160 KB LIVE table parked in the registry:
-     * headroom 96 KB is under the 128 KB floor, and no cycle can free it. */
+    /* 256 KB of headroom, then a 200 KB LIVE table parked in the registry:
+     * headroom 56 KB is under half the 128 KB floor -- where a proven cycle
+     * asks for the flush (lj52shim.c, HALF THE WATERMARK; until 2026-10-04 it
+     * was the whole watermark, and this case held 160 KB) -- and no cycle can
+     * free it. */
     PS.total = base2 + 256 * 1024;
-    lua_createtable(P, 20480, 0);
+    lua_createtable(P, 25600, 0);
     lua_setfield(P, LUA_REGISTRYINDEX, "__live");
     armedB = GC_ARMED(P);
     sprintf(d, "used=%ld of %ld (headroom %ld), armed=%.0f", (long)PS.used,
@@ -898,11 +901,11 @@ int main(void) {
     steps = churn(P, 0, coll0, 10000, &st);
     collB = GC_COLLECTS(P); wantB = GC_FLUSHWANT(P); liveB = JIT_LIVE(P);
     sprintf(d, "%.0f steps (status %d): collects %.0f -> %.0f, headroom now %ld "
-            "(watermark %ld), flush_wanted=%.0f, traces_live=%.0f",
-            steps, st, coll0, collB, (long)(PS.total - PS.used), wmark(PS.total),
+            "(half the watermark %ld), flush_wanted=%.0f, traces_live=%.0f",
+            steps, st, coll0, collB, (long)(PS.total - PS.used), wmark(PS.total) / 2,
             wantB, liveB);
-    ok(st == 0 && collB > coll0 && (long)(PS.total - PS.used) < wmark(PS.total),
-       "P2b the cycle completed and headroom is STILL under the watermark", d);
+    ok(st == 0 && collB > coll0 && (long)(PS.total - PS.used) < wmark(PS.total) / 2,
+       "P2b the cycle completed and headroom is STILL under half the watermark", d);
     ok(wantB == 1, "P2c the collector raised flush_wanted at the proof",
        wantB < 0 ? "flush_wanted stat ABSENT (older shim)" : d);
     ok(liveB == live0, "P2d nothing flushed yet: the allocator never flushes",
@@ -1118,17 +1121,17 @@ int main(void) {
     base = j_used(C, &CS);
     coll0 = GC_COLLECTS(C);
     j_settotal(C, &CS, (jint)(base + 256 * 1024));
-    lua_createtable(C, 20480, 0);       /* 160 KB LIVE: headroom under the floor */
+    lua_createtable(C, 25600, 0);       /* 200 KB LIVE: headroom under half the floor (P2) */
     lua_setfield(C, LUA_REGISTRYINDEX, "__live");
     armedC = GC_ARMED(C);
     steps = churn(C, 0, coll0, 10000, &st);
     wantC = GC_FLUSHWANT(C);
-    sprintf(d, "before: armed %.0f, flush_wanted %.0f; 160 KB live under used+256 KB: armed=%.0f, %.0f steps (status %d), "
-            "collects %.0f -> %.0f, headroom %ld (watermark %ld), flush_wanted=%.0f",
+    sprintf(d, "before: armed %.0f, flush_wanted %.0f; 200 KB live under used+256 KB: armed=%.0f, %.0f steps (status %d), "
+            "collects %.0f -> %.0f, headroom %ld (half the watermark %ld), flush_wanted=%.0f",
             armed0, want0, armedC, steps, st, coll0, GC_COLLECTS(C),
-            (long)((long long)CS.total - j_used(C, &CS)), wmark(CS.total), wantC);
+            (long)((long long)CS.total - j_used(C, &CS)), wmark(CS.total) / 2, wantC);
     ok(armed0 == 0 && want0 == 0 && armedC == 1 && st == 0 && GC_COLLECTS(C) > coll0 && wantC == 1,
-       "C5b live data under the watermark: armed, proven, flush wanted", d);
+       "C5b live data under half the watermark: armed, proven, flush wanted", d);
     lua_pushnil(C);
     lua_setfield(C, LUA_REGISTRYINDEX, "__live");
     st = runstr(C, ARM_DISARM);
@@ -1511,6 +1514,45 @@ int main(void) {
             GC_FLUSHWANT(W));
     ok(st == 0 && armedC == 0 && GC_COLLECTS(W) - coll0 >= 1 && GC_FLUSHWANT(W) == 1,
        "W14 a hold that churns as it grows still asks for the flush", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W15: the flush is asked for inside HALF the watermark (stage C) */
+    /* A 192 KB machine with a trace-free kernelMemory idles with 106-145 KB
+     * free against a 130 KB watermark, so every cycle it proved asked for the
+     * flush and it threw away ~25 KB of compiled code 8-20 times in 10 s
+     * (bench/results-wall-2026-10-04.md, stage C).  160 KB live: with 100 KB
+     * free -- inside the watermark, outside half of it -- a proven cycle must
+     * NOT ask; with 40 KB free it must. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W15: no state\n"); return 1; }
+    runstr(W, "jit.off()");
+    lua_createtable(W, 20480, 0);           /* 160 KB live */
+    lua_setfield(W, LUA_REGISTRYINDEX, "__live15");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    runstr(W, ARM_DISARM);                  /* no stale flag */
+    lua_settop(W, 0);
+    u0 = j_used(W, &WS);
+    cap = u0 + 100 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    coll0 = GC_COLLECTS(W);
+    churn(W, 0, coll0, 20000, &st);         /* garbage until one cycle is proven */
+    armedC = GC_FLUSHWANT(W);
+    lua_gc(W, LUA_GCCOLLECT, 0);            /* unarmed after the proof: no alias */
+    settle_gc(W);
+    runstr(W, ARM_DISARM);
+    lua_settop(W, 0);
+    u1 = j_used(W, &WS);
+    w_setcap(W, &WS, u1 + 40 * 1024, 1);
+    coll1 = GC_COLLECTS(W);
+    churn(W, 0, coll1, 20000, &st2);
+    sprintf(d, "160 KB live, total %ld (watermark %ld): with 100 KB free a cycle proven (collects +%.0f, status %d) "
+            "and flush_wanted %.0f; with 40 KB free, collects +%.0f (status %d), flush_wanted %.0f",
+            (long)cap, wmark((long)cap), coll1 - coll0, st, armedC, GC_COLLECTS(W) - coll1, st2, GC_FLUSHWANT(W));
+    ok(st == 0 && st2 == 0 && coll1 > coll0 && GC_COLLECTS(W) > coll1 && armedC == 0 && GC_FLUSHWANT(W) == 1,
+       "W15 the flush is asked for inside half the watermark, not the whole", d);
     clear_javastate(W);
     lua_close(W);
 

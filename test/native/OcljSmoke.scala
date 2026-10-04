@@ -414,9 +414,12 @@ object Smoke {
    * computes for ~4 s -- short-lived strings, discarded -- yielding between
    * steps, then drops the table and reports done.  Every step is a resume;
    * every resume is a safe point.  64 KB sandbox-visible is 64 x ramScale
-   * real bytes of headroom, under the watermark max(total/4, 128 KB) at
-   * every tier, so from that point on each proven cycle finds the machine
-   * short of headroom for a reason garbage cannot explain.
+   * real bytes of headroom (115 KB at 1.8), under half the watermark
+   * max(total/4, 128 KB) at the 1024 KB tier the suite runs (286 KB), so from
+   * that point on each proven cycle finds the machine short of headroom for a
+   * reason garbage cannot explain.  Half, since 2026-10-04 (lj52shim.c, HALF
+   * THE WATERMARK); at 192 and 256 KB, 115 KB is outside half the watermark
+   * and a hold there keeps its traces, which is the point of the change.
    *
    * WHAT IS READ, under the executor's monitor between resumes, every
    * fourth tick while the row says grow/hold: _OCLJ_JITSTATS traces_live and
@@ -457,7 +460,7 @@ object Smoke {
                     jitMode: String, tierName: String, tierKB: Int): Unit = {
     val m = computer.machine
     val id = "mem-2-pressure-flushes-traces"
-    p("--- (mem-2) a sandbox program holds LIVE data past the watermark at tier=" + tierName + " (" + tierKB +
+    p("--- (mem-2) a sandbox program holds LIVE data inside half the watermark at tier=" + tierName + " (" + tierKB +
       " KB): a proven cycle must raise the flag and the next resume must flush the traces ---")
     if (kernelMode != "watchdog") {
       p("MILESTONE " + id + ": SKIP -- kernel=" + kernelMode + ": only the watchdog kernel calls " +
@@ -3235,7 +3238,7 @@ object Smoke {
     val g1 = gs(); val w1 = ws0(); val tl1 = tlive()
     p("CAP-IDLE| ticks=" + k + " arms=+" + d(g0, g1, 1) + " collects=+" + d(g0, g1, 2) +
       " bailouts=+" + d(g0, g1, 3) + " refusals=+" + d(g0, g1, 4) +
-      " trace_flushes=+" + d(g0, g1, 10) + " park_resets=+" + d(w0, w1, 4) +
+      " trace_flushes=+" + d(g0, g1, 10) + " trace_flush_bytes=+" + d(g0, g1, 13) + " park_resets=+" + d(w0, w1, 4) +
       " traces_live " + tl0 + " -> " + tl1 + " " + gcState(g1) + " parked=" + parked(g1) +
       " wallstats=" + (if (!ours) "n/a" else if (hasWall) "present" else "absent") + " running=" + m.isRunning)
     // 2. the live set, after three full collects (perturbing)
@@ -3830,6 +3833,26 @@ object Smoke {
       "asked for " + kernelMode + ", raw _G._OCLJ_KERNEL=" + kernelSeen +
         (if ((kernelMode == "watchdog") == (kernelSeen == "watchdog")) ""
          else "   <- the kernel that ran is NOT the one requested; nothing below means what it says"))
+    // --- (km-1) kernel init compiles nothing -------------------------------
+    // Site 13 of the patched kernel (native/kernel/patch-machine-lua.lua, THE
+    // FIFTH CHANGE) keeps the JIT off until OpenComputers has measured
+    // kernelMemory at the kernel's first yield, and records the traces live at
+    // that yield in _OCLJ_KERNEL_TRACES.  0 means kernelMemory holds no
+    // compiled code: the same figure every boot, where the 12-site kernel
+    // measured 335-414 KB with kernel init's traces in it -- which the pressure
+    // flush later handed back as RAM no one installed.  Read from the raw
+    // state, like k0's marker; absent on a kernel without site 13.
+    if (kernelMode != "watchdog")
+      p("MILESTONE km-1-kernel-init-compiles-nothing: SKIP -- kernel=" + kernelMode +
+        ": OpenComputers' own kernel has no site 13 (not counted)")
+    else {
+      val kt = evalStrLocked(computer.machine, mLua, "return tostring(rawget(_G, '_OCLJ_KERNEL_TRACES'))")
+      milestone("km-1-kernel-init-compiles-nothing", kt == "0",
+        "traces live at the kernelMemory baseline = " + kt + "; kernelMemory=" + mKernel +
+          (if (kt == "0") ""
+           else if (kt == "nil") "   <- no site 13 in this kernel: kernelMemory may hold kernel init's traces"
+           else "   <- kernel init compiled before the baseline: kernelMemory holds trace metadata"))
+    }
     // --- (al-1) which allocator the machine's blocks live in --------------
     // Since 2026-10-02 every state the shim creates keeps its blocks in its
     // own lj_alloc arena (lj52shim.c, lj52_back) instead of the C library's

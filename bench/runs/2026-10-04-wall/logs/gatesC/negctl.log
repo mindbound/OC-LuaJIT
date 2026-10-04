@@ -1,0 +1,221 @@
+[negctl] eris_lj.h from /c/Users/astro/Downloads/OC-LuaJIT/serializer
+
+[negctl] --- canon : canonical shim passes every check
+[negctl]     exit status  want=0 got=0
+[negctl]     failing ids  want=[]
+[negctl]                  got =[]
+  RESULT: PASS  canonical shim passes every check
+
+[negctl] --- dropmode : mode-dropping shim is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[MG1 MG3 MG9 ]
+[negctl]                  got =[MG1 MG3 MG9 ]
+  RESULT: PASS  mode-dropping shim is caught
+
+[negctl] --- sniffer : byte-sniffer's unchecked direction and stack leak are caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[MG1D MG3 ]
+[negctl]                  got =[MG1D MG3 ]
+  RESULT: PASS  byte-sniffer's unchecked direction and stack leak are caught
+[negctl] 
+[negctl] --- sniffer, with OCLJ_NOMODECHECK=1 in the environment
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[MG1 MG3 MG9 ]
+[negctl]                  got =[MG1 MG3 MG9 ]
+  RESULT: PASS  env bypass is caught
+
+[negctl] --- le51 : 5.1 __le semantics are caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[LE1 LE2 LE3 LE4 ]
+[negctl]                  got =[LE1 LE2 LE3 LE4 ]
+  RESULT: PASS  5.1 __le semantics are caught
+
+[negctl] --- memcanon : canonical shim passes every memory check
+[negctl]     exit status  want=0 got=0
+[negctl]     failing ids  want=[]
+[negctl]                  got =[]
+  RESULT: PASS  canonical shim passes every memory check
+
+[negctl] --- stopgap : a discarded allocator swap is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C0b C0d C3a C4b C5a C5b C6 M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h W1 W10 W11 W12 W13 W14 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W8 ]
+[negctl]                  got =[C0b C0d C3a C4b C5a C5b C6 M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h W1 W10 W11 W12 W13 W14 W15 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W8 ]
+  ---- test output ----
+  | mem_test -- lj52 memory accounting
+  |   PASS  M0 the state's heap is its own lj_alloc arena        _OCLJ_GCSTATS heap=1 (1 = own lj_alloc arena, 0 = libc, -1 = absent)
+  |   PASS  M1 uncapped state is not charged                     2000 tables allocated, setluamemory never called
+  |   PASS  M2 capped but unbound: still not charged             lua_setallocf before the javastate exists is harmless
+  |   PASS  M2b settling up at bind leaves used non-negative     used=0 after settling up
+  |   FAIL  M3 allocation is charged                             used 0 -> 0 (+0) over 20000 tables
+  |   FAIL  M3b charged to the byte, vs lua_gc(GCCOUNT)          we charged +0, LuaJIT counted +1828506  (difference -1828506)
+  |   FAIL  M3c legacy mode keeps the native figure too, exact   native used 2258972, Java's field 0, LuaJIT 2258972
+  |   FAIL  M4 freeing is credited back                          used 0 -> 0 (0 of 0 reclaimed)
+  |   FAIL  M4c credited to the byte, vs lua_gc(GCCOUNT)         we credited +0, LuaJIT counted -2215734  (difference 2215734)
+  |   PASS  M4b used never goes negative                         used=0
+  |   FAIL  M5 the cap refuses                                   pcall status=0 (LUA_ERRMEM=4)  used=0 cap=196608 (+ credit 49152)
+  |   PASS  M6a lua_pushcfunction survives an exhausted cap      used 0, cap -49152, the credit spent; pushed=yes
+  |   FAIL  M6b a RAW push is refused at that same cap           the raw push SUCCEEDED, so M6a proves nothing: the cap was not tight
+  |   FAIL  M7 the unrefusable push is still charged             the push allocated off the books -- an uncharged path is a hole
+  |   PASS  M8 clearing the javastate stops the accounting       5000 tables allocated, setluamemory never called again
+  |         main state after M8: flush_wanted=0 trace_flushes=0 (-1 == stat absent; a standing flag here is M5-M7's, awaiting a resume)
+  |   PASS  M0b the second state is on its own arena too         _OCLJ_GCSTATS heap=1
+  |   PASS  P0 the JIT compiled a few dozen resident traces      traces_live=40 after 40 hot loops
+  |         base live set used=0  arms=0 collects=0 bailouts=0 refusals=0 trace_flushes=0 (-1 == stat absent)
+  |   FAIL  P1a an emergency cycle armed and was proven to complete 400 steps of 64 KB garbage (status 0): arms 0 -> 0, collects 0 -> 0, bailouts +0, refusals +0, used=0 of 1048576
+  |   PASS  P1b garbage restored the headroom: flush NOT wanted  headroom after the cycle = 1048576 (watermark 262144); flush_wanted=0
+  |   PASS  P1c the safe point left the traces alone             arm()+disarm(): traces_live 40 -> 40, trace_flushes=0
+  |   PASS  P1d trace_flushes is 0                               arm()+disarm(): traces_live 40 -> 40, trace_flushes=0
+  |   FAIL  P2a the live allocation armed the emergency cycle    used=0 of 262144 (headroom 262144), armed=0
+  |   FAIL  P2b the cycle completed and headroom is STILL under half the watermark 10000 steps (status 0): collects 0 -> 0, headroom now 262144 (half the watermark 65536), flush_wanted=0, traces_live=40
+  |   FAIL  P2c the collector raised flush_wanted at the proof   10000 steps (status 0): collects 0 -> 0, headroom now 262144 (half the watermark 65536), flush_wanted=0, traces_live=40
+  |   PASS  P2d nothing flushed yet: the allocator never flushes 10000 steps (status 0): collects 0 -> 0, headroom now 262144 (half the watermark 65536), flush_wanted=0, traces_live=40
+  |   FAIL  P2e the arm entry point flushed once                 arm(): trace_flushes=0 flush_wanted=0 traces_live=40 flush_bytes=0 refusals=0 re-armed=0
+  |   FAIL  P2f no trace is live after the flush                 arm(): trace_flushes=0 flush_wanted=0 traces_live=40 flush_bytes=0 refusals=0 re-armed=0
+  |   FAIL  P2g the flag is consumed and the cycle re-armed      arm(): trace_flushes=0 flush_wanted=0 traces_live=40 flush_bytes=0 refusals=0 re-armed=0
+  |   FAIL  P2h the accounted used dropped by at least the trace metadata used 0 -> 0 -> 0: dropped 0 across arm + 10000 steps (status 0, collects 0 -> 0); flush unlinked 0 bytes of trace metadata
+  |   PASS  C0a a freshly bound state is in legacy mode          csync=0, native used=-1 (-1 = not handed over)
+  |   FAIL  C0d legacy allocations cross JNI, counted three ways 3000 tables in legacy mode: getluamemory calls +0, getthreadenv +0, allocator calls through JNI +0
+  |   FAIL  C0b the handover: native cap and figure are Java's and LuaJIT's csync=1, native cap 67108864 (Java 67108864); used: native 317928, Java's field 0, LuaJIT 317928
+  |   PASS  C0c _OCLJ_GCSTATS returns 20 values                  20 values (14 before 2026-10-03)
+  |   PASS  C1 after the handover no allocation crosses into the JVM openlibs + 20000 tables: allocator calls +20476, of them through JNI +0; getluamemory +0, setluamemory +0, getthreadenv +0
+  |   PASS  C2a the native figure is LuaJIT's own count, to the byte native used 2363356, LuaJIT 2363356 (difference 0); getFreeMemory 64745508
+  |   PASS  C2b getFreeMemory reads the native figure, once      getFreeMemory=64745508; used reads 3 -> 4
+  |   PASS  C2c frees are credited, to the byte                  used 2363356 -> 43238 (2320118 reclaimed); LuaJIT 43238 (difference 0)
+  |   FAIL  C3a a lowered cap refuses on the next allocations    cap lowered to used+192 KB = 239846: status 0 (LUA_ERRMEM=4), used 1014262576 (credit 49152), native cap 239846
+  |   PASS  C3b a raised cap admits at once                      cap raised to 64 MB: status 0, used 1016284628
+  |   PASS  C4a the save's raised cap lets the persist allocate past the machine's under Integer.MAX_VALUE: status 0, used 2066516 (machine cap 108774), free 2145417131
+  |   FAIL  C4b the restored cap reads free 0 and refuses growth cap restored to 108774 under used 2164122: free 0, next growth status 0 (LUA_ERRMEM=4)
+  |   PASS  C4c once that garbage is collected the machine runs again after collecting the persist's garbage: free 65536, status 0
+  |   FAIL  C5a the emergency cycle arms against the native cap and completes 400 steps of 64 KB garbage under a native cap of used+1 MB (status 0; armed before 0): arms 0 -> 0, collects 0 -> 0
+  |   FAIL  C5b live data under half the watermark: armed, proven, flush wanted before: armed 0, flush_wanted 0; 200 KB live under used+256 KB: armed=0, 10000 steps (status 0), collects 0 -> 0, headroom -34904 (half the watermark 65536), flush_wanted=0
+  |   FAIL  C6 exhausted cap: raw push refused, memo push succeeds, charged native cap 69706 under used 118858, the credit spent: raw push status 0 (LUA_ERRMEM=4); memo push succeeded, used 118906 -> 118954
+  |   PASS  C7 accounting off: nothing refused, the figure still tracks status 0; getluamemory +0, setluamemory +0; native used 625544, LuaJIT 625544
+  |   PASS  C8 -1 where there is no handed-over record           no state -1, foreign allocator -1 (after settotal), uncapped -1; uncapped getFreeMemory 0, csync 0
+  |   FAIL  W5a an arm in the sweep does not leave the collector parked state 4 before; arms 0 -> 0; after two checkpoints: state 4, armed 0, stepmul 200, threshold 1057145 vs gc.total 1056345, park resets 0
+  |   FAIL  W5b and the churn after it collects, never refused   20000 x 64 B: status 0 (LUA_ERRMEM=4) after 20000 steps; collects 0 -> 0, bailouts 0 -> 0
+  |   FAIL  W5c a sweep that frees 100000 blocks is not a bailout 6443161 B held, then an armed cycle: statuses 0/0, collects 0 -> 0, bailouts 0 -> 0
+  |   FAIL  W2b a refusal arms, from any headroom                headroom 434056 (watermark 272721), armed before 0; one request of 533680 B: status 0 (LUA_ERRMEM=4), armed after 0
+  |   PASS  W2c and the retry succeeds once the garbage is collected the same request again: status 0, used 1724430 of cap 1090886
+  |   FAIL  W2d a request inside the credit is lent, then repaid a request of headroom + G/4 (758296 B): status 0, used 1108078 vs cap 1090886 right after; 1108302 after the next checkpoint
+  |   INFO  W9 residual: allocate-first retries, no checkpoint   request 567776 B = headroom 434056 + G 68184 + 64 KB, garbage 600 KB: status 0, succeeded at try 1
+  |   FAIL  W1 C mode: catch the refusal, drop the data, carry on (x3) [0: status 0, 'no error|256|3', used 19741461, 19813765 after 1129 tables, cap 1090986, collects +0] [1: status 0, 'no error|256|3', used 19741461, 19813765 after 1129 tables, cap 1091122, collects +0] [2: status 0, 'no error|256|3', used 19741461, 19813765 after 1129 tables, cap 1091122, collects +0] od_peak 0, od_limit 0
+  |   FAIL  W1L legacy mode: catch the refusal, drop the data, carry on (x3) [0: status 0, 'no error|256|3', used 0, 0 after 576 tables, cap 524288, collects +0] [1: status 0, 'no error|256|3', used 0, 0 after 576 tables, cap 524288, collects +0] [2: status 0, 'no error|256|3', used 0, 0 after 576 tables, cap 524288, collects +0] od_peak 0, od_limit 0
+  |   FAIL  W1j C mode, JIT on: catch, drop, carry on (x3)       [0: status 0, 'no error|256|3', used 19743685, 19815989 after 1129 tables, cap 1090986, collects +0] [1: status 0, 'no error|256|3', used 19743685, 19816053 after 1130 tables, cap 1092562, collects +0] [2: status 0, 'no error|256|3', used 19743685, 19816053 after 1130 tables, cap 1092562, collects +0] od_peak 0, od_limit 0
+  |   FAIL  W12 a fill to the wall costs a bounded number of cycles the worst W1 round: 0 full cycles (bound 32)
+  |   FAIL  W13 a later hold inside the watermark still gets a cycle (the flush) fill 1: status 0, left the post-cycle level at 0; dropped and collected, used 43240, flush_wanted 0 after the safe point; fill 2 to 988591 of cap 1090918 (watermark 272729): status 0, arms +0, collects +0, flush_wanted 0
+  |   FAIL  W14 a hold that churns as it grows still asks for the flush flush_wanted 0 before; live to the watermark's edge, garbage into it, live to 2038019 of cap 2140392 (watermark 535098): status 0, arms +0, collects +0, flush_wanted 0
+  |   FAIL  W15 the flush is asked for inside half the watermark, not the whole 160 KB live, total 309748 (watermark 131072): with 100 KB free a cycle proven (collects +0, status 0) and flush_wanted 0; with 40 KB free, collects +0 (status 0), flush_wanted 0
+  |   FAIL  W8 an allocation between catch and drop: still recovers status 0, 'err: nil|256|3', used 19741494, 19813798 after 1129 tables (status 0), cap 1090986, bailouts 0 -> 0
+  |   FAIL  W3 a lone allocation at an exhausted cap is lent     cap == used: status 0 (LUA_ERRMEM=4), t[1] = 2000, overdrafts 0
+  |   FAIL  W4 near the wall, cycles per bytes allocated, not per checkpoint 20000 x 64 B, 256 KB live: far (4 watermarks) 0 collects, status 0; near (64 KB) 0 collects (bound 61), status 0, refusals +0; time near/far 2.0
+  |   FAIL  W7 caught refusals cannot push the heap past cap + G 4000 caught attempts past the wall, as the sandbox: status 0, caught 0, refusals +0, collects +0; used 24669772 vs cap 304806; od_peak 0, od_limit 0
+  |   FAIL  W10 the kernel allocates after the sandbox spent the credit status 0, 'true|true|0|true' (kernel armed|after disarm|sandbox refusals|resume); used 19746108 vs cap 828874
+  |   FAIL  W11 live data past total + G/2: the reserve tier, not a refusal setup 0; cap 281918 under used 306494 by 24 KB, G 32768: resume 1 (LUA_YIELD=1), 64 B lent, 32 KB LENT; used 339550
+  |   FAIL  M9 a state that never hands over stays in legacy mode csync=0; allocator calls 10053889, of them through JNI 0
+  |   PASS  M0c the first state is still on its arena at the end _OCLJ_GCSTATS heap=1 after every case above
+  | 
+  | checks=68 failures=42
+  RESULT: FAIL  a discarded allocator swap is caught
+
+[negctl] --- nopending : dropping pre-binding bytes is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C0b M3c M4b M5 ]
+[negctl]                  got =[C0b M3c M4b M5 ]
+  RESULT: PASS  dropping pre-binding bytes is caught
+
+[negctl] --- norefuse : without the window, a bare-frame push KILLS THE PROCESS
+[negctl]     exit status      = 127  (want non-zero)
+[negctl]     got as far as M5 = 1  (want 1 -- so we know WHERE it died)
+[negctl]     reached summary  = 0  (want 0 -- it must not get that far)
+  RESULT: PASS  without the window, a bare-frame push KILLS THE PROCESS
+
+[negctl] --- nopark : a parked collector is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W5a W5b ]
+[negctl]                  got =[W5a W5b ]
+  RESULT: PASS  a parked collector is caught
+
+[negctl] --- freescount : a valve that counts the sweep's frees is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W5c ]
+[negctl]                  got =[W5c ]
+  RESULT: PASS  a valve that counts the sweep's frees is caught
+
+[negctl] --- nocredit : refusing at the cap again is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W1 W10 W11 W1L W1j W2d W3 W8 ]
+[negctl]                  got =[W1 W10 W11 W1L W1j W2d W3 W8 ]
+  RESULT: PASS  refusing at the cap again is caught
+
+[negctl] --- norefusedarm : a refusal that does not arm is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W2b W2c ]
+[negctl]                  got =[W2b W2c ]
+  RESULT: PASS  a refusal that does not arm is caught
+
+[negctl] --- nohyst : the per-checkpoint re-arm is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W12 W4 ]
+[negctl]                  got =[W12 W4 ]
+  RESULT: PASS  the per-checkpoint re-arm is caught
+
+[negctl] --- unbounded : an unbounded credit is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C3a M5 W1 W11 W12 W1L W1j W2b W7 ]
+[negctl]                  got =[C3a M5 W1 W11 W12 W1L W1j W2b W7 ]
+  RESULT: PASS  an unbounded credit is caught
+
+[negctl] --- nokslice : the kernel without its slice is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W10 ]
+[negctl]                  got =[W10 ]
+  RESULT: PASS  the kernel without its slice is caught
+
+[negctl] --- nofresh : a reload refused for history it never saw is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W11 ]
+[negctl]                  got =[W11 ]
+  RESULT: PASS  a reload refused for history it never saw is caught
+
+[negctl] --- closereserve : a reserve that every proof closes is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W11 W8 ]
+[negctl]                  got =[W11 W8 ]
+  RESULT: PASS  a reserve that every proof closes is caught
+
+[negctl] --- flushwhole : a flush asked for at the whole watermark is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W15 ]
+[negctl]                  got =[W15 ]
+  RESULT: PASS  a flush asked for at the whole watermark is caught
+
+[negctl] --- wdcanon : canonical shim passes every watchdog check
+[negctl]     exit status  want=0 got=0
+[negctl]     failing ids  want=[]
+[negctl]                  got =[]
+  RESULT: PASS  canonical shim passes every watchdog check
+
+[negctl] --- standinghook : a standing hook is caught by W6b, W8c, W10g and W12
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W10g W12 W6b W8c ]
+[negctl]                  got =[W10g W12 W6b W8c ]
+  RESULT: PASS  a standing hook is caught by W6b, W8c, W10g and W12
+
+[negctl] --- notimer : without the async injection, the deadline is NEVER enforced (the test's alarm ends it)
+[negctl]     exit status      = 99  (want 99, the alarm's code)
+[negctl]     got as far as W1 = 1  (want 1)
+[negctl]     ALARM line       = 1  (want 1)
+[negctl]     reached summary  = 0  (want 0)
+  RESULT: PASS  without the async injection, the deadline is NEVER enforced (the test's alarm ends it)
+
+[negctl] --- build-native.sh must refuse the sabotaged shims
+[negctl]     dropmode: exit=1 reason=gate
+      BUILD FAIL: lj52shim.h does not map lua_load onto lua_loadx.  The chunk-mode
+  RESULT: PASS  build-native.sh refuses 'dropmode'
+[negctl]     sniffer: exit=1 reason=gate
+      BUILD FAIL: escape hatch 'OCLJ_NOMODECHECK' is back in the shim (line above).  The canonical
+  RESULT: PASS  build-native.sh refuses 'sniffer'
+
+NEGATIVE CONTROL: FAIL -- see the RESULT lines above.
+                  A security test that does not fail here is not
+                  evidence of anything.

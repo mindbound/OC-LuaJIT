@@ -827,13 +827,25 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  *
  * THE PREDICATE IS "A PROVEN CYCLE DID NOT RESTORE HEADROOM", never "we
  * armed".  In the gc_collects++ branch below, with the cycle complete and
- * `used` the heap as it stands after it, headroom still under the watermark
- * means garbage was not what filled the machine, and resident trace metadata
- * is the one reclaimable thing left.  Arming is the wrong trigger: a small
- * machine idling near its watermark arms constantly (the 2026-09-15 census
- * boot of AxisOS: 99542 arms) and would lose its compiled code on every
- * resume for nothing.  gc_flush_wanted is a FLAG.  The allocator sets it and
- * does nothing else.
+ * `used` the heap as it stands after it, headroom still under HALF the
+ * watermark means garbage was not what filled the machine, and resident
+ * trace metadata is the one reclaimable thing left.  Arming is the wrong
+ * trigger: a small machine idling near its watermark arms constantly (the
+ * 2026-09-15 census boot of AxisOS: 99542 arms) and would lose its compiled
+ * code on every resume for nothing.  gc_flush_wanted is a FLAG.  The
+ * allocator sets it and does nothing else.
+ *
+ * HALF THE WATERMARK, NOT THE WHOLE (2026-10-04; LJ52_GC_FLUSHSHIFT).  The
+ * watermark is where the emergency cycle starts to run; it is not "out of
+ * memory".  A 192 KB machine whose kernelMemory holds no compiled code (site
+ * 13 of the patched kernel) idles with OpenOS at 106-145 KB free against a
+ * 130 KB watermark, so with the whole watermark as the predicate every cycle
+ * it proved at idle asked for the flush, and it threw away ~25 KB of
+ * compiled code 8-20 times in 10 s, to recompile it at the next resume.
+ * Half the watermark (12.5% of the cap past 512 KB, 64 KB below) leaves that
+ * machine alone and still flushes a program that holds its data closer to
+ * the wall -- before the wall, so the traces come back before the refusal
+ * (mem_test W15; the harness's mem-2).
  *
  * THE FLUSH CANNOT HAPPEN HERE.  lj_trace_flushall frees machine code and
  * rewrites bytecode (trace_unpatch) and must run on the Lua thread at a point
@@ -868,9 +880,9 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  * WHAT IT COSTS.  The next resume runs interpreted until its loops are hot
  * again (56 iterations each, milliseconds), and the machine gets back what
  * the traces held.  What it does NOT solve: a machine whose LIVE DATA alone
- * is past the watermark raises the flag at every proven cycle and flushes at
- * every resume, because for that machine the predicate is true and there is
- * nothing else to reclaim.  That is a machine that is out of memory; staying
+ * is past half the watermark raises the flag at every proven cycle and
+ * flushes at every resume, because for that machine the predicate is true
+ * and there is nothing else to reclaim.  That is a machine that is out of memory; staying
  * interpreted is the right degradation, and trace_flushes in _OCLJ_GCSTATS
  * makes it visible rather than mysterious.
  *
@@ -1007,6 +1019,7 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
 #define LJ52_GC_ODMAX  (512 * 1024)
 #define LJ52_GC_KSLICE (16 * 1024)      /* the kernel's own, past the credit */
 #define LJ52_GC_HYSTSHIFT 1             /* re-arm after half the headroom    */
+#define LJ52_GC_FLUSHSHIFT 1            /* flush inside half the watermark   */
 #define LJ52_OD_BURST   0               /* credit tiers                      */
 #define LJ52_OD_RESERVE 1
 #define LJ52_ARM_GATE  0                /* armed below the cap: pre-emptive  */
@@ -1150,7 +1163,8 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int k
        * See FLUSHING TRACES UNDER MEMORY PRESSURE above.  Never raised by
        * the proof of a cycle the flush itself armed: that is the
        * flush -> re-arm -> proof -> flush loop. */
-      if (M->gc_armby != LJ52_ARM_FLUSH && total - used < w) M->gc_flush_wanted = 1;
+      if (M->gc_armby != LJ52_ARM_FLUSH && total - used < (w >> LJ52_GC_FLUSHSHIFT))
+        M->gc_flush_wanted = 1;
     } else {
       if (M->gc_moved && g->gc.state == LJ52_GCS_PAUSE && g->gc.threshold > g->gc.total) {
         /* THE PARK RESET: the old cycle ended without atomic(); start a

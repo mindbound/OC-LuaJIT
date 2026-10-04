@@ -1,0 +1,39 @@
+== 14:56:13 chainC0 start; java procs: 0
+fullC0-additive-on exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1882378  used=169982
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| CHECKS: 66   FAILURES: 0   WALL: 89.4s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullC0-dropin-on exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164247  totalMemory=2051684  freeMemory=1856349  used=195335
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164247
+    SMOKE| MILESTONE acc-4/5/7: SKIP -- native=luajit: they test LuaStateLuaJIT, which the dropin arm does not use (not counted)
+    SMOKE| CHECKS: 63   FAILURES: 0   WALL: 90.9s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+one-record-r1-D-C0 exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=164923 held=549 why=not_enough_memory t_first5=0.0017 t_last5=0.0027 batches=6 last/first=1.59 freeKB_at_end/totalKB=0/192 arms=+41 refusals=+1 trace_flushes=+6 fill_ms=1497 queued=true running=true lastError=<null>
+    one-record-r1-D-C0 CAP-IDLE| ticks=400 arms=+40 collects=+40 bailouts=+0 refusals=+0 trace_flushes=+20 trace_flush_bytes=+522020 park_resets=+0 traces_live 13 -> 0 armed=0 state=0 stepmul=200 threshold=733600 gctotal=373555 ccap=518818 cused=373555 parked=false wallstats=present running=true
+    one-record-r1-D-C0 CAP-LIVE| used=367269 kernelMemory=164923 user=202346 count(3 collects)=367221/367221/367221 total=518818 traces_live=0
+    one-record-r1-D-C0 CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=733000 gctotal=382927 ccap=518818 cused=382927
+    one-record-r1-D-C0 CAP-GC| collects=+41 bailouts=+0 overdrafts=+432 od_peak=16323 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 gc_low=363531 armby=2 end: armed=0 state=0 stepmul=200 threshold=752800 gctotal=390483 ccap=518818 cused=390483 parked=false
+    one-record-r1-D-C0 SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/549/not_enough_memory running=true lastError=<null>
+one-record-r2-D-C0 exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=164923 held=566 why=not_enough_memory t_first5=0.0016 t_last5=0.0038 batches=6 last/first=2.38 freeKB_at_end/totalKB=0/192 arms=+36 refusals=+1 trace_flushes=+6 fill_ms=1494 queued=true running=true lastError=<null>
+    one-record-r2-D-C0 CAP-IDLE| ticks=400 arms=+28 collects=+28 bailouts=+0 refusals=+0 trace_flushes=+8 trace_flush_bytes=+228216 park_resets=+0 traces_live 30 -> 33 armed=0 state=0 stepmul=200 threshold=768000 gctotal=396407 ccap=518818 cused=396407 parked=false wallstats=present running=true
+    one-record-r2-D-C0 CAP-LIVE| used=384529 kernelMemory=164923 user=219606 count(3 collects)=384481/384481/384481 total=518818 traces_live=33
+    one-record-r2-D-C0 CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=715000 gctotal=389019 ccap=518818 cused=389019
+    one-record-r2-D-C0 CAP-GC| collects=+36 bailouts=+0 overdrafts=+273 od_peak=16383 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 gc_low=381935 armby=0 end: armed=0 state=0 stepmul=200 threshold=763800 gctotal=414075 ccap=518818 cused=414075 parked=false
+    one-record-r2-D-C0 SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/566/not_enough_memory running=true lastError=<null>
+one-record-r3-D-C0 exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=164923 held=546 why=not_enough_memory t_first5=0.0010 t_last5=0.0017 batches=6 last/first=1.70 freeKB_at_end/totalKB=0/192 arms=+39 refusals=+1 trace_flushes=+7 fill_ms=1487 queued=true running=true lastError=<null>
+    one-record-r3-D-C0 CAP-IDLE| ticks=400 arms=+36 collects=+36 bailouts=+0 refusals=+0 trace_flushes=+16 trace_flush_bytes=+401076 park_resets=+0 traces_live 25 -> 42 armed=0 state=0 stepmul=200 threshold=788000 gctotal=412623 ccap=518818 cused=412623 parked=false wallstats=present running=true
+    one-record-r3-D-C0 CAP-LIVE| used=394521 kernelMemory=164923 user=229598 count(3 collects)=394473/394473/394473 total=518818 traces_live=42
+    one-record-r3-D-C0 CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=733800 gctotal=373999 ccap=518818 cused=373999
+    one-record-r3-D-C0 CAP-GC| collects=+39 bailouts=+0 overdrafts=+386 od_peak=16367 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 gc_low=363531 armby=2 end: armed=0 state=0 stepmul=200 threshold=755200 gctotal=384451 ccap=518818 cused=384451 parked=false
+    one-record-r3-D-C0 SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/546/not_enough_memory running=true lastError=<null>
+one-record-r1-E-C0 exit=0 APACITY| shape=record native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164923 held=552 why=not_enough_memory t_first5=0.0010 t_last5=0.0021 batches=6 last/first=2.10 freeKB_at_end/totalKB=0/192 arms=+49 refusals=+1 trace_flushes=+7 fill_ms=1491 queued=true running=true lastError=<null>
+    one-record-r1-E-C0 CAP-IDLE| ticks=400 arms=+39 collects=+39 bailouts=+0 refusals=+0 trace_flushes=+19 trace_flush_bytes=+452176 park_resets=+0 traces_live 32 -> 34 armed=0 state=0 stepmul=200 threshold=778600 gctotal=401707 ccap=518818 cused=401707 parked=false wallstats=present running=true
+    one-record-r1-E-C0 CAP-LIVE| used=389829 kernelMemory=164923 user=224906 count(3 collects)=389781/389781/389781 total=518818 traces_live=34
+    one-record-r1-E-C0 CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=746200 gctotal=373415 ccap=518818 cused=373415
+    one-record-r1-E-C0 CAP-GC| collects=+49 bailouts=+0 overdrafts=+375 od_peak=16367 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 gc_low=362883 armby=2 end: armed=0 state=0 stepmul=200 threshold=735600 gctotal=407935 ccap=518818 cused=407935 parked=false
+    one-record-r1-E-C0 SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/552/not_enough_memory running=true lastError=<null>
+== 15:01:16 chainC0 done

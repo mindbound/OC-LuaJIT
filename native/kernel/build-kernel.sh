@@ -189,7 +189,31 @@ NEXTS=$(grep -c 'next(' "$OUT")
        sites 10-11), found $NEXTS -- OpenComputers may have grown an iterator this patch does
        not know about, and a closure over next is the shape that restores wrong"
 
-say "    arms=$ARMS  surviving debug.sethook=$LEFT (bogomips only; the post-expiry re-arm is deleted)  _ENV sites=2  shell-fill sites=3  snapshot walks=2  next( calls=$NEXTS"
+# SITE 13 (docs/roadmap.md, "the collector at the wall", stage C): the JIT is
+# off through kernel init and put back as it was after the baseline yield, so
+# kernelMemory -- which OpenComputers measures at that yield and grants on top
+# of the machine's RAM -- holds no compiled code.  By content AND by order: the
+# switch has to come before the kernel's first statement, or the bogomips loop
+# (calcHookInterval, called at the top level) compiles before it; and the
+# restore has to follow the baseline yield closely, with the trace count
+# recorded just before that yield for the harness to read back.
+J13=$(grep -n '^local ocljJitWasOn = type(jit) == "table" and jit.status() or false$' "$OUT" | head -1 | cut -d: -f1)
+H13=$(grep -n '^local hookInterval = 10000$' "$OUT" | head -1 | cut -d: -f1)
+[ -n "$J13" ] && [ -n "$H13" ] && [ "$J13" -lt "$H13" ] \
+  || fail "site 13 did not apply: no JIT switch before the kernel's first statement (switch at line
+       '${J13:-none}', hookInterval at '${H13:-none}').  Kernel init's traces would be counted in
+       kernelMemory again -- 335-414 KB where a trace-free kernel measures ~165 KB"
+grep -q '^if ocljJitWasOn then jit.off() end$' "$OUT" \
+  || fail "site 13: the JIT's state is noted but it is never switched off"
+BASE13=$(sed -n '/^  -- Yield once to get a memory baseline\.$/,/^  if ocljJitWasOn then jit.on() end$/p' "$OUT")
+BASEN=$(printf '%s\n' "$BASE13" | wc -l)
+printf '%s\n' "$BASE13" | tail -1 | grep -q '^  if ocljJitWasOn then jit.on() end$' && [ "$BASEN" -le 8 ] \
+  && printf '%s\n' "$BASE13" | grep -q '^  coroutine.yield()$' \
+  && printf '%s\n' "$BASE13" | grep -q '_OCLJ_KERNEL_TRACES = select(5, _OCLJ_JITSTATS())' \
+  || fail "site 13: the baseline yield is not followed closely by the JIT's restore, or the trace
+       count is not recorded before it (main()'s first lines)"
+
+say "    arms=$ARMS  surviving debug.sethook=$LEFT (bogomips only; the post-expiry re-arm is deleted)  _ENV sites=2  shell-fill sites=3  snapshot walks=2  next( calls=$NEXTS  JIT off through kernel init (site 13)"
 say "    out     = $OUT  ($(wc -c < "$OUT") bytes)"
 echo
 echo "NEXT: package it."

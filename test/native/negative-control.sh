@@ -367,13 +367,13 @@ build_variant_mem stopgap
 # M3c, M9, C0b, C0d, C3a, C4b, C5a, C5b, C6  (since the accounting's C side,
 #      2026-10-03) the native figure and Java's no longer agree, nothing crosses
 #      JNI, and in C mode too nothing is refused and no cycle arms
-# W1-W14 but W2c  (since the collector at the wall, 2026-10-04) the same: an
+# W1-W15 but W2c  (since the collector at the wall, 2026-10-04) the same: an
 #      uncharged state never arms, refuses or lends, so there is no cycle to
 #      park, restart or prove and no wall to recover at; W2c's retry succeeds
 #      anyway when nothing is ever refused
 expect_mem stopgap "a discarded allocator swap is caught" 1 \
   M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a C5b C6 \
-  W1 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W8 W10 W11 W12 W13 W14
+  W1 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W8 W10 W11 W12 W13 W14 W15
 
 
 # --- 4.2 nopending: drop the pre-binding bytes instead of banking them
@@ -498,6 +498,13 @@ expect_mem nofresh "a reload refused for history it never saw is caught" 1 W11
 # (W8) is refused again; the reload's derived reserve is lost too (W11).
 sabotage_mem closereserve 's|^      if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /\* repaid \*/$|      M->gc_odstate = LJ52_OD_BURST;  /* sabotage: every proof closes the reserve */|' 'sabotage: every proof closes the reserve'
 expect_mem closereserve "a reserve that every proof closes is caught" 1 W8 W11
+
+# 4.13 flushwhole: the flush asked for inside the whole watermark again, as
+# until stage C.  A machine holding live data with 100 KB free of a 300 KB
+# cap -- the shape a 192 KB machine idles in, kernelMemory trace-free --
+# throws away its compiled code at every proven cycle (W15).
+sabotage_mem flushwhole 's|^#define LJ52_GC_FLUSHSHIFT 1 |#define LJ52_GC_FLUSHSHIFT 0 /* sabotage: the whole watermark */ |' 'sabotage: the whole watermark'
+expect_mem flushwhole "a flush asked for at the whole watermark is caught" 1 W15
 
 # =====================================================================
 # 6. THE WATCHDOG.  Two sabotages, each the design's own "before" picture:

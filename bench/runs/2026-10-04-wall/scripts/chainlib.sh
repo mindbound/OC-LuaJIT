@@ -12,6 +12,6 @@ run() { # name native libdir jit early tier scale shape   (LOG and RUNS set by t
   "$A" C03C03 default "$SH" "$ONE" "$(cygpath -m $D)" $2 "$3" $4 $5 $6 $7 $8 > /dev/null 2>&1
   echo "$1 exit=$(cat $D/exit.txt 2>/dev/null) $(grep -E 'SMOKE\| CAPACITY\|' $D/run.log | cut -c9-)" >> $LOG
   grep -E 'SMOKE\| CAP-(IDLE|LIVE|MID|GC)\|' $D/run.log | sed "s/^SMOKE| /    $1 /" >> $LOG
-  grep -E 'MILESTONE cap-1' $D/run.log | sed "s/^/    $1 /" >> $LOG
+  grep -E 'MILESTONE (cap-1|km-1)' $D/run.log | sed "s/^/    $1 /" >> $LOG
   grep -qE 'MILESTONE (c-openos-shell|d-autorun-counter-live): FAIL|FATAL' $D/run.log && echo "    $1 BOOT-FAIL $(grep -E 'lastError =' $D/run.log | head -1)" >> $LOG
 }

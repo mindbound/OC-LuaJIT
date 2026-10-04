@@ -1,0 +1,12 @@
+[kernel] pinned OpenComputers = 1.12.58-GTNH
+[kernel] jar     = /c/Users/astro/.gradle/caches/modules-2/files-2.1/com.github.GTNewHorizons/OpenComputers/1.12.58-GTNH/6317dc8c8362cc4f00bc1b61f509356c351e7977/OpenComputers-1.12.58-GTNH-dev.jar
+[kernel] =============== 1. extract OpenComputers' kernel ===============
+[kernel]     stock kernel = 46483 bytes
+[kernel] =============== 2. patch ===============
+patch-machine-lua: ok  46483 -> 52904 bytes, 13 sites, 2 debug.sethook left, 0 next( left, LF endings
+[kernel] =============== 3. postflight ===============
+[kernel]     arms=3  surviving debug.sethook=2 (bogomips only; the post-expiry re-arm is deleted)  _ENV sites=2  shell-fill sites=3  snapshot walks=2  next( calls=0  JIT off through kernel init (site 13)
+[kernel]     out     = /c/Users/astro/Downloads/OC-LuaJIT/build/native/kernel/machine.lua  (52904 bytes)
+
+NEXT: package it.
+  ./gradlew build     # stages it at assets/ocluajit/lua/machine.lua

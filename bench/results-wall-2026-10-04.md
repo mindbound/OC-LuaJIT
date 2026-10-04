@@ -1,5 +1,20 @@
 # The collector at the wall (2026-10-04)
 
+**Stage C, a trace-free `kernelMemory`: every boot measures the same figure, and a
+192 KB machine idles without throwing away its compiled code.**
+
+- **Site 13.** The patched kernel keeps the JIT off until OpenComputers has taken its
+  memory baseline.
+- **`kernelMemory`** reads 164 923 B on every boot of the additive build, pinned and
+  unpinned. With kernel init's traces in it, the figure was 335-414 KB and varied boot
+  to boot.
+- **The trace flush** is now asked for only when a proven cycle leaves less than half the
+  watermark free. A 192 KB machine at idle flushed its compiled code 8-20 times in 10 s;
+  now it does so 0 times in 13 of 16 runs.
+- **Capacity at small sticks drops to its honest figure:** D at 192 KB holds 1.53-2.78x
+  stock's objects, from up to 4.5x with the windfall. At least stock's in every cell.
+- **Boots:** none failed.
+
 **Stage B, recovery at the wall: a program that catches "not enough memory" and drops
 its data now carries on, and the last quarter of memory costs 0.7-2.7x what it costs on
 stock, not 21-121x.**
@@ -32,14 +47,14 @@ instead of staying armed at the pause with the threshold twice the heap (the *pa
 The safety valve now counts allocation attempts only, so one armed sweep of more than
 65 536 dead blocks no longer reads as a bailout. Both were seen failing on the 2026-10-03
 shim first, in hermetic tests. In the machine the park did not occur at all in the fills
-measured: it is not what took 192 KB machines down. Stage C makes `kernelMemory`
-trace-free; this document grows with it.
+measured: it is not what took 192 KB machines down.
 
 All harness runs: ocelot-brain, JDK 8, pinned to the performance cores (`affrun
 C03C03`), the watchdog kernel on ours, OC's own on stock. Baseline: the shipping
 additive DLL `cb29485d` (and the dropin `f556d839`), saved before any rebuild. Stage A:
 additive `4c225c7d`, dropin `ed3b4fe9`, shim object `d156cb7a`. Stage B: additive
-`2869c2ad`, dropin `b33a1dbe`, shim object `377bc4d6`. Archive:
+`2869c2ad`, dropin `b33a1dbe`, shim object `377bc4d6`. Stage C: additive `05d133cf`,
+dropin `4cb483a5`, shim object `0259f0d1`, the mod's kernel `1d12c322`. Archive:
 [runs/2026-10-04-wall/](runs/2026-10-04-wall/).
 
 ## The four problems, and the design
@@ -481,3 +496,143 @@ flush predicate.
 335-350k, 367k and 411-414k as on 2026-10-03, and E reads 164 525 B.
 
 **Full tables:** [runs/2026-10-04-wall/chainB-tables.md](runs/2026-10-04-wall/chainB-tables.md).
+
+## Stage C: no compiled code in `kernelMemory`, and the flush at half the watermark
+
+**Why.** OpenComputers lets the kernel initialise, collects at its first yield (the
+"memory baseline" in `main()`), and records what is in use as `kernelMemory`. It grants
+that figure on top of the machine's RAM.
+
+With the JIT on, kernel init compiles (the bogomips loop, the sandbox build), and the
+trace metadata it leaves is charged like any other allocation, so OC counted it:
+- `kernelMemory` read 335-414 KB against a trace-free ~165 KB, and differed boot to boot
+  with how much had compiled.
+- The traces were later flushed while the grant stayed, so a machine got 170-250 KB of
+  memory it was never given.
+- At 192 KB that windfall inflated what a program could hold, and it was what had been
+  keeping the machine off its watermark at idle.
+
+**Site 13 of the patched kernel** (`native/kernel/patch-machine-lua.lua`, THE FIFTH
+CHANGE):
+- At the kernel's first line, the JIT's state is noted and the JIT switched off.
+- After the baseline yield, the JIT is switched back on only if it was on. Restoring,
+  rather than calling `jit.on()`, keeps an embedder's choice: the harness's arm E starts
+  with the JIT off.
+- Just before the yield, the kernel records the live trace count in the raw global
+  `_OCLJ_KERNEL_TRACES`. The harness reads it back as `km-1`, and 0 is the claim.
+- The patcher applies to both kernels: GTNH OpenComputers' (the mod's, 46 483 -> 52 904
+  B) and ocelot-brain's (the harness's).
+- `build-kernel.sh`'s postflight checks site 13 by content and by order.
+
+**The flush at half the watermark** (`native/lj52shim.c`, HALF THE WATERMARK,
+`LJ52_GC_FLUSHSHIFT`). With `kernelMemory` trace-free, a 192 KB machine idles with
+OpenOS at 106-145 KB free against a 130 KB watermark. With the whole watermark as the
+flush predicate, every cycle it proved at idle asked for the flush: it threw away
+~25 KB of compiled code 8-20 times in 10 s, and recompiled it at the next resume
+(`logs/chainC0/`: 228-522 KB of trace metadata a window). A proven cycle now asks for
+the flush only when it leaves less than half the watermark free:
+- 12.5% of the cap past 512 KB, 64 KB below that.
+- Cap-relative, and the same shape as the rule it replaces.
+- It still flushes a program holding its data closer to the wall, before the wall. The
+  harness's `mem-2` (1024 KB, 115 KB free at its hold, half the watermark 286 KB)
+  passes with 16 and 19 flushes.
+
+Two alternatives were set aside:
+- **A fixed 32 KB:** at large caps it would let a program run within ~100 KB of the wall
+  without ever reclaiming its traces, and `mem-2` would fail there.
+- **Trace size against free memory:** fragile. The idle case (25 KB of traces, ~120 KB
+  free) and mem_test's P2 case (20 KB, 98 KB free) are nearly the same proportion.
+
+**Fail-first:**
+- **`build-kernel.sh`'s postflight** fails on the 12-site patcher, naming site 13
+  (`logs/kernel/build-kernel-failfirst.log`). On the new patcher it passes, and the mod's
+  kernel is `1d12c322` (was `089dcbde`).
+- **`km-1`** fails on a kernel with site 13's `jit.off()` neutralised: 246 traces live at
+  the baseline, `kernelMemory` 339 943 B (`logs/chainC0/km1-sabotage-jit-left-on.log`).
+  It passes on every run since.
+- **mem_test W15** holds 160 KB live in a 300 KB cap:
+  - With 100 KB free (inside the watermark, outside half of it), a proven cycle must not
+    ask for the flush.
+  - With 40 KB free, it must.
+
+  On stage B's object the first half fails (`logs/mem/stageC/W15-on-stageB-object.log`).
+- **The sabotage** `flushwhole` (`negative-control.sh` 4.13), the whole watermark again,
+  fails exactly W15.
+- **P2 and C5b** encoded the whole-watermark rule (160 KB live, 96 KB free). On the new
+  object they failed, P2c-h and C5b
+  (`logs/mem/stageC/half-watermark-before-P2-rescope.log`). They were re-scoped to 200 KB
+  live (56 KB free) and pass on the stage-B and stage-C objects alike.
+
+**Gates, stage C build** (shim object `0259f0d1`, additive `05d133cf`, dropin
+`4cb483a5`, kernel `1d12c322`): mem_test 68/0, wd_test 35/0, shim_test PASS, security
+PASS, race 2/0, penalty 6/0.
+
+The negative control passed on its re-run (`negctl-2.log`), with 24 controls. Its first
+run found stopgap's list one short: W15, since an uncharged state never cycles.
+
+## Stage C in the machine
+
+**The full suite** (`chainC`): additive JIT on 66/0, the dropin 63/0, JIT off 64/0,
+sieve only 60/0, stock 47/0. `km-1` passed in every run of ours.
+
+**`kernelMemory`** read **164 923 B on every boot** of the additive build: all 41 of its
+capacity runs (40 pinned, one unpinned) and its three full suites. The dropin read
+164 247 B and stock PUC 174 605 B. Stage B's D read 334 733-413 645 B. The figure is
+about 400 B over arm E's earlier 164 525 B, for site 13's flag and marker.
+
+**The capacity matrix** (`chainC`) follows chain B's layout without arm E: with site 13
+shipped, D is what E was. It ran stock S, ours D and O, and the dropin L; 192 KB at 3
+reps, 256 and 1024 KB at 1; four shapes; 68 runs, plus one D run at 192 KB not pinned.
+
+| | runs | clean | recovery refused | stalled | machine down | boot failed |
+|---|---|---|---|---|---|---|
+| stock S | 20 | 20 | 0 | 0 | 0 | 0 |
+| ours D/O, pinned | 40 | 39 | 0 | 1 | 0 | 0 |
+| the dropin L | 8 | 8 | 0 | 0 | 0 | 0 |
+| ours D, unpinned | 1 | 1 | 0 | 0 | 0 | 0 |
+
+The one stall (`onehalf-string-r1-O-C`) is stage B's residual class: a refusal outside
+the program's handler. Chain B saw 3 stalls and 1 dropin down in 68; chain C sees 1 in
+49. No boot failed: 24 of 24 D/O boots at 192 KB, the judges' 12 of 12 twice over.
+
+**192 KB at idle,** 400 ticks after boot:
+- **D:** 20 arms (20-29) and 0 trace flushes in 10 of 12 runs. Stage B's arm E read 38
+  arms and 18 flushes; with stage B's DLL, the site-13 kernel read 28-40 and 8-20
+  (`chainC0`).
+- **Three runs flushed once each** (two D, one L), each with 103-116 traces
+  resident, 83-86 KB of metadata. The flag goes up only when a proven cycle leaves less
+  than half the watermark free, so those traces had brought the heap there. The flush gave
+  them back, and the traces regrew to 53-61.
+- **The judges' gate:** arms <= 63, met; 0 flushes, met in 13 of 16 runs (D and L), and
+  the three that flushed did so for that reason.
+- **O:** 0-1 arms.
+
+**Capacity, the objects held at the refusal** (clean runs, median): ours holds 1.10x to
+3.04x stock's, at least stock's in every cell. D at 192 KB now holds what arm E held,
+because the windfall is gone:
+
+| shape | stage B | stage C |
+|---|---|---|
+| record | 1188 | 551 |
+| array | 1677 | 799 |
+| string | 4667 | 2048 |
+| closure | 1887 | 778 |
+
+That is 1.53-2.78x stock's, the honest figure. The 1024 KB closure cell, the tightest
+before, reads D 1.12x, O 1.11x, L 1.10x against a stock reading of 7313; chain B's stock
+read 8192 there.
+
+**Near the wall,** the last five batches' time against stock's in the same chain:
+- **Most cells:** 0.9-3.2x.
+- **One 256 KB string run of D:** 0.1x.
+- **The unpinned record run:** 4.1x.
+- **1024 KB strings:** 5.5-5.8x for D, O and L alike. Ours read the same as in stage B
+  (D 0.0109 s against 0.0095; O 0.0117 against 0.0129; L 0.0114 against 0.0089). Stock's
+  single reading there halved between the chains (0.0050 s to 0.0020 s). A ratio to one
+  stock run is that run's noise as much as ours.
+
+**Arms per batch** read 0.6-5.8 pinned. **Bailouts and park resets** stayed 0. **The
+excursion past the cap** stayed within G plus the kernel's slice; 1024 KB D passed its G
+by 127 B.
+
+**Full tables:** [runs/2026-10-04-wall/chainC-tables.md](runs/2026-10-04-wall/chainC-tables.md).

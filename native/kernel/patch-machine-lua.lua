@@ -4,18 +4,20 @@
 --   luajit patch-machine-lua.lua <in: OC machine.lua> <out: patched machine.lua>
 --
 -- WHY A PATCH AND NOT A FORK.  The census argument stands: we run OC's real
--- kernel semantics and couple to no particular OS.  This script changes twelve
+-- kernel semantics and couple to no particular OS.  This script changes thirteen
 -- places and refuses to run if any anchor does not match EXACTLY ONCE -- so an
 -- OpenComputers bump that moves or rewords a site fails loudly at build time
 -- rather than shipping a kernel that arms the old hook somewhere.
 --
--- The twelve are FOUR changes, not one.  Sites 0-3 and 12 replace the standing
+-- The thirteen are FIVE changes, not one.  Sites 0-3 and 12 replace the standing
 -- deadline hook with the watchdog (12 deletes checkDeadline's own post-expiry
 -- re-arm; see THE CHANGE).  Sites 4-5 bind the name _ENV, which LuaJIT
 -- does not provide at all; see THE SECOND CHANGE below.  Sites 6-9 convert the
 -- kernel's two __persist recipes to the shell-fill protocol; see THE THIRD
 -- CHANGE.  Sites 10-11 replace the kernel's two iterators that wrap next in a
 -- closure with snapshot walks that survive a save; see THE FOURTH CHANGE.
+-- Site 13 keeps the JIT off through kernel init, so that kernelMemory holds no
+-- compiled code; see THE FIFTH CHANGE.
 --
 -- THE CHANGE.  OC enforces its per-resume timeout by arming
 --     debug.sethook(co, checkDeadline, "", hookInterval)
@@ -136,6 +138,34 @@
 -- __pairs the triple would also drop the whole second phase, the fields.
 -- After this change the kernel calls next nowhere, and the patcher asserts
 -- that, the same way it asserts the surviving debug.sethook count.
+
+-- THE FIFTH CHANGE: NO COMPILED CODE IN kernelMemory (site 13; docs/roadmap.md,
+-- "the collector at the wall", stage C; bench/results-wall-2026-10-04.md).
+-- OpenComputers lets the kernel initialise, collects at its first yield (the
+-- "memory baseline" in main()), and records what is in use as kernelMemory,
+-- which it grants ON TOP of the machine's RAM (NativeLuaArchitecture.scala
+-- :207-222, :158).  With the JIT on, kernel init compiles -- the bogomips loop,
+-- the sandbox build -- and the trace metadata, charged to the machine like any
+-- other allocation, was counted in that figure: 335-414 KB, against a
+-- trace-free 164 393 B and stock PUC's 174 605 B, and different boot to boot
+-- with how much had compiled.  The traces were then flushed (the pressure
+-- flush, LuaJIT's own) while the grant stayed, so a machine got 170-250 KB it
+-- was never given, by luck, and on a 192 KB stick that windfall is what had
+-- been keeping it off its watermark at idle.  The harness's arm E (the JIT off
+-- through kernel init) had measured the trace-free figure since 2026-10-03.
+--
+-- THE FIX: note the JIT's state at the kernel's first line and switch it off;
+-- after the baseline yield, switch it back on only if it was on.  RESTORE,
+-- not jit.on(): an embedder that started the state with the JIT off (the
+-- harness's arm E does; a future setting might) keeps it off.  Just before the
+-- yield the kernel records the live trace count in the raw global
+-- _OCLJ_KERNEL_TRACES, which the harness reads back (km-1); 0 is the claim.
+-- jit is a raw global the sandbox never sees, and jit.off/jit.on are C
+-- functions the interpreter calls -- the documented way to switch it.
+-- Nothing persists differently: the flag is one boolean upvalue, and a state
+-- restored from a save is past the baseline with the JIT as the loader left it.
+-- The cost is a kernel init run interpreted -- the bogomips calibration among
+-- it, whose result (hookInterval) this kernel no longer uses.
 
 -- Left alone on purpose:
 --   * calcHookInterval (the bogomips loop at the top) still arms a hook for
@@ -488,6 +518,35 @@ src = replace_once(src, "checkDeadline post-expiry re-arm",
     if not hitDeadline then
 ]==])
 
+-- 13. No compiled code in kernelMemory: the JIT off from the kernel's first
+--     line until OpenComputers has taken its memory baseline, then back as it
+--     was.  See THE FIFTH CHANGE.
+src = replace_once(src, "JIT off through kernel init",
+[==[local hookInterval = 10000
+]==],
+[==[-- OC-LuaJIT: no compiled code in kernelMemory (site 13 in
+-- native/kernel/patch-machine-lua.lua).  OpenComputers measures the kernel's
+-- footprint at its first yield (main(), below) and grants it on top of the
+-- machine's RAM; traces compiled during kernel init were counted there and
+-- flushed later, a windfall that differed boot to boot.  The JIT stays off
+-- until that measurement and is put back as it was after it.
+local ocljJitWasOn = type(jit) == "table" and jit.status() or false
+if ocljJitWasOn then jit.off() end
+local hookInterval = 10000
+]==])
+src = replace_once(src, "JIT restored after the memory baseline",
+[==[  -- Yield once to get a memory baseline.
+  coroutine.yield()
+]==],
+[==[  -- Yield once to get a memory baseline.
+  -- OC-LuaJIT (site 13): record the traces live at the baseline -- 0 is the
+  -- point -- where the harness can read it back; then yield, and put the JIT
+  -- back as it was before kernel init.
+  if type(_OCLJ_JITSTATS) == "function" then _OCLJ_KERNEL_TRACES = select(5, _OCLJ_JITSTATS()) end
+  coroutine.yield()
+  if ocljJitWasOn then jit.on() end
+]==])
+
 -- What must remain: exactly the two debug.sethook calls we leave alone (the
 -- bogomips arm and clear in calcHookInterval).  checkDeadline's re-arm is
 -- gone by site 12.  Anything else means OC grew an arm site this patch does
@@ -508,14 +567,15 @@ assert(nextcalls == 0,
 local banner = [==[-- =====================================================================
 -- OC-LuaJIT KERNEL VARIANT -- generated by native/kernel/patch-machine-lua.lua
 -- from OpenComputers' machine.lua.  Do not edit; edit the patcher.
--- Twelve sites changed: the standing deadline hook is replaced by the native's
+-- Thirteen sites changed: the standing deadline hook is replaced by the native's
 -- asynchronous watchdog and checkDeadline's post-expiry re-arm, per-VM on
 -- LuaJIT, is deleted (5), the name _ENV is bound per chunk, which LuaJIT
 -- does not do (2), the two __persist recipes fill the shell the serializer
 -- hands them instead of returning a fresh table (3), and component.list and
 -- componentProxy.__pairs walk a snapshot of their keys by an integer instead
--- of wrapping next in a closure, which restores wrong (2).  Everything else
--- is OpenComputers' own kernel.
+-- of wrapping next in a closure, which restores wrong (2), and the JIT is
+-- kept off through kernel init so kernelMemory holds no compiled code (1).
+-- Everything else is OpenComputers' own kernel.
 -- =====================================================================
 ]==]
 
@@ -524,5 +584,5 @@ if crlf then out = out:gsub(LF, CR .. LF) end
 local g = assert(io.open(outpath, "wb"))
 g:write(out)
 g:close()
-io.write(("patch-machine-lua: ok  %d -> %d bytes, 12 sites, %d debug.sethook left, %d next( left, %s endings"):format(
+io.write(("patch-machine-lua: ok  %d -> %d bytes, 13 sites, %d debug.sethook left, %d next( left, %s endings"):format(
   srcbytes, #out, remaining, nextcalls, crlf and "CRLF" or "LF") .. LF)
