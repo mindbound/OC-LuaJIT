@@ -1,0 +1,3 @@
+13:45:23 start locked-1 lock=on native=additive
+13:46:02 end   locked-1 exit=0 MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1352692 reads over 1000 ticks (2796157 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 47 -> 1048
+13:46:02 CHAIN DONE

@@ -1,0 +1,4 @@
+== 14:37:12 chainZ start; java procs: 0
+race1-locked exit=0 SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1325129 reads over 1000 ticks (2447919 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 45 -> 1046
+fullZ-additive-on exit=0 SMOKE| CHECKS: 66   FAILURES: 0   WALL: 90.5s
+== 14:39:27 chainZ done

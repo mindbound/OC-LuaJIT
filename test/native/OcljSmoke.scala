@@ -97,6 +97,10 @@ object Smoke {
    * machine thread racing over one Lua stack, which is the single thing a JNI
    * caller must never do.  A probe skipped and announced is worth more than a
    * number read off a stack somebody else is using.
+   *
+   * Necessary, not sufficient: a false isExecuting can mean a resume is
+   * already scheduled (evalStrLocked says how), so every read after this
+   * also takes the machine's monitor.
    */
   def quiesced(machine: totoro.ocelot.brain.entity.machine.Machine, what: String,
                spins: Int = 600, ms: Long = 10L): Boolean = {
@@ -641,9 +645,19 @@ object Smoke {
                     lua: LuaState, code: String): String =
     machine.synchronized {
       val before = try lua.getTop catch { case _: Throwable => -1 }
-      if (before != 1)
-        p("!! raw-state read on a dirty stack: getTop=" + before +
-          " (expected 1) -- something else is using this state")
+      // Under the monitor, 2 is usually OC's own shape, not a fault: the
+      // kernel thread and a function is a synchronized call waiting for the
+      // next tick (runSynchronized's asserts), and the thread and a table is
+      // its result waiting for the worker (runThreaded's).  Logged either
+      // way, with the shape, and left as found.
+      if (before != 1) {
+        val shape = if (before != 2) "" else
+          try " [1]=" + lua.`type`(1) + " [2]=" + lua.`type`(2) catch { case _: Throwable => "" }
+        val pending = shape == " [1]=THREAD [2]=FUNCTION" || shape == " [1]=THREAD [2]=TABLE"
+        p("!! raw-state read on a dirty stack: getTop=" + before + shape + " (expected 1) -- " +
+          (if (pending) "a synchronized call between its two halves, OC's own shape, left as found"
+           else "something else is using this state"))
+      }
       val r = evalStr(lua, code)
       val after = try lua.getTop catch { case _: Throwable => -1 }
       if (after != before)
@@ -1574,6 +1588,29 @@ object Smoke {
     if (nativeMode == "additive") classOf[OCLuaJITArchitecture]
     else classOf[NativeLua52Architecture]
 
+  /** The VM fingerprint's six reads on a machine's RAW state: the native's
+    * marker, the JIT marker, _VERSION, the jit table, eris's shape and version.
+    * `locked` takes the machine's monitor around them, as evalStrLocked does;
+    * without it nothing stops the machine's worker resuming the same state
+    * in the middle of a read (the race-1 probe, OCLJ_PROBE=rawrace). */
+  def vmFingerprint(machine: totoro.ocelot.brain.entity.machine.Machine, lua: LuaState,
+                    locked: Boolean): (String, String, String, String, String, String) = {
+    def reads(): (String, String, String, String, String, String) = (
+      evalStr(lua, "return rawget(_G, '_OCLJ_NATIVE') or '<stock>'"),
+      evalStr(lua, "return rawget(_G, '_OCLJ_JIT') or '<n/a>'"),
+      evalStr(lua, "return _VERSION"),
+      evalStr(lua, "return jit and (jit.version or 'jit-table-no-version') or 'NO-JIT-TABLE'"),
+      evalStr(lua,
+        "if not eris then return 'NO-ERIS' end local ks={} for k in pairs(eris) do ks[#ks+1]=k end " +
+          "table.sort(ks) return table.concat(ks,',')"),
+      evalStr(lua,
+        "if not eris or not eris.version then return '<none>' end " +
+          "if type(eris.version) ~= 'function' then return tostring(eris.version) end " +
+          "local ok, a, b, c = pcall(eris.version) " +
+          "return ok and (tostring(a) .. ' / ' .. tostring(b) .. ' / fmt=' .. tostring(c)) or '<err>'"))
+    if (locked) machine.synchronized { reads() } else reads()
+  }
+
   def guard(machine: totoro.ocelot.brain.entity.machine.Machine): String = {
     if (!LuaStateFactory.isAvailable)
       die("LuaStateFactory.isAvailable == false: no native loaded, LuaJ would be substituted. " +
@@ -1591,18 +1628,10 @@ object Smoke {
     val lua = luaOf(arch)
     if (lua == null) die("architecture holds a null LuaState")
 
-    val nativeMark = evalStr(lua, "return rawget(_G, '_OCLJ_NATIVE') or '<stock>'")
-    val jitStatus = evalStr(lua, "return rawget(_G, '_OCLJ_JIT') or '<n/a>'")
-    val version = evalStr(lua, "return _VERSION")
-    val hasJit = evalStr(lua, "return jit and (jit.version or 'jit-table-no-version') or 'NO-JIT-TABLE'")
-    val erisShape = evalStr(lua,
-      "if not eris then return 'NO-ERIS' end local ks={} for k in pairs(eris) do ks[#ks+1]=k end " +
-        "table.sort(ks) return table.concat(ks,',')")
-    val erisVer = evalStr(lua,
-      "if not eris or not eris.version then return '<none>' end " +
-        "if type(eris.version) ~= 'function' then return tostring(eris.version) end " +
-        "local ok, a, b, c = pcall(eris.version) " +
-        "return ok and (tostring(a) .. ' / ' .. tostring(b) .. ' / fmt=' .. tostring(c)) or '<err>'")
+    // Under the machine's monitor.  Until 2026-10-04 these six reads were the
+    // last unlocked ones on a live machine, and one boot in about 220 died on
+    // OC's runSynchronized assertion for it (race-1, OCLJ_PROBE=rawrace).
+    val (nativeMark, jitStatus, version, hasJit, erisShape, erisVer) = vmFingerprint(machine, lua, locked = true)
 
     val fp = s"native=$nativeMark | class=${lua.getClass.getSimpleName} | _VERSION=$version | " +
       s"jit=$hasJit ($jitStatus) | eris=[$erisShape] | eris.version=$erisVer"
@@ -3180,6 +3209,119 @@ object Smoke {
       |end, math.huge)
       |""".stripMargin
 
+  /** OCLJ_RACE_LOCK=off reads without the machine's monitor (race-1, race-2). */
+  val raceLocked: Boolean = Option(System.getenv("OCLJ_RACE_LOCK")).map(_.trim).getOrElse("on") != "off"
+  /** OCLJ_RACE_PHASE: idle (default, race-1 after the boot) or boot (race-2, through it). */
+  val racePhase: String = Option(System.getenv("OCLJ_RACE_PHASE")).map(_.trim).filter(_.nonEmpty).getOrElse("idle")
+
+  /** The fingerprint reads race-1 and race-2 make beside a machine, and what
+    * they found.  Each read only while isExecuting is false -- guard()'s own
+    * precondition -- and under the machine's monitor unless `locked` is false. */
+  final class RaceReads(m: totoro.ocelot.brain.entity.machine.Machine, lua: LuaState, val locked: Boolean) {
+    val want = vmFingerprint(m, lua, locked = true)
+    var reads = 0; var wrong = 0; var skipped = 0; var firstBad = ""
+    def window(ms: Long, tick: Int): Unit = {
+      val until = System.nanoTime() + ms * 1000000L
+      while (System.nanoTime() < until && m.isRunning) {
+        if (m.isExecuting) skipped += 1
+        else {
+          val got = vmFingerprint(m, lua, locked)
+          reads += 1
+          if (got != want) { wrong += 1; if (firstBad.isEmpty) firstBad = "tick " + tick + ": " + got }
+        }
+      }
+    }
+    def summary(ticks: Int): String =
+      (if (locked) "locked" else "UNLOCKED") + ": " + reads + " reads over " + ticks + " ticks (" + skipped +
+        " checks found the machine executing); wrong reads " + wrong + (if (firstBad.nonEmpty) " (first: " + firstBad + ")" else "")
+  }
+
+  /** OC's own complaints in the captured log since `log0`: runSynchronized's
+    * asserts ("Faulty architecture"), runThreaded's, and a kernel that died. */
+  def raceComplaints(log0: Int): (Int, Int, Int) = {
+    val logs = kernelLog.toArray.drop(log0).map(String.valueOf)
+    (logs.count(_.contains("Faulty architecture")), logs.count(_.contains("runThreaded threw")),
+      logs.count(_.contains("Kernel crashed")))
+  }
+
+  /** Where a machine ended: its state stack, the ticks it may idle, and its
+    * main stack's shape (the kernel thread alone, when it is healthy and
+    * between runs). */
+  def machineEndState(m: totoro.ocelot.brain.entity.machine.Machine, lua: LuaState): String = {
+    val stateNow = try String.valueOf(m.getClass.getMethod("state").invoke(m)) catch { case t: Throwable => "<" + t + ">" }
+    val idleNow = try {
+      val f = classOf[totoro.ocelot.brain.entity.machine.Machine].getDeclaredField("remainIdle")
+      f.setAccessible(true); String.valueOf(f.get(m))
+    } catch { case t: Throwable => "<" + t + ">" }
+    val stackNow = m.synchronized {
+      try { val t = lua.getTop; t + (if (t > 0) " " + (1 to t).map(i => String.valueOf(lua.`type`(i))).mkString(",") else "") }
+      catch { case t: Throwable => "<" + t + ">" }
+    }
+    "state=" + stateNow + " remainIdle=" + idleNow + " main stack=" + stackNow
+  }
+
+  /**
+    * (race-1) OCLJ_PROBE=rawrace: the VM fingerprint's raw-state reads, over
+    * and over, beside a machine that runs.  A 2026-10-04 capacity boot died on
+    * the boot loop's first tick with OpenComputers' own runSynchronized
+    * assertion (lua.getTop == 2, NativeLuaArchitecture.scala:172), and the
+    * reads guard() made just before were the one place the harness touched a
+    * machine's raw state without its monitor: quiesced() only checks that the
+    * machine is not executing NOW, and a machine whose next run is already
+    * scheduled can start resuming the same state mid-read.
+    *
+    * 1000 ticks; in each, ws.update(), then reads for ~25 ms, each one only
+    * while machine.isExecuting is false -- guard()'s own precondition.
+    * OCLJ_RACE_LOCK=off reads without the monitor, as guard() did; the
+    * default takes it, as guard() does since.  PASS iff the machine is still
+    * running AND still counting (the autorun's heartbeat, one per 0.05 s of
+    * uptime, advanced by at least ticks/2; a machine that keeps up advances
+    * it once a tick, +1003 in a locked run's 1000), every read returned the first
+    * read's fingerprint, and the log carries no "Faulty architecture"
+    * (runSynchronized's asserts), "runThreaded threw" (runThreaded's) or
+    * "Kernel crashed".
+    *
+    * The heartbeat is there because the race has a SILENT outcome: a read
+    * whose setTop(base) lands between the kernel's yield and runThreaded's
+    * read of it removes the sleep value, runThreaded falls through to
+    * Sleep(Int.MaxValue), and the machine -- whose only timers are the
+    * kernel's own -- never runs again while isRunning stays true.  The second
+    * unlocked run did exactly that and scored PASS before this check existed;
+    * a later one stopped counting at +187 and read remainIdle Int.MaxValue-814.
+    * The last line says where the machine ended: its state stack, the ticks
+    * it may idle, and its main stack's shape (the kernel thread alone, when
+    * it is healthy and between runs).
+    */
+  def rawRaceProbe(ws: Workspace, computer: Case, screen: Screen, lua: LuaState): Unit = {
+    val m = computer.machine
+    def ctr(): Int = try parse(nonEmptyScreen(screen), "OCLJCTR").toInt catch { case _: Throwable => -1 }
+    val ticks = Option(System.getenv("OCLJ_RACE_TICKS")).map(_.trim.toInt).getOrElse(1000)
+    p("--- (race-1) the fingerprint's raw reads beside a running machine, " + ticks + " ticks, " +
+      (if (raceLocked) "under the machine's monitor" else "WITHOUT the monitor, as guard() read before 2026-10-04") + " ---")
+    val rr = new RaceReads(m, lua, raceLocked)
+    val ctr0 = ctr()
+    val log0 = kernelLog.size
+    var tick = 0
+    var stoppedAt = -1
+    while (tick < ticks && m.isRunning) {
+      ws.update()
+      rr.window(25, tick)
+      tick += 1
+    }
+    if (!m.isRunning) stoppedAt = tick
+    val ctr1 = ctr()
+    val counting = ctr0 > 0 && ctr1 - ctr0 >= ticks / 2
+    p("race-1 end: " + machineEndState(m, lua))
+    val (faulty, threw, crashed) = raceComplaints(log0)
+    val ok = m.isRunning && counting && rr.wrong == 0 && faulty == 0 && threw == 0 && crashed == 0
+    milestone("race-1-raw-reads-beside-a-running-machine", ok,
+      rr.summary(tick) +
+        "; 'Faulty architecture' " + faulty + ", 'runThreaded threw' " + threw + ", 'Kernel crashed' " + crashed +
+        "; running=" + m.isRunning + ", heartbeat " + ctr0 + " -> " + ctr1 +
+        (if (counting) "" else " (want +" + (ticks / 2) + ": the machine stopped running its kernel)") +
+        (if (stoppedAt >= 0) " (stopped by tick " + stoppedAt + ", lastError=" + m.lastError + ")" else ""))
+  }
+
   /** OCLJ_CAP_SHAPE for the capacity probe; refused, not defaulted, on a misspelling. */
   val capShape: String = Option(System.getenv("OCLJ_CAP_SHAPE")).map(_.trim).filter(_.nonEmpty).getOrElse("record")
 
@@ -3477,8 +3619,15 @@ object Smoke {
     p("LuaStateFactory.includeLuaJ  = " + LuaStateFactory.includeLuaJ)
     p("forceNativeLibPathFirst      = '" + totoro.ocelot.brain.Settings.get.forceNativeLibPathFirst + "'")
     p("computer.lua.allowBytecode   = " + totoro.ocelot.brain.Settings.get.allowBytecode)
-    if (probeMode.nonEmpty && probeMode != "grace" && probeMode != "capacity")
-      die("OCLJ_PROBE must be unset, 'grace' or 'capacity', not '" + probeMode + "'")
+    if (probeMode.nonEmpty && probeMode != "grace" && probeMode != "capacity" && probeMode != "rawrace")
+      die("OCLJ_PROBE must be unset, 'grace', 'capacity' or 'rawrace', not '" + probeMode + "'")
+    if (probeMode == "rawrace") {
+      if (racePhase != "idle" && racePhase != "boot")
+        die("OCLJ_RACE_PHASE must be idle or boot, not '" + racePhase + "'")
+      p("!! OCLJ_PROBE=rawrace: boot with the heartbeat-only autorun, then ONLY the raw-read race probe (" +
+        (if (racePhase == "boot") "race-2, reading through the boot" else "race-1, after the boot") + ");")
+      p("!! no suite, no persist.  ocelot-brain log capture: " + installKernelLogCapture())
+    }
     if (probeMode == "capacity") {
       if (!Set("record", "array", "string", "closure").contains(capShape))
         die("OCLJ_CAP_SHAPE must be record, array, string or closure, not '" + capShape + "'")
@@ -3540,7 +3689,7 @@ object Smoke {
     // are still written (the planting code is shared) but nothing reads them.
     val autorunSrc =
       if (probeMode == "grace") GraceAutorunLua
-      else if (probeMode == "capacity") CapacityAutorunLua.replace("%%SHAPE%%", capShape)
+      else if (probeMode == "capacity" || probeMode == "rawrace") CapacityAutorunLua.replace("%%SHAPE%%", capShape)
       else AutorunLua
     Files.write(diskDir.resolve("autorun.lua"), autorunSrc.getBytes(StandardCharsets.UTF_8))
     // The Phase-0 compute pole, planted next to autorun.lua so the sandbox can
@@ -3820,8 +3969,15 @@ object Smoke {
     // are being made at all.  Attached here -- after machine.lua has built its
     // sandbox, before OpenOS boots -- so the count covers the boot.
     //   -Docljit.jit=off is the control: the same boot, the compiler switched
-    // off in the same state at the same moment.  Note what that does NOT
-    // cover: kernel init already ran with the JIT on by the time we get here.
+    // off in the same state at the same moment, and jit.on made a no-op there.
+    // Kernel site 13 restores the JIT it found at the kernel's first line, at
+    // the kernel's first resume after the kernelMemory baseline.  When that
+    // resume has not run yet at this read-out (the fingerprint's quiesce took
+    // 0 spins), the restore came AFTER this jit.off() and undid it: j0 read
+    // jit.status()=true on 2026-10-04.  With jit.on a no-op the order does not
+    // matter, on our architecture and the dropin alike.  Nothing else calls
+    // jit.on in a JIT-off run, and a restored state is past site 13's restore
+    // (f6 re-applies the off there).
     val jitMode = System.getProperty("ocljit.jit", "on")
     val kernelMode = System.getProperty("ocljit.kernel", "stock")
     // Which kernel ACTUALLY ran.  The patched kernel sets _OCLJ_KERNEL in the
@@ -3900,8 +4056,8 @@ object Smoke {
     var qj = 0
     quiesced(computer.machine, "the JIT probe read-out")
     if (jitMode == "off")
-      p("JIT PROBE: jit.off() + jit.flush() -> jit.status()=" +
-        evalStrLocked(computer.machine, mLua, "jit.off() jit.flush() return tostring(jit.status())"))
+      p("JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=" +
+        evalStrLocked(computer.machine, mLua, "jit.off() jit.flush() jit.on = function() end return tostring(jit.status())"))
     // OCLJ_JIT_EARLY=off (OcljArch.initialize) kept the compiler off through
     // kernel init, so kernelMemory holds no trace metadata; with OCLJ_JIT=on
     // it is switched back on HERE, once kernelMemory is taken, so OpenOS and
@@ -3981,14 +4137,41 @@ object Smoke {
     // counter -1 -- so the suite reported SMOKE FAIL for a documented control
     // arm, for a timing reason, with nothing actually wrong.
     val bootCapTicks = if (kernelMode == "watchdog" && probeMode != "capacity") 600 else 3000
+    // (race-2) OCLJ_PROBE=rawrace OCLJ_RACE_PHASE=boot: the fingerprint's reads
+    // in place of this loop's sleep, through OpenOS's boot -- where the boot
+    // that died on runSynchronized's assertion was, and where synchronized
+    // calls are frequent.  race-1 reads after the boot and never saw that
+    // assertion in 10 unlocked runs.
+    val bootRace: RaceReads =
+      if (probeMode == "rawrace" && racePhase == "boot") {
+        p("--- (race-2) the fingerprint's raw reads through OpenOS's boot, in place of the boot loop's sleep, " +
+          (if (raceLocked) "under the machine's monitor" else "WITHOUT the monitor, as guard() read before 2026-10-04") + " ---")
+        new RaceReads(computer.machine, mLua, raceLocked)
+      } else null
+    val bootLog0 = kernelLog.size
     var i = 0
     var booted = false
     while (i < bootCapTicks && computer.machine.isRunning && !booted) {
-      ws.update(); Thread.sleep(25); i += 1
+      ws.update()
+      if (bootRace != null) bootRace.window(25, i) else Thread.sleep(25)
+      i += 1
       if (i % 20 == 0) {
         val t = nonEmptyScreen(screen)
         booted = t.contains("/home #") && t.contains("OCLJCTR=")
       }
+    }
+    // race-2's verdict HERE, before (c) and (d): a boot the race broke never
+    // runs the autorun, and the harness stops at (d) on the missing nonce.
+    if (bootRace != null) {
+      val m = computer.machine
+      p("race-2 end: " + machineEndState(m, mLua))
+      val (faulty, threw, crashed) = raceComplaints(bootLog0)
+      val ok = m.isRunning && booted && bootRace.wrong == 0 && faulty == 0 && threw == 0 && crashed == 0
+      milestone("race-2-raw-reads-through-the-boot", ok,
+        bootRace.summary(i) +
+          "; 'Faulty architecture' " + faulty + ", 'runThreaded threw' " + threw + ", 'Kernel crashed' " + crashed +
+          "; booted=" + booted + " running=" + m.isRunning +
+          (if (!m.isRunning) " (lastError=" + m.lastError + ")" else ""))
     }
     val tBootShell = System.currentTimeMillis()
     val txtA = nonEmptyScreen(screen)
@@ -4031,6 +4214,11 @@ object Smoke {
     // --- (k6) OCLJ_PROBE=grace: the grace-expiry probe, and nothing after it --
     if (probeMode == "grace") {
       graceExpiryProbe(ws, computer, screen, kernelMode, nativeMode)
+      finish()
+    }
+    // --- (race-1, race-2) OCLJ_PROBE=rawrace: the raw-read race probe, and nothing after it --
+    if (probeMode == "rawrace") {
+      if (bootRace == null) rawRaceProbe(ws, computer, screen, mLua)
       finish()
     }
     // --- (cap-1) OCLJ_PROBE=capacity: the capacity probe, and nothing after it --
@@ -5019,7 +5207,7 @@ object Smoke {
           milestone("f6-restored-jit-still-off", ok = false,
             "the restored machine never quiesced, so jit.off() was NOT re-applied")
         else {
-          val st = evalStr(rLua, "jit.off() jit.flush() return tostring(jit.status())")
+          val st = evalStrLocked(computer2.machine, rLua, "jit.off() jit.flush() return tostring(jit.status())")
           milestone("f6-restored-jit-still-off", st == "false",
             "re-applied jit.off() to the state eris rebuilt -> jit.status()=" + st +
               (if (st == "false")
@@ -5057,10 +5245,10 @@ object Smoke {
               "the encore below ran at the default stepmul and says nothing about pacing")
         else {
           val sm = if (gcStepMul > 0)
-            evalStr(rLua2, "local ok, old = pcall(collectgarbage, 'setstepmul', " + gcStepMul +
+            evalStrLocked(computer2.machine, rLua2, "local ok, old = pcall(collectgarbage, 'setstepmul', " + gcStepMul +
               ") return ok and tostring(old) or ('ERR:' .. tostring(old))") else "-"
           val pz = if (gcPause > 0)
-            evalStr(rLua2, "local ok, old = pcall(collectgarbage, 'setpause', " + gcPause +
+            evalStrLocked(computer2.machine, rLua2, "local ok, old = pcall(collectgarbage, 'setpause', " + gcPause +
               ") return ok and tostring(old) or ('ERR:' .. tostring(old))") else "-"
           // The old value is the evidence for the claim in the comment above:
           // if the restored state had kept the injection it would read back the

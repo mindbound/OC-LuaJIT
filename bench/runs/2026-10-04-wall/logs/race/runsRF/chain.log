@@ -1,0 +1,119 @@
+== 13:15:43 chainRF start; java procs: 0
+race-unlocked-1 exit=1
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| race-1 end: state=Stack(Sleeping) remainIdle=2147482955 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 1404206 reads over 1000 ticks (2130887 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 47 -> 355 (want +500: the machine stopp
+        SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 1404206 reads over 1000 ticks (2130887 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 47 -> 355 (want +500: the machine s
+    SMOKE FAIL
+race-locked-1 exit=0
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| race-1 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1345639 reads over 1000 ticks (2504533 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 46 -> 1047
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+race-unlocked-2 exit=1
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| race-1 end: state=Stack(Stopping) remainIdle=0 main stack=0
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 292947 reads over 219 ticks (1696217 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; running=false, heartbeat 46 -> 264 (want +500: the machine stoppe
+        SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 292947 reads over 219 ticks (1696217 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; running=false, heartbeat 46 -> 264 (want +500: the machine st
+    SMOKE FAIL
+race-locked-2 exit=0
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| race-1 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1306352 reads over 1000 ticks (1857290 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 48 -> 1049
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+race-unlocked-3 exit=1
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| race-1 end: state=Stack(Stopping) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 34574 reads over 31 ticks (205097 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; running=false, heartbeat 46 -> 77 (want +500: the machine stopped ru
+        SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 34574 reads over 31 ticks (205097 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; running=false, heartbeat 46 -> 77 (want +500: the machine stoppe
+    SMOKE FAIL
+race-locked-3 exit=0
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| race-1 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1382127 reads over 1000 ticks (1507668 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 42 -> 1046
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullRF-additive-on exit=0
+    SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+    SMOKE| CHECKS: 66   FAILURES: 0   WALL: 90.3s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullRF-dropin-on exit=0
+    SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaState | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+    SMOKE| MILESTONE acc-4/5/7: SKIP -- native=luajit: they test LuaStateLuaJIT, which the dropin arm does not use (not counted)
+    SMOKE| CHECKS: 63   FAILURES: 0   WALL: 91.4s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullRF-additive-off exit=1
+    SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+    SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+    SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: FAIL -- JIT off: sandbox loop = 0.0072 s = 0.11x the raw interpreted reference 0.0652 s -- interpreter speed, must be >= 1/3
+    SMOKE| MILESTONE j0-jit-switch-honoured: FAIL -- mode=off -> jit.status()=true   <- the probe's own control did not take; this run's numbers mean nothing
+    SMOKE| MILESTONE k4-still-compiled-after-timeout-NEGATIVE-CONTROL: FAIL -- kernel=watchdog jit=off: loop after the timeout = 0.0072 s = 0.11x the raw interpreted reference 0.0652 s (must NOT be compiled-fast here: want >= 1/3)
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: FAIL -- jit=off: mcode=655360 B, traces=62 (must be exactly 0)
+    SMOKE| MILESTONE f6-restored-jit-still-off: PASS -- re-applied jit.off() to the state eris rebuilt -> jit.status()=false   (without this, this cell's post-restore numbers are the COMPILER's)
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: SKIP -- jit=off: no trace is ever resident, so there is nothing to flush (not counted)
+    SMOKE| CHECKS: 64   FAILURES: 4   WALL: 81.7s
+    SMOKE| VERDICT: FAIL
+        SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: FAIL -- JIT off: sandbox loop = 0.0072 s = 0.11x the raw interpreted reference 0.0652 s -- interpreter speed, must be >= 1/3
+        SMOKE| MILESTONE j0-jit-switch-honoured: FAIL -- mode=off -> jit.status()=true   <- the probe's own control did not take; this run's numbers mean nothing
+        SMOKE| MILESTONE k4-still-compiled-after-timeout-NEGATIVE-CONTROL: FAIL -- kernel=watchdog jit=off: loop after the timeout = 0.0072 s = 0.11x the raw interpreted reference 0.0652 s (must NOT be compiled-fast here: want >= 1/3)
+        SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: FAIL -- jit=off: mcode=655360 B, traces=62 (must be exactly 0)
+    SMOKE FAIL
+fullRF-stock exit=0
+    SMOKE| GUARD VM FINGERPRINT: native=<stock> | class=LuaState | _VERSION=Lua+Eris 5.2 | jit=NO-JIT-TABLE (<n/a>) | eris=[persist,settings,unpersist] | eris.version=<none>
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: SKIP -- kernel=stock: OpenComputers' own kernel has no site 13 (not counted)
+    SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| MILESTONE acc-1-machine-handover: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+    SMOKE| MILESTONE acc-1r-restored-machine-handover: SKIP -- native=stock (not counted)
+    SMOKE| MILESTONE acc-3..7: SKIP -- native=stock: PUC's accounting is jnlua's own (not counted)
+    SMOKE| CHECKS: 47   FAILURES: 0   WALL: 76.8s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS (BASELINE) -- OpenOS booted on ocelot-brain's stock PUC-Lua 5.2,
+fullRF-additive-off-stepmul400 exit=0
+    SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+    SMOKE| GC PACE: setstepmul=400  (was 200)
+    SMOKE| MILESTONE gc-pace-stepmul-took: PASS -- collectgarbage('setstepmul', 400) returned the previous value 200
+    SMOKE| GC PACE: stepmul=400  pause=default(200)
+    SMOKE| MILESTONE f6-restored-jit-still-off: PASS -- re-applied jit.off() to the state eris rebuilt -> jit.status()=false   (without this, this cell's post-restore numbers are the COMPILER's)
+    SMOKE| GC PACE: re-applied after restore -- setstepmul was 200, setpause was -
+    SMOKE| MILESTONE gc-pace-restored: PASS -- re-applied pacing to the state eris rebuilt (previous stepmul on the RESTORED state = 200; note it reset to the LUAI_GCMUL default, which is why this is needed)
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: SKIP -- jit=off: no trace is ever resident, so there is nothing to flush (not counted)
+    SMOKE| CHECKS: 66   FAILURES: 0   WALL: 91.7s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+== 13:26:33 chainRF done

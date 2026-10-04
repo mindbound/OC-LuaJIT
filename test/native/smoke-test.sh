@@ -69,11 +69,19 @@
 #                  one build-native.sh built]
 #   OCLJ_JIT      on (default) | off.  "off" makes the harness call
 #                 jit.off()+jit.flush() on the machine's state right before
-#                 OpenOS boots -- the control for the JIT PROBE line.  (This
+#                 OpenOS boots -- the control for the JIT PROBE line -- and
+#                 makes jit.on a no-op in that state, or kernel site 13's
+#                 restore after the baseline can switch it back on.  (This
 #                 replaces OCLJ_JITOFF, which exported an env var the shim
 #                 deliberately never reads; it had been dead since the shim
 #                 lost its getenv() hatches.)
-#   OCLJ_PROBE    unset (default) | grace | capacity.  "capacity" boots with a
+#   OCLJ_PROBE    unset (default) | grace | capacity | rawrace.  "rawrace" boots
+#                 like capacity, then only re-reads the VM fingerprint beside
+#                 the running machine (race-1; OCLJ_RACE_LOCK=off reads without
+#                 the machine's monitor, OCLJ_RACE_TICKS sets the length;
+#                 OCLJ_RACE_PHASE=boot reads through OpenOS's boot instead,
+#                 race-2).
+#                 "capacity" boots with a
 #                 heartbeat-only autorun and runs only the capacity probe: an
 #                 idle window, the post-GC live set, then a fill of
 #                 OCLJ_CAP_SHAPE (record|array|string|closure) until the
@@ -515,8 +523,9 @@ case $OCLJ_JIT in on|off) ;; *) fail "OCLJ_JIT must be on or off, not '$OCLJ_JIT
 # run the default suite and report on the wrong thing.  The harness reads the
 # variable itself; this only refuses unknown values and names the mode.
 : "${OCLJ_PROBE:=}"
-case $OCLJ_PROBE in ""|grace|capacity) ;; *) fail "OCLJ_PROBE must be unset, grace or capacity, not '$OCLJ_PROBE'";; esac
+case $OCLJ_PROBE in ""|grace|capacity|rawrace) ;; *) fail "OCLJ_PROBE must be unset, grace, capacity or rawrace, not '$OCLJ_PROBE'";; esac
 [ "$OCLJ_PROBE" = "grace" ] && say "    OCLJ_PROBE=grace -- boot, then ONLY the grace-expiry probe (k6); no suite, no persist"
+[ "$OCLJ_PROBE" = "rawrace" ] && say "    OCLJ_PROBE=rawrace -- boot (heartbeat-only autorun), then ONLY the raw-read race probe: phase=${OCLJ_RACE_PHASE:-idle} lock=${OCLJ_RACE_LOCK:-on} ticks=${OCLJ_RACE_TICKS:-1000}"
 [ "$OCLJ_PROBE" = "capacity" ] && say "    OCLJ_PROBE=capacity -- boot (heartbeat-only autorun), then ONLY the capacity probe (cap-1): shape=${OCLJ_CAP_SHAPE:-record} jitearly=${OCLJ_JIT_EARLY:--}"
 # Validated for the same reason again, and the harness refuses it a second
 # time: a run filed under the wrong tier is worse than no run.

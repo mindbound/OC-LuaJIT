@@ -36,7 +36,9 @@ stock, not 21-121x.**
 - **What remains:**
   - 3 stalls and 1 dropin machine down in 68 of our runs, where a refusal landed in code
     with no handler of the program's (stock: 0 of 20);
-  - one boot failure, unexplained.
+  - one boot failure, unexplained at the time. It was the harness reading the
+    machine's raw state without its monitor, not the mod; found and fixed the same day
+    (the last section).
 
 The design's back-off was built, found by the harness to suppress the trace flush, and
 removed.
@@ -459,8 +461,9 @@ down.
   - The harness's dirty-stack check was silent. That rules nothing out: it is silent in
     all 17 of the 93 runs whose quiesce took 0 spins, and the other 76 warn
     `getTop=2`.
-  - It is the first such failure in about 140 harness runs this session. Unexplained,
-    and recorded as such.
+  - It is the first such failure in about 140 harness runs this session. Unexplained
+    when this was written; explained the same day as the harness's own race (the last
+    section).
 
 **Near the wall** (clean runs, median per cell):
 
@@ -636,3 +639,186 @@ excursion past the cap** stayed within G plus the kernel's slice; 1024 KB D pass
 by 127 B.
 
 **Full tables:** [runs/2026-10-04-wall/chainC-tables.md](runs/2026-10-04-wall/chainC-tables.md).
+
+## The boot that died on OC's assertion: the harness
+
+Stage B's one unexplained failure, `one-array-r2-D-B3`, was the harness, not the mod. The
+harness's own reads of the machine's raw Lua state raced the machine's worker thread.
+Found and fixed the same day.
+
+**The reads.** `guard()` reads six values off the machine's raw state for the VM
+fingerprint. Each one is an `evalStr`, five or six jnlua calls: `getTop`, `load`, `call`,
+`isNil` and `toString` for the result, then `setTop` back to the top it found.
+
+- **Missed when the rest moved.** Every other read that touches a live machine's stack
+  went under the machine's monitor (`evalStrLocked`, whose comment records this race's
+  first measurement). These six were left outside it, and so were the two re-applies after
+  a restore (f6's `jit.off()`, gc-pace's).
+  - Two unlocked reads remain, `b2`'s `getTotalMemory` and `getFreeMemory`. Each is a
+    single call that does not touch the stack.
+- **`quiesced()` is not enough.** It runs before the reads but checks only that the machine
+  is not executing at that moment. A machine whose next resume is already scheduled starts
+  in the middle of the read.
+- **The failing run fits.** It quiesced after 0 spins, the case where a resume can already
+  be pending.
+
+**How it breaks the machine.** jnlua makes each `LuaState` call `synchronized` on the
+state, so no two calls interleave. But `evalStr` is several calls, and the worker's
+`runThreaded` runs between them: push a signal, resume, check the result's type, read it,
+pop it. The read's last call restores the top it found at its first, cutting off, or
+padding with nils, whatever the worker changed in between. The worker's checks then find
+the read's values, or nothing, where the kernel's result belongs. Seen, in OC's own code
+reacting to a stack it did not leave that way:
+
+- **`runSynchronized` fails `lua.getTop == 2`** (`NativeLuaArchitecture.scala:172`), OC
+  logs "Faulty architecture implementation", and the machine stops with
+  `Error.InternalError`. This was the original failure.
+- **The synchronized call's return finds the wrong stack:** `runThreaded`'s
+  `assert(lua.getTop == 2)` before it resumes with the call's result table (`:200`).
+- **The kernel's sleep value is gone.** `runThreaded` finds no number where the sleep
+  belongs and falls through to `Sleep(Int.MaxValue)`. Nothing inside the machine wakes it,
+  and the probe sends no outside signal (a key or a network message would). `isRunning`
+  stays true. A silent wedge.
+- **The kernel thread is popped.** `runThreaded`'s `pop(results)` takes the thread itself,
+  and the next resume fails `assert(lua.isThread(1))` (`:195`).
+- **The sleep value vanishes between its check and its read.** `isNumber(2)` passes, and
+  `toNumber(2)` on the same line throws `IllegalArgumentException: illegal index`
+  (`:257`).
+
+The `runThreaded` ones log "runThreaded threw an error" and stop the machine with
+`Error.InternalError`.
+
+**Two probes.** `OCLJ_PROBE=rawrace` boots with the capacity probe's heartbeat-only
+autorun and makes the fingerprint's reads beside the running machine, each one only while
+`isExecuting` is false, which is guard's own precondition. `OCLJ_RACE_LOCK=off` reads the
+way guard did; the default takes the monitor, the way guard now does.
+
+- **`race-1`** (the default, `OCLJ_RACE_PHASE=idle`) reads after the boot, for 1000 ticks:
+  `ws.update()`, then 25 ms of reads.
+  - **PASS requires:**
+    - the machine running;
+    - the autorun's heartbeat (one per 0.05 s of uptime) advanced by at least 500;
+    - every read equal to the first;
+    - none of "Faulty architecture", "runThreaded threw" or "Kernel crashed" in the log.
+  - From `runsR3` on, the line before the verdict prints the machine's state stack,
+    `remainIdle` and its main stack's shape.
+- **`race-2`** (`OCLJ_RACE_PHASE=boot`) makes the same reads in place of the boot loop's
+  25 ms sleep, through OpenOS's boot, where the failing run was and where synchronized calls
+  are frequent.
+  - **PASS requires:**
+    - OpenOS booted to the autorun;
+    - the machine running;
+    - the same reads and log checks as `race-1`.
+
+All on stage C's additive build:
+
+| runs | unlocked | locked |
+|---|---|---|
+| race-1, before the heartbeat (`runsR`, `runsR2`) | 1 stopped at tick 9 on `:195`. 2 scored PASS, and one of those never found the machine executing in 1000 ticks; neither was measured further | 3 PASS |
+| race-1 with the heartbeat (`runsR3`, bar +100) | 4 of 4 wedged by their end state (asleep, `remainIdle` `Int.MaxValue` less 814-998 ticks; one with its main stack empty). Heartbeat +3, +74 and +75 failed; +187 scored PASS | 4 of 4 PASS, heartbeat +1001 to +1009. `Yielded`, the kernel thread alone on the stack |
+| race-1 after the fix (`runsRF`, bar +500) | 3 of 3 failed: 1 wedged (+308), 1 stopped on `:195` at tick 219, 1 on `:257` at tick 31 | 3 of 3 PASS, +1001 to +1004 |
+| race-1 on the final tree (`runsRfinal`, `runsF`, `runsZ`) | 1 wedged (+194) | 3 PASS, +1001 to +1002 |
+| race-2 (`runsF`, `runsH`) | 10 of 16 broke the boot: `:200` 7 times, `:195` once, a wedge once, and `:172` once (`runsH/u05`). 6 booted | 6 of 6 PASS, booted |
+
+- **Locked:**
+  - race-1: about 1.3 million reads in its 1000 ticks;
+  - race-2: 450 000-520 000 reads through the boot.
+
+  Neither disturbs the machine.
+- **Unlocked, the 9 race-1 runs that were measured:** the machine stops within 3-308
+  heartbeats, or within 9-219 ticks.
+- **Unlocked race-2:** 10 of 16 boots broke. One was an exact reproduction of the original
+  failure: `runsH/u05` logged "Faulty architecture implementation for synchronized calls",
+  `runSynchronized` at `:172` called from `Machine.update` at `:536`, the same trace as
+  `one-array-r2-D-B3`. The other 6 booted; the boot is only 260-280 ticks, and the race does
+  not always land in it.
+- **`race-1` never produced `:172`** in 11 unlocked runs. After the boot, synchronized calls
+  are rare.
+
+The first heartbeat bar was +100. The +187 run passed it, so the bar is now half the ticks;
+the +308 run would also have passed the old one.
+
+The original failure was 1 in about 220 harness runs on 2026-10-04 (stage B's ~140 and
+chains C0 and C). That is consistent with guard's 6 reads once a run, open only when the
+quiesce took 0 spins, as it did there; the probes do not predict the rate.
+
+**The fix** (`test/native/OcljSmoke.scala`):
+
+- `guard()` reads through `vmFingerprint(..., locked = true)`, the same function the probes
+  drive.
+- f6's and gc-pace's re-applies go through `evalStrLocked`.
+- `quiesced()`'s comment now says it is necessary, not sufficient.
+
+The full suite after it (`runsRF`):
+
+- **Passed:** the additive, the dropin, stock, and the additive with the JIT off at
+  stepmul 400. Under the monitor, f6 and gc-pace both read back their values
+  (`jit.status()=false`; the previous stepmul 200).
+- **Failed:** the additive with the JIT off. It failed `j0` and the three negative controls
+  behind it (`k3`, `k4`, `m1`), from a second harness race (next).
+
+**A second harness race, found by that run: the JIT-off control and kernel site 13.**
+
+- **What it read.** `fullRF-additive-off` failed `j0-jit-switch-honoured`: `jit.status()`
+  read `true` in a run asked for the JIT off, and `m1` read 62 traces and 640 KB of mcode.
+- **The cause.**
+  - Site 13 (stage C) notes the JIT's state at the kernel's first line, and restores it at
+    the kernel's first resume after the `kernelMemory` baseline.
+  - The harness's JIT-off control is a `jit.off()` at its JIT read-out.
+  - When that resume has not run by the read-out, the restore comes after it and switches
+    the JIT back on.
+- **Which runs.** The ones whose fingerprint quiesce took 0 spins; both failing runs had
+  reached `kernelMemory` in 1 tick. The passing JIT-off runs took 2 ticks and 2-3 spins.
+- **Measured.** On the tree with guard's fix and nothing yet for this race, 4 more JIT-off
+  full suites on the additive and 4 on the dropin:
+  - 1 failed `j0`, the additive's one 0-spin run;
+  - the other 7 took 2-3 spins and passed.
+  - With the two in `runsRF` and stage C's own: every 0-spin JIT-off run failed (2 of 2),
+    and every other passed (9 of 9).
+- **The fix** (`OcljSmoke.scala`): the read-out also replaces `jit.on` in that state with a
+  no-op, so the restore cannot switch it back whichever comes first. It acts on the raw
+  state, so the dropin gets it too.
+  - The dropin's JIT-off cell is not hypothetical: `bench/oc/matrix.sh` and
+    `gc-pace-sweep.sh` run it as cell B.
+  - Nothing else calls `jit.on` in a JIT-off run.
+  - A restored state is past site 13's restore, and f6 re-applies the off there.
+  - After it, 12 of 12 JIT-off full suites passed `j0` and `m1` (0 B of mcode, 0 traces),
+    6 on each arm. One of them, `fullF-additive-off-3`, was a 0-spin boot. The JIT-on suites
+    passed on both arms (`runsF`, `runsZ`).
+  - A first version switched the JIT off in `OcljArch.initialize`, as arm O's
+    `OCLJ_JIT_EARLY=off` does. It passed 6 of 6 on the additive, two of them 0-spin. It was
+    dropped because it cannot reach the dropin, which runs OC's own architecture class.
+- **What else could have been hit.** Arm O of the capacity matrix switches the JIT off
+  before kernel init, so site 13 found it off. All 20 of chain C's O runs log that switch,
+  and read `traces_live 0`. Their data stands. The mod has no runtime JIT switch.
+
+**The dirty-stack lead was OC's own shape.** Under the monitor, `getTop=2` is a synchronized
+call between its two halves:
+
+- the kernel thread and a function, waiting for the main thread's `runSynchronized`;
+- or the kernel thread and the result table, waiting for the worker.
+
+The read leaves it as it found it, and nothing is disturbed. The warning now prints the two
+slots' types and says which case it is. Across the 64 runs from `runsRF` to `runsH`, 49
+printed 220 warnings, 4-6 a run. Every one reads `[1]=THREAD [2]=FUNCTION`, and none reads
+"something else is using this state". The 15 silent runs are exactly the ones whose
+fingerprint quiesce took 0 spins. In chain B too, the 76 warning runs are the ones whose
+quiesce waited on an executing machine. The 17 silent ones
+are the 0-spin quiesces, where a resume could already be pending, and the failing run was
+one of them.
+
+**The mod is not involved.** Its architecture touches the stack only where OpenComputers
+calls it:
+
+- `initialize`, before the first run;
+- `save` and `load`;
+- the inherited `runThreaded` and `runSynchronized`.
+
+Its other contacts with the state are single calls that leave the stack alone: the
+inherited `recomputeMemory`, `freeMemory` and `totalMemory`, and `LuaStateLuaJIT`'s memory
+overrides. ocelot-brain wraps `save` and `load` in the machine's monitor (`Machine.scala:691`,
+`:758`), as it does `run()` (`:907`). That covers the harness's mirror class; OpenComputers'
+own `Machine`, which ocelot-brain ports, was not available to check. The native and the
+kernel did not change.
+
+**Archive:** [runs/2026-10-04-wall/logs/race/](runs/2026-10-04-wall/logs/race/).

@@ -1,0 +1,11 @@
+13:06:41 start locked-1 lock=on native=additive
+13:07:21 end   locked-1 exit=0 MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1314488 reads over 1000 ticks (2705401 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true
+13:07:21 start unlocked-2 lock=off native=additive
+13:07:59 end   unlocked-2 exit=0 MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- UNLOCKED: 1441553 reads over 1000 ticks (0 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true
+13:07:59 start locked-2 lock=on native=additive
+13:08:39 end   locked-2 exit=0 MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1329363 reads over 1000 ticks (2644251 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true
+13:08:39 start unlocked-3 lock=off native=additive
+13:09:18 end   unlocked-3 exit=0 MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- UNLOCKED: 1703726 reads over 1000 ticks (672346 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true
+13:09:18 start locked-3 lock=on native=additive
+13:09:57 end   locked-3 exit=0 MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1308480 reads over 1000 ticks (2409744 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true
+13:09:57 CHAIN DONE

@@ -1,0 +1,45 @@
+== 13:28:18 chainJ pre start; java procs: 0
+fullJ-pre-off-1 exit=1
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 1 ticks; running=true; lastError=null
+    SMOKE| quiesced after 0 spins, before the VM fingerprint
+    SMOKE| quiesced after 0 spins, before the JIT probe read-out
+    SMOKE| JIT PROBE: jit.off() + jit.flush() -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=true  traces start/stop/abort/flush=226/114/112/0  ticks-to-shell=180  boot-ms=5166  sandbox-bench(min-s/iters/reps/sum)=0.0073/12000000/3/135
+    SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: FAIL -- JIT off: sandbox loop = 0.0073 s = 0.11x the raw interpreted reference 0.0644 s -- interpreter speed, must be >= 1/3
+    SMOKE| MILESTONE j0-jit-switch-honoured: FAIL -- mode=off -> jit.status()=true   <- the probe's own control did not take; this run's numbers mean nothing
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: FAIL -- jit=off: mcode=655360 B, traces=60 (must be exactly 0)
+    SMOKE| VERDICT: FAIL
+        SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: FAIL -- JIT off: sandbox loop = 0.0073 s = 0.11x the raw interpreted reference 0.0644 s -- interpreter speed, must be >= 1/3
+        SMOKE| MILESTONE j0-jit-switch-honoured: FAIL -- mode=off -> jit.status()=true   <- the probe's own control did not take; this run's numbers mean nothing
+        SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: FAIL -- jit=off: mcode=655360 B, traces=60 (must be exactly 0)
+fullJ-pre-off-2 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| quiesced after 0 spins, before the JIT probe read-out
+    SMOKE| JIT PROBE: jit.off() + jit.flush() -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5174  sandbox-bench(min-s/iters/reps/sum)=0.0727/12000000/3/13500001
+    SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: PASS -- JIT off: sandbox loop = 0.0727 s = 1.10x the raw interpreted reference 0.0661 s -- interpreter speed, must be >= 1/3
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| VERDICT: PASS
+fullJ-pre-off-3 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| quiesced after 0 spins, before the JIT probe read-out
+    SMOKE| JIT PROBE: jit.off() + jit.flush() -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5192  sandbox-bench(min-s/iters/reps/sum)=0.0649/12000000/3/13500001
+    SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: PASS -- JIT off: sandbox loop = 0.0649 s = 0.97x the raw interpreted reference 0.0666 s -- interpreter speed, must be >= 1/3
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| VERDICT: PASS
+fullJ-pre-off-4 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| quiesced after 0 spins, before the JIT probe read-out
+    SMOKE| JIT PROBE: jit.off() + jit.flush() -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5192  sandbox-bench(min-s/iters/reps/sum)=0.0655/12000000/3/13500001
+    SMOKE| MILESTONE k3-sandbox-loop-is-compiled-NEGATIVE-CONTROL: PASS -- JIT off: sandbox loop = 0.0655 s = 1.01x the raw interpreted reference 0.0647 s -- interpreter speed, must be >= 1/3
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| VERDICT: PASS
+== 13:34:45 chainJ pre done

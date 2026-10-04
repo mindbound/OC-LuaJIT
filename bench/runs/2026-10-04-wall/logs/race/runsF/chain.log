@@ -1,0 +1,213 @@
+== 14:06:49 chainF start; java procs: 0
+race2-unlocked-1 exit=1
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (12 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+    SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=<missing> counter -1 -> -1 in 300 of 300 ticks   <- did not advance within the cap
+        SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (12 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+        SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=<missing> counter -1 -> -1 in 300 of 300 ticks   <- did not advance within the cap
+    SMOKE FAIL
+race2-locked-1 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+    SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=15.5500-211817 counter 9 -> 21 in 10 of 300 ticks
+    SMOKE| race-2 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 498612 reads over 320 ticks (1162124 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+race2-unlocked-2 exit=1
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    	at totoro.ocelot.brain.entity.machine.luac.NativeLuaArchitecture.runThreaded(NativeLuaArchitecture.scala:200)
+    SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (1 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+    SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=<missing> counter -1 -> -1 in 0 of 300 ticks   <- did not advance within the cap
+        SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (1 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+        SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=<missing> counter -1 -> -1 in 0 of 300 ticks   <- did not advance within the cap
+    SMOKE FAIL
+race2-locked-2 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+    SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=16.1000-275183 counter 19 -> 30 in 10 of 300 ticks
+    SMOKE| race-2 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 518595 reads over 340 ticks (1270724 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+race2-unlocked-3 exit=1
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 1 ticks; running=true; lastError=null
+    SMOKE| quiesced after 0 spins, before the VM fingerprint
+    	at totoro.ocelot.brain.entity.machine.luac.NativeLuaArchitecture.runThreaded(NativeLuaArchitecture.scala:200)
+    SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (22 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+    SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=<missing> counter -1 -> -1 in 0 of 300 ticks   <- did not advance within the cap
+        SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (22 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+        SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=<missing> counter -1 -> -1 in 0 of 300 ticks   <- did not advance within the cap
+    SMOKE FAIL
+race2-locked-3 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+    SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=15.8000-562069 counter 4 -> 16 in 10 of 300 ticks
+    SMOKE| race-2 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 453027 reads over 320 ticks (1368910 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+race2-unlocked-4 exit=1
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 1 ticks; running=true; lastError=null
+    SMOKE| quiesced after 0 spins, before the VM fingerprint
+    	at totoro.ocelot.brain.entity.machine.luac.NativeLuaArchitecture.runThreaded(NativeLuaArchitecture.scala:195)
+    SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (22 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+    SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=11.5000-870171 counter 65 -> 65 in 0 of 300 ticks   <- did not advance within the cap
+    SMOKE| race-2 end: state=Stack(Stopping) remainIdle=0 main stack=0
+    SMOKE| MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 467439 reads over 308 ticks (3653013 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+        SMOKE| MILESTONE c-openos-shell: FAIL -- OpenOS shell prompt on screen (22 non-empty lines)   <- loop hit its 600-tick cap without the autorun line; expect (d) to fail
+        SMOKE| MILESTONE d-autorun-counter-live: FAIL -- nonce=11.5000-870171 counter 65 -> 65 in 0 of 300 ticks   <- did not advance within the cap
+        SMOKE| MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 467439 reads over 308 ticks (3653013 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+    SMOKE FAIL
+race2-locked-4 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+    SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=16.3000-845750 counter 14 -> 26 in 10 of 300 ticks
+    SMOKE| race-2 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 522213 reads over 340 ticks (1903759 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+race1-unlocked-1 exit=1
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 1 ticks; running=true; lastError=null
+    SMOKE| quiesced after 0 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+    SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=10.3000-616828 counter 26 -> 45 in 10 of 300 ticks
+    SMOKE| race-1 end: state=Stack(Sleeping) remainIdle=2147482841 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 1430805 reads over 1000 ticks (1160009 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 45 -> 239 (want +500: the machine stopped running its kernel)
+        SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: FAIL -- UNLOCKED: 1430805 reads over 1000 ticks (1160009 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 45 -> 239 (want +500: the machine stopped running its kernel)
+    SMOKE FAIL
+race1-locked-1 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 1 ticks; running=true; lastError=null
+    SMOKE| quiesced after 0 spins, before the VM fingerprint
+    SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+    SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=10.2500-640357 counter 22 -> 42 in 10 of 300 ticks
+    SMOKE| race-1 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+    SMOKE| MILESTONE race-1-raw-reads-beside-a-running-machine: PASS -- locked: 1313614 reads over 1000 ticks (2494286 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; running=true, heartbeat 42 -> 1044
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullF-additive-off-1 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5196  sandbox-bench(min-s/iters/reps/sum)=0.0649/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 94.1s
+    SMOKE| VERDICT: PASS
+fullF-dropin-off-1 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5178  sandbox-bench(min-s/iters/reps/sum)=0.0692/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 61   FAILURES: 0   WALL: 97.4s
+    SMOKE| VERDICT: PASS
+fullF-additive-off-2 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5203  sandbox-bench(min-s/iters/reps/sum)=0.0661/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 95.0s
+    SMOKE| VERDICT: PASS
+fullF-dropin-off-2 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5172  sandbox-bench(min-s/iters/reps/sum)=0.0654/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 61   FAILURES: 0   WALL: 96.3s
+    SMOKE| VERDICT: PASS
+fullF-additive-off-3 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 1 ticks; running=true; lastError=null
+    SMOKE| quiesced after 0 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5175  sandbox-bench(min-s/iters/reps/sum)=0.0658/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 94.5s
+    SMOKE| VERDICT: PASS
+fullF-dropin-off-3 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5191  sandbox-bench(min-s/iters/reps/sum)=0.0673/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 61   FAILURES: 0   WALL: 95.7s
+    SMOKE| VERDICT: PASS
+fullF-additive-off-4 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5187  sandbox-bench(min-s/iters/reps/sum)=0.0666/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 94.7s
+    SMOKE| VERDICT: PASS
+fullF-dropin-off-4 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5191  sandbox-bench(min-s/iters/reps/sum)=0.0658/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 61   FAILURES: 0   WALL: 95.0s
+    SMOKE| VERDICT: PASS
+fullF-additive-off-5 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5194  sandbox-bench(min-s/iters/reps/sum)=0.0652/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 93.8s
+    SMOKE| VERDICT: PASS
+fullF-dropin-off-5 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5165  sandbox-bench(min-s/iters/reps/sum)=0.0651/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 61   FAILURES: 0   WALL: 95.5s
+    SMOKE| VERDICT: PASS
+fullF-additive-off-6 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5188  sandbox-bench(min-s/iters/reps/sum)=0.0658/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 94.3s
+    SMOKE| VERDICT: PASS
+fullF-dropin-off-6 exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: jit.off() + jit.flush(), jit.on held off -> jit.status()=false
+    SMOKE| JIT PROBE: kernel=watchdog  mode=off  jit.status()=false  traces start/stop/abort/flush=0/0/0/0  ticks-to-shell=180  boot-ms=5191  sandbox-bench(min-s/iters/reps/sum)=0.0657/12000000/3/135000011250000  raw-interpr
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE m1-mcode-is-real-NEGATIVE-CONTROL: PASS -- jit=off: mcode=0 B, traces=0 (must be exactly 0)
+    SMOKE| CHECKS: 61   FAILURES: 0   WALL: 94.6s
+    SMOKE| VERDICT: PASS
+fullF-additive-on exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 3 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: kernel=watchdog  mode=on  jit.status()=true  traces start/stop/abort/flush=239/124/115/0  ticks-to-shell=180  boot-ms=5192  sandbox-bench(min-s/iters/reps/sum)=0.0072/12000000/3/135000011250000  raw-int
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE m1-mcode-is-real: PASS -- kernel=watchdog: 655360 B of machine code the RAM cap does not charge for, 68 traces, cap 2097152 B
+    SMOKE| CHECKS: 66   FAILURES: 0   WALL: 90.4s
+    SMOKE| VERDICT: PASS
+fullF-dropin-on exit=0
+    SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+    SMOKE| quiesced after 2 spins, before the VM fingerprint
+    SMOKE| JIT PROBE: kernel=watchdog  mode=on  jit.status()=true  traces start/stop/abort/flush=263/112/151/0  ticks-to-shell=180  boot-ms=5190  sandbox-bench(min-s/iters/reps/sum)=0.0072/12000000/3/135000011250000  raw-int
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE m1-mcode-is-real: PASS -- kernel=watchdog: 655360 B of machine code the RAM cap does not charge for, 254 traces, cap 2097152 B
+    SMOKE| CHECKS: 63   FAILURES: 0   WALL: 91.6s
+    SMOKE| VERDICT: PASS
+== 14:33:26 chainF done

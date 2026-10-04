@@ -1,0 +1,85 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/C/libdir-additive/libjnluajit52-windows-x86_64.dll (834220 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +0s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +1s  LuaStateLuaJIT compiled
+[smoke] +5s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runsF/race2-locked-3/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runsF/race2-locked-3/work/libdir-additive
+patch-machine-lua: ok  46451 -> 54527 bytes, 13 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runsF/race2-locked-3/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+[smoke]     OCLJ_PROBE=rawrace -- boot (heartbeat-only autorun), then ONLY the raw-read race probe: phase=boot lock=on ticks=1000
+[smoke]     OCLJ_RAM_TIER=one -- a smaller RAM stick than the 3.5 the reference numbers were taken at
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+SMOKE| ========================================================================
+SMOKE| OC-LuaJIT smoke test -- OpenOS on LuaJIT, persist, resume
+SMOKE| java=1.8.0_504 amd64  os=Windows 11
+SMOKE| conf=C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runsF/race2-locked-3/work/ocljit.conf
+2026-10-04T14:08:12.709Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-04T14:08:12.754Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-04T14:08:12.787Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+SMOKE| LuaStateFactory.isAvailable  = true
+SMOKE| LuaStateFactory.include52    = true
+SMOKE| LuaStateFactory.includeLuaJ  = false
+SMOKE| forceNativeLibPathFirst      = 'C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runsF/race2-locked-3/work/libdir-additive'
+SMOKE| computer.lua.allowBytecode   = false
+SMOKE| !! OCLJ_PROBE=rawrace: boot with the heartbeat-only autorun, then ONLY the raw-read race probe (race-2, reading through the boot);
+SMOKE| !! no suite, no persist.  ocelot-brain log capture: ok (root level WARN -> WARN)
+SMOKE| RAM tier = one (192 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+SMOKE| quarantined, not in the default suite: sieve,strings   (run one with OCLJ_BENCH_ONLY=<name>)
+SMOKE| planted 10 more .lua from bench\oc; suite = mandelbrot,binarytrees,trampoline,matmul,strings2,nqueens,sha256 x3 reps; encore = mandelbrot every 5 s
+SMOKE| planted mandelbrot.lua (1972 B) and a 120-deep directory tree
+SMOKE| hdd real path = C:\Users\astro\AppData\Local\Temp\ocljit-smoke-hdd4780482241164339123 (autorun.lua planted, 2343 bytes)
+SMOKE| architecture pinned to ocljit.arch.OCLuaJITArchitecture   (ocljit.native=additive)
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+SMOKE| MILESTONE a-lua-state-opens: PASS -- LuaState created after 1 ticks
+SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+SMOKE| quiesced after 3 spins, before the VM fingerprint
+SMOKE| GUARD OK. arch=ocljit.arch.OCLuaJITArchitecture
+SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=518818  freeMemory=322807  used=196011
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE k0-kernel-observed: PASS -- asked for watchdog, raw _G._OCLJ_KERNEL=watchdog
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: PASS -- _OCLJ_GCSTATS count:heap = 20:1 (want >=14:1, the state's own lj_alloc arena)
+SMOKE| MILESTONE acc-1-machine-handover: PASS -- _OCLJ_GCSTATS count=20 csync=1 native cap=518818 Java getTotalMemory=518818  (want csync 1 and the caps equal: LuaStateLuaJIT handed over)
+SMOKE| quiesced after 0 spins, before the JIT probe read-out
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| JIT PROBE: mode=on  attach -> ok
+SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+SMOKE| --- (race-2) the fingerprint's raw reads through OpenOS's boot, in place of the boot loop's sleep, under the machine's monitor ---
+SMOKE| SCREEN AFTER BOOT (320 ticks, 9.1s, running=true):
+????????????????????????????????????????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (192k RAM)                                                                      ?
+? Most blocks act as 'cables' - use relays and power distributors to create separate networks. ?
+????????????????????????????????????????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+OCLJNONCE=15.8000-562069 OCLJCTR=4
+OCLJCAP=armed
+OCLJCAPT=0.0000/0.0000/0
+OCLJCAPF=-1/-1
+SMOKE| lastError = null
+SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (10 non-empty lines)
+SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=15.8000-562069 counter 4 -> 16 in 10 of 300 ticks
+SMOKE| race-2 end: state=Stack(Yielded) remainIdle=0 main stack=1 THREAD
+SMOKE| MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 453027 reads over 320 ticks (1368910 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+SMOKE| FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| CHECKS: 10   FAILURES: 0   WALL: 9.4s
+SMOKE| VERDICT: PASS
+SMOKE| ========================================================================
+[smoke] =============== 5. verdict ===============
+[smoke] +15s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/runsF/race2-locked-3/work/smoke.log
+SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.

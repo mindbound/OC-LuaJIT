@@ -1,0 +1,29 @@
+14:33:37 start u01 lock=off native=additive phase=boot
+14:33:51 end   u01 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- UNLOCKED: 408004 reads over 260 ticks (2955371 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:33:51 start u02 lock=off native=additive phase=boot
+14:34:04 end   u02 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- UNLOCKED: 407722 reads over 280 ticks (3786767 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:34:04 start u03 lock=off native=additive phase=boot
+14:34:13 end   u03 exit=1 MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 154550 reads over 91 ticks (1080876 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+14:34:13 start u04 lock=off native=additive phase=boot
+14:34:27 end   u04 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- UNLOCKED: 410332 reads over 280 ticks (4180609 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:34:27 start u05 lock=off native=additive phase=boot
+14:34:36 end   u05 exit=1 MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 195594 reads over 115 ticks (1329186 checks found the machine executing); wrong reads 0; 'Faulty architecture' 1, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+14:34:36 start u06 lock=off native=additive phase=boot
+14:34:48 end   u06 exit=1 MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 346970 reads over 216 ticks (2155766 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+14:34:48 start l01 lock=on native=additive phase=boot
+14:35:02 end   l01 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 499969 reads over 320 ticks (1797207 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:35:02 start u07 lock=off native=additive phase=boot
+14:35:14 end   u07 exit=1 MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 323662 reads over 205 ticks (2117269 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+14:35:14 start u08 lock=off native=additive phase=boot
+14:35:27 end   u08 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- UNLOCKED: 426334 reads over 280 ticks (3425530 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:35:27 start u09 lock=off native=additive phase=boot
+14:35:37 end   u09 exit=1 MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 196054 reads over 117 ticks (1613643 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+14:35:37 start u10 lock=off native=additive phase=boot
+14:35:50 end   u10 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- UNLOCKED: 423473 reads over 280 ticks (3249719 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:35:50 start u11 lock=off native=additive phase=boot
+14:35:59 end   u11 exit=1 MILESTONE race-2-raw-reads-through-the-boot: FAIL -- UNLOCKED: 151800 reads over 88 ticks (1494231 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 1, 'Kernel crashed' 0; booted=false running=false (lastError=Error.InternalError)
+14:35:59 start u12 lock=off native=additive phase=boot
+14:36:12 end   u12 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- UNLOCKED: 432630 reads over 280 ticks (3828305 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:36:12 start l02 lock=on native=additive phase=boot
+14:36:27 end   l02 exit=0 MILESTONE race-2-raw-reads-through-the-boot: PASS -- locked: 478809 reads over 320 ticks (1129415 checks found the machine executing); wrong reads 0; 'Faulty architecture' 0, 'runThreaded threw' 0, 'Kernel crashed' 0; booted=true running=true
+14:36:27 CHAIN DONE
