@@ -1,0 +1,71 @@
+mem_test -- lj52 memory accounting
+  PASS  M0 the state's heap is its own lj_alloc arena        _OCLJ_GCSTATS heap=1 (1 = own lj_alloc arena, 0 = libc, -1 = absent)
+  PASS  M1 uncapped state is not charged                     2000 tables allocated, setluamemory never called
+  PASS  M2 capped but unbound: still not charged             lua_setallocf before the javastate exists is harmless
+  PASS  M2b settling up at bind leaves used non-negative     used=430690 after settling up
+  PASS  M3 allocation is charged                             used 430690 -> 2259196 (+1828506) over 20000 tables
+  PASS  M3b charged to the byte, vs lua_gc(GCCOUNT)          we charged +1828506, LuaJIT counted +1828506  (difference 0)
+  PASS  M3c legacy mode keeps the native figure too, exact   native used 2259196, Java's field 2259196, LuaJIT 2259196
+  PASS  M4 freeing is credited back                          used 2259196 -> 43462 (2215734 of 1828506 reclaimed)
+  PASS  M4c credited to the byte, vs lua_gc(GCCOUNT)         we credited -2215734, LuaJIT counted -2215734  (difference 0)
+  PASS  M4b used never goes negative                         used=43462
+  PASS  M5 the cap refuses                                   pcall status=4 (LUA_ERRMEM=4)  used=239984 cap=240070 (+ credit 0)
+  PASS  M6a lua_pushcfunction survives an exhausted cap      used 110266, cap 110266, the credit spent; pushed=yes
+  PASS  M6b a RAW push is refused at that same cap           lua_pushcclosure under pcall -> status 4 (LUA_ERRMEM=4)
+  PASS  M7 the unrefusable push is still charged             used 110266 -> 110314 (+48)
+  PASS  M8 clearing the javastate stops the accounting       5000 tables allocated, setluamemory never called again
+        main state after M8: flush_wanted=1 trace_flushes=0 (-1 == stat absent; a standing flag here is M5-M7's, awaiting a resume)
+  PASS  M0b the second state is on its own arena too         _OCLJ_GCSTATS heap=1
+  PASS  P0 the JIT compiled a few dozen resident traces      traces_live=40 after 40 hot loops
+        base live set used=76602  arms=0 collects=0 bailouts=0 refusals=0 trace_flushes=0 (-1 == stat absent)
+  PASS  P1a an emergency cycle armed and was proven to complete 13 steps of 64 KB garbage (status 0): arms 0 -> 1, collects 0 -> 1, bailouts +0, refusals +0, used=142258 of 1125178
+  PASS  P1b garbage restored the headroom: flush NOT wanted  headroom after the cycle = 982920 (watermark 281294); flush_wanted=0
+  PASS  P1c the safe point left the traces alone             arm()+disarm(): traces_live 40 -> 40, trace_flushes=0
+  PASS  P1d trace_flushes is 0                               arm()+disarm(): traces_live 40 -> 40, trace_flushes=0
+  PASS  P2a the live allocation armed the emergency cycle    used=240546 of 338746 (headroom 98200), armed=1
+  PASS  P2b the cycle completed and headroom is STILL under the watermark 1 steps (status 0): collects 1 -> 2, headroom now 98088 (watermark 131072), flush_wanted=1, traces_live=40
+  PASS  P2c the collector raised flush_wanted at the proof   1 steps (status 0): collects 1 -> 2, headroom now 98088 (watermark 131072), flush_wanted=1, traces_live=40
+  PASS  P2d nothing flushed yet: the allocator never flushes 1 steps (status 0): collects 1 -> 2, headroom now 98088 (watermark 131072), flush_wanted=1, traces_live=40
+  PASS  P2e the arm entry point flushed once                 arm(): trace_flushes=1 flush_wanted=0 traces_live=0 flush_bytes=19968 refusals=0 re-armed=1
+  PASS  P2f no trace is live after the flush                 arm(): trace_flushes=1 flush_wanted=0 traces_live=0 flush_bytes=19968 refusals=0 re-armed=1
+  PASS  P2g the flag is consumed and the cycle re-armed      arm(): trace_flushes=1 flush_wanted=0 traces_live=0 flush_bytes=19968 refusals=0 re-armed=1
+  PASS  P2h the accounted used dropped by at least the trace metadata used 240658 -> 241332 -> 220690: dropped 19968 across arm + 5 steps (status 0, collects 7 -> 8); flush unlinked 19968 bytes of trace metadata
+  PASS  C0a a freshly bound state is in legacy mode          csync=0, native used=-1 (-1 = not handed over)
+  PASS  C0d legacy allocations cross JNI, counted three ways 3000 tables in legacy mode: getluamemory calls +3062, getthreadenv +3062, allocator calls through JNI +3062
+  PASS  C0b the handover: native cap and figure are Java's and LuaJIT's csync=1, native cap 67108864 (Java 67108864); used: native 317880, Java's field 317880, LuaJIT 317880
+  PASS  C0c _OCLJ_GCSTATS returns 20 values                  20 values (14 before 2026-10-03)
+  PASS  C1 after the handover no allocation crosses into the JVM openlibs + 20000 tables: allocator calls +20476, of them through JNI +0; getluamemory +0, setluamemory +0, getthreadenv +0
+  PASS  C2a the native figure is LuaJIT's own count, to the byte native used 2363580, LuaJIT 2363580 (difference 0); getFreeMemory 64745284
+  PASS  C2b getFreeMemory reads the native figure, once      getFreeMemory=64745284; used reads 3 -> 4
+  PASS  C2c frees are credited, to the byte                  used 2363580 -> 43462 (2320118 reclaimed); LuaJIT 43462 (difference 0)
+  PASS  C3a a lowered cap refuses on the next allocations    cap lowered to used+192 KB = 240070: status 4 (LUA_ERRMEM=4), used 239984 (credit 0), native cap 240070
+  PASS  C3b a raised cap admits at once                      cap raised to 64 MB: status 0, used 2066740
+  PASS  C4a the save's raised cap lets the persist allocate past the machine's under Integer.MAX_VALUE: status 0, used 2066740 (machine cap 108998), free 2145416907
+  PASS  C4b the restored cap reads free 0 and refuses growth cap restored to 108998 under used 2066740: free 0, next growth status 4 (LUA_ERRMEM=4)
+  PASS  C4c once that garbage is collected the machine runs again after collecting the persist's garbage: free 65536, status 0
+  PASS  C5a the emergency cycle arms against the native cap and completes 14 steps of 64 KB garbage under a native cap of used+1 MB (status 0; armed before 0): arms 701 -> 702, collects 701 -> 702
+  PASS  C5b live data under the watermark: armed, proven, flush wanted before: armed 0, flush_wanted 0; 160 KB live under used+256 KB: armed=1, 1 steps (status 0), collects 702 -> 703, headroom 98088 (watermark 131072), flush_wanted=1
+  PASS  C6 exhausted cap: raw push refused, memo push succeeds, charged native cap 110266 under used 110266, the credit spent: raw push status 4 (LUA_ERRMEM=4); memo push succeeded, used 110266 -> 110314
+  PASS  C7 accounting off: nothing refused, the figure still tracks status 0; getluamemory +0, setluamemory +0; native used 616952, LuaJIT 616952
+  PASS  C8 -1 where there is no handed-over record           no state -1, foreign allocator -1 (after settotal), uncapped -1; uncapped getFreeMemory 0, csync 0
+  FAIL  W5a an arm in the sweep does not leave the collector parked state 4 before; arms 0 -> 1; after two checkpoints: state 0, armed 1, stepmul 0, threshold 2110600 vs gc.total 1055592, park resets -1
+  FAIL  W5b and the churn after it collects, never refused   20000 x 64 B: status 4 (LUA_ERRMEM=4) after 3209 steps; collects 0 -> 0, bailouts 0 -> 0
+  FAIL  W5c a sweep that frees 100000 blocks is not a bailout 6443385 B held, then an armed cycle: statuses 0/0, collects 0 -> 0, bailouts 0 -> 1
+  FAIL  W2b a refusal arms, from any headroom                headroom 434056 (watermark 272777), armed before 0; one request of 533688 B: status 4 (LUA_ERRMEM=4), armed after 0
+  FAIL  W2c and the retry succeeds once the garbage is collected the same request again: status 4, used 657278 of cap 1091110
+  FAIL  W2d a request inside the credit is lent, then repaid a request of headroom + G/4 (758304 B): status 4, used 349966 vs cap 1091110 right after; 350190 after the next checkpoint
+  INFO  W9 residual: allocate-first retries, no checkpoint   request 567790 B = headroom 434056 + G 68198 + 64 KB, garbage 600 KB: status 0, tries made 20
+  FAIL  W1 C mode: catch the refusal, drop the data, carry on (x3) [0: status 4, 'not enough memory', used 1091209, 1091209 after 1129 tables, cap 1091210, collects +1552] [1: status 4, 'not enough memory', used 1091209, 1091209 after 1129 tables, cap 1091210, collects +1552] [2: status 4, 'not enough memory', used 1091209, 1091209 after 1129 tables, cap 1091210, collects +1552] od_peak -1, od_limit -1
+  FAIL  W1L legacy mode: catch the refusal, drop the data, carry on (x3) [0: status 4, 'not enough memory', used 1091209, 1091209 after 1129 tables, cap 1091210, collects +1552] [1: status 4, 'not enough memory', used 1091209, 1091209 after 1129 tables, cap 1091210, collects +1552] [2: status 4, 'not enough memory', used 1091209, 1091209 after 1129 tables, cap 1091210, collects +1552] od_peak -1, od_limit -1
+  FAIL  W1j C mode, JIT on: catch, drop, carry on (x3)       [0: status 4, 'not enough memory', used 1091145, 62006 after 1129 tables, cap 1091210, collects +1552] [1: status 4, 'not enough memory', used 1092641, 1092641 after 1131 tables, cap 1092650, collects +1554] [2: status 4, 'not enough memory', used 1092641, 1092641 after 1131 tables, cap 1092650, collects +1554] od_peak -1, od_limit -1
+  FAIL  W12 a fill to the wall costs a bounded number of cycles the worst W1 round: 1554 full cycles (bound 16); back-offs engaged 0
+  FAIL  W8 an allocation between catch and drop: still recovers status 4, 'not enough memory', used 1091206, 1091206 after 1129 tables (status 4), cap 1091210, bailouts 0 -> 0
+  FAIL  W3 a lone allocation at an exhausted cap is lent     cap == used: status 4 (LUA_ERRMEM=4), t[1] = -1, overdrafts -1
+  FAIL  W4 near the wall, cycles per bytes allocated, not per checkpoint 20000 x 64 B, 256 KB live: far (4 watermarks) 0 collects, status 0; near (64 KB) 10000 collects (bound 61), status 0, refusals +0; time near/far 117.0
+  FAIL  W7 caught refusals cannot push the heap past cap + G 4000 caught attempts past the wall, as the sandbox: status 0, caught 3960, refusals +3960, collects +2632; used 305004 vs cap 305030; od_peak -1, od_limit -1
+  FAIL  W10 the kernel allocates after the sandbox spent the credit status 4, 'not enough memory' (kernel armed|after disarm|sandbox refusals|resume); used 829096 vs cap 829098
+  FAIL  W11 live data past total + G/2: the reserve tier, not a refusal setup 0; cap 282142 under used 306718 by 24 KB, G 32768: resume 4 (LUA_YIELD=1), 64 B n/a, 32 KB n/a; used 306718
+  PASS  M9 a state that never hands over stays in legacy mode csync=0; allocator calls 58044, of them through JNI 48273
+  PASS  M0c the first state is still on its arena at the end _OCLJ_GCSTATS heap=1 after every case above
+
+checks=65 failures=16

@@ -92,6 +92,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -413,13 +414,23 @@ static const char *ARM_DISARM =
 
 /* ---- the collector at the wall (the W cases) ------------------------------
  * _OCLJ_GCSTATS positions the earlier cases do not read, and _OCLJ_WALLSTATS
- * (docs/roadmap.md, "THE COLLECTOR AT THE WALL"): its 4th value counts parked
- * arms restarted.  Every WALL value reads -1 on a shim older than 2026-10-04. */
+ * (docs/roadmap.md, "THE COLLECTOR AT THE WALL"; lj52shim.c, THE CREDIT):
+ * growths lent past the cap, the largest excursion past it, the credit tier
+ * (0 burst, 1 reserve), parked arms restarted, the credit limit G for the
+ * current cap, the kernel's slice past it, and THE CADENCE's own state: the
+ * heap the last proof left, why the last cycle was armed, whether one has
+ * been proven.  Every WALL value reads -1 on a shim older than 2026-10-04. */
 #define GC_GTOTAL(L)        statn(L, "_OCLJ_GCSTATS", 6)
 #define GC_THRESH(L)        statn(L, "_OCLJ_GCSTATS", 7)
 #define GC_STEPMUL(L)       statn(L, "_OCLJ_GCSTATS", 8)
 #define GC_STATE(L)         statn(L, "_OCLJ_GCSTATS", 9)
+#define WALL_OVERDRAFTS(L)  statn(L, "_OCLJ_WALLSTATS", 1)
+#define WALL_ODPEAK(L)      statn(L, "_OCLJ_WALLSTATS", 2)
+#define WALL_ODSTATE(L)     statn(L, "_OCLJ_WALLSTATS", 3)
 #define WALL_PARKRESETS(L)  statn(L, "_OCLJ_WALLSTATS", 4)
+#define WALL_ODLIMIT(L)     statn(L, "_OCLJ_WALLSTATS", 5)
+#define WALL_KSLICE(L)      statn(L, "_OCLJ_WALLSTATS", 6)
+#define WALL_LOW(L)         statn(L, "_OCLJ_WALLSTATS", 7)
 /* lj_gc.h's GC states, by value (the shim spells GCSpause as 0 too). */
 #define W_GCSPAUSE 0
 #define W_GCSSWEEP 4
@@ -452,6 +463,35 @@ static void w_setcap(lua_State *W, FakeState *s, long long cap, int handover) {
   else s->total = (jint)cap;
 }
 
+/* The credit limit G the design gives a cap: total/16, clamped 32-512 KB. */
+static long long w_odmax(long long total) {
+  long long g = total >> 4;
+  return g < 32 * 1024 ? 32 * 1024 : g > 512 * 1024 ? 512 * 1024 : g;
+}
+
+/* The most THE CREDIT lends past `total` to the kernel -- and mem_test's own
+ * C frames run where the kernel does, with no resume armed: G plus the
+ * kernel's slice.  0 on a shim without the credit.  Read while there is room
+ * (a statn at an exhausted cap would itself be refused). */
+static long long w_creditmax(lua_State *L, long long total) {
+  double k = WALL_KSLICE(L);
+  return k < 0 ? 0 : w_odmax(total) + (long long)k;
+}
+
+/* A cap with not one byte to spare, the credit included: total + G(total) +
+ * the kernel's slice == used.  Live data that far past the cap is the
+ * reserve tier, so both tiers and the slice are spent.  On a shim without
+ * the credit, total == used, as these cases always set it. */
+static long long w_exhausted(lua_State *L, long long used) {
+  double k = WALL_KSLICE(L);
+  long long t;
+  int i;
+  if (k < 0) return used;
+  t = used - (long long)k - w_odmax(used);
+  for (i = 0; i < 8; i++) t = used - (long long)k - w_odmax(t);   /* the fixed point */
+  return t;
+}
+
 /* One lua_createtable of `narray` slots under cpcall: the status, and the
  * table left on the stack when it succeeded (keep = 1) or popped. */
 typedef struct { int narray; int keep; } WTab;
@@ -468,11 +508,119 @@ static int w_tab(lua_State *L, int narray, int keep) {
   return lua_cpcall(L, w_tab_cf, &a);
 }
 
+/* Every fill below that ends only at the cap carries its own bound (200 000
+ * small tables, ~16 MB, thirty times any cap these cases set): a sabotage
+ * that removes the cap -- negative-control.sh's stopgap -- must make them
+ * FAIL, and the first unbounded draft instead ran the process to 18 GB. */
+/* The W1 program: fill a pre-sized holder until the cap refuses, catch it,
+ * drop the data, then do what a program does next -- build a string with an
+ * allocate-first library function (string.rep allocates, then checks the GC:
+ * lib_string.c) and make a table.  __w1 reports the caught error and the
+ * string's length. */
+static const char *W1_CHUNK =
+  "local h = __h "
+  "local ok, err = pcall(function() local i = 0 while i < 200000 do i = i + 1 h[i] = {i} end end) "
+  "__h = nil h = nil "
+  "local s = string.rep('x', 256) "
+  "local t = {1, 2, 3} "
+  "__w1 = (ok and 'no error' or tostring(err)) .. '|' .. #s .. '|' .. #t";
+
+/* The W7 program: a caught refusal per live insert, many times over -- a
+ * program trying to creep its live data into the credit.  Bounded at 4000
+ * attempts: every attempt past the wall costs a full cycle, as each refusal
+ * does on PUC. */
+/* W1 with one more allocation BETWEEN the catch and the drop: the message
+ * concatenated while the data is still held.  Its cycle runs and proves
+ * nothing collectable; the recovery after the drop must still work. */
+static const char *W8_CHUNK =
+  "local h = __h "
+  "local ok, err = pcall(function() local i = 0 while i < 200000 do i = i + 1 h[i] = {i} end end) "
+  "local msg = 'err: ' .. tostring(err) "
+  "__h = nil h = nil "
+  "local s = string.rep('y', 256) "
+  "local t = {1, 2, 3} "
+  "__w8 = msg .. '|' .. #s .. '|' .. #t";
+
+/* The residual: an allocate-first request retried in a loop with no
+ * checkpoint in it (FORL, CALL, nothing that runs lj_gc_check), bigger than
+ * the headroom plus the credit and covered only by garbage.  Stock collects
+ * at the refusal and the first retry succeeds. */
+static const char *W9_CHUNK =
+  "local n, tries = __w9n, 0 "
+  "for i = 1, 20 do tries = i if pcall(string.rep, 'z', n) then break end end "
+  "__w9 = tries";
+
+/* The kernel's allocations after the sandbox has exhausted the credit: the
+ * sandbox fills inside a coroutine resumed under the watchdog's arm, as the
+ * kernel resumes it, until refused twice (both tiers); then the kernel does
+ * the table.pack it does after every resume (machine.lua), once still armed
+ * and once after the disarm, where Java's signal pushes also land. */
+static const char *W10_CHUNK =
+  "local h, fails, i = __h, 0, 0 "
+  "local args = {} for k = 1, 64 do args[k] = k end "
+  "local co = coroutine.create(function() "
+  "  for attempt = 1, 10 do "
+  "    if fails >= 2 then break end "
+  "    if not pcall(function() while i < 200000 do i = i + 1 h[i] = {i} end end) then fails = fails + 1 end "
+  "  end "
+  "end) "
+  "local t = _OCLJ_WATCHDOG.arm(3600, function() end, true) "
+  "local okr = coroutine.resume(co) "
+  "local ok1 = pcall(table.pack, unpack(args)) "
+  "_OCLJ_WATCHDOG.disarm(t) "
+  "local ok2 = pcall(table.pack, unpack(args)) "
+  "__h = nil h = nil "
+  "__w10 = tostring(ok1) .. '|' .. tostring(ok2) .. '|' .. fails .. '|' .. tostring(okr)";
+
+/* W11's sandbox: a coroutine made, and the watchdog armed by the main
+ * thread, while there is room; mem_test resumes it from C at the cap. */
+static const char *W11_CHUNK =
+  "__co11 = coroutine.create(function() "
+  "  local ok1 = pcall(function() local x = {1, 2, 3, 4, 5, 6, 7, 8} return x end) "
+  "  local ok2 = pcall(function() local y = {} for k = 1, 4096 do y[k] = k end return y end) "
+  "  coroutine.yield(ok1, ok2) "
+  "end) "
+  "__t11 = _OCLJ_WATCHDOG.arm(3600, function() end, true)";
+
+/* W7's sandbox: 4000 caught attempts to add 64 tables to a table it never
+ * drops, inside a coroutine resumed under the watchdog's arm, as the kernel
+ * resumes the sandbox -- so the bound is the sandbox's, cap + G, without the
+ * kernel's slice. */
+/* W13's fill: live 64-byte tables into __w13 until gc.total reaches __w13t
+ * (bounded, see above). */
+static const char *W13_FILL =
+  "local t = __w13 or {} __w13 = t "
+  "local target, i = __w13t, #t "
+  "while i < 200000 and collectgarbage('count') * 1024 < target do i = i + 1 t[i] = {i} end";
+
+/* W14's program, in three phases by gc.total: live 64-byte tables into __w14
+ * up to __w14a (just outside the watermark), then garbage up to __w14b (into
+ * it: the cycle this arms frees that garbage and its proof lands OUTSIDE
+ * the watermark), then live tables again up to __w14t.  Bounded throughout. */
+static const char *W14_FILL =
+  "local t = {} __w14 = t "
+  "local a, b, c, i, g = __w14a, __w14b, __w14t, 0, 0 "
+  "while i < 200000 and collectgarbage('count') * 1024 < a do i = i + 1 t[i] = {i} end "
+  "while g < 200000 and collectgarbage('count') * 1024 < b do g = g + 1 local x = {g} end "
+  "while i < 400000 and collectgarbage('count') * 1024 < c do i = i + 1 t[i] = {i} end";
+
+static const char *W7_CHUNK =
+  "local h, fails, cur = {}, 0, 0 "
+  "local function add() for k = 1, 64 do h[#h + 1] = {cur, k} end end "
+  "local co = coroutine.create(function() "
+  "  for i = 1, 4000 do cur = i if not pcall(add) then fails = fails + 1 end end "
+  "end) "
+  "local t = _OCLJ_WATCHDOG.arm(3600, function() end, true) "
+  "local okr = coroutine.resume(co) "
+  "_OCLJ_WATCHDOG.disarm(t) "
+  "__w7 = okr and fails or -1";
+
 int main(void) {
   lua_State *L;
   jint used0, used1, used2, usedBeforePush, usedAfterPush;
   long long gc0, gc1, gc2;
   int st, pushedMemo, rawStatus;
+  long long cmax;
   char d[512];
 
   /* UNBUFFERED on purpose, and _IONBF rather than _IOLBF.  One of this file's
@@ -490,6 +638,8 @@ int main(void) {
   L = luaL_newstate();                    /* -> lj52_newstate */
   if (!L) { printf("  FAIL  luaL_newstate returned NULL\n"); return 1; }
   luaL_openlibs(L);
+  lua_pushliteral(L, "_OCLJ_WALLSTATS");   /* interned for good: see w_newstate */
+  lua_setfield(L, LUA_REGISTRYINDEX, "__wallname");
 
   /* ---- M0 ---------------------------------------------------------- */
   /* Which allocator the state's blocks live in.  A state on the C library
@@ -588,20 +738,32 @@ int main(void) {
 
   /* ---- M5 ----------------------------------------------------------- */
   FS.total = FS.used + 192 * 1024;
+  cmax = w_creditmax(L, FS.total);        /* THE CREDIT: G + the kernel's slice */
   st = alloc_tables(L, 10000000L);
-  sprintf(d, "pcall status=%d (LUA_ERRMEM=%d)  used=%ld cap=%ld",
-          st, LUA_ERRMEM, (long)FS.used, (long)FS.total);
-  ok(st == LUA_ERRMEM && FS.used <= FS.total, "M5 the cap refuses", d);
+  sprintf(d, "pcall status=%d (LUA_ERRMEM=%d)  used=%ld cap=%ld (+ credit %ld)",
+          st, LUA_ERRMEM, (long)FS.used, (long)FS.total, (long)cmax);
+  ok(st == LUA_ERRMEM && FS.used <= FS.total + cmax, "M5 the cap refuses", d);
   lua_settop(L, 0);
 
   /* ---- M6 / M7: the coupling ---------------------------------------
    * Stage the raw-push wrapper and the stack slack WHILE there is still
    * room, so that what the cap refuses below is the pushcclosure under
    * test and not the machinery around it. */
+  /* M5's refusal ARMS the collector (lj52shim.c, THE CREDIT), so the push
+   * below would collect M5's garbage at its checkpoint and fit: collect it
+   * now.  And 64 KB of live ballast, because a cap that the credit and the
+   * kernel's slice exhaust must sit 48 KB or more under the live set. */
+  lua_gc(L, LUA_GCCOLLECT, 0);
+  settle_gc(L);
+  lua_gc(L, LUA_GCCOLLECT, 0);            /* settle_gc's own garbage too: the cycle the refusal
+                                           * arms must find nothing to free, or M7 reads the push
+                                           * net of what it freed (unarmed now: no two-flip alias) */
+  lua_createtable(L, 8192, 0);
+  lua_setfield(L, LUA_REGISTRYINDEX, "__ballast");
   lua_pushcfunction(L, raw_push);         /* memo now warm for raw_push */
   lua_checkstack(L, 20);
 
-  FS.total = FS.used;                     /* not one byte to spare */
+  FS.total = (jint)w_exhausted(L, FS.used);   /* not one byte to spare, the credit included */
 
   rawStatus = lua_pcall(L, 0, 1, 0);      /* runs raw_push -> lua_pushcclosure */
   lua_settop(L, 0);
@@ -612,8 +774,8 @@ int main(void) {
   usedAfterPush = FS.used;
   lua_settop(L, 0);
 
-  sprintf(d, "used == total == %ld; pushed=%s", (long)usedBeforePush,
-          pushedMemo ? "yes" : "NO");
+  sprintf(d, "used %ld, cap %ld, the credit spent; pushed=%s", (long)usedBeforePush,
+          (long)FS.total, pushedMemo ? "yes" : "NO");
   ok(pushedMemo, "M6a lua_pushcfunction survives an exhausted cap",
      pushedMemo ? d : "REFUSED -- this is the bare-frame ERRMEM that kills the JVM");
 
@@ -811,6 +973,8 @@ int main(void) {
     CS.total = 64 * 1024 * 1024;        /* LuaState(int): luaMemoryTotal = memory */
     lua_setallocf(C, NULL, C);          /* controlled_newstate: the capped form */
     bind_javastate(C, (void *)&CS);     /* newstate_protected */
+    lua_pushliteral(C, "_OCLJ_WALLSTATS");   /* interned for good: see w_newstate */
+    lua_setfield(C, LUA_REGISTRYINDEX, "__wallname");
 
     /* ---- C0: legacy until the handover, then the native figures --------- */
     sprintf(d, "csync=%.0f, native used=%ld (-1 = not handed over)",
@@ -879,12 +1043,13 @@ int main(void) {
     u0 = j_used(C, &CS);
     cap = (jint)(u0 + 192 * 1024);
     j_settotal(C, &CS, cap);            /* setTotalMemory(lower) */
+    cmax = w_creditmax(C, cap);
     st = alloc_tables(C, 10000000L);
     lua_settop(C, 0);
     u1 = j_used(C, &CS);
-    sprintf(d, "cap lowered to used+192 KB = %ld: status %d (LUA_ERRMEM=%d), used %ld, native cap %.0f",
-            (long)cap, st, LUA_ERRMEM, (long)u1, GC_CTOTAL(C));
-    ok(st == LUA_ERRMEM && u1 <= cap, "C3a a lowered cap refuses on the next allocations", d);
+    sprintf(d, "cap lowered to used+192 KB = %ld: status %d (LUA_ERRMEM=%d), used %ld (credit %ld), native cap %.0f",
+            (long)cap, st, LUA_ERRMEM, (long)u1, (long)cmax, GC_CTOTAL(C));
+    ok(st == LUA_ERRMEM && u1 <= cap + cmax, "C3a a lowered cap refuses on the next allocations", d);
     lua_gc(C, LUA_GCCOLLECT, 0);
     j_settotal(C, &CS, 64 * 1024 * 1024);   /* setTotalMemory(higher) */
     st = alloc_tables(C, 20000);
@@ -974,10 +1139,13 @@ int main(void) {
     lua_gc(C, LUA_GCCOLLECT, 0);
     j_settotal(C, &CS, 64 * 1024 * 1024);
     lua_settop(C, 0);
+    lua_createtable(C, 8192, 0);        /* 64 KB of live ballast: see M6 */
+    lua_setfield(C, LUA_REGISTRYINDEX, "__ballast");
     lua_pushcfunction(C, raw_push);     /* memo warm for raw_push on this state */
     lua_checkstack(C, 20);
     u0 = j_used(C, &CS);
-    j_settotal(C, &CS, (jint)u0);       /* not one byte to spare */
+    cmax = w_exhausted(C, u0);
+    j_settotal(C, &CS, (jint)cmax);     /* not one byte to spare, the credit included */
     rawStatus = lua_pcall(C, 0, 1, 0);  /* raw_push -> lua_pushcclosure */
     lua_settop(C, 0);
     u1 = j_used(C, &CS);
@@ -985,8 +1153,8 @@ int main(void) {
     pushed = lua_isfunction(C, -1);
     u2 = j_used(C, &CS);
     lua_settop(C, 0);
-    sprintf(d, "native cap == used == %ld: raw push status %d (LUA_ERRMEM=%d); memo push %s, used %ld -> %ld",
-            (long)u0, rawStatus, LUA_ERRMEM, pushed ? "succeeded" : "REFUSED", (long)u1, (long)u2);
+    sprintf(d, "native cap %ld under used %ld, the credit spent: raw push status %d (LUA_ERRMEM=%d); memo push %s, used %ld -> %ld",
+            (long)cmax, (long)u0, rawStatus, LUA_ERRMEM, pushed ? "succeeded" : "REFUSED", (long)u1, (long)u2);
     ok(rawStatus == LUA_ERRMEM && pushed && u2 > u1,
        "C6 exhausted cap: raw push refused, memo push succeeds, charged", d);
 
@@ -1045,10 +1213,13 @@ int main(void) {
    * ================================================================== */
   {
     FakeState WS;
-    lua_State *W;
-    long long cap, u0;
-    double coll0, bail0, arms0, st9, thr, gtot, steps;
-    int round, st2;
+    lua_State *W, *Wco;
+    long long base, cap, u0, u1, H, G;
+    double coll0, coll1, bail0, refu0, arms0, st9, thr, gtot, steps, peak, lim, armedC;
+    int round, allok, nreq, st2, st3, nrep;
+    double cworst = 0;
+    clock_t t0, t1, t2;
+    double tnear, tfar, cnear, cfar;
 
     /* ---- W5: the parked collector (P3) ------------------------------- */
     /* An arm that lands while the collector sweeps: the next checkpoint
@@ -1116,6 +1287,432 @@ int main(void) {
     clear_javastate(W);
     lua_close(W);
 
+    /* ---- W2: a refusal with no arm (P1, second shape) ----------------- */
+    /* One request larger than the headroom while the headroom is still over
+     * the watermark: refused, and today nothing arms, so the garbage that
+     * would have covered it is never collected and the retry is refused too. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W2: no state\n"); return 1; }
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    base = j_used(W, &WS);
+    cap = base + 1024 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    w_tab(W, 76800, 0);                 /* 600 KB of garbage, one block */
+    H = cap - j_used(W, &WS);
+    G = w_odmax(cap);
+    nreq = (int)((H + G / 2 + 64 * 1024) / 8);
+    armedC = GC_ARMED(W);
+    st = w_tab(W, nreq, 0);
+    sprintf(d, "headroom %ld (watermark %ld), armed before %.0f; one request of %ld B: status %d (LUA_ERRMEM=%d), armed after %.0f",
+            (long)H, wmark((long)cap), armedC, (long)nreq * 8, st, LUA_ERRMEM, GC_ARMED(W));
+    ok(armedC == 0 && st == LUA_ERRMEM && GC_ARMED(W) == 1,
+       "W2b a refusal arms, from any headroom", d);
+    st = w_tab(W, nreq, 0);
+    sprintf(d, "the same request again: status %d, used %ld of cap %ld", st, (long)j_used(W, &WS), (long)cap);
+    ok(st == 0, "W2c and the retry succeeds once the garbage is collected", d);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    w_tab(W, 38400, 0);                 /* 300 KB of garbage */
+    H = cap - j_used(W, &WS);
+    nreq = (int)((H + w_odmax(cap) / 4) / 8);
+    st = w_tab(W, nreq, 1);             /* kept live */
+    u0 = j_used(W, &WS);
+    w_tab(W, 0, 0);                     /* a checkpoint: the armed cycle */
+    w_tab(W, 0, 0);
+    u1 = j_used(W, &WS);
+    sprintf(d, "a request of headroom + G/4 (%ld B): status %d, used %ld vs cap %ld right after; %ld after the next checkpoint",
+            (long)nreq * 8, st, (long)u0, (long)cap, (long)u1);
+    ok(st == 0 && u0 > cap && u1 <= cap, "W2d a request inside the credit is lent, then repaid", d);
+    lua_pushnil(W); lua_setfield(W, LUA_REGISTRYINDEX, "__wkeep");
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W9: the residual, measured, not asserted ---------------------- */
+    /* What the bounded credit does NOT fix (docs/roadmap.md, the collector
+     * at the wall): printed so a change in it is seen, never counted, because
+     * only a collection outside the checkpoints (the hook carrier, stage 2)
+     * would turn it into a pass. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W9: no state\n"); return 1; }
+    runstr(W, "jit.off() __w9 = 0 __w9n = 0");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    base = j_used(W, &WS);
+    cap = base + 1024 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    w_tab(W, 76800, 0);                 /* 600 KB of garbage, one block */
+    H = cap - j_used(W, &WS);
+    G = w_odmax(cap);
+    lua_pushinteger(W, (lua_Integer)(H + G + 64 * 1024));
+    lua_setglobal(W, "__w9n");
+    st = runstr(W, W9_CHUNK);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    lua_getglobal(W, "__w9");
+    printf("  INFO  %-52s request %ld B = headroom %ld + G %ld + 64 KB, garbage 600 KB: status %d, %s %ld\n",
+           "W9 residual: allocate-first retries, no checkpoint", (long)(H + G + 64 * 1024), (long)H, (long)G, st,
+           lua_tointeger(W, -1) > 0 && lua_tointeger(W, -1) < 20 ? "succeeded at try" : "tries made",
+           (long)lua_tointeger(W, -1));
+    lua_settop(W, 0);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W1: recovery at the wall (P1) -------------------------------- */
+    /* The probe's measured failure, hermetically: three rounds, C mode, then
+     * the same in legacy mode (the dropin's path). */
+    for (round = 0; round < 3; round++) {
+      int handover = round != 1;        /* C mode, legacy, C mode with the JIT on */
+      int r;
+      W = w_newstate(&WS, 64 * 1024 * 1024, handover);
+      if (!W) { printf("  FAIL  W1: no state\n"); return 1; }
+      if (round != 2) runstr(W, "jit.off()");
+      allok = 1;
+      d[0] = 0;
+      for (r = 0; r < 3; r++) {
+        const char *res;
+        char one[200];
+        lua_createtable(W, 1 << 16, 0);  /* the holder, pre-sized: the fill never grows it */
+        lua_setglobal(W, "__h");
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        settle_gc(W);
+        cap = j_used(W, &WS) + 512 * 1024;
+        w_setcap(W, &WS, cap, handover);
+        coll0 = GC_COLLECTS(W); bail0 = GC_BAILOUTS(W);
+        st = runstr(W, W1_CHUNK);
+        if (st != 0) { res = errtop(W); }
+        else { lua_getglobal(W, "__w1"); res = lua_tostring(W, -1); if (!res) res = "(nil)"; }
+        /* Repaid within one credit's worth of further allocation: the
+         * dropped data is collected at the latest when the distance to the
+         * tier's top has halved (lj52shim.c, THE CADENCE). */
+        u0 = j_used(W, &WS);
+        nrep = (int)(w_odmax(cap) / 64) + 64;
+        churn(W, 0, 1e18, nrep, &st3);
+        u1 = j_used(W, &WS);
+        if (GC_COLLECTS(W) - coll0 > cworst) cworst = GC_COLLECTS(W) - coll0;
+        sprintf(one, "[%d: status %d, '%.40s', used %ld, %ld after %d tables, cap %ld, collects +%.0f] ", r, st, res,
+                (long)u0, (long)u1, nrep, (long)cap, GC_COLLECTS(W) - coll0);
+        strcat(d, one);
+        if (!(st == 0 && strncmp(res, "not enough memory|256|3", 23) == 0 && st3 == 0 && u1 <= cap
+              && GC_BAILOUTS(W) == bail0)) allok = 0;
+        lua_settop(W, 0);
+        w_setcap(W, &WS, 64 * 1024 * 1024, handover);
+      }
+      peak = WALL_ODPEAK(W); lim = WALL_ODLIMIT(W);
+      {
+        char tail[96];
+        sprintf(tail, "od_peak %.0f, od_limit %.0f", peak, lim);
+        strcat(d, tail);
+      }
+      ok(allok && peak >= 0 && peak <= lim,
+         round == 0 ? "W1 C mode: catch the refusal, drop the data, carry on (x3)"
+         : round == 1 ? "W1L legacy mode: catch the refusal, drop the data, carry on (x3)"
+                      : "W1j C mode, JIT on: catch, drop, carry on (x3)", d);
+      clear_javastate(W);
+      lua_close(W);
+    }
+
+    /* ---- W12: what a fill costs (P2, THE CADENCE) ---------------------- */
+    /* Each W1 round fills 512 KB of headroom with live 64-byte tables to the
+     * refusal, recovers, and repays.  Measured per round: 21 full cycles
+     * (the pre-emptive cycles halving their way to the cap, then the tiers
+     * past it), about 1840 without the hysteresis (one per checkpoint pair),
+     * and 1551 before any of this.  12 with the back-off this design once
+     * had (lj52shim.c, NO BACK-OFF).  The bound is half again the measured
+     * count; a per-checkpoint re-arm is two orders of magnitude past it. */
+    sprintf(d, "the worst W1 round: %.0f full cycles (bound 32)", cworst);
+    ok(cworst >= 1 && cworst <= 32, "W12 a fill to the wall costs a bounded number of cycles", d);
+
+    /* ---- W13: a hold after an earlier fill still gets a cycle ---------- */
+    /* Written while chasing the harness's mem-2 on the first stage-B build
+     * (one arm in 7 s, 0 flushes, where the stage-A build armed 13 451 times
+     * and flushed 118), on the hypothesis that a back-off engaged by an
+     * earlier phase's fill had outlived it.  That hazard is real -- on that
+     * build a later program holding live data inside the watermark, below
+     * the cap so nothing ever armed at the wall, got not one cycle here --
+     * though mem-2's own failure turned out to be W14's pattern.  Fill,
+     * drop, collect, then hold inside the watermark. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W13: no state\n"); return 1; }
+    runstr(W, "jit.off() __w13t = 0");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    base = j_used(W, &WS);
+    cap = base + 1024 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    lua_pushinteger(W, (lua_Integer)(cap - 60 * 1024));
+    lua_setglobal(W, "__w13t");
+    st = runstr(W, W13_FILL);              /* phase 1: live data to 60 KB short of the cap */
+    peak = WALL_LOW(W);
+    runstr(W, "__w13 = nil");
+    lua_gc(W, LUA_GCCOLLECT, 0);           /* its data gone, the heap back near the base */
+    runstr(W, ARM_DISARM);                 /* the safe point consumes fill 1's flush flag */
+    lua_settop(W, 0);
+    u0 = j_used(W, &WS);
+    armedC = GC_FLUSHWANT(W);
+    arms0 = GC_ARMS(W); coll0 = GC_COLLECTS(W);
+    lua_pushinteger(W, (lua_Integer)(cap - 100 * 1024));
+    lua_setglobal(W, "__w13t");
+    st2 = runstr(W, W13_FILL);             /* phase 2: hold inside the watermark, below the cap */
+    u1 = j_used(W, &WS);
+    sprintf(d, "fill 1: status %d, left the post-cycle level at %.0f; dropped and collected, used %ld, flush_wanted %.0f after the safe point; "
+            "fill 2 to %ld of cap %ld (watermark %ld): status %d, arms +%.0f, collects +%.0f, flush_wanted %.0f",
+            st, peak, (long)u0, armedC, (long)u1, (long)cap, wmark((long)cap), st2,
+            GC_ARMS(W) - arms0, GC_COLLECTS(W) - coll0, GC_FLUSHWANT(W));
+    ok(st == 0 && st2 == 0 && armedC == 0 && GC_COLLECTS(W) - coll0 >= 1 && GC_FLUSHWANT(W) == 1,
+       "W13 a later hold inside the watermark still gets a cycle (the flush)", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W14: a hold that churns as it grows still gets the flush ------ */
+    /* mem-2's failure on both builds that had a back-off (2026-10-04):
+     * its first pre-emptive cycle freed the program's own garbage and left
+     * the heap OUTSIDE the watermark, so that proof rightly asked for no
+     * flush -- and then a back-off (freed less than half the growth since a
+     * proof taken before the program began) stopped every later cycle while
+     * the program grew to 100 KB short of the cap.  One proof inside the
+     * watermark is all the trace flush needs. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W14: no state\n"); return 1; }
+    runstr(W, "jit.off() __w14t = 0");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    /* a proof before the program, as mem-2's record had one: a tight cap,
+     * churn until one cycle is proven, then the program's cap */
+    base = j_used(W, &WS);
+    w_setcap(W, &WS, base + 100 * 1024, 1);
+    coll0 = GC_COLLECTS(W);
+    churn(W, 0, coll0, 20000, &st2);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    runstr(W, ARM_DISARM);                 /* the safe point consumes that proof's flush flag */
+    lua_settop(W, 0);
+    base = j_used(W, &WS);
+    cap = base + 2048 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    settle_gc(W);
+    lua_pushinteger(W, (lua_Integer)(cap - wmark((long)cap) - 50 * 1024));
+    lua_setglobal(W, "__w14a");
+    lua_pushinteger(W, (lua_Integer)(cap - wmark((long)cap) + 150 * 1024));
+    lua_setglobal(W, "__w14b");
+    lua_pushinteger(W, (lua_Integer)(cap - 100 * 1024));
+    lua_setglobal(W, "__w14t");
+    arms0 = GC_ARMS(W); coll0 = GC_COLLECTS(W);
+    armedC = GC_FLUSHWANT(W);
+    st = runstr(W, W14_FILL);
+    u1 = j_used(W, &WS);
+    sprintf(d, "flush_wanted %.0f before; live to the watermark's edge, garbage into it, live to %ld of cap %ld "
+            "(watermark %ld): status %d, arms +%.0f, collects +%.0f, flush_wanted %.0f",
+            armedC, (long)u1, (long)cap, wmark((long)cap), st, GC_ARMS(W) - arms0, GC_COLLECTS(W) - coll0,
+            GC_FLUSHWANT(W));
+    ok(st == 0 && armedC == 0 && GC_COLLECTS(W) - coll0 >= 1 && GC_FLUSHWANT(W) == 1,
+       "W14 a hold that churns as it grows still asks for the flush", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W8: an allocation between the catch and the drop (P1) -------- */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W8: no state\n"); return 1; }
+    runstr(W, "jit.off()");
+    lua_createtable(W, 1 << 16, 0);
+    lua_setglobal(W, "__h");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    cap = j_used(W, &WS) + 512 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    bail0 = GC_BAILOUTS(W);
+    st = runstr(W, W8_CHUNK);
+    u0 = j_used(W, &WS);
+    nrep = (int)(w_odmax(cap) / 64) + 64;
+    churn(W, 0, 1e18, nrep, &st3);      /* repaid within one credit: see W1 */
+    u1 = j_used(W, &WS);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    {
+      const char *res;
+      if (st != 0) res = errtop(W);
+      else { lua_getglobal(W, "__w8"); res = lua_tostring(W, -1); if (!res) res = "(nil)"; }
+      sprintf(d, "status %d, '%.60s', used %ld, %ld after %d tables (status %d), cap %ld, bailouts %.0f -> %.0f",
+              st, res, (long)u0, (long)u1, nrep, st3, (long)cap, bail0, GC_BAILOUTS(W));
+      allok = st == 0 && strstr(res, "err: not enough memory|256|3") == res && st3 == 0 && u1 <= cap
+              && GC_BAILOUTS(W) == bail0;
+    }
+    lua_settop(W, 0);
+    ok(allok, "W8 an allocation between catch and drop: still recovers", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W3: one allocation at an exhausted cap (P1, trace exits) ------ */
+    /* A compiled loop whose table is sunk: the exit at i == n restores it,
+     * and the restore allocates.  At a cap with not one byte to spare that
+     * restore (or, uncompiled, the TDUP) is lent from the credit. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W3: no state\n"); return 1; }
+    runstr(W, "function __w3(n) for i = 1, n do local t = {i, i + 1} if i == n then return t end end end "
+              "for k = 1, 20 do __w3(2000) end");
+    lua_settop(W, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    lua_getglobal(W, "__w3");
+    lua_pushinteger(W, 2000);
+    cap = j_used(W, &WS);
+    w_setcap(W, &WS, cap, 1);
+    st = lua_pcall(W, 1, 1, 0);
+    u1 = st == 0 && lua_istable(W, -1) ? (lua_rawgeti(W, -1, 1), (long long)lua_tointeger(W, -1)) : -1;
+    lua_settop(W, 0);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    sprintf(d, "cap == used: status %d (LUA_ERRMEM=%d), t[1] = %ld, overdrafts %.0f",
+            st, LUA_ERRMEM, (long)u1, WALL_OVERDRAFTS(W));
+    ok(st == 0 && u1 == 2000 && WALL_OVERDRAFTS(W) >= 1,
+       "W3 a lone allocation at an exhausted cap is lent", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W4: the re-arm cadence in the last quarter (P2) -------------- */
+    /* 256 KB live, 64 B garbage churn.  Near: 64 KB of headroom, inside the
+     * watermark.  Far: four watermarks of headroom.  Today every proven cycle
+     * that leaves the heap inside the watermark re-arms at the next
+     * allocation -- a full cycle per checkpoint pair.  Stock pays one full
+     * cycle per (cap - live) bytes. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W4: no state\n"); return 1; }
+    runstr(W, "jit.off()");
+    lua_createtable(W, 32768, 0);
+    lua_setfield(W, LUA_REGISTRYINDEX, "__live4");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    base = j_used(W, &WS);
+    w_setcap(W, &WS, base + 4 * wmark((long)(base + 4 * 128 * 1024)), 1);
+    settle_gc(W);
+    coll0 = GC_COLLECTS(W);
+    t0 = clock();
+    churn(W, 0, 1e18, 20000, &st2);
+    t1 = clock();
+    cfar = GC_COLLECTS(W) - coll0;
+    lua_gc(W, LUA_GCCOLLECT, 0);        /* the far phase leaves its garbage: */
+    settle_gc(W);                       /* the near cap counts from the live set */
+    base = j_used(W, &WS);
+    w_setcap(W, &WS, base + 64 * 1024, 1);
+    settle_gc(W);
+    coll1 = GC_COLLECTS(W); refu0 = GC_REFUSALS(W);
+    t1 = clock();
+    churn(W, 0, 1e18, 20000, &st);
+    t2 = clock();
+    cnear = GC_COLLECTS(W) - coll1;
+    tfar = (double)(t1 - t0) > 0 ? (double)(t1 - t0) : 1;
+    tnear = (double)(t2 - t1);
+    /* The bound is R2's: within 3x stock's cycle count, and stock runs one
+     * full cycle per (cap - live) bytes -- here 1.28 MB / 64 KB, about 20. */
+    lim = 3.0 * (20000.0 * 64 / (64 * 1024)) + 2;
+    sprintf(d, "20000 x 64 B, 256 KB live: far (4 watermarks) %.0f collects, status %d; near (64 KB) %.0f collects "
+            "(bound %.0f), status %d, refusals +%.0f; time near/far %.1f",
+            cfar, st2, cnear, lim, st, GC_REFUSALS(W) - refu0, tnear / tfar);
+    ok(st == 0 && st2 == 0 && cnear >= 1 && cnear <= lim && cfar <= 2
+         && GC_REFUSALS(W) == refu0 && tnear / tfar <= 3.0,
+       "W4 near the wall, cycles per bytes allocated, not per checkpoint", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W7: the credit cannot be ratcheted (R5) ---------------------- */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W7: no state\n"); return 1; }
+    runstr(W, "jit.off()");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    runstr(W, "__w7 = 0");               /* the result's global exists before the wall */
+    lua_settop(W, 0);
+    cap = j_used(W, &WS) + 256 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    refu0 = GC_REFUSALS(W); coll0 = GC_COLLECTS(W);
+    st = runstr(W, W7_CHUNK);
+    lua_settop(W, 0);
+    u1 = j_used(W, &WS);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);   /* nothing below is read at the wall */
+    peak = WALL_ODPEAK(W); lim = WALL_ODLIMIT(W);
+    lua_getglobal(W, "__w7");
+    nrep = (int)lua_tointeger(W, -1);
+    lua_pop(W, 1);
+    sprintf(d, "4000 caught attempts past the wall, as the sandbox: status %d, caught %d, refusals +%.0f, collects +%.0f; "
+            "used %ld vs cap %ld; od_peak %.0f, od_limit %.0f",
+            st, nrep, GC_REFUSALS(W) - refu0, GC_COLLECTS(W) - coll0, (long)u1, (long)cap, peak, lim);
+    ok(st == 0 && nrep > 0 && GC_REFUSALS(W) > refu0 && peak >= 0 && lim > 0 && peak <= lim
+         && u1 <= cap + (long long)lim + 2048
+         && GC_COLLECTS(W) - coll0 <= 2 * (GC_REFUSALS(W) - refu0) + 24,
+       "W7 caught refusals cannot push the heap past cap + G", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W10: the kernel allocates after the sandbox (X9) -------------- */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W10: no state\n"); return 1; }
+    runstr(W, "jit.off() __w10 = 0");
+    lua_createtable(W, 1 << 16, 0);
+    lua_setglobal(W, "__h");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    lua_settop(W, 0);
+    cap = j_used(W, &WS) + 256 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    st = runstr(W, W10_CHUNK);
+    u1 = j_used(W, &WS);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    {
+      const char *res;
+      if (st != 0) res = errtop(W);
+      else { lua_getglobal(W, "__w10"); res = lua_tostring(W, -1); if (!res) res = "(nil)"; }
+      sprintf(d, "status %d, '%.40s' (kernel armed|after disarm|sandbox refusals|resume); used %ld vs cap %ld",
+              st, res, (long)u1, (long)cap);
+      allok = st == 0 && strncmp(res, "true|true|2|true", 16) == 0;
+    }
+    lua_settop(W, 0);
+    ok(allok, "W10 the kernel allocates after the sandbox spent the credit", d);
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W11: a cap set under the live data (a load, a lowered cap) ---- */
+    /* A fresh record -- no refusal and no proven cycle behind it -- as when
+     * eris loads a machine that filled into the reserve before it was saved
+     * and its cap is restored under the live set.  The live data alone is
+     * past total + G/2, so the burst tier is spent before anything is asked
+     * of it; a small request is lent from the reserve tier, a 32 KB one past
+     * total + G is refused.  Run as the sandbox (a coroutine resumed under
+     * the watchdog's arm), so the kernel's slice cannot be what grants it. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W11: no state\n"); return 1; }
+    runstr(W, "jit.off()");
+    lua_createtable(W, 32768, 0);       /* 256 KB live */
+    lua_setfield(W, LUA_REGISTRYINDEX, "__live11");
+    st = runstr(W, W11_CHUNK);
+    lua_getglobal(W, "__co11");
+    Wco = lua_tothread(W, -1);
+    lua_settop(W, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    u0 = j_used(W, &WS);
+    cap = u0 - 24 * 1024;               /* G is the 32 KB floor at this cap: over by 3/4 G */
+    w_setcap(W, &WS, cap, 1);
+    st2 = Wco ? lua_resume(Wco, W, 0) : -1;
+    nreq = Wco && st2 == LUA_YIELD ? lua_toboolean(Wco, 1) * 2 + lua_toboolean(Wco, 2) : -1;
+    u1 = j_used(W, &WS);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    runstr(W, "_OCLJ_WATCHDOG.disarm(__t11)");
+    sprintf(d, "setup %d; cap %ld under used %ld by 24 KB, G %ld: resume %d (LUA_YIELD=%d), 64 B %s, 32 KB %s; used %ld",
+            st, (long)cap, (long)u0, (long)w_odmax(cap), st2, LUA_YIELD,
+            nreq < 0 ? "n/a" : nreq >= 2 ? "lent" : "REFUSED", nreq < 0 ? "n/a" : (nreq & 1) == 0 ? "refused" : "LENT", (long)u1);
+    ok(st == 0 && st2 == LUA_YIELD && nreq == 2,
+       "W11 live data past total + G/2: the reserve tier, not a refusal", d);
+    lua_settop(W, 0);
+    clear_javastate(W);
+    lua_close(W);
   }
 
   /* M9 -- the M state never handed over, and nothing in the shim does it

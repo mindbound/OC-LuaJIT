@@ -1,13 +1,13 @@
 ## Outcomes, by stick, arm and build
 
-| stick | arm | build | clean | recovery refused | machine down | boot failed |
-|---|---|---|---|---|---|---|
-| 192 KB | E | A | 6 | 3 | 3 | 0 |
-| 192 KB | E | base | 3 | 0 | 1 | 0 |
+| stick | arm | build | clean | recovery refused | stalled | machine down | boot failed |
+|---|---|---|---|---|---|---|---|
+| 192 KB | E | A | 6 | 3 | 0 | 3 | 0 |
+| 192 KB | E | base | 3 | 0 | 0 | 1 | 0 |
 
 ## The collector over the fill (ours): medians over clean runs, and the park fingerprint over ALL runs
 
-`arms/batch` is the fill's arms over its batches; `parked runs` counts runs whose fill snapshots (CAP-MID, every tick) read the park: armed, at the pause, stepmul 0, threshold past gc.total.  Chain A's harness counted a snapshot taken after the machine went down too; later chains count running snapshots only. The end state after a machine went down is listed with the unclean runs, not counted here. `od_peak <= od_limit` must hold in every run.
+`arms/batch` is the fill's arms over its batches; `parked runs` counts runs whose fill snapshots (CAP-MID, every tick) read the park: armed, at the pause, stepmul 0, threshold past gc.total.  Chain A's harness counted a snapshot taken after the machine went down too; later chains count running snapshots only. The end state after a machine went down is listed with the unclean runs, not counted here. `od_peak` must stay within `od_limit` (the sandbox's G) plus the kernel's 16 KB slice and the 1.5 KB norefuse window.
 
 | stick | arm | build | n clean | arms/batch | collects | bailouts (all runs) | park resets | overdrafts | od_peak max / od_limit | parked runs |
 |---|---|---|---|---|---|---|---|---|---|---|

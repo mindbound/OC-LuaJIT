@@ -496,6 +496,17 @@ object Smoke {
       rawTot0 = try lua.getTotalMemory.toLong catch { case _: Throwable => -1L }
       rawFree0 = try lua.getFreeMemory.toLong catch { case _: Throwable => -1L }
     }
+    // THE CADENCE's state (_OCLJ_WALLSTATS 7-9: gc_low, armby, hyst) and the
+    // cap, before, sampled with every read below, and after:
+    // what a hold that gets no cycle has to be explained by (2026-10-04).
+    def cad(): String = m.synchronized {
+      val w = rawstats(lua, "_OCLJ_WALLSTATS", 10); val g = gcstats(lua)
+      if (w(0) < 9) "n/a" else
+        "used=" + g(16).toLong + "/low=" + w(7).toLong + "/armby=" + w(8).toLong +
+          "/hyst=" + w(9).toLong + "/armed=" + g(5).toLong + "/arms=" + g(1).toLong
+    }
+    p("MEM-2 cadence before: " + cad() + " (cap: raw total " + rawTot0 + ")")
+    val cadTrace = new StringBuilder
     p("MEM-2 before: traces_live=" + liveStr(live0) + " traces=" + j0._3 + " mcode=" + j0._1 + " B" +
       "  arms=" + g0._1 + " collects=" + g0._2 + " trace_flushes=" + tfStr(flushes0) + " flush_bytes=" + bytes0 +
       "  raw total/free KB=" + rawTot0 / 1024 + "/" + rawFree0 / 1024 +
@@ -542,6 +553,7 @@ object Smoke {
           if (lv == 0 && !zeroSeen) { zeroSeen = true; zeroPoll = polls; zeroRow = row; zeroSeq = num(row, 1) }
           if (lv >= 0 && lv <= nearMax && !nearSeen) { nearSeen = true; nearPoll = polls; nearSeq = num(row, 1) }
           if (tf > maxFlushes) { if (firstFlushPoll < 0) { firstFlushPoll = polls; firstFlushRow = row }; maxFlushes = tf }
+          if (cadTrace.length < 4000) cadTrace.append(" [" + polls + " " + cad() + "]")
         }
       }
     }
@@ -569,6 +581,7 @@ object Smoke {
       "; min=" + (if (minLive == Int.MaxValue) "n/a" else minLive.toString) + " at row " + minLiveRow +
       "; first 0 at poll " + zeroPoll + " row " + zeroRow + " (program stepped on to seq " + seqAfterZero + " after it)" +
       "; first trace_flushes advance at poll " + firstFlushPoll + " row " + firstFlushRow)
+    p("MEM-2 cadence during:" + cadTrace + "  after: " + cad())
     p("MEM-2 after: traces_live=" + liveStr(jN._5) + " traces=" + jN._3 + " mcode=" + jN._1 + " B" +
       "  arms=" + gN._1 + " collects=" + gN._2 + " bailouts=" + gN._3 + " refusals=" + gN._4 + " armed=" + gN._5 +
       "  trace_flushes=" + tfStr(gN._7) + " (+" + flushed + " over the program) flush_bytes=" + gN._8 +
@@ -1940,22 +1953,28 @@ object Smoke {
           // it raises are charged (mem_test M7, C6) -- a doubling is not.
           val st1 = gcstats(s)
           val nUsed = st1(16).toLong
+          // THE CREDIT (lj52shim.c): the refusal now comes past the cap, by at
+          // most G = od_limit and, with no watchdog arm (wd_depth 0), the
+          // kernel's slice; both read from the shim, -1 before it existed.
+          val wall = rawstats(s, "_OCLJ_WALLSTATS", 8)
+          val credit = (if (wall(0) >= 6 && wall(5) > 0) wall(5).toLong else 0L) +
+                       (if (wall(0) >= 6 && wall(6) > 0) wall(6).toLong else 0L)
           // And the override's clamp: a cap lowered below what is held reads
           // free 0, never negative, and reaches the shim at once.
           s.setTotalMemory(cap / 4)
           val freeLow = s.getFreeMemory
           val st2 = gcstats(s)
           val refused = raised.startsWith("LuaMemoryAllocationException")
-          val ok = st0(17) == 1 && st0(15) == cap && refused && nUsed <= cap + 4096 && nUsed > cap / 2 &&
+          val ok = st0(17) == 1 && st0(15) == cap && refused && nUsed <= cap + credit + 4096 && nUsed > cap / 2 &&
                    st1(20) == st0(20) && freeLow == 0 && st2(15) == cap / 4
           milestone("acc-4-constructor-cap-bites", ok,
             "new LuaStateLuaJIT(" + cap + "), no setTotalMemory: csync " + st0(17).toInt + ", native cap " +
               st0(15).toLong + "; unbounded allocation " + (if (raised.nonEmpty) "raised " + raised.take(100) else "RAN TO COMPLETION") +
-              " at native used " + nUsed + "; JNI crossings during it " + (st1(20) - st0(20)).toLong +
+              " at native used " + nUsed + " (credit " + credit + "); JNI crossings during it " + (st1(20) - st0(20)).toLong +
               "; cap lowered to " + (cap / 4) + ": free " + freeLow + ", native cap " + st2(15).toLong +
               (if (ok) ""
                else if (st0(17) != 1) "   <- the constructor did not hand over"
-               else if (!refused || nUsed > cap + 4096 || nUsed <= cap / 2) "   <- the constructor's cap was not what stopped the allocation"
+               else if (!refused || nUsed > cap + credit + 4096 || nUsed <= cap / 2) "   <- the constructor's cap was not what stopped the allocation"
                else if (st1(20) != st0(20)) "   <- the run crossed JNI: not on the C path"
                else if (freeLow != 0) "   <- getFreeMemory() under a lowered cap is not clamped at 0"
                else "   <- setTotalMemory did not reach the shim"))
@@ -3188,13 +3207,14 @@ object Smoke {
       " tier=" + ramTierName + "(" + ramTierKB + " KB) ramScale(arch)=" + scaleNow + " ---")
     def gs(): Array[Double] = if (!ours) Array.fill(21)(-1.0) else m.synchronized { gcstats(mLua) }
     // _OCLJ_WALLSTATS (the collector at the wall, 2026-10-04): overdrafts,
-    // od_peak, od_state, park_resets, od_limit, kernel slice, back-offs.
+    // od_peak, od_state, park_resets, od_limit, kernel slice, and THE
+    // CADENCE's gc_low, armby, hyst.
     // Asked for ONCE, at idle, with room to spare; on a DLL without it every
     // later read is skipped, because getGlobal would intern the missing name
     // -- an allocation, which at the wall is a refusal that arms the very
     // collector being measured.
     var hasWall = false
-    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(9)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 8) }
+    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(11)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 10) }
     def tlive(): Int = if (!ours) -1 else jitStatsLocked(m, mLua)._5
     def d(a: Array[Double], b: Array[Double], i: Int): String =
       if (a(0) < i || b(0) < i) "n/a" else (b(i) - a(i)).toLong.toString
@@ -3208,7 +3228,7 @@ object Smoke {
     def parked(a: Array[Double]): Boolean =
       a(0) >= 9 && a(5) == 1 && a(9) == 0 && a(8) == 0 && a(7) > a(6)
     // 1. idle window: 400 ticks, ~10 s
-    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 8) }(0) > 0
+    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 10) }(0) > 0
     val g0 = gs(); val w0 = ws0(); val tl0 = tlive()
     var k = 0
     while (k < 400 && m.isRunning) { ws.update(); Thread.sleep(25); k += 1 }
@@ -3290,7 +3310,7 @@ object Smoke {
     p("CAP-GC| collects=+" + d(g2, g3, 2) + " bailouts=+" + d(g2, g3, 3) +
       " overdrafts=+" + d(w2, w3, 1) + " od_peak=" + v(w3, 2) + " od_state=" + v(w3, 3) +
       " park_resets=+" + d(w2, w3, 4) + " od_limit=" + v(w3, 5) + " kslice=" + v(w3, 6) +
-      " backoffs=+" + d(w2, w3, 7) + " end: " + gcState(g3) + " parked=" + parked(g3))
+      " gc_low=" + v(w3, 7) + " armby=" + v(w3, 8) + " end: " + gcState(g3) + " parked=" + parked(g3))
     milestone("cap-1-refusal-caught-machine-survives",
       row.startsWith("done") && why.contains("not_enough_memory") && running,
       "shape=" + capShape + " OCLJCAP=" + row + " running=" + running + " lastError=" + err +

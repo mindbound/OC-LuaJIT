@@ -367,12 +367,13 @@ build_variant_mem stopgap
 # M3c, M9, C0b, C0d, C3a, C4b, C5a, C5b, C6  (since the accounting's C side,
 #      2026-10-03) the native figure and Java's no longer agree, nothing crosses
 #      JNI, and in C mode too nothing is refused and no cycle arms
-# W5a, W5b, W5c  (since the collector at the wall, 2026-10-04) the same: an
-#      uncharged state never arms, so there is no cycle to park, restart or
-#      prove
+# W1-W14 but W2c  (since the collector at the wall, 2026-10-04) the same: an
+#      uncharged state never arms, refuses or lends, so there is no cycle to
+#      park, restart or prove and no wall to recover at; W2c's retry succeeds
+#      anyway when nothing is ever refused
 expect_mem stopgap "a discarded allocator swap is caught" 1 \
   M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a C5b C6 \
-  W5a W5b W5c
+  W1 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W8 W10 W11 W12 W13 W14
 
 
 # --- 4.2 nopending: drop the pre-binding bytes instead of banking them
@@ -399,14 +400,15 @@ build_variant_mem nopending
 #     positive again, so the cap taken from it is tight and the raw push really
 #     is refused.  A control that expected everything downstream to fail would
 #     be asserting noise rather than the defect.
-# M7  also fails, and did on HEAD's tree before the accounting's C side
-#     (2026-10-03): by M7 the runaway M5 has left about a gigabyte of garbage,
-#     and the check measures the push's NET effect on `used`.  The likely
-#     reading, not verified: a collector step inside the push frees more than
-#     the push charges.
+# M7  failed here until 2026-10-04: by M7 the runaway M5 had left about a
+#     gigabyte of garbage, and the check measures the push's NET effect on
+#     `used`.  The reading then, not verified: a collector step inside the
+#     push frees more than the push charges.  Verified since: M6 now collects
+#     M5's garbage before it exhausts the cap (a refusal arms the collector,
+#     lj52shim.c THE CREDIT), and with nothing left to free M7 passes here.
 # M3c, C0b  (since 2026-10-03) the native figure keeps the bytes Java's drops:
 #     the two disagree, in the M state and at the C state's handover.
-expect_mem nopending "dropping pre-binding bytes is caught" 1 M4b M5 M7 M3c C0b
+expect_mem nopending "dropping pre-binding bytes is caught" 1 M4b M5 M3c C0b
 
 # --- 4.3 norefuse: remove the pushcfunction window.  MUST DIE. -------
 mkdir -p "$WORK/norefuse"
@@ -444,6 +446,58 @@ grep -q 'sabotage: frees counted' "$WORK/freescount/lj52shim.c" \
 build_variant_mem freescount
 # W5c 100 000 dead blocks swept by one armed cycle: a bailout, no collect
 expect_mem freescount "a valve that counts the sweep's frees is caught" 1 W5c
+
+# --- 4.6-4.12: the collector at the wall's credit and cadence (P1, P2,
+#     2026-10-04).  One line each, in lj52shim.c's THE CREDIT / THE CADENCE.
+# sabotage_mem <name> <sed expression> <marker the expression leaves>
+sabotage_mem() {
+  mkdir -p "$WORK/$1"
+  cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/$1/"
+  sed -i "$2" "$WORK/$1/lj52shim.c"
+  grep -q "$3" "$WORK/$1/lj52shim.c" || fail "$1: the sabotage patch did not apply -- its line has been reworded"
+  build_variant_mem "$1"
+}
+
+# 4.6 nocredit: refuse at the cap, as before the change.  Every recovery
+# fails (W1 x3, W8), the lent request (W2d), the trace exit's restore (W3),
+# the kernel after the sandbox (W10), the reload (W11).
+sabotage_mem nocredit 's|^  c = lj52_gc_odmax(total);$|  return 0;  /* sabotage: no credit */|' 'sabotage: no credit'
+expect_mem nocredit "refusing at the cap again is caught" 1 W1 W1L W1j W2d W3 W8 W10 W11
+
+# 4.7 norefusedarm: a refusal that does not arm -- the request bigger than
+# the headroom, refused with the garbage that would cover it uncollected.
+sabotage_mem norefusedarm 's|^  else lj52_gc_arm(M, g, LJ52_ARM_WALL);$|  else (void)0;  /* sabotage: a refusal does not arm */|' 'sabotage: a refusal does not arm'
+expect_mem norefusedarm "a refusal that does not arm is caught" 1 W2b W2c
+
+# 4.8 nohyst: re-arm at the watermark after every proven cycle, the old
+# cadence: a full cycle per checkpoint pair near the wall (W4), and a fill
+# that costs ~1840 cycles a round (W12).
+sabotage_mem nohyst 's|^  if (!M->gc_hyst) {$|  if (1) {  /* sabotage: no hysteresis */|' 'sabotage: no hysteresis'
+expect_mem nohyst "the per-checkpoint re-arm is caught" 1 W4 W12
+
+# 4.9 unbounded: credit = the whole cap.  The bound is what fails: the
+# sandbox past cap + G (W7), the cap checks re-scoped to cap + credit (M5,
+# C3a), the cases that need a refusal where the credit would have run out
+# (W1 x3, W2b, W11), and the fill's cost: the whole cap lent past the cap is
+# a band of total bytes to halve through, 2921 cycles a round (W12).
+sabotage_mem unbounded 's|^  c = lj52_gc_odmax(total);$|  c = total;  /* sabotage: credit = total */|' 'sabotage: credit = total'
+expect_mem unbounded "an unbounded credit is caught" 1 C3a M5 W1 W11 W12 W1L W1j W2b W7
+
+# 4.10 nokslice: the kernel's slice gone; the kernel's table.pack after the
+# sandbox spent both tiers is refused.
+sabotage_mem nokslice 's|^  if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;$|  /* sabotage: no kernel slice */|' 'sabotage: no kernel slice'
+expect_mem nokslice "the kernel without its slice is caught" 1 W10
+
+# 4.11 nofresh: a fresh record past total + G/2 takes the burst tier, so the
+# first allocation after a reload is refused.
+sabotage_mem nofresh 's|^  if (!M->gc_hyst \&\& used > total + (lj52_gc_odmax(total) >> 1)) {$|  if (0) {  /* sabotage: no fresh-record reserve */|' 'sabotage: no fresh-record reserve'
+expect_mem nofresh "a reload refused for history it never saw is caught" 1 W11
+
+# 4.12 closereserve: every proof closes the reserve tier, the safe-point
+# design's rule.  A program that allocates between the catch and the drop
+# (W8) is refused again; the reload's derived reserve is lost too (W11).
+sabotage_mem closereserve 's|^      if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /\* repaid \*/$|      M->gc_odstate = LJ52_OD_BURST;  /* sabotage: every proof closes the reserve */|' 'sabotage: every proof closes the reserve'
+expect_mem closereserve "a reserve that every proof closes is caught" 1 W8 W11
 
 # =====================================================================
 # 6. THE WATCHDOG.  Two sabotages, each the design's own "before" picture:

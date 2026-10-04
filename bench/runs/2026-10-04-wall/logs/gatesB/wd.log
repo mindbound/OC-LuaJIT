@@ -1,0 +1,38 @@
+wd_test -- lj52 deadline watchdog
+  PASS  W1 _OCLJ_WATCHDOG.arm / .disarm exist                      
+  PASS  W2 a 50 ms deadline interrupts `while true do end`         status=2 msg=WD-DEADLINE after 68.8 ms
+  PASS  W3a after firing, checkDeadline's count=1 re-arm is set    
+  PASS  W3b disarm() reached through the grace and cleared it      status=0, hook=clear
+  PASS  W4 disarm before expiry: nothing fires later               status=0, hook=clear after sleeping past the cancelled deadline
+  PASS  W5a inner deadline fires                                   status=2 after 58.2 ms
+  PASS  W5b popped to the outer 10 s deadline: a 100 ms loop is undisturbed status=0, hook=clear
+  PASS  W5c fully disarmed                                         
+  PASS  W6a jit.status() is true                                   
+  PASS  W6b traces run while armed: few traces, milliseconds       4M iterations in 5.0 ms, traces start/stop/abort=1/1/0 (a standing hook: ~900 ms, ~200 traces)
+  PASS  W7a arm(-0.1) hooks synchronously and fires before arm() returns status=2 msg=WD-DEADLINE, hook=SET
+  PASS  W7b the count=1 re-arm is in place and grace holds         status=0 (inside the grace, so the re-armed hook lets it run)
+  PASS  W7c disarmed again through the grace                       
+  PASS  W9a deadline fired, hook set                               
+  PASS  W9b hook cleared behind the watchdog's back                
+  PASS  W9c the re-fire put it back                                hook=SET after 170 ms with the timer still armed
+  PASS  W9d and disarm stops the re-fire for good                  hook=clear 170 ms after disarm
+  PASS  W13a no HOOK_ACTIVE wedge                                  status=0, HOOK_ACTIVE=clear after 1 s of hook-per-instruction with ~20 re-fires
+  PASS  W13b and the next deadline still fires                     status=2 after 65.1 ms
+  PASS  W8a disarm(token) restores TO the level, not one entry     depth after disarm(token=1) with two leaked entries above = 0
+  PASS  W8b the outermost arm resets the stack first               depth after an outermost arm over two leaked entries = 1
+  PASS  W8c the leaked expired deadline is gone: a 100 ms loop is undisturbed 
+  PASS  W8d and popping the legitimate one re-programs nothing stale status=0 hook=clear
+  PASS  W10a a leaked entry: the fire reaches the parent past the skip budget status=2 msg=WD-DEADLINE after 57.5 ms (deadline 50 ms, loop allowed 300)
+  PASS  W10b ...after exactly LJ52_WD_SKIPMAX skipped fires, not one more skipped=64 (LJ52_WD_SKIPMAX=64), callback calls on main=11
+  PASS  W10c and disarm clears it as usual                         
+  PASS  W10d an arm FOR a coroutine interrupts that coroutine      status=2 msg=WD-DEADLINE
+  PASS  W10e a coroutine nested past the cap is still interrupted  status=2 after 310.8 ms msg=WD-DEADLINE
+  PASS  W10f and disarm(token) unwinds it all                      
+  PASS  W10g the normal path: child killed, parent skipped to disarm(), never called status=0 msg= child ok=0 err=WD-DEADLINE, callback calls=1 on main=0, skipped=4
+  PASS  W10h and disarm(token) left nothing behind                 hook=clear depth=0
+  PASS  W11a arms past the cap push nothing and raise nothing      depth after 401 arms = 256 (cap 256), no error raised
+  PASS  W11b ...and the enclosing 10 s deadline is what stays live status=0 hook=clear
+  PASS  W11c disarm(token) unwinds it all                          
+  PASS  W12 a timeout past LJ52_WD_MAXMS arms no timer at all      hook=clear 120 ms after arm(1e16 s)
+
+checks=35 failures=0

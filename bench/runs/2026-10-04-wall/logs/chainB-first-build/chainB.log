@@ -1,0 +1,89 @@
+== 10:05:26 chainB start; java procs: 0
+fullB-additive-on exit=1
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  mandelbrot/ok/37904620/0.0641/0.0682/789/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  binarytrees/ok/7038400/0.2507/0.2607/436/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  trampoline/ok/247388/0.2257/0.2353/613/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  matmul/ok/481.0000/0.0874/0.0938/495/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  strings2/ok/12582912-3852468224/0.1843/0.2105/429/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  nqueens/ok/85200/0.5562/1.1635/927/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.0485/0.0505/802/5
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: FAIL -- tier=threehalf (1024 KB): held 1437 KB live with sandbox free down to 33 KB; trace_flushes 0 -> 0; traces_live 79 before, min 88 over 57 reads while running (never 
+    SMOKE| CHECKS: 65   FAILURES: 1   WALL: 90.3s
+    SMOKE| VERDICT: FAIL
+        SMOKE| MILESTONE mem-2-pressure-flushes-traces: FAIL -- tier=threehalf (1024 KB): held 1437 KB live with sandbox free down to 33 KB; trace_flushes 0 -> 0; traces_live 79 before, min 88 over 57 reads while running (ne
+    SMOKE FAIL
+fullB-additive-off exit=0
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  mandelbrot/ok/37904620/0.3831/0.3999/861/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  binarytrees/ok/7038400/0.3454/0.3664/713/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  trampoline/ok/247388/0.2754/0.2892/786/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  matmul/ok/481.0000/0.6305/0.6384/915/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  strings2/ok/12582912-3852468224/0.4129/0.4551/499/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  nqueens/ok/85200/0.9691/1.2139/575/5
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=off  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.8109/0.8849/724/5
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: SKIP -- jit=off: no trace is ever resident, so there is nothing to flush (not counted)
+    SMOKE| CHECKS: 63   FAILURES: 0   WALL: 95.0s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullB-additive-sieve exit=0
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| PHASE1 ROW: native=additive kernel=watchdog jit=on  sieve/ok/4626000/0.1076/0.1137/591/2
+    SMOKE| CHECKS: 59   FAILURES: 0   WALL: 82.2s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullB-dropin-on exit=1
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  mandelbrot/ok/37904620/0.0664/0.0679/615/5
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  binarytrees/ok/7038400/0.4198/0.4348/616/5
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  trampoline/ok/247388/0.2226/0.2293/700/5
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  matmul/ok/481.0000/0.1011/0.1051/487/5
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  strings2/ok/12582912-3852468224/0.2191/0.2295/577/5
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  nqueens/ok/85200/0.5787/1.1025/504/5
+    SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.0502/0.0683/689/5
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: FAIL -- tier=threehalf (1024 KB): held 1070 KB live with sandbox free down to 43 KB; trace_flushes 0 -> 0; traces_live 501 before, min 501 over 48 reads while running (neve
+    SMOKE| MILESTONE acc-4/5/7: SKIP -- native=luajit: they test LuaStateLuaJIT, which the dropin arm does not use (not counted)
+    SMOKE| CHECKS: 62   FAILURES: 1   WALL: 90.7s
+    SMOKE| VERDICT: FAIL
+        SMOKE| MILESTONE mem-2-pressure-flushes-traces: FAIL -- tier=threehalf (1024 KB): held 1070 KB live with sandbox free down to 43 KB; trace_flushes 0 -> 0; traces_live 501 before, min 501 over 48 reads while running (
+    SMOKE FAIL
+fullB-stock exit=0
+    SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+    SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| MILESTONE acc-1-machine-handover: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  mandelbrot/ok/37904620/0.7819/0.7997/627/5
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  binarytrees/ok/7038400/1.6218/1.6952/464/5
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  trampoline/ok/247388/0.4169/0.4205/735/5
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  matmul/ok/481.0000/1.2090/1.2640/353/5
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  strings2/ok/12582912-3852468224/0.6885/0.7145/209/5
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  nqueens/ok/85200/1.8330/1.8716/481/5
+    SMOKE| PHASE1 ROW: native=stock kernel=stock jit=on  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.9693/1.0118/333/5
+    SMOKE| MILESTONE acc-1r-restored-machine-handover: SKIP -- native=stock (not counted)
+    SMOKE| MILESTONE acc-3..7: SKIP -- native=stock: PUC's accounting is jnlua's own (not counted)
+    SMOKE| CHECKS: 47   FAILURES: 0   WALL: 77.2s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS (BASELINE) -- OpenOS booted on ocelot-brain's stock PUC-Lua 5.2,
+one-record-r1-S-stock exit=0 APACITY| shape=record native=stock jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=174605 held=262 why=not_enough_memory t_first5=0.0012 t_last5=0.0012 batches=3 last/first=1.00 freeKB_at_end/totalKB=0/192 arms=+n/a refusals=+n/a trace_flushes=+n/a fill_ms=1495 queued=true running=true lastError=<null>
+    one-record-r1-S-stock CAP-IDLE| ticks=400 arms=+n/a collects=+n/a bailouts=+n/a refusals=+n/a trace_flushes=+n/a park_resets=+n/a traces_live -1 -> -1 armed=n/a state=n/a stepmul=n/a threshold=n/a gctotal=n/a ccap=n/a cused=n/a parked=false wallstats=n/a running=true
+    one-record-r1-S-stock CAP-LIVE| used=430671 kernelMemory=174605 user=256066 count(3 collects)=433066/433066/433066 total=528500 traces_live=-1
+    one-record-r1-S-stock CAP-MID| snaps=0 stopped=0 stepmul0=0 parked=0 last: armed=n/a state=n/a stepmul=n/a threshold=n/a gctotal=n/a ccap=n/a cused=n/a
+    one-record-r1-S-stock CAP-GC| collects=+n/a bailouts=+n/a overdrafts=+n/a od_peak=n/a od_state=n/a park_resets=+n/a od_limit=n/a kslice=n/a backoffs=+n/a end: armed=n/a state=n/a stepmul=n/a threshold=n/a gctotal=n/a ccap=n/a cused=n/a parked=false
+    one-record-r1-S-stock SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/262/not_enough_memory running=true lastError=<null>
+one-record-r1-D-B exit=0 APACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=400265 held=1395 why=not_enough_memory t_first5=0.0007 t_last5=0.0027 batches=14 last/first=3.86 freeKB_at_end/totalKB=0/192 arms=+43 refusals=+2 trace_flushes=+7 fill_ms=1497 queued=true running=true lastError=<null>
+    one-record-r1-D-B CAP-IDLE| ticks=400 arms=+0 collects=+0 bailouts=+0 refusals=+0 trace_flushes=+0 park_resets=+0 traces_live 94 -> 102 armed=0 state=0 stepmul=200 threshold=906800 gctotal=514039 ccap=754160 cused=514039 parked=false wallstats=present running=true
+    one-record-r1-D-B CAP-LIVE| used=453953 kernelMemory=400265 user=53688 count(3 collects)=453905/453905/453905 total=754160 traces_live=102
+    one-record-r1-D-B CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=765600 gctotal=389583 ccap=754160 cused=389583
+    one-record-r1-D-B CAP-GC| collects=+43 bailouts=+0 overdrafts=+1184 od_peak=47103 od_state=0 park_resets=+0 od_limit=47135 kslice=16384 backoffs=+8 end: armed=0 state=0 stepmul=200 threshold=800800 gctotal=407241 ccap=754160 cused=407241 parked=false
+    one-record-r1-D-B SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/1395/not_enough_memory running=true lastError=<null>
+one-record-r1-E-B exit=0 APACITY| shape=record native=additive jit=on jitearly=off tier=192KB scale=1.8 kernelMemory=164525 held=624 why=not_enough_memory t_first5=0.0008 t_last5=0.0021 batches=7 last/first=2.62 freeKB_at_end/totalKB=0/192 arms=+48 refusals=+2 trace_flushes=+8 fill_ms=1498 queued=true running=true lastError=<null>
+    one-record-r1-E-B CAP-IDLE| ticks=400 arms=+31 collects=+31 bailouts=+0 refusals=+0 trace_flushes=+11 park_resets=+0 traces_live 22 -> 33 armed=0 state=0 stepmul=200 threshold=771400 gctotal=391913 ccap=518420 cused=391913 parked=false wallstats=present running=true
+    one-record-r1-E-B CAP-LIVE| used=386259 kernelMemory=164525 user=221734 count(3 collects)=386211/386211/386211 total=518420 traces_live=33
+    one-record-r1-E-B CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=719800 gctotal=384037 ccap=518420 cused=384037
+    one-record-r1-E-B CAP-GC| collects=+48 bailouts=+0 overdrafts=+932 od_peak=32763 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 backoffs=+6 end: armed=0 state=0 stepmul=200 threshold=725800 gctotal=397201 ccap=518420 cused=397201 parked=false
+    one-record-r1-E-B SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/624/not_enough_memory running=true lastError=<null>
+one-record-r1-O-B exit=0 APACITY| shape=record native=additive jit=off jitearly=off tier=192KB scale=1.8 kernelMemory=164525 held=549 why=not_enough_memory t_first5=0.0012 t_last5=0.0022 batches=6 last/first=1.83 freeKB_at_end/totalKB=0/192 arms=+35 refusals=+1 trace_flushes=+0 fill_ms=1504 queued=true running=true lastError=<null>
+    one-record-r1-O-B CAP-IDLE| ticks=400 arms=+1 collects=+1 bailouts=+0 refusals=+0 trace_flushes=+0 park_resets=+0 traces_live 0 -> 0 armed=0 state=0 stepmul=200 threshold=703800 gctotal=358117 ccap=518420 cused=358117 parked=false wallstats=present running=true
+    one-record-r1-O-B CAP-LIVE| used=352463 kernelMemory=164525 user=187938 count(3 collects)=352415/352415/352415 total=518420 traces_live=0
+    one-record-r1-O-B CAP-MID| snaps=8 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=729800 gctotal=389737 ccap=518420 cused=389737
+    one-record-r1-O-B CAP-GC| collects=+35 bailouts=+0 overdrafts=+321 od_peak=16363 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 backoffs=+7 end: armed=0 state=0 stepmul=200 threshold=729800 gctotal=389737 ccap=518420 cused=389737 parked=false
+    one-record-r1-O-B SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/549/not_enough_memory running=true lastError=<null>

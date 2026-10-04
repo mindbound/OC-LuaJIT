@@ -9,7 +9,10 @@ cadence) | ... ; stock runs carry build "stock".
 Every run is classified before anything is averaged (as 2026-10-03's analyze.py):
   clean      the fill ended in a caught refusal and the machine kept running
   recovery   the program caught the refusal and dropped its data, then its own next
-             allocation was refused (stuck at filling/N, machine up)
+             allocation was refused (stuck at filling/N, machine up, OCLJCAPF written)
+  stalled    stuck at filling/N with the machine up and OCLJCAPF never written: the
+             refusal landed in the probe's own code outside its pcall (the stage
+             string, event.timer), so its timer chain broke before the handler ran
   down       a refusal took the machine down (running=false)
   bootfail   OpenOS did not boot (no CAPACITY line)
 Counters over the fill and the batch times come from clean runs only: in the other
@@ -51,6 +54,8 @@ def classify(kv):
         return "down"
     if num(kv.get("held")) is not None and "not_enough_memory" in kv.get("why", ""):
         return "clean"
+    if kv.get("freeKB_at_end/totalKB") == "-1/-1":
+        return "stalled"
     return "recovery"
 
 TIERS = [("one", 192), ("onehalf", 256), ("threehalf", 1024)]
@@ -69,8 +74,8 @@ order = {"S": 0, "D": 1, "E": 2, "O": 3, "L": 4}
 groups.sort(key=lambda g: (order[g[0]], g[1]))
 
 print("## Outcomes, by stick, arm and build\n")
-print("| stick | arm | build | clean | recovery refused | machine down | boot failed |")
-print("|---|---|---|---|---|---|---|")
+print("| stick | arm | build | clean | recovery refused | stalled | machine down | boot failed |")
+print("|---|---|---|---|---|---|---|---|")
 for tier, kb in TIERS:
     for arm, build in groups:
         rs = cells.get((tier, arm, build), [])
@@ -79,14 +84,15 @@ for tier, kb in TIERS:
         c = defaultdict(int)
         for _, _, _, cl in rs:
             c[cl] += 1
-        print("| %d KB | %s | %s | %d | %d | %d | %d |" % (kb, arm, build, c["clean"], c["recovery"], c["down"], c["bootfail"]))
+        print("| %d KB | %s | %s | %d | %d | %d | %d | %d |" % (kb, arm, build, c["clean"], c["recovery"], c["stalled"], c["down"], c["bootfail"]))
 
 print("\n## The collector over the fill (ours): medians over clean runs, and the park fingerprint over ALL runs\n")
 print("`arms/batch` is the fill's arms over its batches; `parked runs` counts runs whose fill snapshots (CAP-MID, "
       "every tick) read the park: armed, at the pause, stepmul 0, threshold past gc.total.  Chain A's harness "
       "counted a snapshot taken after the machine went down too; later chains count running snapshots only. "
       "The end state after a machine went down is listed with the unclean runs, not counted here. "
-      "`od_peak <= od_limit` must hold in every run.\n")
+      "`od_peak` must stay within `od_limit` (the sandbox's G) plus the kernel's 16 KB slice and the "
+      "1.5 KB norefuse window.\n")
 print("| stick | arm | build | n clean | arms/batch | collects | bailouts (all runs) | park resets | overdrafts | od_peak max / od_limit | parked runs |")
 print("|---|---|---|---|---|---|---|---|---|---|---|")
 for tier, kb in TIERS:
