@@ -1,0 +1,52 @@
+penalty_test: linking /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/libluajit.a (3e023942fdf4741bd2e51febc3fd0f54, 835838 bytes)
+penalty_test: alloc=crt realloc/free  jit=on  PENALTY_SLOTS=64 MIN=72 MAX=60000
+re-loads of C:/Users/astro/Downloads/OC-LuaJIT/bench/oc/mandelbrot.lua, N=40, full collect between each:
+  run  1: ok     69.7 ms (1.00x run 1)  bc=6d337c58 visit 1  dead-proto slots=-1  inherited=0 (max val 0) after=2 (max val 295)  live=42  heads: 34=JLOOP 45=JFORL 46=FORL
+  run  2: ok     69.0 ms (0.99x run 1)  bc=6d33e938 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 149)  live=24  heads: 34=JLOOP 45=JFORL 46=FORL
+  run  3: ok     69.1 ms (0.99x run 1)  bc=6d33e938 visit 2  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 159)  live=25  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run  4: ok     70.1 ms (1.01x run 1)  bc=6d338218 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 156)  live=24  heads: 34=JLOOP 45=JFORL 46=FORL
+  run  5: ok     71.2 ms (1.02x run 1)  bc=6d33e938 visit 3  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 155)  live=25  heads: 34=JLOOP 45=JFORL 46=FORL
+  run  6: ok     70.6 ms (1.01x run 1)  bc=6d33ba98 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 300)  live=44  heads: 34=JLOOP 45=JFORL 46=FORL
+  run  7: ok     68.1 ms (0.98x run 1)  bc=6d33ba98 visit 2  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 154)  live=26  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run  8: ok     68.0 ms (0.98x run 1)  bc=6d33ba98 visit 3  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 158)  live=25  heads: 34=JLOOP 45=JFORL 46=FORL
+  run  9: ok     68.4 ms (0.98x run 1)  bc=6d33ba98 visit 4  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 156)  live=26  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 10: ok     68.0 ms (0.98x run 1)  bc=6d33ba98 visit 5  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 303)  live=44  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 11: ok     69.6 ms (1.00x run 1)  bc=6d33ba98 visit 6  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 155)  live=27  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 12: ok     71.0 ms (1.02x run 1)  bc=6d33ba98 visit 7  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 155)  live=27  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 13: ok     69.0 ms (0.99x run 1)  bc=6d33ba98 visit 8  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 155)  live=28  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 14: ok     68.0 ms (0.98x run 1)  bc=6d343c38 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 154)  live=30  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 15: ok     69.3 ms (0.99x run 1)  bc=6d34c458 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 149)  live=31  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 16: ok     69.2 ms (0.99x run 1)  bc=6d343c38 visit 2  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 154)  live=31  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 17: ok     68.1 ms (0.98x run 1)  bc=6d33ba98 visit 9  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 305)  live=51  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 18: ok     68.9 ms (0.99x run 1)  bc=6d343c38 visit 3  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 154)  live=33  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 19: ok     69.5 ms (1.00x run 1)  bc=6d343c38 visit 4  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 156)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 20: ok     69.7 ms (1.00x run 1)  bc=6d343c38 visit 5  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 144)  live=33  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 21: ok     70.1 ms (1.01x run 1)  bc=6d343c38 visit 6  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 156)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 22: ok     69.0 ms (0.99x run 1)  bc=6d343c38 visit 7  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 159)  live=33  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 23: ok     69.9 ms (1.00x run 1)  bc=6d343c38 visit 8  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 311)  live=51  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 24: ok     68.8 ms (0.99x run 1)  bc=6d343c38 visit 9  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 299)  live=52  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 25: ok     68.8 ms (0.99x run 1)  bc=6d343c38 visit 10  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 295)  live=51  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 26: ok     68.9 ms (0.99x run 1)  bc=6d343c38 visit 11  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 157)  live=33  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 27: ok     70.0 ms (1.01x run 1)  bc=6d343c38 visit 12  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 148)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 28: ok     68.7 ms (0.99x run 1)  bc=6d343c38 visit 13  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 319)  live=52  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 29: ok     68.8 ms (0.99x run 1)  bc=6d34ab38 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 314)  live=51  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 30: ok     69.8 ms (1.00x run 1)  bc=6d339ba8 visit 1  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 149)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 31: ok     69.5 ms (1.00x run 1)  bc=6d34ab38 visit 2  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 157)  live=33  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 32: ok     68.7 ms (0.99x run 1)  bc=6d339ba8 visit 2  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 314)  live=52  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 33: ok     69.9 ms (1.00x run 1)  bc=6d34ab38 visit 3  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 149)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 34: ok     68.7 ms (0.99x run 1)  bc=6d338218 visit 2  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 297)  live=52  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 35: ok     71.6 ms (1.03x run 1)  bc=6d338218 visit 3  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 316)  live=51  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 36: ok     69.0 ms (0.99x run 1)  bc=6d338218 visit 4  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 158)  live=33  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 37: ok     69.2 ms (0.99x run 1)  bc=6d338218 visit 5  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 149)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 38: ok     68.0 ms (0.98x run 1)  bc=6d338218 visit 6  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 313)  live=52  heads: 34=JLOOP 45=JFORL 46=JFORL
+  run 39: ok     69.3 ms (0.99x run 1)  bc=6d338218 visit 7  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 154)  live=32  heads: 34=JLOOP 45=JFORL 46=FORL
+  run 40: ok     68.1 ms (0.98x run 1)  bc=6d338218 visit 8  dead-proto slots=0  inherited=0 (max val 0) after=2 (max val 311)  live=52  heads: 34=JLOOP 45=JFORL 46=JFORL
+
+  PASS  P1 every re-load computed the published checksum               40/40 ok (expect 37904620)
+  PASS  P2 no re-load reads a blacklisted loop head (ILOOP/IFORL/IITERL) 0/40
+  PASS  P3 no re-load slower than 3x the first                         run 1 69.7 ms, slowest 1.03x
+  PASS  P4 no penalty slot outlives its prototype (the mechanism)      max slots still pointing into a dead prototype's bytecode = 0
+  PASS  P5 while blacklisting still works within a live prototype (-> ILOOP) head reads ILOOP after 400000 iterations in 22.8 ms; penalty slots in proto=1 max val 40134
+  PASS  P6 for blacklisting still works within a live prototype (-> IFORL) head reads IFORL after 400000 iterations in 50.0 ms; penalty slots in proto=1 max val 41195
+
+checks=6 failures=0

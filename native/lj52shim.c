@@ -277,6 +277,10 @@ typedef struct lj52_mem {
   long long     gc_seentotal;  /* the cap the last allocator call was under   */
   volatile long gc_overdrafts; /* growths granted past the cap, on credit     */
   long long     gc_odpeak;     /* the largest excursion past the cap, bytes   */
+  int           gc_win;        /* THE WINDOW: 0 shut, 1 open, 2 the verdict   */
+  long long     gc_grown;      /* bytes granted since the last proof          */
+  volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+  long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
   int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
                                   /* flush at the next safe point (wd_arm)    */
@@ -294,10 +298,13 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int k
 #define LJ52_GP_FREE 0                  /* a free or a shrink               */
 #define LJ52_GP_GROW 1                  /* a growth that was granted        */
 #define LJ52_GP_TRY  2                  /* a growth that was refused        */
-/* THE CREDIT at the cap, and the refusal that opens its reserve tier; both
- * defined with the collector, below the LuaJIT-internal includes. */
+/* THE CREDIT at the cap, the refusal that opens its reserve tier, and THE
+ * WINDOW past a tier's top (its look and its lend); all defined with the
+ * collector, below the LuaJIT-internal includes. */
 static long long lj52_gc_credit(lj52_mem *M, long long total, long long used);
 static void lj52_gc_refused(lj52_mem *M, long long total, long long used);
+static void lj52_gc_look(lj52_mem *M, long long total, long long used);
+static int lj52_gc_lend(lj52_mem *M, long long total, long long used, long long delta);
 
 /* The record for L, or NULL for a state this shim did not create. */
 static lj52_mem *lj52_memof(lua_State *L) {
@@ -343,6 +350,9 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize);
  *   2. It charges only what it actually got.  jnlua writes used+delta before
  *      knowing whether realloc succeeded, so a failed resize permanently
  *      inflates the machine's usage.  Ours charges after the fact.
+ *
+ * And it refuses later than the cap: THE CREDIT and THE WINDOW lend a
+ * bounded excursion past it, and arm the collector to repay it.
  *
  * norefuse is the other half of this change; see lj52_pushcfunction. */
 /* The Java side stores used/total as jint, so that is what crosses the JNI
@@ -395,14 +405,19 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
       M->used += delta;
       return NULL;
     }
+    if (acct && delta > 0 && M->total - M->used < delta)
+      lj52_gc_look(M, M->total, M->used);   /* THE WINDOW: a finished cycle first */
     if (acct && delta > 0 && !M->norefuse && M->total - M->used < delta
-        && M->total + lj52_gc_credit(M, M->total, M->used) - M->used < delta) {
+        && M->total + lj52_gc_credit(M, M->total, M->used) - M->used < delta
+        && !lj52_gc_lend(M, M->total, M->used, delta)) {
+      M->gc_refdelta = delta;
       lj52_gc_refused(M, M->total, M->used);
       return NULL;                      /* -> lj_err_mem -> LUA_ERRMEM */
     }
     p = lj52_back(M, ptr, osize, nsize);
     if (p != NULL) {
       M->used += delta;
+      if (delta > 0) M->gc_grown += delta;
       if (acct) lj52_gc_pressure(M, M->total, M->used, delta > 0 ? LJ52_GP_GROW : LJ52_GP_FREE);
     }
     return p;
@@ -457,12 +472,16 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     M->used += delta;
     return NULL;
   }
+  if (delta > 0 && total - used < delta)
+    lj52_gc_look(M, total, used);           /* THE WINDOW: a finished cycle first */
   if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse
-        || total + lj52_gc_credit(M, total, used) - used >= delta)) {
+        || total + lj52_gc_credit(M, total, used) - used >= delta
+        || lj52_gc_lend(M, total, used, delta))) {
     /* We are at the wall, past the credit too.  We still do not collect
      * here -- C1/C5/C6 -- but the refusal arms, from any headroom, and opens
      * the credit's reserve tier for whatever the program does next: see
      * THE CREDIT, in the collector section. */
+    M->gc_refdelta = delta;
     lj52_gc_refused(M, total, used);
     return NULL;                        /* -> lj_err_mem -> LUA_ERRMEM */
   }
@@ -470,6 +489,7 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
   if (p != NULL) {
     M->setmem(env, obj, lj52_clampi(used + delta));
     M->used += delta;
+    if (delta > 0) M->gc_grown += delta;
     lj52_gc_pressure(M, total, used + delta, delta > 0 ? LJ52_GP_GROW : LJ52_GP_FREE);
   }
   return p;
@@ -934,8 +954,9 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  * bounded credit, charged like any other, and the collector armed to repay
  * it at the next checkpoint.  G = total/16, clamped to 32 KB..512 KB:
  *   - BURST, the default tier: up to G/2 past the cap.  Before any refusal
- *     the heap stops at total + G/2, so when the refusal comes at least G/2
- *     is left for what the program does next;
+ *     the heap stops at total + G/2 (+ THE WINDOW below, for the sandbox),
+ *     so when the refusal comes at least G/2 (G/2 - LJ52_GC_LEND) is left
+ *     for what the program does next;
  *   - RESERVE, after a refusal: up to G.  The refusal opens it; a proof that
  *     finds the heap back under the cap closes it.  A proof that does not --
  *     the cycle ran before the program dropped its data -- leaves it open,
@@ -947,23 +968,28 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  *     after a load is not refused for history the record never saw.  Only
  *     a fresh record: in one that has run cycles, the heap passes total +
  *     G/2 legitimately on the kernel's slice below, and taking that as a
- *     reserve would spend the second tier before any refusal;
+ *     reserve would spend the second tier before any refusal.  Nor bytes
+ *     THE WINDOW lent: in a fresh record they would open the second tier
+ *     with no refusal at all (mem_test W11w);
  *   - THE KERNEL'S SLICE: LJ52_GC_KSLICE more, for the kernel only -- no
  *     resume armed (wd_depth 0: between resumes, where Java's signal pushes
  *     land too), or the thread that made the outermost arm (the kernel after
  *     coroutine.resume returned and before the disarm; cur_L is restored to
  *     the resumer, vm_x64.dasc:1625).  The sandbox that spent both tiers
- *     cannot take the kernel down with it on the table.pack it does after
- *     every resume (machine.lua).
+ *     and its window cannot take the kernel down with it on the table.pack
+ *     it does after every resume (machine.lua): the kernel keeps
+ *     LJ52_GC_KSLICE - LJ52_GC_LEND past the sandbox's ceiling.
  * No credit at all where nothing could repay it: under HOOK_GC (a finalizer;
  * PUC's cap is hard there too) and under a host GCSTOP.  The bound is
- * absolute, not incremental: used + delta <= total + G (+ the slice) for
- * every growth outside the norefuse window, so caught refusals cannot
- * ratchet it (mem_test W7), and the excursion is charged -- getFreeMemory
- * reads 0, both Java sides clamp it there.  What it does not fix: a single
- * request larger than headroom + credit, retried with no checkpoint between
- * the tries (mem_test W9, printed, not asserted), is refused where PUC would
- * collect and succeed; any checkpoint between the tries cures it.
+ * absolute, not incremental: used + delta <= total + G + the slice for
+ * every growth outside the norefuse window -- the sandbox's own, total + G
+ * + LJ52_GC_LEND, inside it -- so caught refusals cannot ratchet it
+ * (mem_test W7, W7k), and the excursion is charged -- getFreeMemory reads
+ * 0, both Java sides clamp it there.  What it does not fix: a single
+ * request larger than headroom + credit (+ the window), retried with no
+ * checkpoint between the tries (mem_test W9, printed, not asserted), is
+ * refused where PUC would collect and succeed; any checkpoint between the
+ * tries cures it.
  *
  * THE CADENCE (2026-10-04).  Until this change, once a proven cycle left the
  * heap inside the watermark, the very next allocator call armed again, so
@@ -978,7 +1004,12 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  *     to the top of the current tier -- the kernel's slice included, when it
  *     is the kernel allocating -- has halved since that proof.  Halving, not
  *     every grant: a program holding data past the cap pays log2 cycles per
- *     tier, and one that drops its data is repaid within half the tier.
+ *     tier, and one that drops its data is repaid within half the tier;
+ *   - past the tier's top itself, THE WINDOW below arms instead: each
+ *     sandbox crossing it lends demands the cycle that decides it, so a
+ *     program whose live data and newest garbage straddle the top pays a
+ *     cycle per crossing there -- stock's rate, which collects at every
+ *     allocation that does not fit.
  * mem_test W4: 20000 64-byte tables over 256 KB live with 64 KB of headroom
  * took 10000 full cycles (one per checkpoint pair) before; the bound now is
  * three times stock's count.  A fill of 512 KB of live 64-byte tables to
@@ -999,6 +1030,76 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
  * proof inside the watermark; halving the gate gives it that, at log2
  * cost.
  *
+ * THE WINDOW (2026-10-05; docs/roadmap.md, "A refusal at a credit tier's
+ * top can land outside the program's handler").  THE CREDIT moved the
+ * refusal from the cap to a tier's top, but it still came at whichever
+ * allocation first found used + delta past that top -- and `used` is the
+ * live data PLUS everything allocated since the last proven cycle PLUS what
+ * the frame of that cycle's checkpoint still pinned.  So refusals were
+ * spread over the allocation sites by bytes, and some landed where the
+ * program has no handler -- the capacity probe's step between batches (a
+ * stall), OpenOS's dispatcher after a resume (the sandbox down) -- although
+ * a collection would have made room: 431 of 16384 hermetic probe runs on
+ * stage C, every one garbage-covered; 0 on PUC, which collects at the
+ * refusal and retries (mem_test W16, W16R, W16Rj).  We cannot collect there
+ * (C1-C7).  So a SANDBOX growth past its tier's top S (total + G/2, or
+ * total + G in the reserve tier) is LENT, up to LJ52_GC_LEND past S, and
+ * arms the cycle that will decide it; the window stays open until a proven
+ * cycle says what the heap holds:
+ *   - back under S: the window shuts -- garbage covered the crossing;
+ *   - past S even without the bytes granted since the PREVIOUS proof, i.e.
+ *     data that survived two consecutive cycles: THE VERDICT, and the next
+ *     crossing is refused while that proof's heap stays past the current S
+ *     -- read against the current S so that a cap raised, or frees that took
+ *     gc_low back under S, between the proof and that crossing void it; the
+ *     two are usually one allocator call apart, and no test reaches the
+ *     case.  That refusal shuts the window
+ *     and arms a cycle, so the crossing after it is lent and decided anew:
+ *     a program that catches its refusals and keeps allocating pays a cycle
+ *     per refusal -- stock's emergency collection per refusal -- and never
+ *     passes the ceiling;
+ *   - otherwise it stays open.  The excess is no older than the previous
+ *     proof, and the frame that allocated it may still pin it: a cycle run
+ *     at a check inside a loop marks that frame's registers (lj_gc.c:
+ *     309-313), so its proof counts junk that is dead the moment the loop's
+ *     function returns (W16: the batch's last checkpoint, then the stage
+ *     string outside the handler; a verdict on that one proof refused it).
+ * THE LOOK: a growth that would pass the cap first proves a cycle that has
+ * ended, so a proof's figure is the heap the cycle left, not that plus the
+ * request that observed it, and its decision reaches the first allocation
+ * after that cycle -- most often in the code whose checkpoint ran it --
+ * not the second: read one call late, it reached the allocation after the
+ * batch had returned -- event.timer's record, outside the handler (W16,
+ * W16R; in the hermetic W16 sweeps, 30 and 29 landings outside the handler
+ * without it, 0 with it).
+ * A refusal shuts the window, so the cycle it arms decides the next
+ * crossing: a caught refusal in the reserve tier opens no room, and without
+ * this the program's next allocation -- its "done/..." string, allocate-
+ * first -- was refused before any checkpoint could run (W16Rj).  The
+ * window arms its own cycle: THE CADENCE would arm the same grant (regime
+ * P: top - used < 0), but once a proof has left the heap past the top it
+ * gets there by right-shifting a negative number.
+ * The kernel gets no window (C6b, W7k): its slice lies past every window
+ * (LJ52_GC_LEND <= LJ52_GC_KSLICE, checked at compile time), so it keeps
+ * LJ52_GC_KSLICE - LJ52_GC_LEND past the sandbox's ceiling (W19); and when
+ * its slice took the heap past S between resumes, the sandbox's next
+ * allocation -- the dispatcher's table.pack -- is a crossing like any
+ * other, lent, its cycle run at that call's own check.  No window under
+ * HOOK_GC or a host GCSTOP, as no credit.  Nothing of it crosses eris: it
+ * is shut on a fresh record, decided anew at every proof, and read against
+ * the current top.  The bound stays absolute: the sandbox's used + delta <=
+ * total + G + LJ52_GC_LEND, every thread's <= total + G + LJ52_GC_KSLICE as
+ * before, so caught refusals cannot ratchet it (W7, re-scoped to G + the
+ * window; W7k).  What it costs: a cycle per crossing while live data plus
+ * the newest junk straddles a top; and a program whose live data sits past
+ * S by less than its own garbage per cycle never gets the verdict -- lent
+ * within the ceiling, a cycle per crossing, never refused.  What it does
+ * not fix: a window overrun before a checkpoint proves its cycle (more than
+ * LJ52_GC_LEND with no checkpoint, a single request past S + LJ52_GC_LEND,
+ * or the kernel spending more than that of its slice past S between
+ * resumes), and garbage pinned across two consecutive cycles, are still
+ * refused wherever they land.
+ *
  * THE VALVE COUNTS ATTEMPTS.  LJ52_GC_ARMCAP counts allocator calls that
  * try to GROW (granted or refused), never frees or shrinks.  An armed cycle
  * that sweeps more than 65 536 dead blocks -- one sweep of a machine full of
@@ -1018,6 +1119,13 @@ static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
 #define LJ52_GC_ODMIN  (32 * 1024)
 #define LJ52_GC_ODMAX  (512 * 1024)
 #define LJ52_GC_KSLICE (16 * 1024)      /* the kernel's own, past the credit */
+#define LJ52_GC_LEND   (4 * 1024)       /* THE WINDOW; <= KSLICE: the bound  */
+#if LJ52_GC_LEND > LJ52_GC_KSLICE
+#error "THE WINDOW must sit inside the kernel's slice, or the bound over every thread moves"
+#endif
+#if LJ52_GC_KSLICE - LJ52_GC_LEND < 12 * 1024
+#error "the kernel must keep 12 KiB past the sandbox's ceiling (mem_test W19)"
+#endif
 #define LJ52_GC_HYSTSHIFT 1             /* re-arm after half the headroom    */
 #define LJ52_GC_FLUSHSHIFT 1            /* flush inside half the watermark   */
 #define LJ52_OD_BURST   0               /* credit tiers                      */
@@ -1065,11 +1173,13 @@ static long long lj52_gc_odmax(long long total)
 
 /* The tier a record is in for this heap: RESERVE after a refusal, or a fresh
  * record (no cycle proven) whose live data is already past the burst tier,
- * which then keeps it.  See THE CREDIT. */
+ * which then keeps it -- not bytes THE WINDOW lent it: a window is open
+ * (gc_win) only once this record has itself granted past the top.  See THE
+ * CREDIT. */
 static int lj52_gc_reserve(lj52_mem *M, long long total, long long used)
 {
   if (M->gc_odstate == LJ52_OD_RESERVE) return 1;
-  if (!M->gc_hyst && used > total + (lj52_gc_odmax(total) >> 1)) {
+  if (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1)) {
     M->gc_odstate = LJ52_OD_RESERVE;
     return 1;
   }
@@ -1097,6 +1207,42 @@ static long long lj52_gc_credit(lj52_mem *M, long long total, long long used)
   return c;
 }
 
+/* THE WINDOW's look: a growth that would pass the cap first sees whether
+ * the armed cycle has ended, so the proof's figure is the heap that cycle
+ * left -- not that plus the request -- and the window is decided before the
+ * request is judged.  It is the armed branch of lj52_gc_pressure, with its
+ * guards (norefuse, HOOK_GC, GCSTOP: nothing is observed there), as a FREE:
+ * a look is not an attempt, and the valve must not count it.  The park
+ * reset it can run is the one the same call's GROW or TRY would run a
+ * moment later, against the same gc.total (LuaJIT adds the block only after
+ * the allocator returns).  Only on the slow path: below the cap the call
+ * is the stage-C allocator's, unchanged. */
+static void lj52_gc_look(lj52_mem *M, long long total, long long used)
+{
+  if (M->gc_armed) lj52_gc_pressure(M, total, used, LJ52_GP_FREE);
+}
+
+/* THE WINDOW: lend a sandbox growth the credit refused?  Up to LJ52_GC_LEND
+ * past the top it was refused at, unless the verdict stands, and arm the
+ * cycle that will decide it.  Never the kernel's, never under HOOK_GC or a
+ * host GCSTOP. */
+static int lj52_gc_lend(lj52_mem *M, long long total, long long used, long long delta)
+{
+  global_State *g;
+  long long top;
+  if (M->L == NULL || total <= 0) return 0;
+  g = G(M->L);
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM || lj52_gc_kernel(M, g))
+    return 0;
+  top = total + lj52_gc_credit(M, total, used);
+  if (used + delta > top + LJ52_GC_LEND) return 0;      /* the ceiling */
+  if (M->gc_win == 2 && M->gc_low > top) return 0;      /* the verdict */
+  M->gc_win = 1;
+  M->gc_lends++;
+  if (!M->gc_armed) lj52_gc_arm(M, g, LJ52_ARM_WALL);   /* the window's cycle */
+  return 1;
+}
+
 /* A refusal: counted, the valve and the proof seen to first, then the
  * reserve tier opened and the collector armed -- from ANY headroom, so the
  * garbage that would have covered the request is collected at the next
@@ -1111,6 +1257,7 @@ static void lj52_gc_refused(lj52_mem *M, long long total, long long used)
   g = G(M->L);
   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
   M->gc_odstate = LJ52_OD_RESERVE;
+  M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
   if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
   else lj52_gc_arm(M, g, LJ52_ARM_WALL);
 }
@@ -1155,6 +1302,12 @@ static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int k
       M->gc_hyst = 1;
       M->gc_low = used;
       if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
+      if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+        top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+                                                        : lj52_gc_odmax(total) >> 1);
+        M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;
+      }
+      M->gc_grown = 0;
       /* THE FLUSH PREDICATE -- at the proof, never at the arm.  The cycle
        * has run to completion and `used` is the heap as it stands after it.
        * Headroom still short means garbage was not what filled the machine,
@@ -1879,7 +2032,8 @@ static int lj52_gcstats(lua_State *L) {
 }
 
 /* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets,
- *                      od_limit, kernel_slice, gc_low, armby, hyst
+ *                      od_limit, kernel_slice, gc_low, armby, hyst,
+ *                      window, lends, win, refused
  *
  * The collector at the wall (docs/roadmap.md; THE CREDIT, THE CADENCE and
  * THE PARK RESET in the collector section).  overdrafts counts growths lent
@@ -1891,9 +2045,14 @@ static int lj52_gcstats(lua_State *L) {
  * last proof left (lowered by frees), why the last cycle was armed (0 gate,
  * 1 wall or refusal, 2 the flush), and whether a cycle has been proven at
  * all -- what the harness's mem-2 needed to see why a hold got no cycle
- * (2026-10-04).  A separate
- * global, not more _OCLJ_GCSTATS positions: twenty values is LUA_MINSTACK,
- * which is what lets that one push without a checkstack.  Read-only,
+ * (2026-10-04).  window is THE WINDOW's LJ52_GC_LEND (the sandbox's bound is
+ * then used <= cap + od_limit + window), lends the growths it lent, win its
+ * state (0 shut, 1 open, 2 the verdict), refused the size of the last
+ * refused request (what a landing outside a handler was asking for: the
+ * hermetic W16 cases judge "covered" by it, and a capacity run's stall is
+ * attributed by it).  A separate global, not more
+ * _OCLJ_GCSTATS positions: twenty values is LUA_MINSTACK, which is what
+ * lets that one push without a checkstack.  Read-only,
  * allocates nothing, raw global -- the sandbox never sees it. */
 static int lj52_wallstats(lua_State *L) {
   lj52_mem *M = lj52_memof(L);
@@ -1906,7 +2065,11 @@ static int lj52_wallstats(lua_State *L) {
   lua_pushnumber(L, M ? (lua_Number)M->gc_low : -1);
   lua_pushinteger(L, M ? M->gc_armby : -1);
   lua_pushinteger(L, M ? M->gc_hyst : -1);
-  return 9;
+  lua_pushinteger(L, M ? LJ52_GC_LEND : -1);
+  lua_pushinteger(L, M ? M->gc_lends : -1);
+  lua_pushinteger(L, M ? M->gc_win : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->gc_refdelta : -1);
+  return 13;
 }
 
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */

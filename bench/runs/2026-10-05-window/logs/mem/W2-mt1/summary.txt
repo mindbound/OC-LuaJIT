@@ -1,0 +1,35 @@
+fixed 082ff068 run 1: checks=81 failures=0
+fixed run 2: checks=81 failures=0
+fixed run 3: checks=81 failures=0
+fixed run 4: checks=81 failures=0
+fixed run 5: checks=81 failures=0
+fixed run 6: checks=81 failures=0
+fixed run 7: checks=81 failures=0
+fixed run 8: checks=81 failures=0
+fixed run 9: checks=81 failures=0
+fixed run 10: checks=81 failures=0
+fixed failing sets:
+     10 
+fixeddrop 332dc85c run 1: checks=81 failures=0
+fixeddrop run 2: checks=81 failures=0
+fixeddrop run 3: checks=81 failures=0
+fixeddrop run 4: checks=81 failures=0
+fixeddrop run 5: checks=81 failures=0
+fixeddrop failing sets:
+      5 
+prefix d1242186 run 1: checks=81 failures=2
+prefix run 2: checks=81 failures=2
+prefix run 3: checks=81 failures=3
+prefix run 4: checks=81 failures=2
+prefix run 5: checks=81 failures=2
+prefix failing sets:
+      4 W11w W11wL 
+      1 W4 W11w W11wL 
+stageC 0259f0d1 run 1: checks=81 failures=7
+stageC run 2: checks=81 failures=7
+stageC run 3: checks=81 failures=7
+stageC run 4: checks=81 failures=7
+stageC run 5: checks=81 failures=7
+stageC failing sets:
+      5 W17 W16 W16L W16R W16Rj W16RL W16RjL 
+DONE

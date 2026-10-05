@@ -87,6 +87,23 @@
  *   cases C3-C6 pass on the legacy path.  Sabotaged copies of the C path
  *   make C2-C7 fail one by one; see the change's gate log.
  *
+ * And THE COLLECTOR AT THE WALL (lj52shim.c: THE PARK RESET, THE CREDIT, THE
+ * CADENCE, THE WINDOW), the W cases, each with its story at the case:
+ *   W1-W15  the park reset and the valve, the credit's tiers and its bound
+ *       (W7: caught refusals cannot ratchet it), the cadence's cost, the
+ *       flush at half the watermark (bench/results-wall-2026-10-04.md)
+ *   W16 the capacity probe's program: no refusal outside the program's
+ *       handler where a collection would have made room for the request
+ *   W16R, W16Rj  the same in the reserve tier, after a first refusal the
+ *       step's handler absorbed, with the JIT off and on; W16L, W16RL and
+ *       W16RjL all three on the legacy (dropin) path
+ *   W11w a fresh record's window opens no reserve tier without a refusal
+ *   W17 a live fill is refused past the top, and within half the window
+ *   W7k, C6b, W18, W19  the kernel: its bound, its hard top, never refused
+ *       for the sandbox's lent data at 4 and 10 MB, its room past the window
+ *   FAIL-FIRST: W16, W16R, W16Rj and W17 fail on the stage-C object in 10 of
+ *   10 runs (bench/results-wall-window-2026-10-05.md).
+ *
  * Build: see run-mem.sh next to this file.  Exit status 0 iff every case passes.
  */
 #include <stdio.h>
@@ -431,6 +448,9 @@ static const char *ARM_DISARM =
 #define WALL_ODLIMIT(L)     statn(L, "_OCLJ_WALLSTATS", 5)
 #define WALL_KSLICE(L)      statn(L, "_OCLJ_WALLSTATS", 6)
 #define WALL_LOW(L)         statn(L, "_OCLJ_WALLSTATS", 7)
+#define WALL_LEND(L)        statn(L, "_OCLJ_WALLSTATS", 10)   /* THE WINDOW; -1 before it */
+#define WALL_LENDS(L)       statn(L, "_OCLJ_WALLSTATS", 11)
+#define WALL_WIN(L)         statn(L, "_OCLJ_WALLSTATS", 12)   /* 0 shut, 1 open, 2 the verdict */
 /* lj_gc.h's GC states, by value (the shim spells GCSpause as 0 too). */
 #define W_GCSPAUSE 0
 #define W_GCSSWEEP 4
@@ -614,6 +634,262 @@ static const char *W7_CHUNK =
   "local okr = coroutine.resume(co) "
   "_OCLJ_WATCHDOG.disarm(t) "
   "__w7 = okr and fails or -1";
+
+/* W11w's program (the code review of THE WINDOW, 2026-10-05): a sandbox
+ * coroutine, resumed by C under the watchdog's arm, makes ONE table of a
+ * given array and hash size from a C function -- three allocator calls (the
+ * header, the array part, the hash part) with no checkpoint between them. */
+static int w11w_mk(lua_State *L) {
+  lua_createtable(L, (int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2));
+  return 1;
+}
+static const char *W11W_CHUNK =
+  "__keep = false "
+  "__co = coroutine.create(function(na, nh) "
+  "  local ok, t = pcall(__w11wmk, na, nh) "
+  "  if ok then __keep = t end "
+  "  coroutine.yield(ok) "
+  "end) "
+  "__t = _OCLJ_WATCHDOG.arm(3600, function() end, true)";
+
+#ifndef W16_N
+#define W16_N 96             /* caps in the sweep */
+#endif
+#ifndef W16_STEP
+#define W16_STEP 64          /* bytes between them: 96 x 64 B is one step of the fill */
+#endif
+#ifndef W16R_N
+#define W16R_N 96            /* W16R / W16Rj (at 48 x 128 stage C left 1-2 covered) */
+#endif
+#ifndef W16R_STEP
+#define W16R_STEP 64
+#endif
+/* W16's program: the capacity probe's shape (OcljSmoke.scala, OCLJ_PROBE=
+ * capacity), the residual the collector at the wall left (docs/roadmap.md, "A
+ * refusal at a credit tier's top can land outside the program's handler").  A
+ * sandbox coroutine, resumed under the watchdog's arm as machine.lua resumes
+ * it, fills 100 held 32-character strings per step INSIDE a pcall, with a
+ * churn string per object; BETWEEN steps, outside any handler of its own, it
+ * does what the probe does: the stage string, and event.timer's record for
+ * the next step -- and the dispatcher packs each signal (OpenOS's
+ * pullSignal) outside any handler at all.  The kernel's loop arms, resumes,
+ * packs the results and disarms.  __w16rec(code) records, allocating
+ * nothing: 1 refused inside the handler (the probe's normal end), 2 escaped
+ * step() into the dispatcher's pcall (the probe's STALL), 3 killed the
+ * sandbox (a machine down).  A stall then YIELDS 'stop' and the kernel stops
+ * resuming it: the sandbox stays suspended where it landed, as OpenOS's
+ * would, so the live set read after the run counts its stack (a coroutine
+ * that returned has had its stack shrunk: up to 3.9 KB under, d2-verdict).  Bounded at 400 steps (40 000 strings, ~3 MB, seven
+ * times the cap; see W1's note on bounds). */
+static const char *W16_CHUNK =
+  "local rec, held, count, stage, slot = __w16rec, {}, 0, 'filling/0', {} "
+  "__w16h = held "
+  "local function uniq(len, i) local s = tostring(i) return string.rep('x', len - #s) .. s end "
+  "local step "
+  "step = function() "
+  "  local ok = pcall(function() "
+  "    for k = 1, 100 do "
+  "      count = count + 1 held[count] = uniq(32, count) "
+  "      local junk = uniq(24, count) .. '!' "
+  "    end "
+  "  end) "
+  "  if not ok then rec(1) return end "
+  "  stage = 'filling/' .. count "
+  "  slot[1] = { key = false, times = 1, callback = step, interval = 0, timeout = 0 } "
+  "end "
+  "slot[1] = { key = false, times = 1, callback = step, interval = 0, timeout = 0 } "
+  "local co = coroutine.create(function() "
+  "  for r = 1, 400 do "
+  "    local sig = table.pack(coroutine.yield()) "
+  "    local hd = slot[1] "
+  "    if not hd then return end "
+  "    slot[1] = nil "
+  "    if not pcall(hd.callback) then rec(2) coroutine.yield('stop') return end "
+  "  end "
+  "end) "
+  "local cb = function() end "
+  "__w16k = function() "
+  "  for r = 1, 402 do "
+  "    local t = _OCLJ_WATCHDOG.arm(3600, cb, true) "
+  "    local res = table.pack(coroutine.resume(co, 'timer')) "
+  "    _OCLJ_WATCHDOG.disarm(t) "
+  "    if not res[1] then rec(3) return end "
+  "    if res[2] == 'stop' or coroutine.status(co) == 'dead' then return end "
+  "  end "
+  "end "
+  /* the largest single object the program allocates outside a handler: the
+   * stage string, event.timer's record, the dispatcher's pack -- measured
+   * here, with the collector stopped, so the case never hardcodes LuaJIT's
+   * object sizes.  The third round counts: the first also pays one-time
+   * allocations (the string buffer, table.pack's first call). */
+  "for round = 1, 3 do "
+  "  collectgarbage('stop') "
+  "  local c0 = collectgarbage('count') "
+  "  local s1 = 'filling/' .. (12345 + round) "
+  "  local c1 = collectgarbage('count') "
+  "  local t1 = { key = false, times = 1, callback = cb, interval = 0, timeout = 0 } "
+  "  local c2 = collectgarbage('count') "
+  "  local p1 = table.pack('timer') "
+  "  local c3 = collectgarbage('count') "
+  "  collectgarbage('restart') "
+  "  __w16dmax = math.max(c1 - c0, c2 - c1, c3 - c2) * 1024 "
+  "end";
+
+/* W16's recorder: what landed where, and the accounted figure at that
+ * moment.  A C function the chunk calls: nothing allocated. */
+static int W16_CODE = 0;
+static long long W16_USED = -1;
+static double W16_DELTA = -1;      /* the refused request, WALLSTATS[13]; -1 before it */
+static int w16_rec(lua_State *L) {
+  W16_CODE = (int)lua_tointeger(L, 1);
+  W16_USED = j_core_used(L);
+  W16_DELTA = statn(L, "_OCLJ_WALLSTATS", 13);
+  return 0;
+}
+
+/* W16R's program: W16's, carried into the RESERVE tier -- the shape every
+ * bad in-machine outcome had (scratchpad wall2/design/u2-stalls.md: each came
+ * at the reserve top, after a FIRST refusal something other than the fill
+ * absorbed).  Here the step's own handler absorbs the first refusal and the
+ * fill goes on with its data kept; at the second it records, drops its data
+ * and stops, as the capacity probe does.  The recorder keeps the FIRST thing
+ * recorded and the tier it happened in (the shim's refusal count). */
+static const char *W16R_CHUNK =
+  "local rec, held, count, stage, slot, nfail = __w16rec, {}, 0, 'filling/0', {}, 0 "
+  "__w16h = held "
+  "local function uniq(len, i) local s = tostring(i) return string.rep('x', len - #s) .. s end "
+  "local step "
+  "step = function() "
+  "  local ok = pcall(function() "
+  "    for k = 1, 100 do "
+  "      count = count + 1 held[count] = uniq(32, count) "
+  "      local junk = uniq(24, count) .. '!' "
+  "    end "
+  "  end) "
+  "  if not ok then "
+  "    nfail = nfail + 1 "
+  "    if nfail >= 2 then rec(1, nfail) held = nil __w16h = nil return end "
+  "  end "
+  "  stage = 'filling/' .. count "
+  "  slot[1] = { key = false, times = 1, callback = step, interval = 0, timeout = 0 } "
+  "end "
+  "slot[1] = { key = false, times = 1, callback = step, interval = 0, timeout = 0 } "
+  "local co = coroutine.create(function() "
+  "  for r = 1, 400 do "
+  "    local sig = table.pack(coroutine.yield()) "
+  "    local hd = slot[1] "
+  "    if not hd then return end "
+  "    slot[1] = nil "
+  "    if not pcall(hd.callback) then rec(2, nfail) coroutine.yield('stop') return end "
+  "  end "
+  "end) "
+  "local cb = function() end "
+  "__w16k = function() "
+  "  for r = 1, 402 do "
+  "    local t = _OCLJ_WATCHDOG.arm(3600, cb, true) "
+  "    local res = table.pack(coroutine.resume(co, 'timer')) "
+  "    _OCLJ_WATCHDOG.disarm(t) "
+  "    if not res[1] then rec(3, nfail) return end "
+  "    if res[2] == 'stop' or coroutine.status(co) == 'dead' then return end "
+  "  end "
+  "end";
+static int W16R_TIER = 0;
+static double W16R_REF0 = 0;       /* the shim's refusals when the run began */
+static int w16r_rec(lua_State *L) {
+  if (W16_CODE == 0) {
+    W16_CODE = (int)lua_tointeger(L, 1);
+    /* The tier the landing was judged in, from the SHIM's count, not the
+     * program's: a refusal the JIT recorder absorbed (trace_abort drops the
+     * error, lj_trace.c) opens the reserve tier too, and the program never
+     * sees it.  Two or more since the run began: an earlier one opened it
+     * (the program keeps its data, so no proof can close it between). */
+    W16R_TIER = statn(L, "_OCLJ_GCSTATS", 4) - W16R_REF0 >= 2;
+    W16_USED = j_core_used(L);
+    W16_DELTA = statn(L, "_OCLJ_WALLSTATS", 13);
+  }
+  return 0;
+}
+
+/* W17's sandbox (d2-verdict): a fill of live 64-byte tables into a
+ * pre-sized holder, inside a pcall, until refused (bounded: 200 000), in a
+ * coroutine resumed under the watchdog's arm -- the sandbox's tops, no
+ * kernel slice.  The holder never grows, so every growth is a TNEW: check
+ * first, then the table, one checkpoint per object. */
+static const char *W17_CHUNK =
+  "local h, n = __w17h, 0 "
+  "local co = coroutine.create(function() "
+  "  local ok = pcall(function() while n < 200000 do n = n + 1 h[n] = {n} end end) "
+  "  coroutine.yield(ok and 1 or 0) "
+  "end) "
+  "local t = _OCLJ_WATCHDOG.arm(3600, function() end, true) "
+  "local okr, r = coroutine.resume(co) "
+  "_OCLJ_WATCHDOG.disarm(t) "
+  "__w17 = okr and r or -1";
+
+/* W18's program (j2-safety's K1): the sandbox fills live tables to
+ * __k1target (1 KB under its burst top), then crosses with ONE allocation no
+ * checkpoint precedes -- mode 1 an array doubling (+32 KB, rawset), mode 2
+ * a concatenation of two kept 10 KB strings -- and yields.  The kernel then
+ * packs, still armed (the first pack is machine.lua's own, of the resume's
+ * results) and after the disarm.  Every one protected here so the case can
+ * count; machine.lua's are not, and a refusal there is a dead machine.
+ * Bounded: 4 000 000 tables (__f is pre-sized from C, so it never grows). */
+static const char *W18_CHUNK =
+  "local f, h = __f, {} for i = 1, 4096 do h[i] = i end __h = h "
+  "local A, B = string.rep('a', __k1cat), string.rep('b', __k1cat) "
+  "local cb = function() end "
+  "local nf = 0 "
+  "__k1r = {0, 0, 0, 0, 0, 0, 0} "
+  "__k1s = false "
+  "local R = __k1r "
+  "local co = coroutine.create(function() "
+  "  local target = __k1target "
+  "  local ok = pcall(function() "
+  "    while nf < 4000000 and collectgarbage('count') * 1024 < target do nf = nf + 1 f[nf] = {nf} end "
+  "  end) "
+  "  if not ok then R[3] = R[3] + 1 end "
+  "  if __k1mode == 1 then "
+  "    if pcall(rawset, h, 4097, true) then R[4] = 1 end "
+  "  elseif __k1mode == 2 then "
+  "    local okc, s = pcall(function() return A .. B end) "
+  "    if okc then __k1s = s R[4] = 1 end "
+  "  end "
+  "  coroutine.yield() "
+  "end) "
+  "__k1run = function() "
+  "  local t = _OCLJ_WATCHDOG.arm(3600, cb, true) "
+  "  local ok0 = pcall(table.pack, coroutine.resume(co)) "
+  "  local k = ok0 and 0 or 1 R[7] = k "
+  "  for i = 1, 6 do if not pcall(table.pack, i, i, i) then k = k + 1 end end "
+  "  _OCLJ_WATCHDOG.disarm(t) "
+  "  local k2 = 0 "
+  "  for i = 1, 6 do if not pcall(table.pack, i, i, i) then k2 = k2 + 1 end end "
+  "  R[1] = k R[2] = k2 R[6] = nf "
+  "end";
+
+/* W19's program (j2-safety's K8, its window-filling mode): the sandbox
+ * makes 8 000 caught attempts to add one live table each, which leaves the
+ * heap at its reserve tier's ceiling -- top plus THE WINDOW; R[5] is the
+ * excursion it reached, read before the kernel allocates.  Then the kernel,
+ * still armed and then at depth 0, makes ONE table of __k8n array slots. */
+static const char *W19_CHUNK =
+  "local h, fails, i = __h, 0, 0 local cb = function() end "
+  "local n8 = __k8n "
+  "__k8r = {0, 0, 0, 0, 0} local R = __k8r "
+  "local co = coroutine.create(function() "
+  "  local function add1() i = i + 1 h[i] = {i} end "
+  "  for attempt = 1, 8000 do if not pcall(add1) then i = i - 1 fails = fails + 1 end end "
+  "end) "
+  "__k8run = function() "
+  "  local t = _OCLJ_WATCHDOG.arm(3600, cb, true) "
+  "  R[1] = coroutine.resume(co) and 1 or 0 "
+  "  R[5] = select(2, _OCLJ_WALLSTATS()) "
+  "  R[2] = pcall(__k8mk, n8) and 1 or 0 "
+  "  _OCLJ_WATCHDOG.disarm(t) "
+  "  R[3] = pcall(__k8mk, n8) and 1 or 0 "
+  "  R[4] = fails "
+  "end";
+static int w19_mk(lua_State *L) { lua_createtable(L, (int)lua_tointeger(L, 1), 0); return 1; }
 
 int main(void) {
   lua_State *L;
@@ -1161,6 +1437,37 @@ int main(void) {
     ok(rawStatus == LUA_ERRMEM && pushed && u2 > u1,
        "C6 exhausted cap: raw push refused, memo push succeeds, charged", d);
 
+    /* ---- C6b: THE WINDOW is the sandbox's: the kernel has none --------- */
+    /* (d2-prevent's case, with THE WINDOW's state.)  C6 exhausts the RESERVE
+     * top; this one exhausts the kernel's BURST top, the record in BURST and
+     * no verdict standing, where a kernel window would lend the push.  C
+     * frames at depth 0 are the kernel.  The preconditions are asserted, so
+     * the case cannot pass vacuously. */
+    lua_settop(C, 0);
+    j_settotal(C, &CS, 64 * 1024 * 1024);
+    settle_gc(C);
+    lua_gc(C, LUA_GCCOLLECT, 0);
+    settle_gc(C);
+    lua_pushcfunction(C, raw_push);     /* memo warm (C6 pushed it) */
+    lua_checkstack(C, 20);
+    {
+      double tier6 = WALL_ODSTATE(C), win6 = WALL_WIN(C), k6 = WALL_KSLICE(C);
+      long long t6;
+      int i6;
+      u0 = j_used(C, &CS);
+      t6 = u0;
+      for (i6 = 0; i6 < 8; i6++) t6 = u0 - (long long)k6 - w_odmax(t6) / 2;   /* T + G(T)/2 + K == used */
+      j_settotal(C, &CS, (jint)t6);
+      rawStatus = lua_pcall(C, 0, 1, 0);
+      lua_settop(C, 0);
+      j_settotal(C, &CS, 64 * 1024 * 1024);
+      sprintf(d, "burst tier %.0f (want 0), window %.0f (want no verdict: 0, 1, or -1 before THE WINDOW), slice %.0f; "
+                 "cap %ld = used %ld - G/2 - slice: raw push status %d (LUA_ERRMEM=%d)",
+              tier6, win6, k6, (long)t6, (long)u0, rawStatus, LUA_ERRMEM);
+      ok(tier6 == 0 && win6 != 2 && k6 > 0 && rawStatus == LUA_ERRMEM,
+         "C6b the kernel at its burst top: raw push refused (no window)", d);
+    }
+
     /* ---- C7: the accounting switched off, as jnlua's close does ------- */
     u0 = j_used(C, &CS);
     j_settotal(C, &CS, (jint)u0);       /* still not one byte to spare */
@@ -1217,7 +1524,7 @@ int main(void) {
   {
     FakeState WS;
     lua_State *W, *Wco;
-    long long base, cap, u0, u1, H, G;
+    long long base, cap, u0, u1, H, G, w16dmax = 256;
     double coll0, coll1, bail0, refu0, arms0, st9, thr, gtot, steps, peak, lim, armedC;
     int round, allok, nreq, st2, st3, nrep;
     double cworst = 0;
@@ -1655,8 +1962,15 @@ int main(void) {
     sprintf(d, "20000 x 64 B, 256 KB live: far (4 watermarks) %.0f collects, status %d; near (64 KB) %.0f collects "
             "(bound %.0f), status %d, refusals +%.0f; time near/far %.1f",
             cfar, st2, cnear, lim, st, GC_REFUSALS(W) - refu0, tnear / tfar);
+    /* The time ratio is PRINTED, not asserted (2026-10-05).  It is two
+     * clock() readings of a few milliseconds each at clock()'s 1 ms
+     * resolution, so it only takes the values 0.5, 1, 2, 3, 4...; 11 of 75
+     * runs read exactly the old bound of 3.0, and two read 4.0 while the
+     * efficiency cores were loaded -- one of them inside a negative-control
+     * sabotage that W4 has nothing to do with.  The cycle count is the
+     * deterministic measure of R2, and the nohyst sabotage still fails it. */
     ok(st == 0 && st2 == 0 && cnear >= 1 && cnear <= lim && cfar <= 2
-         && GC_REFUSALS(W) == refu0 && tnear / tfar <= 3.0,
+         && GC_REFUSALS(W) == refu0,
        "W4 near the wall, cycles per bytes allocated, not per checkpoint", d);
     clear_javastate(W);
     lua_close(W);
@@ -1678,16 +1992,104 @@ int main(void) {
     u1 = j_used(W, &WS);
     w_setcap(W, &WS, 64 * 1024 * 1024, 1);   /* nothing below is read at the wall */
     peak = WALL_ODPEAK(W); lim = WALL_ODLIMIT(W);
-    lua_getglobal(W, "__w7");
-    nrep = (int)lua_tointeger(W, -1);
-    lua_pop(W, 1);
-    sprintf(d, "4000 caught attempts past the wall, as the sandbox: status %d, caught %d, refusals +%.0f, collects +%.0f; "
-            "used %ld vs cap %ld; od_peak %.0f, od_limit %.0f",
-            st, nrep, GC_REFUSALS(W) - refu0, GC_COLLECTS(W) - coll0, (long)u1, (long)cap, peak, lim);
-    ok(st == 0 && nrep > 0 && GC_REFUSALS(W) > refu0 && peak >= 0 && lim > 0 && peak <= lim
-         && u1 <= cap + (long long)lim + 2048
-         && GC_COLLECTS(W) - coll0 <= 2 * (GC_REFUSALS(W) - refu0) + 24,
-       "W7 caught refusals cannot push the heap past cap + G", d);
+    {
+      double win = WALL_LEND(W), kslice = WALL_KSLICE(W);
+      if (win < 0) win = 0;                /* a shim before THE WINDOW */
+      lua_getglobal(W, "__w7");
+      nrep = (int)lua_tointeger(W, -1);
+      lua_pop(W, 1);
+      sprintf(d, "4000 caught attempts past the wall, as the sandbox: status %d, caught %d, refusals +%.0f, collects +%.0f; "
+              "used %ld vs cap %ld; od_peak %.0f, od_limit %.0f, window %.0f (slice %.0f)",
+              st, nrep, GC_REFUSALS(W) - refu0, GC_COLLECTS(W) - coll0, (long)u1, (long)cap, peak, lim, win, kslice);
+      /* The sandbox's bound is cap + G + THE WINDOW, and the window must sit
+       * inside the kernel's slice, or the bound over every thread moves. */
+      ok(st == 0 && nrep > 0 && GC_REFUSALS(W) > refu0 && peak >= 0 && lim > 0 && peak <= lim + win
+           && win <= kslice && u1 <= cap + (long long)(lim + win) + 2048
+           && GC_COLLECTS(W) - coll0 <= 2 * (GC_REFUSALS(W) - refu0) + 24,
+         "W7 caught refusals cannot push the heap past cap + G + the window", d);
+    }
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W7k: the bound over every thread, as the kernel ---------------- */
+    /* W7's attempts made by the kernel (main thread, no resume armed): the
+     * kernel has no window -- its slice is past every window -- so its bound
+     * stays cap + G + the slice.  Nothing else pinned it past the kernel's
+     * first refusal (d2-lend: the kernel-window sabotage passed every case). */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W7k: no state\n"); return 1; }
+    runstr(W, "jit.off() __w7k = 0");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    lua_settop(W, 0);
+    cap = j_used(W, &WS) + 256 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    refu0 = GC_REFUSALS(W);
+    st = runstr(W, "local h, fails, cur = {}, 0, 0 "
+                   "local function add() for k = 1, 64 do h[#h + 1] = {cur, k} end end "
+                   "for i = 1, 4000 do cur = i if not pcall(add) then fails = fails + 1 end end "
+                   "__w7k = fails");
+    lua_settop(W, 0);
+    u1 = j_used(W, &WS);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    peak = WALL_ODPEAK(W); lim = WALL_ODLIMIT(W);
+    {
+      double kslice = WALL_KSLICE(W), win = WALL_LEND(W);
+      if (win < 0) win = 0;                /* a shim before THE WINDOW */
+      lua_getglobal(W, "__w7k");
+      nrep = (int)lua_tointeger(W, -1);
+      lua_pop(W, 1);
+      sprintf(d, "4000 caught attempts past the wall, as the kernel: status %d, caught %d, refusals +%.0f; "
+              "used %ld vs cap %ld; od_peak %.0f, od_limit %.0f, window %.0f, slice %.0f",
+              st, nrep, GC_REFUSALS(W) - refu0, (long)u1, (long)cap, peak, lim, win, kslice);
+      /* Not vacuous: the kernel went past the sandbox's ceiling (G + the
+       * window) into its slice, so this is the kernel's bound being held. */
+      ok(st == 0 && nrep > 0 && GC_REFUSALS(W) > refu0 && lim > 0 && kslice > 0
+           && peak > lim + win && peak <= lim + kslice && u1 <= cap + (long long)(lim + kslice) + 2048,
+         "W7k as the kernel, past the sandbox's ceiling, under cap + G + the slice", d);
+    }
+    clear_javastate(W);
+    lua_close(W);
+
+    /* ---- W17: a live fill is refused past the top, inside half the window */
+    /* THE WINDOW (d2-final): a sandbox growth past its tier's top is lent,
+     * and the cycle armed for it decides.  A fill of LIVE data survives two
+     * consecutive cycles, so the verdict refuses it within a few objects of
+     * the top: past it -- stage C refused AT the top with its garbage
+     * uncollected (od_peak <= G/2: this case fails first there) -- and well
+     * before the window's ceiling (the window is not a third tier).  From
+     * d2-verdict's W17 and d2-prevent's W17, with THE WINDOW's bounds. */
+    W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+    if (!W) { printf("  FAIL  W17: no state\n"); return 1; }
+    runstr(W, "jit.off() __w17 = 0");
+    lua_createtable(W, 8192, 0);            /* the holder, pre-sized: 64 KB, never grown */
+    lua_setglobal(W, "__w17h");
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    lua_gc(W, LUA_GCCOLLECT, 0);
+    settle_gc(W);
+    lua_settop(W, 0);
+    cap = j_used(W, &WS) + 256 * 1024;
+    w_setcap(W, &WS, cap, 1);
+    refu0 = GC_REFUSALS(W);
+    st = runstr(W, W17_CHUNK);
+    w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+    peak = WALL_ODPEAK(W);
+    G = w_odmax(cap);
+    {
+      double win = WALL_LEND(W);
+      if (win < 0) win = 0;                /* a shim before THE WINDOW */
+      lua_getglobal(W, "__w17");
+      nrep = (int)lua_tointeger(W, -1);
+      lua_pop(W, 1);
+      sprintf(d, "sandbox fill of live 64 B tables, cap %ld, G %ld: status %d, caught %s, refusals +%.0f; od_peak %.0f "
+                 "(the top G/2 = %ld; half the window past it = %.0f)",
+              (long)cap, (long)G, st, nrep == 0 ? "yes" : "NO", GC_REFUSALS(W) - refu0, peak,
+              (long)(G / 2), (double)(G / 2) + win / 2);
+      ok(st == 0 && nrep == 0 && GC_REFUSALS(W) - refu0 == 1
+           && peak > (double)(G / 2) && peak <= (double)(G / 2) + win / 2,
+         "W17 a live fill is refused past the top, inside half the window", d);
+    }
     clear_javastate(W);
     lua_close(W);
 
@@ -1755,6 +2157,324 @@ int main(void) {
     lua_settop(W, 0);
     clear_javastate(W);
     lua_close(W);
+
+    /* ---- W11w: a fresh record's window opens no reserve tier ------------- */
+    /* (The code review of THE WINDOW, 2026-10-05.)  W11's rule takes a fresh
+     * record -- no cycle proven, as after a load -- whose heap is already past
+     * total + G/2 into the RESERVE tier.  THE WINDOW lets the sandbox itself
+     * take a fresh record past that line, by its lend; the rule must not then
+     * read those bytes as history and open the second tier with no refusal.
+     * The sandbox, at S - 1 KB on a fresh record, makes one table whose array
+     * part is lent and whose hash part would pass the window's ceiling: it
+     * must be REFUSED (refusals +1, the excursion within the window), in C
+     * mode and on the legacy path.  Before the fix it was granted at G/2 +
+     * 13 KB with no refusal at all. */
+    {
+      int hm;
+      for (hm = 1; hm >= 0; hm--) {
+        lua_State *Wco;
+        long long u0, T, G11, i11;
+        double refu0, refu1, peak, lend;
+        int st2, okr = -1;
+        W = w_newstate(&WS, 64 * 1024 * 1024, hm);
+        if (!W) { printf("  FAIL  W11w: no state\n"); return 1; }
+        runstr(W, "jit.off()");
+        lua_pushcfunction(W, w11w_mk);
+        lua_setglobal(W, "__w11wmk");
+        if (runstr(W, W11W_CHUNK) != 0) { printf("  FAIL  W11w: the chunk: %s\n", errtop(W)); return 1; }
+        lua_getglobal(W, "__co");
+        Wco = lua_tothread(W, -1);
+        lua_settop(W, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        settle_gc(W);
+        refu0 = GC_REFUSALS(W);
+        lend = WALL_LEND(W);
+        if (lend < 0) lend = 0;              /* a shim before THE WINDOW */
+        lua_pushinteger(Wco, 256);
+        lua_pushinteger(Wco, 512);
+        u0 = j_used(W, &WS);
+        T = u0;                              /* T + G(T)/2 - 1 KB == u0 */
+        for (i11 = 0; i11 < 8; i11++) T = u0 + 1024 - w_odmax(T) / 2;
+        G11 = w_odmax(T);
+        w_setcap(W, &WS, T, hm);
+        st2 = lua_resume(Wco, W, 2);
+        if (st2 == LUA_YIELD) okr = lua_toboolean(Wco, -1);
+        w_setcap(W, &WS, 64 * 1024 * 1024, hm);
+        peak = WALL_ODPEAK(W);
+        refu1 = GC_REFUSALS(W);
+        sprintf(d, "%s, fresh record at S - 1 KB, cap %lld, G %lld: createtable(256,512) %s, refusals +%.0f, "
+                   "od_peak G/2 + %.0f (the window: %.0f)",
+                hm ? "C mode" : "legacy", T, G11, okr < 0 ? "did not yield" : okr ? "GRANTED" : "refused",
+                refu1 - refu0, peak - (double)(G11 / 2), lend);
+        ok(okr == 0 && refu1 - refu0 >= 1 && peak <= (double)(G11 / 2) + lend,
+           hm ? "W11w a fresh record's window opens no reserve tier without a refusal"
+              : "W11wL the same on the legacy path", d);
+        clear_javastate(W);
+        lua_close(W);
+      }
+    }
+
+    /* ---- W16: a refusal at the credit's top lands outside the handler -- */
+    w16dmax = 256;
+    /* The residual row (docs/roadmap.md, found 2026-10-04): stage B saw 3
+     * stalls and a dropin down in 68 capacity runs, stage C one stall in 49,
+     * stock none.  Hermetically (wall2/repro, 2026-10-04): with the live data
+     * inside the burst tier, the last cycle the cadence arms runs at a
+     * checkpoint inside the batch, while the batch's own churn is still in
+     * its frame; the batch returns, that churn is garbage, and the next
+     * request -- the stage string or event.timer's record (allocate-first:
+     * lj_meta_cat, lj_tab_dup's hash part), or the dispatcher's pack on the
+     * next resume after the kernel spent its slice -- does not fit under
+     * cap + G/2 and is refused before any checkpoint can collect it.  Stock
+     * collects at the refusal (lmem.c:85-93) and the request fits.
+     *
+     * The sweep moves the cap through one step's worth of the fill (100
+     * strings of ~60 B: one period of where the top falls in the program).
+     * For every run whose refusal landed OUTSIDE the batch's handler (the
+     * stall, or the sandbox killed) it collects twice and asks whether the
+     * live set, plus the request that was refused (WALLSTATS[13]; on a shim
+     * that does not report it, the LARGEST object the program allocates
+     * outside a handler, measured, not hardcoded), fits under the sandbox's
+     * burst top.  If it does, a collection at the refusal would have made
+     * room and the program would have gone on: that is the failure.  The
+     * live set is read with the sandbox still suspended where it landed (a
+     * stall yields; a killed sandbox is dead), so it counts the sandbox's
+     * stack as the program would hold it.  A refusal outside the handler
+     * that garbage could NOT have covered is stock's behaviour too and is
+     * not counted. */
+    {
+    int hm16;
+    for (hm16 = 1; hm16 >= 0; hm16--) {
+      int k, nin = 0, nstall = 0, ndown = 0, nother = 0, ncov = 0;
+      long long dmax = 0, L16, top16, off;
+      char first[200];
+      first[0] = 0;
+      for (k = 0; k < W16_N; k++) {
+        off = (long long)k * W16_STEP;
+        W = w_newstate(&WS, 64 * 1024 * 1024, hm16);
+        if (!W) { printf("  FAIL  W16: no state\n"); return 1; }
+        runstr(W, "jit.off() __w16k = false __w16dmax = 0");
+        lua_pushcfunction(W, w16_rec);
+        lua_setglobal(W, "__w16rec");
+        if (runstr(W, W16_CHUNK) != 0) { printf("  FAIL  W16: the chunk: %s\n", errtop(W)); return 1; }
+        lua_getglobal(W, "__w16dmax");
+        dmax = (long long)lua_tonumber(W, -1);
+        lua_settop(W, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        settle_gc(W);
+        lua_getglobal(W, "__w16k");             /* on the stack while there is room */
+        base = j_used(W, &WS);
+        cap = base + 384 * 1024 + off;
+        W16_CODE = 0; W16_USED = -1; W16_DELTA = -1;
+        w_setcap(W, &WS, cap, hm16);
+        st = lua_pcall(W, 0, 0, 0);
+        w_setcap(W, &WS, 64 * 1024 * 1024, hm16);
+        lua_settop(W, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        L16 = j_used(W, &WS);                   /* the live set the refusal left */
+        top16 = cap + w_odmax(cap) / 2;         /* the sandbox's burst tier: no slice */
+        if (st != 0 || W16_CODE == 0) nother++;
+        else if (W16_CODE == 1) nin++;
+        else {
+          if (W16_CODE == 2) nstall++; else ndown++;
+          if (L16 + (W16_DELTA > 0 ? (long long)W16_DELTA : dmax) <= top16) {
+            if (ncov == 0)
+              sprintf(first, "; first at cap = base + 384 KB + %lld: %s, request %.0f, used %lld, live %lld, top %lld",
+                      off, W16_CODE == 2 ? "stall" : "sandbox down", W16_DELTA, W16_USED, L16, top16);
+            ncov++;
+          }
+        }
+        clear_javastate(W);
+        lua_close(W);
+      }
+      sprintf(d, "%s, %d caps, base + 384 KB + 0..%d B: inside %d, stall %d, sandbox down %d, other %d; "
+                 "outside with room after a collection for the refused request (or %lld B): %d%.180s",
+              hm16 ? "C mode" : "legacy", W16_N, (W16_N - 1) * W16_STEP, nin, nstall, ndown, nother, dmax, ncov, first);
+      /* other: the kernel's own pcall failed or nothing was recorded -- a
+       * machine down by the kernel's refusal, which no handler would catch */
+      ok(nin > 0 && ncov == 0 && nother == 0,
+         hm16 ? "W16 no refusal outside the handler that garbage covers"
+              : "W16L the same on the legacy (dropin) path", d);
+      if (hm16) w16dmax = dmax;
+    }
+    }
+
+    /* ---- W16R / W16Rj: the same, carried into the reserve tier -------- */
+    /* The in-machine stalls and the dropin's down all came at the RESERVE
+     * top (u2-stalls.md).  W16's program, but its handler absorbs the first
+     * refusal and the fill goes on, data kept; the second refusal must land
+     * inside the handler unless garbage could not have covered it.  Stage C,
+     * hermetically (d2-lend, 4096 caps): 169 outside with the JIT off, 1847
+     * with it on (all but 43 covered).  A landing is judged against the tier
+     * it happened in: cap + G/2 before the first refusal, cap + G after. */
+    for (round = 0; round < 4; round++) {
+      int k, nin = 0, nstall = 0, ndown = 0, nother = 0, ncov = 0;
+      int hmr = round < 2;                     /* rounds 2, 3: the legacy path */
+      long long dmax = w16dmax, Lr, topr, off;
+      char first[200];
+      first[0] = 0;
+      for (k = 0; k < W16R_N; k++) {
+        off = (long long)k * W16R_STEP;
+        W = w_newstate(&WS, 64 * 1024 * 1024, hmr);
+        if (!W) { printf("  FAIL  W16R: no state\n"); return 1; }
+        runstr(W, (round & 1) == 0 ? "jit.off() __w16k = false" : "jit.on() __w16k = false");
+        lua_pushcfunction(W, w16r_rec);
+        lua_setglobal(W, "__w16rec");
+        if (runstr(W, W16R_CHUNK) != 0) { printf("  FAIL  W16R: the chunk: %s\n", errtop(W)); return 1; }
+        lua_settop(W, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        settle_gc(W);
+        lua_getglobal(W, "__w16k");
+        base = j_used(W, &WS);
+        cap = base + 384 * 1024 + off;
+        W16_CODE = 0; W16_USED = -1; W16_DELTA = -1; W16R_TIER = 0;
+        W16R_REF0 = GC_REFUSALS(W);
+        w_setcap(W, &WS, cap, hmr);
+        st = lua_pcall(W, 0, 0, 0);
+        w_setcap(W, &WS, 64 * 1024 * 1024, hmr);
+        lua_settop(W, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        Lr = j_used(W, &WS);
+        topr = cap + (W16R_TIER ? w_odmax(cap) : w_odmax(cap) / 2);
+        if (st != 0 || W16_CODE == 0) nother++;
+        else if (W16_CODE == 1) nin++;
+        else {
+          if (W16_CODE == 2) nstall++; else ndown++;
+          if (Lr + (W16_DELTA > 0 ? (long long)W16_DELTA : dmax) <= topr) {
+            if (ncov == 0)
+              sprintf(first, "; first at cap = base + 384 KB + %lld: %s in the %s tier, request %.0f, used %lld, live %lld, top %lld",
+                      off, W16_CODE == 2 ? "stall" : "sandbox down", W16R_TIER ? "reserve" : "burst", W16_DELTA, W16_USED, Lr, topr);
+            ncov++;
+          }
+        }
+        clear_javastate(W);
+        lua_close(W);
+      }
+      sprintf(d, "%s, %d caps, base + 384 KB + 0..%d B: second refusal inside %d, stall %d, sandbox down %d, other %d; "
+                 "outside with room after a collection for the refused request (or %lld B): %d%.180s",
+              hmr ? "C mode" : "legacy", W16R_N, (W16R_N - 1) * W16R_STEP, nin, nstall, ndown, nother, dmax, ncov, first);
+      ok(nin > 0 && ncov == 0 && nother == 0,
+         round == 0 ? "W16R the reserve tier: no refusal outside the handler that garbage covers"
+         : round == 1 ? "W16Rj the same with the JIT on"
+         : round == 2 ? "W16RL the reserve tier on the legacy (dropin) path"
+         :              "W16RjL the same with the JIT on", d);
+    }
+
+    /* ---- W18: the kernel's packs after a sandbox crossing ---------------- */
+    /* (j2-safety's K1.)  machine.lua packs every resume's results with no
+     * handler: a kernel refusal there is a machine down.  The sandbox fills
+     * live data to 1 KB under its burst top and crosses it with one
+     * allocation no checkpoint precedes, kept live: an array doubling (+32
+     * KB) or a 20 KB concatenation.  At caps of 4 and 10 MB -- G 256 to 512
+     * KB, where a window sized by G instead of a constant would pass the
+     * kernel's slice (d2-verdict's first FATAL) -- in C mode and legacy.  The
+     * kernel is never refused: whatever the sandbox was lent stays under its
+     * ceiling, LJ52_GC_KSLICE - LJ52_GC_LEND below the kernel's top. */
+    {
+      static const long long xkb[4] = { 4096, 4096, 10240, 10240 };
+      static const int xmode[4] = { 1, 2, 1, 2 }, xho[4] = { 1, 0, 0, 1 };
+      int k, bad = 0;
+      char one[160];
+      d[0] = 0;
+      for (k = 0; k < 4; k++) {
+        double r[8];
+        long long Nf, S18;
+        int i;
+        W = w_newstate(&WS, 64 * 1024 * 1024, xho[k]);
+        if (!W) { printf("  FAIL  W18: no state\n"); return 1; }
+        runstr(W, "jit.off()");
+        Nf = 1;
+        while (Nf < (xkb[k] * 1024 + 600 * 1024) / 64 + 4096) Nf <<= 1;
+        lua_createtable(W, (int)Nf, 0);   /* the fill's holder: never grown */
+        lua_setglobal(W, "__f");
+        runstr(W, xmode[k] == 1 ? "__k1cat = 10000 __k1mode = 1 __k1target = 0"
+                                : "__k1cat = 10000 __k1mode = 2 __k1target = 0");
+        if (runstr(W, W18_CHUNK) != 0) { printf("  FAIL  W18: the chunk: %s\n", errtop(W)); return 1; }
+        lua_settop(W, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        lua_gc(W, LUA_GCCOLLECT, 0);
+        settle_gc(W);
+        lua_getglobal(W, "__k1run");
+        base = j_used(W, &WS);
+        cap = base + xkb[k] * 1024;
+        S18 = cap + w_odmax(cap) / 2;
+        lua_pushnumber(W, (lua_Number)(S18 - 1024));
+        lua_setglobal(W, "__k1target");   /* an existing key: nothing allocated */
+        w_setcap(W, &WS, cap, xho[k]);
+        st = lua_pcall(W, 0, 0, 0);
+        w_setcap(W, &WS, 64 * 1024 * 1024, xho[k]);
+        peak = WALL_ODPEAK(W);
+        lua_settop(W, 0);
+        lua_getglobal(W, "__k1r");
+        for (i = 1; i <= 7; i++) { lua_rawgeti(W, -1, i); r[i] = lua_tonumber(W, -1); lua_pop(W, 1); }
+        lua_pop(W, 1);
+        if (st != 0 || r[7] != 0 || r[1] != 0 || r[2] != 0) bad++;
+        sprintf(one, "%s%lld MB %s %s: st %d, kernel refused %.0f/%.0f/%.0f, fill refused %.0f, crossing %s, peak-G/2 %.0f",
+                k ? "; " : "", xkb[k] / 1024, xmode[k] == 1 ? "doubling" : "concat", xho[k] ? "C" : "legacy",
+                st, r[7], r[1], r[2], r[3], r[4] ? "lent" : "refused", peak - (double)(w_odmax(cap) / 2));
+        strncat(d, one, sizeof d - strlen(d) - 1);
+        clear_javastate(W);
+        lua_close(W);
+      }
+      ok(bad == 0, "W18 the kernel's packs after a sandbox crossing, 4 and 10 MB", d);
+    }
+
+    /* ---- W19: the kernel's room after the sandbox spent its window ------ */
+    /* (j2-safety's K8.)  8 000 caught attempts to add one live table leave
+     * the sandbox at its reserve tier's ceiling, top plus THE WINDOW (the
+     * case asserts it got within 1 KB of it before the kernel allocates);
+     * then the kernel, still armed and then at depth 0, makes ONE table of
+     * 11 KB of array -- a FIXED size, not one derived from the window, so a
+     * wider window that ate into the kernel's room fails here (lj52shim.c
+     * also refuses to compile with less than 12 KB of slice past the
+     * window).  Stage C, with no window, keeps the whole 16 KB. */
+    {
+      double r[6], kslice, win;
+      int i, n19;
+      W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+      if (!W) { printf("  FAIL  W19: no state\n"); return 1; }
+      runstr(W, "jit.off()");
+      kslice = WALL_KSLICE(W);
+      win = WALL_LEND(W);
+      if (win < 0) win = 0;                /* a shim before THE WINDOW */
+      n19 = 11 * 1024 / 8;
+      lua_createtable(W, 8192, 0);
+      lua_setglobal(W, "__h");
+      lua_pushcfunction(W, w19_mk);
+      lua_setglobal(W, "__k8mk");
+      lua_pushnumber(W, (lua_Number)n19);
+      lua_setglobal(W, "__k8n");
+      if (runstr(W, W19_CHUNK) != 0) { printf("  FAIL  W19: the chunk: %s\n", errtop(W)); return 1; }
+      lua_settop(W, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      settle_gc(W);
+      lua_getglobal(W, "__k8run");
+      base = j_used(W, &WS);
+      cap = base + 256 * 1024;
+      G = w_odmax(cap);
+      w_setcap(W, &WS, cap, 1);
+      st = lua_pcall(W, 0, 0, 0);
+      w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+      lua_settop(W, 0);
+      lua_getglobal(W, "__k8r");
+      for (i = 1; i <= 5; i++) { lua_rawgeti(W, -1, i); r[i] = lua_tonumber(W, -1); lua_pop(W, 1); }
+      lua_pop(W, 1);
+      sprintf(d, "slice %.0f, window %.0f, G %ld: sandbox resumed %.0f, refused %.0f times, reached G + %.0f; "
+                 "the kernel's one %d-slot table: armed %s, at depth 0 %s",
+              kslice, win, (long)G, r[1], r[4], r[5] - (double)G, n19,
+              r[2] == 1 ? "granted" : "REFUSED", r[3] == 1 ? "granted" : "REFUSED");
+      ok(st == 0 && r[1] == 1 && r[4] >= 2 && kslice > 0 && r[5] >= (double)G + win - 1024
+           && r[2] == 1 && r[3] == 1,
+         "W19 the kernel keeps 11 KB past the sandbox's ceiling", d);
+      clear_javastate(W);
+      lua_close(W);
+    }
   }
 
   /* M9 -- the M state never handed over, and nothing in the shim does it

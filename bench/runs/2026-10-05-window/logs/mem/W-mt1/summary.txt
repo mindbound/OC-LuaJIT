@@ -1,0 +1,57 @@
+final d1242186 run 1: checks=76 failures=0
+final run 2: checks=76 failures=0
+final run 3: checks=76 failures=0
+final run 4: checks=76 failures=0
+final run 5: checks=76 failures=0
+final run 6: checks=76 failures=0
+final run 7: checks=76 failures=0
+final run 8: checks=76 failures=0
+final run 9: checks=76 failures=0
+final run 10: checks=76 failures=0
+final run 11: checks=76 failures=0
+final run 12: checks=76 failures=0
+final run 13: checks=76 failures=0
+final run 14: checks=76 failures=0
+final run 15: checks=76 failures=0
+final run 16: checks=76 failures=0
+final run 17: checks=76 failures=0
+final run 18: checks=76 failures=0
+final run 19: checks=76 failures=0
+final run 20: checks=76 failures=0
+final run 21: checks=76 failures=0
+final run 22: checks=76 failures=0
+final run 23: checks=76 failures=0
+final run 24: checks=76 failures=0
+final run 25: checks=76 failures=0
+final run 26: checks=76 failures=0
+final run 27: checks=76 failures=0
+final run 28: checks=76 failures=0
+final run 29: checks=76 failures=0
+final run 30: checks=76 failures=0
+final failing sets:
+     30 
+dropin 61aeba10 run 1: checks=76 failures=0
+dropin run 2: checks=76 failures=0
+dropin run 3: checks=76 failures=0
+dropin run 4: checks=76 failures=0
+dropin run 5: checks=76 failures=0
+dropin run 6: checks=76 failures=0
+dropin run 7: checks=76 failures=0
+dropin run 8: checks=76 failures=0
+dropin run 9: checks=76 failures=0
+dropin run 10: checks=76 failures=0
+dropin failing sets:
+     10 
+stageC 0259f0d1 run 1: checks=76 failures=4
+stageC run 2: checks=76 failures=4
+stageC run 3: checks=76 failures=4
+stageC run 4: checks=76 failures=4
+stageC run 5: checks=76 failures=4
+stageC run 6: checks=76 failures=4
+stageC run 7: checks=76 failures=4
+stageC run 8: checks=76 failures=4
+stageC run 9: checks=76 failures=4
+stageC run 10: checks=76 failures=4
+stageC failing sets:
+     10 W17 W16 W16R W16Rj 
+DONE

@@ -1,0 +1,47 @@
+fullW-additive-on exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1856349  used=196011
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1339 KB live with sandbox free down to 53 KB; trace_flushes 0 -> 19; traces_live 251 before, min 0 over 55 reads while running (0 first seen at poll 136, program still stepp
+    SMOKE| MILESTONE acc-4-constructor-cap-bites: PASS -- new LuaStateLuaJIT(4194304), no setTotalMemory: csync 1, native cap 4194304; unbounded allocation raised LuaMemoryAllocationException: not enough memory at native used 4340346 (credit 278528); JNI crossings
+    SMOKE| CHECKS: 66   FAILURES: 0   WALL: 90.7s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullW-dropin-on exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164247  totalMemory=2051684  freeMemory=1856349  used=195335
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164247
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1335 KB live with sandbox free down to 51 KB; trace_flushes 0 -> 20; traces_live 244 before, min 0 over 55 reads while running (0 first seen at poll 148, program still stepp
+    SMOKE| MILESTONE acc-4/5/7: SKIP -- native=luajit: they test LuaStateLuaJIT, which the dropin arm does not use (not counted)
+    SMOKE| CHECKS: 63   FAILURES: 0   WALL: 92.3s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullW-additive-off exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1882378  used=169982
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: SKIP -- jit=off: no trace is ever resident, so there is nothing to flush (not counted)
+    SMOKE| MILESTONE acc-4-constructor-cap-bites: PASS -- new LuaStateLuaJIT(4194304), no setTotalMemory: csync 1, native cap 4194304; unbounded allocation raised LuaMemoryAllocationException: not enough memory at native used 4340346 (credit 278528); JNI crossings
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 93.3s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullW-additive-sieve exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1856349  used=196011
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1425 KB live with sandbox free down to 50 KB; trace_flushes 0 -> 19; traces_live 247 before, min 0 over 57 reads while running (0 first seen at poll 176, program still stepp
+    SMOKE| MILESTONE acc-4-constructor-cap-bites: PASS -- new LuaStateLuaJIT(4194304), no setTotalMemory: csync 1, native cap 4194304; unbounded allocation raised LuaMemoryAllocationException: not enough memory at native used 4340346 (credit 278528); JNI crossings
+    SMOKE| CHECKS: 60   FAILURES: 0   WALL: 81.3s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullW-stock exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=174605  totalMemory=2062042  freeMemory=1845286  used=216756
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: SKIP -- kernel=stock: OpenComputers' own kernel has no site 13 (not counted)
+    SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| MILESTONE acc-1-machine-handover: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=<error: smoke:1: attempt to index global 'jit' (a nil value)>
+    SMOKE| MILESTONE acc-1r-restored-machine-handover: SKIP -- native=stock (not counted)
+    SMOKE| MILESTONE acc-3..7: SKIP -- native=stock: PUC's accounting is jnlua's own (not counted)
+    SMOKE| CHECKS: 47   FAILURES: 0   WALL: 77.9s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS (BASELINE) -- OpenOS booted on ocelot-brain's stock PUC-Lua 5.2,

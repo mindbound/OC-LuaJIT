@@ -3149,18 +3149,25 @@ object Smoke {
       |local gpu = component.gpu
       |local nonce = string.format("%.4f-%d", computer.uptime(), math.random(100000, 999999))
       |local SHAPE = "%%SHAPE%%"
-      |local BATCH = 100
+      |local BATCH = %%BATCH%%
       |local n = 0
       |local stage = "armed"
       |local held, count, batches = nil, 0, 0
       |local tfirst, ring = 0, {0, 0, 0, 0, 0}
       |local freeAt, totalKB = -1, -1
+      |-- OCLJCAPX (THE WINDOW's gate): steps entered, the count when event.timer last
+      |-- returned, paints refused, errors that reached event.onError.  The counters
+      |-- are numbers, but with row 19's paint and the onError wrapper they add ~1.1 KB
+      |-- of live data and a fifth gpu.set per paint at every BATCH: compare a run
+      |-- only with a baseline taken under this same probe.
+      |local entered, timed, pf, oe = 0, 0, 0, 0
       |local function paint()
       |  local tlast = ring[1] + ring[2] + ring[3] + ring[4] + ring[5]
       |  gpu.set(1, 15, "OCLJNONCE=" .. nonce .. " OCLJCTR=" .. n .. "        ")
       |  gpu.set(1, 16, "OCLJCAP=" .. stage .. "        ")
       |  gpu.set(1, 17, "OCLJCAPT=" .. string.format("%.4f/%.4f/%d", tfirst, tlast, batches) .. "        ")
       |  gpu.set(1, 18, "OCLJCAPF=" .. freeAt .. "/" .. totalKB .. "        ")
+      |  gpu.set(1, 19, "OCLJCAPX=" .. entered .. "/" .. timed .. "/" .. pf .. "/" .. oe .. "        ")
       |end
       |local function uniq(len, i) local s = tostring(i) return string.rep("x", len - #s) .. s end
       |local makers = {
@@ -3172,13 +3179,14 @@ object Smoke {
       |local make = makers[SHAPE]
       |local step
       |step = function()
+      |  entered = entered + 1
       |  local t0 = os.clock()
       |  local ok, err = pcall(function()
       |    for k = 1, BATCH do
       |      local o = make(count + 1)
       |      held[count + 1] = o
       |      count = count + 1
-      |      local junk = uniq(24, count) .. "!"
+      |      local junk = uniq(%%JUNK%%, count) .. "!"
       |    end
       |  end)
       |  local dt = os.clock() - t0
@@ -3188,14 +3196,17 @@ object Smoke {
       |  if ok and count < 2000000 then
       |    stage = "filling/" .. count
       |    event.timer(0, step)
+      |    timed = count
       |  else
       |    freeAt = math.floor(computer.freeMemory() / 1024)
       |    totalKB = math.floor(computer.totalMemory() / 1024)
       |    held = nil
       |    stage = "done/" .. count .. "/" .. (ok and "cap" or tostring(err):gsub("[ /]", "_"))
       |  end
-      |  pcall(paint)
+      |  if not pcall(paint) then pf = pf + 1 end
       |end
+      |local onError0 = event.onError
+      |event.onError = function(...) oe = oe + 1 return onError0(...) end
       |event.listen("ocljcap", function()
       |  if not make then stage = "ERR/unknown_shape_" .. SHAPE pcall(paint) return false end
       |  held = {}
@@ -3205,7 +3216,7 @@ object Smoke {
       |end)
       |event.timer(0.05, function()
       |  n = n + 1
-      |  pcall(paint)
+      |  if not pcall(paint) then pf = pf + 1 end
       |end, math.huge)
       |""".stripMargin
 
@@ -3324,6 +3335,15 @@ object Smoke {
 
   /** OCLJ_CAP_SHAPE for the capacity probe; refused, not defaulted, on a misspelling. */
   val capShape: String = Option(System.getenv("OCLJ_CAP_SHAPE")).map(_.trim).filter(_.nonEmpty).getOrElse("record")
+  /** OCLJ_CAP_BATCH / OCLJ_CAP_JUNK: objects per step (100) and the churn string's
+    * length (24).  The AMPLIFIED probe is BATCH 10: the code between steps -- the
+    * stage string, event.timer, paint, OpenOS's dispatcher -- becomes a tenfold
+    * larger share of the bytes, so a refusal outside the program's handler is
+    * frequent enough to count (THE WINDOW's gate, 2026-10-05).  -1: unparseable. */
+  val capBatch: Int = Option(System.getenv("OCLJ_CAP_BATCH")).map(_.trim).filter(_.nonEmpty)
+    .map(v => scala.util.Try(v.toInt).getOrElse(-1)).getOrElse(100)
+  val capJunk: Int = Option(System.getenv("OCLJ_CAP_JUNK")).map(_.trim).filter(_.nonEmpty)
+    .map(v => scala.util.Try(v.toInt).getOrElse(-1)).getOrElse(24)
 
   /**
     * The capacity probe's driver, after (d).  Three readings, in this order,
@@ -3359,7 +3379,9 @@ object Smoke {
     // -- an allocation, which at the wall is a refusal that arms the very
     // collector being measured.
     var hasWall = false
-    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(11)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 10) }
+    // 10-13 (THE WINDOW, 2026-10-05): window (LJ52_GC_LEND), lends, win (0 shut,
+    // 1 open, 2 the verdict), refused (the last refused request, bytes).
+    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(14)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 13) }
     def tlive(): Int = if (!ours) -1 else jitStatsLocked(m, mLua)._5
     def d(a: Array[Double], b: Array[Double], i: Int): String =
       if (a(0) < i || b(0) < i) "n/a" else (b(i) - a(i)).toLong.toString
@@ -3373,7 +3395,7 @@ object Smoke {
     def parked(a: Array[Double]): Boolean =
       a(0) >= 9 && a(5) == 1 && a(9) == 0 && a(8) == 0 && a(7) > a(6)
     // 1. idle window: 400 ticks, ~10 s
-    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 10) }(0) > 0
+    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 13) }(0) > 0
     val g0 = gs(); val w0 = ws0(); val tl0 = tlive()
     var k = 0
     while (k < 400 && m.isRunning) { ws.update(); Thread.sleep(25); k += 1 }
@@ -3395,6 +3417,13 @@ object Smoke {
     val used = tot - fr
     p("CAP-LIVE| used=" + used + " kernelMemory=" + km + " user=" + (used - km) +
       " count(3 collects)=" + cnt + " total=" + tot + " traces_live=" + tlive())
+    // The JIT's trace events before the fill (attached for capacity runs, JIT PROBE):
+    // an abort across the fill can be a refusal the recorder absorbed (u2-stalls 4).
+    // The second read is at the end of the fill WINDOW: in a STALL run that is
+    // ~250 s of post-stall idle, in a CLEAN one ~2 s -- compare like classes.
+    def trc(): String = if (!ours) "n/a" else
+      evalStrLocked(m, mLua, "local t = __ocljTr return t and (t.start .. '/' .. t.abort) or 'n/a'")
+    val tr0 = trc()
     // 3. the fill
     val g2 = gs(); val w2 = ws0()
     val tSig = System.currentTimeMillis()
@@ -3455,7 +3484,33 @@ object Smoke {
     p("CAP-GC| collects=+" + d(g2, g3, 2) + " bailouts=+" + d(g2, g3, 3) +
       " overdrafts=+" + d(w2, w3, 1) + " od_peak=" + v(w3, 2) + " od_state=" + v(w3, 3) +
       " park_resets=+" + d(w2, w3, 4) + " od_limit=" + v(w3, 5) + " kslice=" + v(w3, 6) +
-      " gc_low=" + v(w3, 7) + " armby=" + v(w3, 8) + " end: " + gcState(g3) + " parked=" + parked(g3))
+      " gc_low=" + v(w3, 7) + " armby=" + v(w3, 8) +
+      " window=" + v(w3, 10) + " lends=+" + d(w2, w3, 11) + " win=" + v(w3, 12) + " refused=" + v(w3, 13) +
+      " end: " + gcState(g3) + " parked=" + parked(g3))
+    // CAP-X (THE WINDOW's gate, 2026-10-05): the amplification, the probe's own
+    // counters, the trace aborts across the fill, and the run's class.  A STALL's
+    // site from OCLJCAPX (u2-stalls 5): entered = batches + 1, the closure handed to
+    // pcall in the next step; timed < count, event.timer in this one.  A JVM that
+    // dies prints no CAP-X: the chain classifies that run PROC-DEATH.
+    val rowX = parse(txt, "OCLJCAPX").split("/")
+    def xn(i: Int): Long = try rowX(i).toLong catch { case _: Throwable => -1L }
+    val cnt0 = if (row.startsWith("filling/")) (try row.stripPrefix("filling/").toLong catch { case _: Throwable => -1L }) else -1L
+    val nb = try rowT(2).toLong catch { case _: Throwable => -1L }
+    val cls =
+      if (row.startsWith("done") && why.contains("not_enough_memory") && running) "CLEAN"
+      else if (running && row.startsWith("filling") && !rowF.matches("\\d+/\\d+")) "STALL"
+      else if (running && row.startsWith("filling")) "RECOVERY-REFUSED"
+      else if (!running && err.contains("not enough memory")) "DOWN"
+      else if (!running) "STOPPED"
+      else "OTHER"
+    // step-entry: refused between step's first statement and the batch -- the
+    // closure handed to pcall, but also the kernel's resume wrapper and a stack
+    // regrowth in that window; event.timer: after the batch, before the timer.
+    val site = if (cls != "STALL") "-" else if (xn(0) == nb + 1) "step-entry"
+               else if (xn(0) == nb && xn(1) >= 0 && xn(1) < cnt0) "event.timer" else "?"
+    p("CAP-X| batch=" + capBatch + " junk=" + capJunk + " OCLJCAPX=" + parse(txt, "OCLJCAPX") +
+      " traces(start/abort) " + tr0 + " -> " + (if (running) trc() else "n/a") +
+      " class=" + cls + " site=" + site)
     milestone("cap-1-refusal-caught-machine-survives",
       row.startsWith("done") && why.contains("not_enough_memory") && running,
       "shape=" + capShape + " OCLJCAP=" + row + " running=" + running + " lastError=" + err +
@@ -3631,6 +3686,8 @@ object Smoke {
     if (probeMode == "capacity") {
       if (!Set("record", "array", "string", "closure").contains(capShape))
         die("OCLJ_CAP_SHAPE must be record, array, string or closure, not '" + capShape + "'")
+      if (capBatch < 1 || capBatch > 1000) die("OCLJ_CAP_BATCH must be 1..1000, not '" + System.getenv("OCLJ_CAP_BATCH") + "'")
+      if (capJunk < 8 || capJunk > 200) die("OCLJ_CAP_JUNK must be 8..200, not '" + System.getenv("OCLJ_CAP_JUNK") + "'")
       p("!! OCLJ_PROBE=capacity: boot with the heartbeat-only autorun, then ONLY the capacity probe")
       p("!! (shape=" + capShape + "; boot caps 3000/2000 ticks for EVERY kernel, so arms are scored alike).")
     }
@@ -3689,7 +3746,9 @@ object Smoke {
     // are still written (the planting code is shared) but nothing reads them.
     val autorunSrc =
       if (probeMode == "grace") GraceAutorunLua
-      else if (probeMode == "capacity" || probeMode == "rawrace") CapacityAutorunLua.replace("%%SHAPE%%", capShape)
+      else if (probeMode == "capacity" || probeMode == "rawrace")
+        CapacityAutorunLua.replace("%%SHAPE%%", capShape).replace("%%BATCH%%", capBatch.toString)
+          .replace("%%JUNK%%", capJunk.toString)
       else AutorunLua
     Files.write(diskDir.resolve("autorun.lua"), autorunSrc.getBytes(StandardCharsets.UTF_8))
     // The Phase-0 compute pole, planted next to autorun.lua so the sandbox can

@@ -1,0 +1,23 @@
+fixed 082ff068 run 1: checks=81 failures=0
+fixed run 2: checks=81 failures=0
+fixed run 3: checks=81 failures=0
+fixed run 4: checks=81 failures=0
+fixed run 5: checks=81 failures=0
+fixed run 6: checks=81 failures=0
+fixed run 7: checks=81 failures=0
+fixed run 8: checks=81 failures=0
+fixed run 9: checks=81 failures=0
+fixed run 10: checks=81 failures=0
+fixed run 11: checks=81 failures=0
+fixed run 12: checks=81 failures=0
+fixed run 13: checks=81 failures=0
+fixed run 14: checks=81 failures=0
+fixed run 15: checks=81 failures=0
+fixed run 16: checks=81 failures=0
+fixed run 17: checks=81 failures=0
+fixed run 18: checks=81 failures=0
+fixed run 19: checks=81 failures=0
+fixed run 20: checks=81 failures=0
+fixed failing sets:
+     20 
+DONE

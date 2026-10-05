@@ -1,0 +1,8 @@
+== 00:23:35 chainG start; java procs: 0
+== 00:24:37 sanity done: 2 CAP-X lines (want 2)
+== 00:32:19 full suites done: 5 of 5 PASS
+== 01:04:47 gate record done
+== 01:51:01 gate string done
+== 01:56:12 gate done: 120 runs
+== 02:27:42 matrix done: 68 runs
+== 02:27:42 chainG done

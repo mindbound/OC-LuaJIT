@@ -1,0 +1,49 @@
+## Outcomes, by stick, arm and build
+
+| stick | arm | build | clean | recovery refused | stalled | machine down | boot failed |
+|---|---|---|---|---|---|---|---|
+| 192 KB | S | stock | 20 | 0 | 0 | 0 | 0 |
+| 192 KB | D | C | 20 | 0 | 0 | 0 | 0 |
+| 192 KB | D | W | 20 | 0 | 0 | 0 | 0 |
+| 192 KB | O | C | 20 | 0 | 0 | 0 | 0 |
+| 192 KB | O | W | 20 | 0 | 0 | 0 | 0 |
+| 1024 KB | S | stock | 12 | 0 | 0 | 0 | 0 |
+| 1024 KB | D | C | 12 | 0 | 0 | 0 | 0 |
+| 1024 KB | D | W | 12 | 0 | 0 | 0 | 0 |
+
+## The collector over the fill (ours): medians over clean runs, and the park fingerprint over ALL runs
+
+`arms/batch` is the fill's arms over its batches; `parked runs` counts runs whose fill snapshots (CAP-MID, every tick) read the park: armed, at the pause, stepmul 0, threshold past gc.total.  Chain A's harness counted a snapshot taken after the machine went down too; later chains count running snapshots only. The end state after a machine went down is listed with the unclean runs, not counted here. `od_peak` must stay within `od_limit` (the sandbox's G) plus the kernel's 16 KB slice and the 1.5 KB norefuse window.
+
+| stick | arm | build | n clean | arms/batch | collects | bailouts (all runs) | park resets | overdrafts | od_peak max / od_limit | parked runs |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 192 KB | D | C | 20 | 5.7 | 47 | 0 | 0 | 586 | 32727 / 32768 | 0 of 20 |
+| 192 KB | D | W | 20 | 6.0 | 52 | 0 | 0 | 544 | 17802 / 32768 | 0 of 20 |
+| 192 KB | O | C | 20 | 4.2 | 42 | 0 | 0 | 844 | 32766 / 32768 | 0 of 20 |
+| 192 KB | O | W | 20 | 4.7 | 50 | 0 | 0 | 690 | 16806 / 32768 | 0 of 20 |
+| 1024 KB | D | C | 12 | 0.8 | 55 | 0 | 0 | 1907 | 128242 / 128272 | 0 of 12 |
+| 1024 KB | D | W | 12 | 0.9 | 54 | 0 | 0 | 1866 | 105566 / 128272 | 0 of 12 |
+
+## Near the wall, clean runs only: the last five batches' time (s, median), and over stock's in the same chain
+
+| stick | shape | S/stock | D/C | D/W | O/C | O/W |
+|---|---|---|---|---|---|---|
+| 192 KB | record | 0.0015 | 0.0024 (1.6x) | 0.0023 (1.5x) | 0.0032 (2.1x) | 0.0029 (1.9x) |
+| 192 KB | array | 0.0015 | 0.0019 (1.3x) | 0.0022 (1.5x) | 0.0022 (1.5x) | 0.0028 (1.9x) |
+| 192 KB | string | 0.0017 | 0.0024 (1.4x) | 0.0032 (1.9x) | 0.0044 (2.6x) | 0.0052 (3.1x) |
+| 192 KB | closure | 0.0020 | 0.0024 (1.2x) | 0.0029 (1.4x) | 0.0030 (1.5x) | 0.0029 (1.4x) |
+| 1024 KB | record | 0.0034 | 0.0087 (2.5x) | 0.0107 (3.2x) | - | - |
+| 1024 KB | array | 0.0037 | 0.0046 (1.3x) | 0.0029 (0.8x) | - | - |
+| 1024 KB | closure | 0.0048 | 0.0092 (1.9x) | 0.0066 (1.4x) | - | - |
+
+## Idle window, 400 ticks after boot (ours): arms, collects, trace flushes, park resets (median, range)
+
+- 192 KB D/C: arms 20 (20..100), collects 20 (20..100), trace flushes 0 (0..0), park resets 0 (0..0); kernelMemory 164923; n=20
+- 192 KB D/W: arms 20 (20..37), collects 20 (20..37), trace flushes 0 (0..1), park resets 0 (0..0); kernelMemory 164923; n=20
+- 192 KB O/C: arms 1 (0..8), collects 1 (0..8), trace flushes 0 (0..0), park resets 0 (0..0); kernelMemory 164923; n=20
+- 192 KB O/W: arms 1 (0..4), collects 1 (0..4), trace flushes 0 (0..0), park resets 0 (0..0); kernelMemory 164923; n=20
+- 1024 KB D/C: arms 0 (0..0), collects 0 (0..0), trace flushes 0 (0..0), park resets 0 (0..0); kernelMemory 164923; n=12
+- 1024 KB D/W: arms 0 (0..0), collects 0 (0..0), trace flushes 0 (0..0), park resets 0 (0..0); kernelMemory 164923; n=12
+
+## Every run that did not end cleanly
+

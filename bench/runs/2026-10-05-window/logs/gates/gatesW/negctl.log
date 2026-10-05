@@ -1,0 +1,194 @@
+[negctl] eris_lj.h from /c/Users/astro/Downloads/OC-LuaJIT/serializer
+
+[negctl] --- canon : canonical shim passes every check
+[negctl]     exit status  want=0 got=0
+[negctl]     failing ids  want=[]
+[negctl]                  got =[]
+  RESULT: PASS  canonical shim passes every check
+
+[negctl] --- dropmode : mode-dropping shim is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[MG1 MG3 MG9 ]
+[negctl]                  got =[MG1 MG3 MG9 ]
+  RESULT: PASS  mode-dropping shim is caught
+
+[negctl] --- sniffer : byte-sniffer's unchecked direction and stack leak are caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[MG1D MG3 ]
+[negctl]                  got =[MG1D MG3 ]
+  RESULT: PASS  byte-sniffer's unchecked direction and stack leak are caught
+[negctl] 
+[negctl] --- sniffer, with OCLJ_NOMODECHECK=1 in the environment
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[MG1 MG3 MG9 ]
+[negctl]                  got =[MG1 MG3 MG9 ]
+  RESULT: PASS  env bypass is caught
+
+[negctl] --- le51 : 5.1 __le semantics are caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[LE1 LE2 LE3 LE4 ]
+[negctl]                  got =[LE1 LE2 LE3 LE4 ]
+  RESULT: PASS  5.1 __le semantics are caught
+
+[negctl] --- memcanon : canonical shim passes every memory check
+[negctl]     exit status  want=0 got=0
+[negctl]     failing ids  want=[]
+[negctl]                  got =[]
+  RESULT: PASS  canonical shim passes every memory check
+
+[negctl] --- stopgap : a discarded allocator swap is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C0b C0d C3a C4b C5a C5b C6 C6b M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h W1 W10 W11 W12 W13 W14 W15 W16 W16R W16Rj W17 W19 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W7k W8 ]
+[negctl]                  got =[C0b C0d C3a C4b C5a C5b C6 C6b M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h W1 W10 W11 W12 W13 W14 W15 W16 W16R W16Rj W17 W19 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W7k W8 ]
+  RESULT: PASS  a discarded allocator swap is caught
+
+[negctl] --- nopending : dropping pre-binding bytes is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C0b M3c M4b M5 ]
+[negctl]                  got =[C0b M3c M4b M5 ]
+  RESULT: PASS  dropping pre-binding bytes is caught
+
+[negctl] --- norefuse : without the window, a bare-frame push KILLS THE PROCESS
+[negctl]     exit status      = 127  (want non-zero)
+[negctl]     got as far as M5 = 1  (want 1 -- so we know WHERE it died)
+[negctl]     reached summary  = 0  (want 0 -- it must not get that far)
+  RESULT: PASS  without the window, a bare-frame push KILLS THE PROCESS
+
+[negctl] --- nopark : a parked collector is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W5a W5b ]
+[negctl]                  got =[W5a W5b ]
+  RESULT: PASS  a parked collector is caught
+
+[negctl] --- freescount : a valve that counts the sweep's frees is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W5c ]
+[negctl]                  got =[W5c ]
+  RESULT: PASS  a valve that counts the sweep's frees is caught
+
+[negctl] --- nocredit : refusing at the cap again is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W1 W10 W11 W16 W16R W16Rj W17 W18 W19 W1L W1j W2d W3 W7k W8 ]
+[negctl]                  got =[W1 W10 W11 W16 W16R W16Rj W17 W18 W19 W1L W1j W2d W3 W7k W8 ]
+  RESULT: PASS  refusing at the cap again is caught
+
+[negctl] --- norefusedarm : a refusal that does not arm is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W2b W2c ]
+[negctl]                  got =[W2b W2c ]
+  RESULT: PASS  a refusal that does not arm is caught
+
+[negctl] --- nohyst : the per-checkpoint re-arm is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W12 W4 ]
+[negctl]                  got =[W12 W4 ]
+  RESULT: PASS  the per-checkpoint re-arm is caught
+
+[negctl] --- unbounded : an unbounded credit is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C3a C6b M5 W1 W11 W12 W17 W1L W1j W2b W7 W7k ]
+[negctl]                  got =[C3a C6b M5 W1 W11 W12 W17 W1L W1j W2b W7 W7k ]
+  RESULT: PASS  an unbounded credit is caught
+
+[negctl] --- nokslice : the kernel without its slice is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W10 W16R W16Rj W19 W7k ]
+[negctl]                  got =[W10 W16R W16Rj W19 W7k ]
+  RESULT: PASS  the kernel without its slice is caught
+
+[negctl] --- nofresh : a reload refused for history it never saw is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W11 ]
+[negctl]                  got =[W11 ]
+  RESULT: PASS  a reload refused for history it never saw is caught
+
+[negctl] --- closereserve : a reserve that every proof closes is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W11 W16Rj W19 W7k W8 ]
+[negctl]                  got =[W11 W16Rj W19 W7k W8 ]
+  RESULT: PASS  a reserve that every proof closes is caught
+
+[negctl] --- flushwhole : a flush asked for at the whole watermark is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W15 ]
+[negctl]                  got =[W15 ]
+  RESULT: PASS  a flush asked for at the whole watermark is caught
+
+[negctl] --- nowindow : a tier top that lends nothing is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W16 W16R W16Rj W17 W19 ]
+[negctl]                  got =[W16 W16R W16Rj W17 W19 ]
+  RESULT: PASS  a tier top that lends nothing is caught
+
+[negctl] --- noceiling : a window without a ceiling is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W11 W18 W19 W7 ]
+[negctl]                  got =[W11 W18 W19 W7 ]
+  RESULT: PASS  a window without a ceiling is caught
+
+[negctl] --- slicewindow : a window as wide as the slice is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W19 W7 ]
+[negctl]                  got =[W19 W7 ]
+  RESULT: PASS  a window as wide as the slice is caught
+
+[negctl] --- rawverdict : a verdict on one proof is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W16 W16R W16Rj ]
+[negctl]                  got =[W16 W16R W16Rj ]
+  RESULT: PASS  a verdict on one proof is caught
+
+[negctl] --- nolook : a proof read late is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W16 W16R ]
+[negctl]                  got =[W16 W16R ]
+  RESULT: PASS  a proof read late is caught
+
+[negctl] --- refusalkeeps : a refusal that keeps the verdict is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W16Rj W19 ]
+[negctl]                  got =[W16Rj W19 ]
+  RESULT: PASS  a refusal that keeps the verdict is caught
+
+[negctl] --- kernelwindow : a kernel window is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[C6b W7k ]
+[negctl]                  got =[C6b W7k ]
+  RESULT: PASS  a kernel window is caught
+
+[negctl] --- noarm : a window whose cycle nothing arms is caught
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W17 ]
+[negctl]                  got =[W17 ]
+  RESULT: PASS  a window whose cycle nothing arms is caught
+
+[negctl] --- wdcanon : canonical shim passes every watchdog check
+[negctl]     exit status  want=0 got=0
+[negctl]     failing ids  want=[]
+[negctl]                  got =[]
+  RESULT: PASS  canonical shim passes every watchdog check
+
+[negctl] --- standinghook : a standing hook is caught by W6b, W8c, W10g and W12
+[negctl]     exit status  want=1 got=1
+[negctl]     failing ids  want=[W10g W12 W6b W8c ]
+[negctl]                  got =[W10g W12 W6b W8c ]
+  RESULT: PASS  a standing hook is caught by W6b, W8c, W10g and W12
+
+[negctl] --- notimer : without the async injection, the deadline is NEVER enforced (the test's alarm ends it)
+[negctl]     exit status      = 99  (want 99, the alarm's code)
+[negctl]     got as far as W1 = 1  (want 1)
+[negctl]     ALARM line       = 1  (want 1)
+[negctl]     reached summary  = 0  (want 0)
+  RESULT: PASS  without the async injection, the deadline is NEVER enforced (the test's alarm ends it)
+
+[negctl] --- build-native.sh must refuse the sabotaged shims
+[negctl]     dropmode: exit=1 reason=gate
+      BUILD FAIL: lj52shim.h does not map lua_load onto lua_loadx.  The chunk-mode
+  RESULT: PASS  build-native.sh refuses 'dropmode'
+[negctl]     sniffer: exit=1 reason=gate
+      BUILD FAIL: escape hatch 'OCLJ_NOMODECHECK' is back in the shim (line above).  The canonical
+  RESULT: PASS  build-native.sh refuses 'sniffer'
+
+NEGATIVE CONTROL: PASS -- security_test.c fails on every reintroduced
+                  defect, on exactly the checks that name it, and
+                  passes on the canonical shim.
