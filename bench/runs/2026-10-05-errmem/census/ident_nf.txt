@@ -1,0 +1,28 @@
+== verdict_unpnf_string vs verdict_ctlnf_string
+caps_in_both=2048  both_rc0=1737  identical=1737  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=311
+== verdict_ctlnf_string vs verdict_fixnf_string
+caps_in_both=2048  both_rc0=1737  identical=1737  differ=0  A_crash_B_ok=311  A_ok_B_crash=0  both_crash=0
+  B outcome where A crashed: status=0 term=1 events=3,1,6 x74
+  B outcome where A crashed: status=0 term=1 events=1,6 x237
+== verdict_unpnf_string vs verdict_fixnf_string
+caps_in_both=2048  both_rc0=1737  identical=1737  differ=0  A_crash_B_ok=311  A_ok_B_crash=0  both_crash=0
+  B outcome where A crashed: status=0 term=1 events=3,1,6 x74
+  B outcome where A crashed: status=0 term=1 events=1,6 x237
+== verdict_unpnf_record vs verdict_ctlnf_record
+caps_in_both=512  both_rc0=512  identical=512  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== verdict_ctlnf_record vs verdict_fixnf_record
+caps_in_both=512  both_rc0=512  identical=512  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== verdict_unpnf_record vs verdict_fixnf_record
+caps_in_both=512  both_rc0=512  identical=512  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== verdict_unpnf_closure vs verdict_ctlnf_closure
+caps_in_both=512  both_rc0=512  identical=512  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== verdict_ctlnf_closure vs verdict_fixnf_closure
+caps_in_both=512  both_rc0=512  identical=512  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== verdict_unpnf_closure vs verdict_fixnf_closure
+caps_in_both=512  both_rc0=512  identical=512  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== window_unpnf_string vs window_ctlnf_string
+caps_in_both=2048  both_rc0=2048  identical=2048  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== window_ctlnf_string vs window_fixnf_string
+caps_in_both=2048  both_rc0=2048  identical=2048  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== window_unpnf_string vs window_fixnf_string
+caps_in_both=2048  both_rc0=2048  identical=2048  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0

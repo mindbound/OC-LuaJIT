@@ -1,0 +1,401 @@
+j3-evidence -- the judge's verdict on the three second-chance designs, LENS: EVIDENCE
+=====================================================================================
+2026-10-05.  Row: "A refusal the program never saw opens the reserve tier for it".
+Designs: lifetime (R4K: the reserve's size), verdict (THE ADDRESS: the handler of record),
+identify (THE RECIPIENT: name the recorder and the vmevent, bound the rest at 4 KiB).
+
+Question asked of each claim: WAS IT MEASURED, and does the measurement say what the
+sentence says?  Everything below is recomputed from the designers' own output files, or
+re-run.  Nothing under C:/Users/astro/Downloads/OC-LuaJIT was modified.
+
+GRADES (evidence only; this is not a verdict on the designs)
+  lifetime  B+   the strongest experimental design in the round (a 5-point parameter
+                 sweep, a rejected alternative built and published, 3 string-hash seeds on
+                 the outcome cell, the only sandbox-side recovery test).  Two real
+                 problems: the constant 4 096 is rejected-by-its-own-test against the
+                 conservative alternative, and the pooled Fisher hides a per-seed
+                 regression.  One denominator error.
+  verdict   B    the largest census and the best falsification history (three revisions,
+                 each forced by a measurement, all three published with their numbers).
+                 But its headline metric is abolished by its own rule, so the summary
+                 table compares against a quantity that cannot exist in the variant; one
+                 figure does not reconcile; one seed; and the mechanism's key input is an
+                 estimate that its own gate names as a void condition.
+  identify  B-   the best attribution evidence (a null control, then each rule alone) and
+                 the only exactly recomputable identity claim.  But its headline rests on
+                 ONE seed, and its rule 3 is bit-for-bit lifetime's R4K, which lifetime
+                 measured at two more seeds and got 6 outside landings, 6 of them where
+                 identify's seed shows 0.  Its bound's binding term has no fail-first and
+                 it has no recovery test.
+RANKING (evidence): 1 lifetime, 2 verdict, 3 identify.
+
+VERIFICATION I RAN (pinned, affrun 3FC3FC default; outputs in ../../../j3/)
+  lifetime  bin/mem_test_base-lt4.exe   -> checks=84 failures=3 (W7 re-scoped, W20, W20L)
+            bin/mem_test_R4K-lt4.exe    -> checks=84 failures=0
+  identify  bin/mem_test_R5-shipped-additive.exe -> 85/85-3 (R1, R2, R4)
+            bin/mem_test_R5-id-additive.exe      -> checks=85 failures=0
+  verdict   bin/mem_test_mtv8-plain.exe -> checks=87 failures=4 (W20, W21, W22, W25)
+            bin/mem_test_mtv8-v.exe     -> checks=87 failures=0
+            sab6/rawverdict/mem_test.exe-> checks=87 failures=0  (the gap, reproduced)
+  Every headline mem_test claim of all three designs reproduces to the line.  The fail-
+  firsts are real: each design's new cases fail on the shipped object in the direction
+  they guard.
+
+-------------------------------------------------------------------------------------
+1. THE W8 QUESTION, SETTLED (asked explicitly; it bears on all three)
+-------------------------------------------------------------------------------------
+W8 (mem_test.c:1866-1896, chunk :555-562) runs `runstr(W, W8_CHUNK)` on the MAIN state.
+There is no `_OCLJ_WATCHDOG.arm` anywhere in the case, so wd_depth is 0, and
+lj52_gc_kernel (lj52shim.c:1190-1193) is `M->wd_depth == 0 || ...` -- it reads TRUE.
+Consequences, by code:
+  - lj52_gc_credit (:1197) gives W8's thread G/2 + LJ52_GC_KSLICE (16 KiB) in BURST;
+  - lj52_gc_lend (:1229) returns 0 for the kernel: W8 NEVER GETS A WINDOW LEND;
+  - lj52_gc_refused (:1251) has no kernel exclusion, so W8's refusal does open RESERVE.
+So the room that pays for W8's 'err: ' .. tostring(err) while the data is held is the
+KERNEL'S SLICE, not the window and not the reserve.
+MEASURED, decisively: W8's final `used` is 1 142 418 B on the shipped shim and on R0, R1K,
+R4K, R8K and L4 ALIKE (lifetime/mtout/{base-lt4,R0-lt,R1K-lt,R4K-lt4,R8K-lt,L4-lt}.out,
+all with cap 1 091 346).  W8 is insensitive to the reserve's size and lifetime to the byte.
+  -> lifetime's (c) states the right conclusion ("W8 does not guard the reserve's size;
+     W21 does") but the wrong mechanism ("covered by THE WINDOW's lend").  Correct the
+     sentence to the kernel's slice.  The R0 datum it rests on is sound.
+  -> identify's (c) argues W8 passes because "W8's refusal is the program's own ... it
+     opens the reserve with credit max(G/2, r + 4 KiB - total)".  True and measured, but
+     vacuous as evidence for the risk identify creates: W8's recovery is paid from KSLICE.
+     identify has NO sandbox-side recovery case.  (Its (g) does name the hazard -- "a
+     traceback of more than ~4 KiB after a second refusal may not" fit -- and leaves it
+     untested.)
+  -> verdict's (c) says "the fill is the only handler, so it is the handler of record".
+     Under lj52_gc_vote the kernel branch sets gc_addr = 1 and returns before any frame
+     walk, so W8 exercises neither the vote nor the hold: it is vacuous for THE ADDRESS.
+     verdict is nonetheless covered here, because its W20-W25 run as the sandbox (a
+     coroutine under the arm) and each ends with tail(): format while held, drop,
+     string.rep(256), {1,2,3}, asserted as 'err: not enough memory|256|3'.
+  -> FOR THE ROUND: the hard constraint "W8 keeps passing" is met by all three and
+     DISCRIMINATES NONE.  The constraint should be re-stated as "a SANDBOX program's
+     catch-format-drop survives, with a proof between catch and drop".  Only lifetime's
+     W21 (fails on R0 and R1K: result -2) and verdict's W20/W24 tails test that.
+     verdict's W8 line is also the measurement of its kernel cost: used 1 142 386
+     (shipped, its own test file) -> 1 150 570 (prototype) = +8 184 B = exactly
+     LJ52_GC_HOLD.  The kernel-thread excursion grows by H in the burst tier.
+
+-------------------------------------------------------------------------------------
+2. THE BASELINE CELLS, RECOMPUTED FROM THE FORENSICS (the common reference)
+-------------------------------------------------------------------------------------
+From sc/forensics/out/*.class.tsv, counting term in {2,4,5,7} as outside and the
+second_chance column:
+  cell                 runs  outside  sc    sc&out  nonsc&out
+  X_oe_string_j1       2048    21     228     21        0      openers: paint 221, rec 7
+  X_oe_record_j1       2048     0      72      0        0
+  X_k2048_string_j1    2048   828     229    103      725
+  X_k2048_record_j1    2048   162      38      0      162
+  L4_string_j1         4096     1     441      0        1
+  L4_record_j1         4096     0     161      0        0
+  L4_string_j0         4096     0     655      0        0
+  L4_record_j0         4096     0     144      0        0
+All three designs' baseline cells agree with this, and with F3/F4.  Note the sampling
+difference: verdict compared against ALL 4 096 caps of the census cells; lifetime and
+identify against the FIRST 1 024 (sc 90/20/166/36) and both say so.
+
+-------------------------------------------------------------------------------------
+3. lifetime (R4K) -- CLAIM BY CLAIM
+-------------------------------------------------------------------------------------
+HOLDS, recomputed:
+  - identity: compare-R4K ident_b = 934/934, 1004/1004, 858/858, 988/988, 1820/1820,
+    1976/1976, 1819/1819 and ident_sc = 0 of every sc count.  The rule touches a cap iff
+    a reserve was opened by an absorbed refusal.  TRUE.
+  - what the second chance buys: +288 -> +89 (string j1).  Recomputed from the file:
+    baseline non-sc mean = (4770*1024 - 5033*90)/934 = 4744.7; 5033-4745 = +288;
+    4834-4745 = +89.  Arithmetic correct.  Record +50 -> +10 likewise.
+  - collections 1 008 515 -> 998 585 (0.990): my sum of mean*caps over the seven cells is
+    1 008 640 -> 998 707, ratio 0.9902.  Correct within rounding.
+  - od excursions: >old and >new columns 0 in all 10 240 runs; odx (max od_peak - G) goes
+    +1112..+5564 to -7660..-12068.  The bound claim is measured, not asserted.
+  - the pooled stall figure: shipped sc_out 21/0/25 = 46 of 803, R4K 0/6/0 = 6 of 803.
+    I recomputed from out/pair-seeds.txt: BASEs2 sc_out 0 of 275, BASEs3 sc_out 25 of 300,
+    seed 1 21 of 228.  One-sided Fisher 46/803 vs 6/803 = 3.1e-9 (design says <1e-8, OK);
+    vs L4's 39/803 = 0.252 (design says 0.26, OK).  R0 and R8K read 0/0/0 = 0 of 803.
+  - L4 rejected by evidence: built, measured (39 of 803, p = 0.25 against the shipped
+    shim, +26 objects bought, 84/84 on mem_test) and published as a rejection.  This is
+    the round's only published negative result on a lever the author could have shipped.
+  - sabotages, each verified in mtout: rsvwhole -> W7 W20 W20L; rsvzero(=R0) -> W20 W20L
+    W21; rsvfresh -> W11; rsvunclamped -> W7k (od_peak 53 100 > G + slice 49 152);
+    rsvcreep -> W7 only.  Five sabotages, five named failing cases, no silent sabotage.
+  - the bound at the KERNEL's edge: W7k od_peak 49 140 against G + KSLICE = 49 152 -- 12 B
+    under -- and rsvunclamped pushes it to 53 100.  Tested at the edge, with a fail-first.
+    W19's precondition reads tier + 4 088 (8 B under the window).  Also an edge.
+
+DOES NOT HOLD / NEEDS CORRECTION:
+  E1 DENOMINATOR ERROR.  (d.1): "every cap whose first refusal the batch caught is
+     byte-identical in every cell (10 240 of 10 240 such caps over the seven cells)".
+     The batch-caught caps are 934+1004+858+988+1820+1976+1819 = 9 399; the sc caps are
+     841; 9 399 + 841 = 10 240 = the RUN total, not the batch-caught total.  The true
+     statement is 9 399 of 9 399.  (The claim itself is right; the figure is the wrong
+     population.)
+  E2 THE PER-SEED DIRECTION IS ADVERSE AND IS NOT REPORTED AS SUCH.  At seed 2 the
+     shipped shim has 0 second-chance outside landings and R4K has 6 (total outside
+     7 -> 13).  R0 and R8K read 7 -> 7 at that seed.  R4K is the ONLY size that is ever
+     WORSE than the shipped shim on a seed.  The document discloses the 6 and says "the
+     lottery is not abolished", which is honest, but the summary sentence ("46 of 803 ->
+     6 of 803") pools three draws of the string hash and so reports a 7.7x improvement
+     from data in which the variant loses one of the three cells outright.
+  E3 THE REJECTION OF R8K IS CIRCULAR.  R8K's only failures are W20/W20L (whose bar is
+     the literal 4 096 the design chose) and the re-scoped W7 (whose bound is
+     G/2 + 4096 + 2 windows, the same constant).  On the outcome the row exists for, R8K
+     is better than R4K (0 of 803 against 6 of 803) and it passes W21, W16Rj and the
+     bound.  So the evidence against the conservative alternative is the design's own
+     constant; the evidence for it is the stall count.  (d.5)'s "R8K ... is the
+     conservative alternative if the judges want a print's worth of room twice over" is
+     the right framing; the test tables are not.
+  E4 R1K's REJECTION IS PARTLY INSTRUMENT-DEPENDENT.  R1K fails W16Rj/W16RjL with "stall
+     in the reserve tier, request 64, used 465029, live 464989, top 480061".  That top is
+     cap + G, which the design itself says should be read from the shim's tier ((c), (g)):
+     with the real top the landing's "covered" classification -- the thing that makes it a
+     FAILURE -- may not stand.  R1K's rejection survives on W21 alone (result -2, clean).
+     State it that way.
+  E5 ONE CELL MISSING, AND IT IS THE ADVERSE ONE.  compare-R4K has 7 cells;
+     k2048_record_j1 was not run.  identify ran the same rule there and found outside
+     162 -> 163 with a NEW second-chance outside landing (sc_out 0 -> 1, off 23824).  The
+     one cell where this rule makes a run worse is absent from lifetime's table.
+  E6 W20L's FAIL-FIRST WAS BROKEN FOR TWO BUILDS.  mtout/base-lt.out and base-lt2.out
+     record W20L on the shipped shim as "mean +0 B ... past the bound: 0" -- i.e. it did
+     not fail -- and only base-lt3/base-lt4 show the +16 386 B failure.  The legacy
+     reading was fixed mid-round; the document reports only the final figure.  Harmless,
+     but a judge reading mtout/ first would think the case cannot fail.
+  E7 RE-SCOPES THAT READ THE SHIM.  W19's and W16R's bars now come from
+     _OCLJ_WALLSTATS value 14 (the tier the shim claims).  A check whose bar is reported
+     by the thing under test is weaker than one with a constant.  (identify does the same
+     with value 17; verdict with value 18.)
+
+-------------------------------------------------------------------------------------
+4. verdict (THE ADDRESS) -- CLAIM BY CLAIM
+-------------------------------------------------------------------------------------
+HOLDS, recomputed:
+  - 8 cells, 18 432 runs, per-cap comparison, baseline = all 4 096 caps where available:
+    the largest census of the three.
+  - the substantive outcome claim: "every refusal in every cell is now caught by the
+    batch's pcall; refusals per run 1 in every run".  compare-v3 confirms per cell:
+    absorbers {batch: 4096} / {batch: 2048} etc., refusals/run "1:4096".  In the two
+    kernel-garbage cells the residual is named and separated ({resume: 776}, {resume: 162}).
+  - identity on quiet caps: per cell 3654/3654, 3935, 858, 988, 1820, 1976, 1094, 1848 --
+    every one complete.
+  - the revision history is real evidence: k2048 string outside 828 -> 950 (rev 1) -> 881
+    (rev 2) -> 776 (rev 3), each step forced by a traced run (the demotion at off 544).
+    A design that publishes two of its own refutations is the best-instrumented of the
+    three on that axis.
+  - 11 sabotages; 10 fail exactly their stated sets (I spot-reproduced rawverdict and the
+    full test both ways).  W20-W25 run as the sandbox and include the recovery tail.
+  - W7 od_peak G + 4 078 against the sandbox bound G + 4 096: 18 B under.  The bound is
+    tested at its edge.  W22 + nokernelhold test the kernel at its slice past the hold.
+
+DOES NOT HOLD / NEEDS CORRECTION:
+  E8 THE HEADLINE METRIC IS ABOLISHED BY THE RULE, SO "441 -> 0" IS NOT A MEASUREMENT.
+     A "second chance" is defined as a reserve opened by an absorbed refusal.  Under THE
+     ADDRESS no refusal opens a reserve in these cells, so the count is 0 BY CONSTRUCTION
+     in every row, including the rows where the outcome did not improve.  The comparable
+     column is outside landings: 1 -> 0, 0 -> 0, 0 -> 0, 0 -> 0, 21 -> 0, 0 -> 0,
+     828 -> 776, 162 -> 162.  The same artifact makes the k2048-string row's "103 -> 0"
+     misleading: compare-v3 shows 776 refusals that "opened nothing (addr=0), absorbed by
+     {resume: 776}", and the cell's total fell by 52 -- so about 51 of the 103 former
+     second-chance runs STILL end outside, at the dispatcher's pack.  The prose explains
+     this; the table does not.
+  E9 ARITHMETIC.  (a) "identical 14 471 of 14 471 across the eight cells": the per-cell
+     figures in compare-v3.txt sum to 16 173.  The published number cannot be
+     reconstructed from the published file.  (b) "776 are 51 fewer than the baseline's
+     828": 828 - 776 = 52.  (c) "53-295 objects fewer": the worst per-cap delta in
+     compare-v3 is -291 (oe string) / -283 (string j1); -295 appears nowhere.
+  E10 ONE SEED IN THE CENSUS.  Everything in (d) is string-hash seed 1.  The seed data
+     that exist (lifetime's) show the shipped shim's oe-string stall count moving
+     21 / 0 / 25 across three seeds -- the outcome this design claims to zero is a
+     quantity whose baseline swings by a factor of infinity between seeds.  "21 -> 0" is
+     one draw.  (Its mem_test did run 3 random seeds; the census did not.)
+  E11 THE VOTE'S KEY INPUT IS AN ESTIMATE.  (f) states the per-step allocation counts
+     ("fill ~100, paint ~45, step ~10, dispatcher ~5") as the designer's estimate, and
+     names the failure mode ("if the paint out-allocates the fill in the machine, A
+     delivers as today").  The hermetic paint is ~0.3 KB; in the machine map H1 puts it
+     at ~3 KB over five gpu.set calls through the kernel's invoke wrapper, and the
+     forensics NOTE confirms every in-machine absorbed refusal is inside that wrapper.
+     So the one environment where the vote must win is the one where the paint's
+     allocation count is ten-fold higher and unmeasured.  Honest, and still the largest
+     evidence gap in the design.
+  E12 "NO HOLD MET ITS CEILING" IS UNINFORMATIVE.  (d) reports 0 holdfails and explains
+     why: "hermetically the between-step code is ~0.5 KB, far inside the 4 KiB window".
+     The reserve-tier hold's room IS the 4 KiB window, against an in-machine between-step
+     footprint the design estimates at ~4 KB.  The test never approached the ceiling, so
+     it says nothing about the case the residual names.
+  E13 THE COST CLAIM IS NOT A MEASUREMENT.  "4.65/5.65 s (shipped) against 5.25/4.92 s
+     (prototype)" is two timings per build over 24 caps with a 20 % within-build spread,
+     for a change that adds a frame walk to every growth past the cap.  The instrumented
+     build (OCLJHOLD lines, addr=/rec= fields) could have produced a link-count
+     histogram; none is reported, and "one to four links" is stated without one.
+  E14 A SABOTAGE THAT FAILS NOTHING, AND IT IS AN EXISTING ONE.  rawverdict (the
+     two-cycle verdict reduced to one) fails 0 of 87; I reproduced it.  The design says
+     so and proposes W26 but did not build it.  This is not only a gap: the two-cycle rule
+     is part of THE WINDOW as shipped, and under THE ADDRESS its negative control empties.
+  E15 THE KERNEL'S 8 KiB IS MEASURED BUT UNQUOTED.  W8's used goes 1 142 386 -> 1 150 570
+     (+8 184 = H).  (g) mentions the burst-top gain qualitatively; the number belongs in
+     the costs, because it is the one place the every-thread headroom is consumed.
+
+-------------------------------------------------------------------------------------
+5. identify (THE RECIPIENT) -- CLAIM BY CLAIM
+-------------------------------------------------------------------------------------
+HOLDS, recomputed:
+  - THE NULL CONTROL.  Variant cnt (counters, no rule): byte-identical driver lines on
+    1 024 + 2 048 caps, and its absorbed flag fires on exactly the 7 refusals the
+    --wrap ground truth attributes to the recorder.  No other design ran a null control.
+  - PER-RULE DECOMPOSITION, the best attribution evidence in the round.  From
+    out/summary-cmp.txt: rule 1 alone (rec) oe-string 21 -> 19, sc 228 -> 221, recop
+    7 -> 0, held 0.9998; rule 3 alone (res) oe-string 21 -> 0, sc 228 -> 228, recop 7 -> 7;
+    both (id) 21 -> 0, sc 228 -> 221, recop 7 -> 0.  The sentence "rule 3 is what removes
+    the OpenOS-shaped stalls; rule 1 is what stops the recorder from opening the tier" is
+    exactly what the numbers say.
+  - IDENTITY, exactly recomputable: differing caps = the baseline's second-chance runs in
+    all eight cells (90/90, 20/20, 166/166, 36/36, 228/228, 72/72, 229/229, 38/38).  I
+    checked the sc counts against the forensics class.tsv: they match (§2).  This is the
+    cleanest identity claim of the three (lifetime's has E1, verdict's E9a).
+  - THE RECORDER PREDICATE, BOTH WAYS, on this prototype: ctl_rec2 forces 7 recorder
+    refusals, each absorbed=1 and each confirmed by the wrap; dbg_r1b2's program
+    allocation while J->state == RECORD reads absorbed=0; the LITERAL predicate's
+    sabotage fails W16Rj/W16RjL (a reserve-tier stall each).  A genuine fail-first for the
+    exact-vs-literal distinction, which is the hardest thing in this design to get right.
+  - fail-firsts verified: shipped 82/85 (R1, R2, R4), id 85/85 additive and dropin; five
+    sabotages each with a named failing case (norecorder R1, literal W16Rj/W16RjL,
+    novmevent R2, reserveG R4, nostrtab R3).
+  - adverse findings disclosed: k2048 record 162 -> 163 with a new sc outside landing
+    (off 23824), and ctl_rec.lua's 32 KiB retry that the shipped reserve allowed and rule
+    3 refuses (with the in-machine consequence named: 5 of 15 runs will hold 2 048 instead
+    of 2 049).
+
+DOES NOT HOLD / NEEDS CORRECTION:
+  E16 THE HEADLINE IS A ONE-SEED RESULT, AND A WIDER MEASUREMENT OF THE SAME RULE
+      CONTRADICTS IT.  identify's rule 3 and lifetime's R4K are the same rule, and their
+      censuses agree to the digit: held ratios 0.9963 / 0.9994 / 0.9932 / 0.9989 and odx
+      -11016 / -12064 / -11912 / -12068 in the four census cells, oe-string 21 -> 0,
+      k2048-string 828 -> 785 with sc_out 103 -> 60.  Two independent implementations
+      producing identical aggregates is a strong cross-check FOR the rule's
+      implementation -- and it means lifetime's seed-2/seed-3 runs of R4K ARE a
+      measurement of identify's rule 3: 6 of 803 second-chance outside landings, with 6 of
+      them at a seed where the baseline had 0.  identify's "the OpenOS-shaped string
+      cell's 21 outside landings -> 0" is therefore true at seed 1 and false as a general
+      claim; the right figure for identify's own rule is 46 -> 6 over three seeds.
+      HIGHEST-PRIORITY RE-MEASUREMENT IN THE ROUND.
+  E17 THE BOUND'S BINDING TERM HAS NO FAIL-FIRST.  The new bound is
+      total + min(G, max(G/2, r + 4 KiB - total)) + 4 KiB; the clamp at G is what keeps
+      the kernel case inside T + G + KSLICE.  No sabotage removes the clamp, and no case
+      drives a request to the bound: R4's observed +4 224 / +88 sit against bounds of
+      +9 216 / +5 120 (a factor of 2 of slack), and W19's precondition reads "G + -8064",
+      i.e. 8 KiB UNDER the old ceiling.  lifetime's rsvunclamped shows the matching
+      prototype fails W7k at od_peak 53 100 without the clamp -- identify's version of
+      that sabotage was not run.  NOT tested at its edge.
+  E18 NO SANDBOX RECOVERY TEST.  See §1.  R4 measures the reserve's arithmetic from inside
+      the program, not a recovery; W8 is paid by KSLICE.  The residual identify writes --
+      "the recovery room after a SECOND refusal in the same episode ... is the window
+      only; a traceback of more than ~4 KiB after a second refusal may not" fit -- is
+      precisely what lifetime's W21 exists to catch, and R0/R1K's failures there show the
+      case has teeth.  identify should run W21 (and a second-refusal variant of it).
+  E19 UNRECOMPUTABLE DENOMINATORS.  "0 refusals with kernel = 1 in 20 480 hermetic runs",
+      "0 with HOOK_VMEVENT in 20 480", "strtab = 1 in 0 of 25 157 hermetic refusals and 0
+      of 13 659 in mem_test".  The censuses sum to 3 072 (cnt) + 6 144 (rec) + 10 240
+      (res) + 12 288 (id) = 31 744 runs; 20 480 matches no subset I can form (res + id =
+      22 528).  The refusal totals are not printed in summary-cmp.txt.  Either publish
+      the counting script's output or drop the figures.
+  E20 ONE OVERSTATEMENT IN SECTION 0: "every census cell 0 outside as before".  The census
+      string JIT-on cell has 1 (off 2864, F1) before and after.  The table in (d) is right.
+  E21 RULE 2 BUYS NOTHING MEASURED.  0 refusals under HOOK_VMEVENT in any hermetic run; a
+      vmevent handler exists only when something calls jit.attach, which the sandbox
+      cannot.  Its whole evidence is R2 and novmevent.  Harmless and cheap, but it should
+      be presented as hygiene, not as one of three rules carrying the design.
+  E22 AND THE SAME FOR RULE 1, IN THE MACHINE.  The forensics NOTE is explicit: "the
+      recorder lever (L1) is irrelevant in the machine (0 of 50)"; all 50 in-machine
+      refusals read rec0.  So two of identify's three rules are measured to do nothing in
+      a running machine, and its entire in-machine effect is rule 3 = lifetime's R4K --
+      without lifetime's seed evidence, parameter sweep or recovery test.
+
+-------------------------------------------------------------------------------------
+6. CROSS-CUTTING (applies to whichever design is chosen)
+-------------------------------------------------------------------------------------
+  X1 W8 is not a guard on anything this row changes (§1).  Re-state the constraint as a
+     sandbox catch-format-drop with a proof in between, and adopt lifetime's W21 into the
+     suite whichever design lands.  Keep W8: it still guards the kernel's slice.
+  X2 All three re-scope at least one existing check so that its bar is read from
+     _OCLJ_WALLSTATS (lifetime W19/W16R/W7, identify W19/W16R, verdict C6b).  Keep one
+     independent compile-time constant per bound, or the suite stops being able to catch a
+     shim that mis-reports its own tier.
+  X3 The outcome measure is rare and seed-sensitive.  The in-machine history is 3 downs in
+     30 amplified JIT-on runs (results-wall-window) plus 25 clean runs in chainR's NOTE;
+     hermetically the same cell's stall count is 21 / 0 / 25 across three string-hash
+     seeds.  Every gate's "CAN FAIL / VOID" clause therefore matters more than its pass
+     clause.  All three designs wrote one; lifetime's (1) and (3), verdict's (a) and
+     identify's (1) are each explicit, which is to their credit.
+  X4 The in-machine absorbers are the KERNEL's machine.lua closures (wrapUserdata :1261,
+     unwrapUserdata :1280, checkArg :117) made on the sandbox thread inside a component
+     call, caught by the probe's pcall(paint) (NOTE).  Neither rule 1 nor rule 2 reaches
+     them; only the reserve's size (lifetime, identify rule 3) or the verdict's delivery
+     (verdict) does.  Any claim that an identification lever fixes the machine is
+     unsupported by the only in-machine data that exist.
+  X5 Nobody measured near-wall time, and nobody ran a machine.  verdict is the only design
+     whose change touches a per-growth path, so it is the only one for which that absence
+     is load-bearing (E13).
+
+-------------------------------------------------------------------------------------
+7. CLAIMS THAT NEED A RE-MEASUREMENT BEFORE A DECISION
+-------------------------------------------------------------------------------------
+lifetime
+  L1 Seeds 2 and 3 for R4K on the cells that were only seeded for oe-string, and enough
+     seeds (>= 6) to say whether seed 2's 0 -> 6 is noise or the rule's own cost.
+  L2 k2048_record_j1 under R4K (identify's run of the same rule: 162 -> 163, sc_out 0 -> 1).
+  L3 R4K against R8K on a bar that is not the design's own constant.  As the tables stand,
+     R8K loses only to W20's literal 4 096 and the re-scoped W7, and wins on stalls.
+  L4 "10 240 of 10 240" -> 9 399 of 9 399 (E1).  "THE WINDOW's lend" -> the kernel's slice
+     in the W8 paragraph (§1).
+  L5 R1K's rejection re-stated on W21 alone, or W16Rj's topr re-scoped first (E4).
+  L6 The `unbounded` sabotage's expected failure set (the designer could not run
+     negative-control.sh), and W7k's precondition at a 1 MB cap, where the design says it
+     would read false.
+verdict
+  V1 The oe-string and k2048 cells at seeds 2 and 3 (E10).
+  V2 The per-handler count of past-cap growths in a machine (or at least in a probe whose
+     paint is 3 KB): the vote's majority is the design and it is an estimate (E11).
+  V3 The in-machine between-step footprint against the RESERVE-tier hold's 4 KiB (E12);
+     report holdfail per run.
+  V4 The frame walk: a link-count histogram from the instrumented build, and an
+     interleaved timing with more than two samples per build (E13).
+  V5 W26, or rawverdict loses its negative control (E14).
+  V6 Restate the table: outside landings as the comparable column; 14 471 -> 16 173;
+     -51 -> -52; the 51 surviving k2048 second-chance downs named (E8, E9).
+identify
+  I1 The oe-string cell at seeds 2 and 3.  Prediction from lifetime's run of the identical
+     rule: about 6 of 803, not 0 (E16).  Until this is run, identify's headline overstates.
+  I2 A clamp sabotage (lifetime's rsvunclamped) and one case that drives a request to the
+     new bound (E17).
+  I3 lifetime's W21, plus a second-refusal variant, as the sandbox (E18).
+  I4 The 20 480 / 25 157 / 13 659 denominators made recomputable, or dropped (E19).
+  I5 k2048_record's new outside landing: one run or a class? (its own disclosure).
+  I6 A statement of what rules 1 and 2 are worth in a machine, given 0 of 50 (E22).
+
+-------------------------------------------------------------------------------------
+8. WHAT THE EVIDENCE, TAKEN TOGETHER, ALREADY SETTLES
+-------------------------------------------------------------------------------------
+  1. The reserve's size at 4 KiB past the refused heap is implemented twice, independently,
+     with identical census aggregates (§5 E16).  Its capacity cost is -0.06 % to -0.68 %
+     per cell, all of it in second-chance runs (-198 to -206 strings, -40 to -43 records),
+     and its excursion is 7.7-12.1 KiB BELOW the old bound.  Those three facts are
+     measured, agreed by two designs, and are not in dispute.
+  2. That rule does NOT abolish the outside landing: 6 of 803 over three seeds, and at one
+     seed it is worse than the shipped shim.  Anyone who reads "21 -> 0" is reading one
+     draw of the string hash.
+  3. Delivering the verdict to a handler of record removes every absorbed refusal in 18 432
+     hermetic runs and leaves the kernel-garbage residual at 776/162 -- but its decisive
+     input (who out-allocates whom past the cap, in a machine) has never been measured, and
+     its own instrument could not measure it.
+  4. The identification levers (recorder, vmevent) are proven exact and measured to be
+     worth nothing in a machine: 0 of 50 in-machine refusals were the recorder's.
+  5. W8 constrains none of this, and all three designs' W8 paragraphs should be rewritten.
+
+FILES
+  this file                     .../wall2/sc/design/j3-evidence.txt
+  my re-runs                    .../scratchpad/j3/verify-*.out/.err (6 binaries, pinned)
+  recomputed from               lifetime/out/{compare-*.txt,pair-seeds.txt}, lifetime/mtout/*,
+                                verdict/out/compare-v3.txt, verdict/mtout/*, verdict/sab6/*,
+                                identify/out/summary-cmp.txt, identify/mtout/*,
+                                forensics/out/*.class.tsv, runsR/an/{NOTE.txt,refusals.tsv}

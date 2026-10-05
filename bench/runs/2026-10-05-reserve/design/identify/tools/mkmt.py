@@ -1,0 +1,353 @@
+# mkmt.py <repo mem_test.c> <out mem_test_id.c>
+# THE RECIPIENT's mem_test: the repo's 81 checks with two re-scoped (W19's
+# precondition and W16R's tier read from the shim's own figures, which on the
+# shipped object read as before), plus four new cases:
+#   R1  a refusal inside the trace recorder opens no reserve tier
+#   R2  a refusal under HOOK_VMEVENT opens no reserve tier (no credit either)
+#   R3  the intern table's doubling is recognised and counted
+#   R4  the reserve a refusal opens is LJ52_GC_RESERVE past the refusal point
+# Anchored splices, each asserted to match exactly once.  newline="" throughout.
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, "r", newline="") as f:
+    s = f.read()
+assert "\r" not in s
+
+
+def splice(s, anchor, new, what):
+    n = s.count(anchor)
+    assert n == 1, "%s: anchor found %d times" % (what, n)
+    return s.replace(anchor, new, 1)
+
+
+# the new WALLSTATS positions (14-17), -1 on a shim before THE RECIPIENT
+a = '#define WALL_WIN(L)         statn(L, "_OCLJ_WALLSTATS", 12)   /* 0 shut, 1 open, 2 the verdict */\n'
+s = splice(s, a, a +
+           '/* 14-17, THE RECIPIENT (2026-10-05); -1 on a shim before it. */\n'
+           '#define WALL_ABSORBED(L)    statn(L, "_OCLJ_WALLSTATS", 14)   /* refusals inside the recorder */\n'
+           '#define WALL_STRTAB(L)      statn(L, "_OCLJ_WALLSTATS", 15)   /* intern-table doublings refused */\n'
+           '#define WALL_RECORDING(L)   statn(L, "_OCLJ_WALLSTATS", 16)   /* refusals while recording, the program\'s */\n'
+           '#define WALL_ODCREDIT(L)    statn(L, "_OCLJ_WALLSTATS", 17)   /* the reserve tier\'s credit */\n',
+           "macros")
+
+# W16R: the tier and its top from the shim, not from the refusal count
+a = ("    W16R_TIER = statn(L, \"_OCLJ_GCSTATS\", 4) - W16R_REF0 >= 2;\n")
+s = splice(s, a,
+           "    /* THE RECIPIENT (2026-10-05): the shim's refusal count now includes\n"
+           "     * refusals that open no reserve (the recorder's), so the tier is read\n"
+           "     * from the shim itself, and the reserve's top from its credit (G on a\n"
+           "     * shim before it). */\n"
+           "    W16R_TIER = WALL_ODSTATE(L) == 1;\n"
+           "    W16R_CREDIT = WALL_ODCREDIT(L);\n", "w16r rec")
+a = "static int W16R_TIER = 0;\n"
+s = splice(s, a, a + "static double W16R_CREDIT = -1;    /* the reserve tier's credit at the landing */\n", "w16r decl")
+a = "        W16_CODE = 0; W16_USED = -1; W16_DELTA = -1; W16R_TIER = 0;\n"
+s = splice(s, a, "        W16_CODE = 0; W16_USED = -1; W16_DELTA = -1; W16R_TIER = 0; W16R_CREDIT = -1;\n", "w16r reset")
+a = "        topr = cap + (W16R_TIER ? w_odmax(cap) : w_odmax(cap) / 2);\n"
+s = splice(s, a, "        topr = cap + (W16R_TIER ? (W16R_CREDIT >= 0 ? (long long)W16R_CREDIT : w_odmax(cap)) : w_odmax(cap) / 2);\n", "w16r top")
+
+# W19: the sandbox's ceiling is the reserve tier's credit plus the window
+a = ("      ok(st == 0 && r[1] == 1 && r[4] >= 2 && kslice > 0 && r[5] >= (double)G + win - 1024\n"
+     "           && r[2] == 1 && r[3] == 1,\n")
+s = splice(s, a,
+           "      /* THE RECIPIENT (2026-10-05): the reserve a refusal opens is LJ52_GC_RESERVE\n"
+           "       * past the refusal point, so the sandbox's ceiling is the shim's own\n"
+           "       * reserve credit plus the window (G on a shim before it). */\n"
+           "      { double oc = WALL_ODCREDIT(W); if (oc >= 0) G = (long long)oc; }\n"
+           "      ok(st == 0 && r[1] == 1 && r[4] >= 2 && kslice > 0 && r[5] >= (double)G + win - 1024\n"
+           "           && r[2] == 1 && r[3] == 1,\n", "w19")
+
+# the new cases, after W19's block
+a = ("         \"W19 the kernel keeps 11 KB past the sandbox's ceiling\", d);\n"
+     "      clear_javastate(W);\n"
+     "      lua_close(W);\n"
+     "    }\n")
+NEW = r'''
+    /* ==== THE RECIPIENT (2026-10-05): refusals that are not the program's ==== */
+    /* The sandbox in every case below: a coroutine resumed from C under the
+     * watchdog's arm (W11's shape), so the kernel's slice is never what
+     * grants it.  The holder is pre-sized from C, so no array doubling of
+     * its own lands at the top. */
+    {
+      lua_State *Wco;
+      double r[8], abs0, abs1, rec0, rec1, strt, odc;
+      long long S, win;
+      int i, k, nres;
+      char one[200];
+
+      /* ---- R1: a refusal inside the trace recorder opens no reserve ------- */
+      /* Live tables to 1 KB under the burst top S; then ONE string of the room
+       * up to 100 B under THE WINDOW's ceiling (one crossing, lent, and no
+       * checkpoint after it); then a hot loop that allocates nothing -- the
+       * recorder allocates its IR buffer and trace and is refused at the
+       * ceiling, inside its protected call, and trace_abort drops the error.
+       * The tier must still read BURST, and the program's own 2 KB after it
+       * must be refused: no reserve was opened for a fill that never heard.
+       * Fail-first: the shipped shim reads RESERVE and grants the 2 KB. */
+      W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+      if (!W) { printf("  FAIL  R1: no state\n"); return 1; }
+      runstr(W, "jit.on() __r1S = 0 __r1win = 0");
+      lua_pushcfunction(W, r_mkarr);
+      lua_setglobal(W, "__mkarr");
+      lua_createtable(W, 1 << 14, 0);
+      lua_setglobal(W, "__h");
+      if (runstr(W, R1_CHUNK) != 0) { printf("  FAIL  R1: the chunk: %s\n", errtop(W)); return 1; }
+      lua_getglobal(W, "__co1");
+      Wco = lua_tothread(W, -1);
+      lua_settop(W, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      settle_gc(W);
+      base = j_used(W, &WS);
+      cap = base + 384 * 1024;
+      S = cap + w_odmax(cap) / 2;
+      win = (long long)WALL_LEND(W); if (win < 0) win = 0;
+      lua_pushnumber(W, (lua_Number)S); lua_setglobal(W, "__r1S");
+      lua_pushnumber(W, (lua_Number)win); lua_setglobal(W, "__r1win");
+      abs0 = WALL_ABSORBED(W); rec0 = WALL_RECORDING(W);
+      w_setcap(W, &WS, cap, 1);
+      st = Wco ? lua_resume(Wco, W, 0) : -1;          /* -> first yield: okb, s */
+      nres = Wco && st == LUA_YIELD ? lua_gettop(Wco) : 0;
+      r[1] = nres >= 1 ? lua_toboolean(Wco, 1) : -1;  /* the big string was lent */
+      r[2] = WALL_ODSTATE(W);                          /* the tier after the recorder's refusals */
+      abs1 = WALL_ABSORBED(W); rec1 = WALL_RECORDING(W);
+      if (Wco) lua_settop(Wco, 0);
+      st2 = Wco && st == LUA_YIELD ? lua_resume(Wco, W, 0) : -1;   /* -> second yield: ok2 */
+      r[3] = Wco && st2 == LUA_YIELD && lua_gettop(Wco) >= 1 ? lua_toboolean(Wco, 1) : -1;
+      u1 = j_used(W, &WS);
+      w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+      runstr(W, "_OCLJ_WATCHDOG.disarm(__t1)");
+      sprintf(d, "cap %ld, S %lld, window %lld: big string %s; recorder refusals +%.0f (shim's flag), program's-while-recording +%.0f; "
+                 "tier after them %.0f (0 burst); the program's 2 KB then %s; used %ld",
+              (long)cap, S, win, r[1] == 1 ? "lent" : "REFUSED", abs1 - abs0, rec1 - rec0, r[2],
+              r[3] == 1 ? "GRANTED" : r[3] == 0 ? "refused" : "n/a", (long)u1);
+      ok(st == LUA_YIELD && st2 == LUA_YIELD && r[1] == 1 && abs1 - abs0 >= 1 && r[2] == 0 && r[3] == 0,
+         "R1 a refusal inside the trace recorder opens no reserve", d);
+      lua_settop(W, 0);
+      clear_javastate(W);
+      lua_close(W);
+
+      /* (R1b -- a program refusal raised while J->state is RECORD opens the
+       * reserve -- is not arranged here: at the wall the recorder's own 1 KB
+       * IR growth is refused first and aborts the recording, so the program's
+       * refusal that follows is raised idle.  The literal predicate
+       * (J->state != IDLE) is caught by W16Rj and W16RjL, which stall under
+       * it: negative-control sabotage "literal".) */
+
+      /* ---- R2: a refusal under HOOK_VMEVENT opens no reserve ---------------- */
+      /* JIT off, so no recorder is involved: a "bc" handler (jit.attach,
+       * attached while there is room) fires from the parser when load()
+       * finishes a prototype, under HOOK_VMEVENT and lj_vm_pcall.  The fill
+       * stops 1.5 KB under S so the parser itself never crosses; the handler
+       * asks 16 KB -- the first crossing, refused under both shims (past the
+       * window), and the error is dropped ("VM handler failed").  The tier
+       * must still read BURST and the program's 8 KB after it be refused.
+       * Fail-first: the shipped shim reads RESERVE and grants the 8 KB. */
+      W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+      if (!W) { printf("  FAIL  R2: no state\n"); return 1; }
+      runstr(W, "jit.off() __r2S = 0 __r2win = 0");
+      lua_pushcfunction(W, r_mkarr);
+      lua_setglobal(W, "__mkarr");
+      lua_createtable(W, 1 << 14, 0);
+      lua_setglobal(W, "__h");
+      if (runstr(W, R2_CHUNK) != 0) { printf("  FAIL  R2: the chunk: %s\n", errtop(W)); return 1; }
+      lua_getglobal(W, "__co2");
+      Wco = lua_tothread(W, -1);
+      lua_settop(W, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      settle_gc(W);
+      base = j_used(W, &WS);
+      cap = base + 384 * 1024;
+      S = cap + w_odmax(cap) / 2;
+      win = (long long)WALL_LEND(W); if (win < 0) win = 0;
+      lua_pushnumber(W, (lua_Number)S); lua_setglobal(W, "__r2S");
+      lua_pushnumber(W, (lua_Number)win); lua_setglobal(W, "__r2win");
+      w_setcap(W, &WS, cap, 1);
+      st = Wco ? lua_resume(Wco, W, 0) : -1;          /* -> okb, fired, loaded */
+      nres = Wco && st == LUA_YIELD ? lua_gettop(Wco) : 0;
+      r[1] = nres >= 1 ? lua_toboolean(Wco, 1) : -1;
+      r[4] = nres >= 2 ? lua_tonumber(Wco, 2) : -1;    /* handler calls */
+      r[5] = nres >= 3 ? lua_toboolean(Wco, 3) : -1;   /* load succeeded */
+      r[6] = nres >= 4 ? lua_toboolean(Wco, 4) : -1;   /* the handler's own 16 KB */
+      r[2] = WALL_ODSTATE(W);
+      if (Wco) lua_settop(Wco, 0);
+      st2 = Wco && st == LUA_YIELD ? lua_resume(Wco, W, 0) : -1;
+      r[3] = Wco && st2 == LUA_YIELD && lua_gettop(Wco) >= 1 ? lua_toboolean(Wco, 1) : -1;
+      w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+      runstr(W, "_OCLJ_WATCHDOG.disarm(__t2)");
+      sprintf(d, "cap %ld, S %lld: resume %d%s%.60s; setup %s; the bc handler fired %.0f time(s), its 16 KB %s, load %s; tier after it %.0f (0 burst); the program's 8 KB then %s",
+              (long)cap, S, st, st == LUA_YIELD ? "" : " error: ", st == LUA_YIELD || !Wco ? "" : errtop(Wco),
+              r[1] == 1 ? "ok" : "FAILED", r[4], r[6] == 0 ? "refused" : r[6] == 1 ? "GRANTED" : "n/a", r[5] == 1 ? "ok" : "failed", r[2],
+              r[3] == 1 ? "GRANTED" : r[3] == 0 ? "refused" : "n/a");
+      ok(st == LUA_YIELD && st2 == LUA_YIELD && r[1] == 1 && r[4] >= 1 && r[6] == 0 && r[2] == 0 && r[3] == 0,
+         "R2 a refusal under HOOK_VMEVENT opens no reserve", d);
+      lua_settop(W, 0);
+      clear_javastate(W);
+      lua_close(W);
+
+      /* ---- R3: the intern table's doubling is recognised and counted ------- */
+      /* As the kernel (main thread, no arm: a hard top, no window).  700 live
+       * distinct strings put the table at 1 024 slots; live tables to 12 KB
+       * under the kernel's top; then new distinct strings until the 1 025th
+       * interned string asks for the 2 048-slot table -- 16 KB, refused --
+       * and that refusal lands in the pcall that made a 32-byte string.  The
+       * shim must count it as a doubling (its request equals 2 (mask + 1)
+       * GCRefs with num > mask).  A shim without the counter is not judged. */
+      W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+      if (!W) { printf("  FAIL  R3: no state\n"); return 1; }
+      runstr(W, "jit.off() __r3top = 0");
+      lua_createtable(W, 1 << 14, 0);
+      lua_setglobal(W, "__h");
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      settle_gc(W);
+      base = j_used(W, &WS);
+      cap = base + 384 * 1024;
+      lua_pushnumber(W, (lua_Number)(cap + w_odmax(cap) / 2 + (long long)WALL_KSLICE(W)));
+      lua_setglobal(W, "__r3top");
+      strt = WALL_STRTAB(W);
+      w_setcap(W, &WS, cap, 1);
+      st = runstr(W, R3_CHUNK);
+      odc = WALL_STRTAB(W);
+      w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+      lua_getglobal(W, "__r3");
+      for (i = 1; i <= 3; i++) { lua_rawgeti(W, -1, i); r[i] = lua_tonumber(W, -1); lua_pop(W, 1); }
+      lua_pop(W, 1);
+      sprintf(d, "status %d; the string loop's pcall %s after %.0f strings, used %.0f; doublings counted +%.0f%s",
+              st, r[1] == 1 ? "ok" : "failed", r[2], r[3], odc - strt, strt < 0 ? " (no counter on this shim: not judged)" : "");
+      ok(st == 0 && (strt < 0 || (r[1] == 0 && odc - strt >= 1)),
+         "R3 the intern table's doubling is recognised and counted", d);
+      lua_settop(W, 0);
+      clear_javastate(W);
+      lua_close(W);
+
+      /* ---- R4: the reserve is LJ52_GC_RESERVE past the refusal point ------- */
+      /* The second-chance shape with the absorber inside the program: the
+       * sandbox fills live tables until refused, keeps its data and fills
+       * again (as it does when something else caught the first refusal), and
+       * again.  The second fill must end within LJ52_GC_RESERVE + the window
+       * of the first refusal's heap, and the third within the window of the
+       * second: the reserve is granted once per episode and is small.
+       * Fail-first: the shipped shim gives the second fill G/2 more. */
+      W = w_newstate(&WS, 64 * 1024 * 1024, 1);
+      if (!W) { printf("  FAIL  R4: no state\n"); return 1; }
+      runstr(W, "jit.off()");
+      lua_createtable(W, 1 << 14, 0);
+      lua_setglobal(W, "__h");
+      if (runstr(W, R4_CHUNK) != 0) { printf("  FAIL  R4: the chunk: %s\n", errtop(W)); return 1; }
+      lua_getglobal(W, "__co4");
+      Wco = lua_tothread(W, -1);
+      lua_settop(W, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      lua_gc(W, LUA_GCCOLLECT, 0);
+      settle_gc(W);
+      base = j_used(W, &WS);
+      cap = base + 384 * 1024;
+      win = (long long)WALL_LEND(W); if (win < 0) win = 0;
+      w_setcap(W, &WS, cap, 1);
+      st = Wco ? lua_resume(Wco, W, 0) : -1;
+      nres = Wco && st == LUA_YIELD ? lua_gettop(Wco) : 0;
+      for (i = 1; i <= 6; i++) r[i] = nres >= i ? (lua_isboolean(Wco, i) ? lua_toboolean(Wco, i) : lua_tonumber(Wco, i)) : -1;
+      odc = WALL_ODCREDIT(W);
+      w_setcap(W, &WS, 64 * 1024 * 1024, 1);
+      runstr(W, "_OCLJ_WATCHDOG.disarm(__t4)");
+      sprintf(one, "cap %ld, G %ld, window %lld, reserve credit %.0f", (long)cap, (long)w_odmax(cap), win, odc);
+      sprintf(d, "%s: fills %s/%s/%s at %.0f / +%.0f / +%.0f past the first refusal (bound: +%lld, then +%lld)",
+              one, r[1] == 0 ? "refused" : "ok", r[3] == 0 ? "refused" : "ok", r[5] == 0 ? "refused" : "ok",
+              r[2] - (double)cap, r[4] - r[2], r[6] - r[4], 4096 + win + 1024, win + 1024);
+      ok(st == LUA_YIELD && r[1] == 0 && r[3] == 0 && r[5] == 0
+           && r[4] - r[2] >= 512 && r[4] - r[2] <= 4096 + win + 1024 && r[6] - r[4] <= win + 1024,
+         "R4 the reserve is 4 KB past the refusal, once per episode", d);
+      lua_settop(W, 0);
+      clear_javastate(W);
+      lua_close(W);
+    }
+'''
+s = splice(s, a, a + NEW, "new cases")
+
+# the chunks, next to W19's
+a = "/* W19's program (j2-safety's K8, its window-filling mode): the sandbox\n"
+CHUNKS = r'''/* THE RECIPIENT's programs (R1, R1b, R2, R4): the sandbox as W11 makes it.
+ * r_mkarr(n): one table of n array slots from C -- one crossing, no buffer
+ * (string.rep grows g->tmpbuf to the length first: two allocations). */
+static int r_mkarr(lua_State *L) {
+  lua_createtable(L, (int)luaL_checkinteger(L, 1), 0);
+  return 1;
+}
+static const char *R1_CHUNK =
+  "__co1 = coroutine.create(function() "
+  "  local held, i = __h, 0 "
+  "  while i < 400000 and collectgarbage('count') * 1024 < __r1S - 1024 do i = i + 1 held[i] = {i} end "
+  "  local room = (__r1S + __r1win - 100) - collectgarbage('count') * 1024 "
+  "  local okb, big = pcall(__mkarr, math.floor((room > 64 and room or 64) / 8) - 8) "
+  "  local s = 0 "
+  "  for k = 1, 5000 do s = s + (k * 3) % 7 end "
+  "  coroutine.yield(okb, s) "
+  "  local ok2 = pcall(__mkarr, 256) "
+  "  coroutine.yield(ok2, held, big) "
+  "end) "
+  "__t1 = _OCLJ_WATCHDOG.arm(3600, function() end, true)";
+static const char *R1B_CHUNK =
+  "__co1b = coroutine.create(function() "
+  "  local held, i = __h, 0 "
+  "  jit.off() "
+  "  while i < 400000 and collectgarbage('count') * 1024 < __r1bS - __r1bX do i = i + 1 held[i] = {i} end "
+  "  jit.on() "
+  "  local ok = pcall(function() "
+  "    for k = 1, 4000 do "
+  "      held[i+1] = {k} held[i+2] = {k} held[i+3] = {k} held[i+4] = {k} held[i+5] = {k} "
+  "      held[i+6] = {k} held[i+7] = {k} held[i+8] = {k} held[i+9] = {k} held[i+10] = {k} "
+  "      held[i+11] = {k} held[i+12] = {k} held[i+13] = {k} held[i+14] = {k} held[i+15] = {k} "
+  "      held[i+16] = {k} held[i+17] = {k} held[i+18] = {k} held[i+19] = {k} held[i+20] = {k} "
+  "      i = i + 20 "
+  "    end "
+  "  end) "
+  "  coroutine.yield(ok, held) "
+  "end) "
+  "__t1b = _OCLJ_WATCHDOG.arm(3600, function() end, true)";
+static const char *R2_CHUNK =
+  "__co2 = coroutine.create(function() "
+  "  local held, i = __h, 0 "
+  "  local fired, inner, go = 0, nil, false "
+  "  local oka = pcall(jit.attach, function(...) fired = fired + 1 if go then inner = pcall(__mkarr, 2048) end end, 'bc') "
+  "  while i < 400000 and collectgarbage('count') * 1024 < __r2S - 1536 do i = i + 1 held[i] = {i} end "
+  "  go = true "
+  "  local okl, f = pcall(load, 'return 1') "
+  "  go = false "
+  "  local okd = pcall(jit.attach, function() end) "
+  "  coroutine.yield(oka and okd, fired, okl and f ~= nil, inner) "
+  "  local ok2 = pcall(__mkarr, 1024) "
+  "  coroutine.yield(ok2, held, big) "
+  "end) "
+  "__t2 = _OCLJ_WATCHDOG.arm(3600, function() end, true)";
+static const char *R3_CHUNK =
+  "local held, i, pre = __h, 0, {} "
+  "local floor, char = math.floor, string.char "
+  "for k = 1, 700 do pre[k] = char(65 + k % 26, 65 + floor(k / 26) % 26, 65 + floor(k / 676) % 26, 70) end "
+  "while i < 400000 and collectgarbage('count') * 1024 < __r3top - 12288 do i = i + 1 held[i] = {i} end "
+  "local made = 0 "
+  "local ok = pcall(function() "
+  "  for k = 1, 400 do made = k local s = char(65 + k % 26, 65 + floor(k / 26) % 26, 65 + floor(k / 676) % 26, 71) end "
+  "end) "
+  "__r3 = { ok and 1 or 0, made, collectgarbage('count') * 1024 } "
+  "__r3pre = pre";
+static const char *R4_CHUNK =
+  "__co4 = coroutine.create(function() "
+  "  local held, i = __h, 0 "
+  "  local function fill() while i < 400000 do i = i + 1 held[i] = {i} end end "
+  "  local ok1 = pcall(fill) local u1 = collectgarbage('count') * 1024 "
+  "  local ok2 = pcall(fill) local u2 = collectgarbage('count') * 1024 "
+  "  local ok3 = pcall(fill) local u3 = collectgarbage('count') * 1024 "
+  "  coroutine.yield(ok1, u1, ok2, u2, ok3, u3) "
+  "end) "
+  "__t4 = _OCLJ_WATCHDOG.arm(3600, function() end, true)";
+
+'''
+s = splice(s, a, CHUNKS + a, "chunks")
+
+assert "\r" not in s
+with open(dst, "w", newline="") as f:
+    f.write(s)
+print("wrote", dst, s.count("\n"), "lines")

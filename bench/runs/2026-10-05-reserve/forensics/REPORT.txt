@@ -1,0 +1,394 @@
+HERMETIC FORENSICS OF THE SECOND-CHANCE PATH  (THE WINDOW, shim 3186e87)
+=========================================================================
+2026-10-05.  Work directory (everything below is relative to it unless absolute):
+  C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/forensics/
+Nothing under C:/Users/astro/Downloads/OC-LuaJIT was modified (read and compiled from only).
+Every measured executable ran pinned: affrun.exe 3FC3FC default <exe> ... (the AFFRUN line in each
+.err file reads back "applied=1 effective=0x3FC3FC").  gcc/python/WSL-gcc ran unpinned as tools.
+LuaJIT: the CURRENT build's libluajit.a (md5 a93f546e, carries the lj_err_mem fix).
+
+-------------------------------------------------------------------------
+0. FINDINGS IN BRIEF
+-------------------------------------------------------------------------
+F1  THE DETERMINISTIC CASE (string, off 2864, seed 1, no ASLR) IS NOT THE SECOND-CHANCE PATH.
+    It has exactly ONE refusal.  That refusal is THE WINDOW's verdict at the BURST top, taken at a
+    look by event.timer's 64 B record (probe2.lua:80), outside the batch's pcall; the dispatcher's
+    pcall absorbs it (term 2, the stall).  It is also the refusal that opens the reserve tier, but the
+    run ends there.  The recorder absorbed nothing (its one large request in the window, the 668 B
+    GCtrace at allocator call 28742, was LENT by THE WINDOW).  Live data measured after the stall is
+    464 980 B against S = cap + G/2 = 464 908 B: the data really does not fit the burst tier; the
+    verdict was right and landed outside.  Details in section 3.
+
+F2  ON THE CENSUS PROBE (probe2, batch 10, junk 24, capk 384, arm, paint) THE SECOND-CHANCE PATH
+    NEVER ENDS OUTSIDE THE HANDLER: 1 401 second-chance runs in 16 384 (4 cells x 4 096), 0 outside.
+    The only outside landing in the 16 384 is F1's run.
+
+F3  WHO OPENS THE RESERVE TIER WHEN THE PROGRAM DOES NOT SEE IT: the probe's pcall(paint), almost
+    always.  Over all 28 672 hermetic runs: 2 192 second-chance runs (sections 4 and 5);
+    their opener was the paint in 2 169 and the JIT recorder in 23.  EVERY paint- and recorder-
+    absorbed refusal (2 303 + 25) was a VERDICT refusal (win0 = 2): the verdict's refusal goes to
+    the first growth after the proof, wherever it is -- the batch (good), the paint, the trace
+    assembler (both absorb it silently), or event.timer / the dispatcher (outside).
+
+F4  THE SECOND-CHANCE PATH DOES END OUTSIDE IN TWO MORE MACHINE-LIKE SHAPES (JIT on, 2 048 caps each):
+      - OpenOS-shaped event.timer (probe2oe: three checkArg closures before the timer record):
+        string 21 of 228 second-chance runs end in a stall; every one is the RESERVE-top verdict
+        (tier0=1, win0=2) landing at the timer's record (probe2oe:86, 64 B; 19) or a checkArg
+        closure (probe2oe:81, 48 B; 2), 224-500 B past the reserve top.  19 were opened by the
+        paint, 2 by the recorder.  0 of 1 820 runs WITHOUT a second chance ended outside.
+        record: 0 of 72.
+      - kernel garbage 2 KiB per resume (probe2k_2048): string 103 of 229 second-chance runs end
+        down, but so do 725 of 1 819 runs without one; record 162 downs, none second-chance.
+        Every down is the dispatcher's table.pack (ffid 95, probe2k:133) refused 4.1-5.5 KiB past
+        the tier top, i.e. past the window's 4 KiB: the kernel's slice overran the window between
+        resumes -- the residual the shim's comment names; the second chance only moves it from the
+        burst top to the reserve top.
+      heartbeat every 3rd resume (probe2, HB=3): 0 of 224.
+
+F5  THE JIT RECORDER DOES NOT ACCOUNT FOR THE "EXTRA" REFUSALS HERMETICALLY.  25 recorder-absorbed
+    refusals in 31 000 (0.08 %), all at vmstate ASM (lj_trace_alloc's 668 B GCtrace for the trace
+    of probe2:48, uniq()), all on a verdict; 23 of the 25 were a run's FIRST refusal (they opened the
+    reserve tier).  Of the 2 328 refusals that came after a run's first, the recorder absorbed 2
+    (0.09 %); the rest: the batch's own final refusal 2 068, repeated paint absorptions 134, and
+    the terminal landings (resume 103, dispatcher 21).  In-machine extras (5/4/3 against pf = 1) are not
+    reproduced here: no hermetic run had more than 4 refusals.  The instrumented native (section 1)
+    is the instrument that can answer that in the machine.
+
+F6  THE LEVER (scratch only, section 7).  Restricted to the recorder ("rec": refusals inside the
+    recorder's protected call), "do not open the reserve" and "grant instead" both change exactly the
+    23 recorder-opened runs and nothing else: those runs lose their second chance (they end at the
+    burst top inside the handler, 57-274 objects fewer) and 2 of the 21 oe-string stalls become
+    inside endings (outside landings 1 012 -> 1 010 over the 7 JIT-on cells).  It cannot reach the
+    2 169 paint-opened second chances, where every other second-chance outside landing of F4 comes
+    from.  The literal predicate (J->state != IDLE) also fires on program-visible refusals (the
+    interpreter running a just-recorded instruction): "do not open" then also removes 8 paint second
+    chances, harmlessly; "grant" changes 909 runs and ADDS 8 downs (1 012 -> 1 018).  mem_test passes
+    81/81 under all four variants; the lever fired 2-314 times inside it, but no mem_test check pins
+    what a recorder-raised refusal must do, so that pass constrains little.
+
+F7  THE INSTRUMENT IS INERT AND ITS RECORDER CLASSIFICATION IS PROVEN BOTH WAYS: plain and
+    instrumented objects give byte-identical driver lines on 4 096 caps (log off) and on the same
+    4 096 with logging, driver events and the cpcall wrap all on; mem_test 81/81; the shim-side
+    "recorder" flag agreed with the wrap's ground truth on every one of 31 000 refusals, and on a
+    positive control that forces 7 recorder refusals (section 2).
+
+-------------------------------------------------------------------------
+1. THE INSTRUMENTED SOURCE (deliverable)
+-------------------------------------------------------------------------
+Path:    src/lj52shim.c  (md5 33edc64b6ec89aa411fa7a860c9e3047), header src/lj52shim.h (md5 1e1dba02,
+         an unchanged copy).  Generated from the repo's native/lj52shim.c (md5 9b912f60, = 3186e87) by
+         tools/mkref.py + tools/frag_{types,fields,protos,hooks}.c; build-shim.sh regenerates it.
+Build into an OC native:
+         OCLJ_SHIM=<work dir>/src  sh native/build-native.sh       (with OCLJ_VARIANT=additive or dropin)
+         Both variants compile warning-clean on mingw gcc (build-native.sh's exact stage-2 line) and on
+         WSL gcc 15.2 against build/native/luajit-linux-x86_64 (compile only; the Linux environ path
+         was not executed).  build-native.sh's source gates (escape hatches, collector, getenv) pass;
+         run against a copy with one getenv() line inserted the same gate FAILS (gatectl/).
+Enable:  set OCLJ_REFLOG in the environment of the process (the JVM) BEFORE the state is created; it
+         is read once per state at lj52_newstate.
+           OCLJ_REFLOG=1 (any value except 0/2/3)  one line per refusal: "OCLJREF| k=v ..."
+           OCLJ_REFLOG=2                           + one line per proven cycle "OCLJPRF| ..."
+           OCLJ_REFLOG=3                           + one line per arm, with its cause "OCLJARM| ..."
+         Each state also prints "OCLJREFINIT| st=<record> level=<n> ..." once (the fingerprint that the
+         instrumented native is the one loaded).  Every line goes to stderr with fflush, one fprintf
+         per line.  Levels 2/3 can be very loud on an idling small machine (arms per checkpoint).
+         NOTE: the variable is read with GetEnvironmentVariableA (Windows) / a scan of environ (Linux)
+         because build-native.sh refuses a shim whose code names getenv.  A diagnostic copy: never ship.
+What is recorded at EVERY refusal (both paths: C mode and legacy, every call into lj52_gc_refused),
+in a static ring of 256 (oclj_refring(), with oclj_gcevring() for the 1 024-entry arm/proof ring;
+not JNIEXPORT, so the DLL's export table is unchanged) and, if enabled, the OCLJREF line:
+  gseq          process-wide sequence (shared with OCLJPRF/OCLJARM lines)
+  st            the shim record (one per lua_State: the machine's identity)
+  seq           per-state refusal number (= gc_refusals after it)
+  mode          c | legacy
+  delta used total G credit top ceil over
+                the request; the record's figure; the cap; G; the credit THIS request had (read-only
+                re-computation of lj52_gc_credit, which has a side effect); top = total + credit;
+                ceil = top + 4096 for a sandbox request (THE WINDOW's ceiling), top for the kernel;
+                over = used + delta - top
+  tier0 tier1 opened tryproof
+                credit tier before / after (0 burst, 1 reserve); opened=1: this refusal opened the
+                reserve tier (also when a proof inside its own TRY had shut it); tryproof: a proof ran
+                inside lj52_gc_refused's TRY
+  win0 win1 hyst armed0 armby0 armed1 armby1 low grown
+                THE WINDOW (0 shut, 1 open, 2 THE VERDICT), the cadence's state before/after
+  kernel wd kthr mainthr curL mainL kby
+                the kernel's slice applied (lj52_gc_kernel); wd_depth; the running thread is wd_by[0];
+                is the main thread; the pointers
+  vm vmstate    g->vmstate decoded (INTERP C GC EXIT RECORD OPT ASM, or TRACE with vmstate = trace no.)
+  jst jstate    J->state decoded (IDLE ACTIVE RECORD RECORD_1ST START END ASM ERR)
+  incp cfnres recorder
+                the innermost C frame is a cpcall frame (saved PC == L, nres < 0); recorder=1: the
+                refusal was raised INSIDE THE TRACE RECORDER'S PROTECTED CALL (incp, J->state not idle,
+                vmstate not C/GC/EXIT) -- trace_abort drops that error; the program never sees it.
+                vmstate alone is NOT this: it stays RECORD while the interpreter executes the
+                instruction just recorded, and refusals there reach the program (1 100+ of them in the
+                sweeps were caught by the batch's pcall).
+  trec tpar texit
+                J->cur.traceno, J->parent, J->exitno (when J->state is not idle)
+  hook gcst gctotal gcthr
+                g->hookmask, gc.state, gc.total, gc.threshold
+  fk ffid at pcsrc
+                the current frame's function (lua | c | ff, with ffid) and the nearest Lua frame's
+                chunkname:line ('_' for blanks), its PC taken as lj_debug's debug_framepc takes it
+                (pcsrc 1 the C frame's saved PC, 2 the next frame's link, 3 a continuation; 0 none:
+                line -1).  Not on a trace (vm=TRACE), where the saved PC is stale.
+  ctx cat       "rec": J->pt/J->pc of the recorder (cat = the instruction being recorded);
+                "trace": the executing trace's start (cat = its start); "-" otherwise
+  calls arms proofs lends collects
+                allocator calls so far; arms by cause gate/wall/window/refusal/flush; proven cycles;
+                THE WINDOW's lends; collects
+OCLJPRF: proof number, used, low, grown (bytes since the previous proof), win0->win1, tier0->tier1,
+         armby, flush wanted, inref (inside a refusal), vm, jst, calls.
+OCLJARM: why (0 gate 1 wall 2 flush), cause (gate | wall: THE CADENCE, inside lj52_gc_pressure;
+         window: THE WINDOW's lend; refusal: lj52_gc_refused's own arm; flush), tier, win, vm, jst.
+Nothing in the hooks allocates through the Lua allocator or calls the Lua API; the frame walk is
+bounded (256 frames) and checks each function slot (tvisfunc) and the base against the stack.
+
+-------------------------------------------------------------------------
+2. VERIFYING THAT THE INSTRUMENT CHANGES NOTHING, AND THAT IT CAN SEE WHAT IT CLAIMS
+-------------------------------------------------------------------------
+2.1 Objects (build-shim.sh, build-native.sh stage 2's line, -Wall -Wextra, 0 warnings everywhere):
+      plain-dropin.o   332dc85c  == build/native/obj-windows-x86_64/lj52shim.o (byte-identical)
+      plain-additive.o 082ff068  == wall2/W2/lj52shim-additive.o, the census's "window" object
+      ref-additive.o   246c1073,  ref-dropin.o 70812867   (the instrumented copy)
+    So the compile line reproduces the shipped objects exactly, and the baseline below IS the shipped
+    shim.  A later edit of the Linux-only branch (strncpy -> a loop) left all four Windows objects
+    byte-identical (obj/v1/ holds the earlier ones, cmp-identical).
+2.2 mem_test (mt.sh: run-mem.sh's compile line, OCLJ_SHIMOBJ = the object, output into this dir):
+      plain-dropin x4, plain-additive, ref-additive, ref-dropin, ref-additive OCLJ_REFLOG=1 (13 519
+      OCLJREF lines), ref-dropin OCLJ_REFLOG=3, ref-additive OCLJ_REFLOG=0:
+      every one "checks=81 failures=0", rc 0.  (The detail numbers inside W1L/W1j's PASS lines vary
+      run to run: the SAME plain-dropin binary gave 59 062 / 60 086 in W1j across its 4 runs -- the
+      unseeded string hash, not the instrument.)
+2.3 Identity, census setup (no ASLR: --disable-dynamicbase,--disable-high-entropy-va; fixed seed 1:
+    --wrap=lj_prng_seed_secure; one process per cap; probe2.lua <shape> <off> <off> 16 384 <jit> 1 1
+    0 0 -1 24 10), 4 cells (string/record x JIT on/off) x 1 024 caps (off 0..16 368):
+      orig_plain (lj_repro.c + plain) vs orig_ref (lj_repro.c + instrumented, log off):
+          4 096 / 4 096 driver lines identical
+      orig_plain vs lref_ref (lj_ref.c: the same driver + OCLJEV lines + the lj_vm_cpcall wrap, with
+      the instrumented shim and OCLJ_REFLOG=1):  4 096 / 4 096 identical
+      determinism: each 1 024-cap census against the first 1 024 caps of the 4 096-cap census of the
+      same cell: 4 096 / 4 096 identical
+      the comparison CAN fail: every experiment variant (section 7) differs from the baseline in
+      exactly the caps where its lever fired (e.g. 4 / 0 / 7 / 0 / 4 / 5 / 3 for XA-rec).
+2.4 The absorber classification and its ground truth.  In lref_* drivers the stderr stream is
+    totally ordered (unbuffered, fflush, one thread): the shim's OCLJREF lines, the driver's OCLJEV
+    lines (every __rec, written from C, nothing allocated) and wrapcp.c's OCLJCP lines (-Wl,--wrap=
+    lj_vm_cpcall: every protected call that returns an error; recorder=1 when ud is the jit_State,
+    which is how lj_trace_ins calls trace_state and how the nested recorder cpcalls call theirs).
+    The absorber of a refusal is the first catcher after it: OCLJCP st=4 recorder=1 -> the JIT
+    recorder; OCLJEV code 1 -> the batch's pcall (the program's handler), 3 -> pcall(paint),
+    2 -> the dispatcher's pcall (outside: the stall), 4 -> the kernel's coroutine.resume (down),
+    5 -> the driver's pcall (kernel down), 7 -> the heartbeat's pcall.  The probe calls __rec
+    immediately after each failed pcall, before any allocation, so the latest refusal is the one
+    caught.  OCLJCP st=2 lines (LUA_ERRRUN) are ordinary trace aborts and are ignored.
+    Checks on every run of every census: refusal lines == the driver's refusal count; the ring's
+    count == the lines; no refusal without a catcher ("unseen" 0); no catcher event without a
+    refusal (anomalies 0).
+    POSITIVE CONTROL (drv/ctl_rec.lua, run by lref_ref.exe in place of probe2.lua): fill to the
+    ceiling, then a hot allocation-free loop: 11 refusals, 7 of them recorder-absorbed (vm=ASM,
+    588 B: the GCtrace), detected by the wrap AND flagged recorder=1 by the shim; 4 batch ones
+    flagged 0 (out/analysis-ctlrec.txt).
+    Agreement of the shim-side flag with the wrap over every refusal of every baseline census:
+    (pred, truth) = (1,1) 25, (0,0) all others, (1,0) 0, (0,1) 0.
+
+-------------------------------------------------------------------------
+3. THE DETERMINISTIC CASE, REFUSAL BY REFUSAL
+-------------------------------------------------------------------------
+string, off 2864, seed 1, no ASLR, JIT on, batch 10, junk 24: base 52 444, cap 448 524, G 32 768,
+S = cap + G/2 = 464 908, THE WINDOW's ceiling S + 4 096 = 469 004.  Reproduced on orig_plain,
+orig_ref and lref_ref with the same driver line (term 2, count 4 640, events "2,20", refusals 1,
+collects 101, arms 102).  Stream: out/det/lref/2864.err (level 3) and, with a scratch per-allocation
+tracer (tools/mkalloc.py -> src-alloc/, never a deliverable; same driver line again),
+out/det/alloc/2864.err.  The last allocator calls:
+  28742  668 B  vm=ASM (the trace assembler's GCtrace, trace of probe:48 uniq()): its look proves
+         cycle 99 (used 464 564 < S: window shut); 464 564 + 668 crosses S -> LENT, window opens,
+         arms (cause window).  The recorder is NOT refused here.
+  28743  52 B   the batch's junk string (probe:90), under the window.
+  28747  40 B   the stage string "filling/4640" (probe:104, outside the batch's pcall): its look
+         proves cycle 100: used 465 152, minus the 720 B grown since proof 99 = 464 432 <= S -> the
+         window stays open; it crosses -> lent, arms (window).
+         (a checkpoint between 28747 and 28749 completes cycle 101)
+  28749  64 B   event.timer's record handlers[1] = {...} (probe:80, outside the handler): its look
+         proves cycle 101: used 465 072, minus the 40 B grown since proof 100 = 465 032 > S ->
+         THE VERDICT (win 1 -> 2); the request crosses -> REFUSED.  OCLJREF seq=1 delta=64 tier0=0
+         tier1=1 opened=1 win0=2 over=228 kernel=0 wd=1 vm=INTERP jst=IDLE recorder=0 fk=lua
+         at==probe:80.
+  -> caught by the dispatcher's pcall(h.callback) (OCLJEV code 2): the stall; the probe stops.
+Which refusal opened the reserve tier: this one (seq 1, the only one).  Who absorbed it: the
+dispatcher (outside the program's handler).  Where the final refusal landed: the same place.
+The 14 OCLJCP lines in the run are st=2 trace aborts, not refusals.  Measured after the stall (two
+full collections, held still referenced): 464 980 B live, 72 B past S.  So this is THE WINDOW's
+documented residual (a verdict landing at the first growth after its proof, here event.timer's
+record), on data that does not fit; not the second-chance path.
+
+-------------------------------------------------------------------------
+4. THE SWEEPS (census probe)
+-------------------------------------------------------------------------
+lref_ref.exe, OCLJ_REFLOG=1, probe2.lua, capk 384, batch 10, junk 24, arm 1, paint 1, hb 0, seed 1,
+no ASLR, one process per cap, offsets 0, 16, ..., 65 520 (4 096 caps per cell).  "Second chance" =
+the refusal that opened the reserve tier was absorbed by something that is not the program's batch
+handler and that does not end the run (paint, recorder, or unseen).  "Outside" = term 2/4/5/7.
+
+cell          runs  refusals/run           absorbers (all refusals)                      opener of the reserve          2nd chance  2nd->outside  outside
+string JIT on 4096  1:3655 2:398 3:40 4:3  batch 4095 paint 483 recorder 4 dispatcher 1  batch 3654 paint 437 rec 4 disp 1   441        0            1 (off 2864)
+record JIT on 4096  1:3935 2:121 3:40      batch 4096 paint 201                          batch 3935 paint 161                161        0            0
+string JIT off 4096 1:3441 2:655           batch 4096 paint 655                          batch 3441 paint 655                655        0            0
+record JIT off 4096 1:3952 2:144           batch 4096 paint 144                          batch 3952 paint 144                144        0            0
+Sequences: string JIT on: batch 3654, paint,batch 394, paint,paint,batch 40, recorder,batch 4,
+paint,paint,paint,batch 3, dispatcher 1; record JIT on: batch 3935, paint,batch 121,
+paint,paint,batch 40; JIT off: batch, or paint,batch.  The reserve tier opened at most once per run.
+Every second-chance run ended "done" inside the fill's handler.
+Every paint-absorbed refusal (all cells): a verdict (win0=2), at probe2.lua:45 (string.format, vm C)
+1 382, :46 (concat) 905, :44 16; burst tier 2 169, reserve tier 134.
+The 1 024-cap censuses (lref_*) are the first quarter of these and agree.
+
+-------------------------------------------------------------------------
+5. MACHINE-LIKE SHAPES (JIT on, 2 048 caps each, offsets 0..32 752; the design round's probes)
+-------------------------------------------------------------------------
+probe2oe.lua: event.timer as OpenOS makes it (three checkArg closures before the record).
+probe2k_2048.lua: the kernel allocates a 2 KiB string after every resume (its slice).
+probe2.lua with HB=3: every 3rd resume is the heartbeat (pcall(paint) there too).
+
+cell             outside  2nd chance  2nd->outside  absorbers (all refusals)                              opener of the reserve
+oe record        0        72          0             batch 2048 paint 72                                   batch 1976 paint 72
+oe string        21       228         21            batch 2027 paint 236 dispatcher 21 recorder 7          batch 1820 paint 221 rec 7
+k2048 record     162      38          0             batch 1886 resume 162 paint 33 recorder 5              batch 1848 resume 162 paint 33 rec 5
+k2048 string     828      229         103           batch 1220 resume 828 paint 253 recorder 6             batch 1094 resume 725 paint 225 rec 4
+hb3 record       0        43          0             batch 2048 paint 43                                   batch 2005 paint 43
+hb3 string       0        181         0             batch 2048 paint 183 recorder 3                       batch 1867 paint 178 rec 3
+oe string's 21 stalls: sequences paint,dispatcher 19 and recorder,dispatcher 2; the last refusal is
+the RESERVE-top verdict (tier0=1 win0=2) at probe2oe:86 (the record, 64 B) 19 or :81 (a checkArg
+closure, 48 B) 2, 224-500 B past cap + G.  None of the 1 820 runs without a second chance stalled.
+k2048's downs: all at the dispatcher's table.pack (probe2k:133, fk=ff ffid=95), 4 100-5 508 B past
+the tier top -- beyond THE WINDOW's 4 KiB -- burst tier (no second chance) 650+75 string / 135+27
+record, reserve tier (after a paint second chance) 82+20+1 string.  Sequences in the string cell:
+batch 1094, resume 725, paint,batch 99, paint,resume 98, paint,paint,batch 23, paint,paint,resume 5,
+recorder,batch 2, recorder,recorder,batch 2.
+(The design round reported 85 outside landings for lend at 2 KiB in 4 096 caps (out9); its
+arguments and LuaJIT library differ from these and were not compared.)
+
+-------------------------------------------------------------------------
+6. DOES THE JIT RECORDER ACCOUNT FOR THE "EXTRA" REFUSALS?
+-------------------------------------------------------------------------
+Hermetically, no.  Over the 10 cells above (28 672 runs, 31 000 refusals):
+  - recorder-absorbed: 25 refusals (4 + 7 + 5 + 6 + 3), every one vm=ASM jst=ASM, 668 B (the
+    GCtrace lj_trace_alloc copies at trace_stop, trace of probe:48 uniq()), every one on a verdict
+    (win0=2), 23 in the burst tier opening the reserve tier, 2 in the reserve tier;
+  - refusals after a run's first: 2 328 -- batch 2 068, paint 134, resume 103, dispatcher 21,
+    recorder 2;
+  - refusals while J->state was NOT idle but outside the recorder: 1 092 in the 8 JIT-on cells
+    (vm=RECORD or C with J->state RECORD), every one caught by the batch's (1 084) or the paint's
+    (8) pcall: the program saw them.
+The extra refusals in the machine's downs (5/4/3 against pf=1) are not reproduced: no hermetic run
+had more than 4 refusals, and no down had more than 3.  Candidates the hermetic driver lacks: the
+OpenOS error path after the fatal refusal (dispatcher -> event.onError -> its own pcall'd log
+write), the kernel's own allocations, real paint/GPU calls.  The OCLJREF lines' at=, kernel/kthr,
+recorder and seq fields separate all of these in the machine.
+
+-------------------------------------------------------------------------
+7. THE EXPERIMENT (scratch only): a refusal under the JIT does not open the reserve / is lent
+-------------------------------------------------------------------------
+tools/mkxp.py over the INSTRUMENTED copy (so every refusal is still classified), src-xp-<v>/,
+built warning-clean both variants (build-xp.sh).  Two levers x two predicates:
+  A  lj52_gc_refused does not set the RESERVE tier when the predicate holds (still counts, shuts the
+     window, arms);
+  B  a growth past the top is GRANTED (charged, like norefuse) when the predicate holds, before THE
+     WINDOW is consulted;
+  lit  J->state != LJ_TRACE_IDLE (the literal form);
+  rec  inside the recorder's protected call (the instrument's recorder=1, proven in 2.4).
+Each firing prints OCLJXP| (counted as "fired").
+
+mem_test (mt.sh, additive and dropin objects): 81/81, failures 0, for all four variants (8 runs).
+With OCLJ_REFLOG=1 the lever fired inside mem_test 4 (XA-lit), 2 (XA-rec), 314 (XB-lit), 276
+(XB-rec) times, so no check fails -- but no mem_test check pins what a refusal raised by the
+recorder must do; the pass says little either way.
+
+Sweeps: the 7 JIT-on cells (probe2 string/record 4 096; oe string/record, k2048 string/record, hb3
+string 2 048), against the baseline censuses of the same cells (python compare.py; out/compare-all.txt):
+              caps     outside       2nd chance    2nd->outside  recorder-  fired    max od_peak-G
+              changed  base->var     base->var     base->var     opened
+  XA-rec        23     1012->1010    1350->1327     124->122      23->0        23    unchanged (k2048 record 3984->3532)
+  XB-rec        23     1012->1010    1350->1327     124->122      23->0    11 373    unchanged (k2048 record 3984->3532)
+  XA-lit        31     1012->1010    1350->1319     124->122      23->0       859    unchanged (same)
+  XB-lit       909     1012->1018    1350->1319     124->122      23->0    18 169    up to +444 B (hb3 1436->1880)
+(outside = term 2/4 summed over the 7 cells; the baseline's 1 012 are F1's stall, oe's 21 stalls and
+k2048's 990 downs.)
+What changed, cap by cap (python changed.py <v>):
+  - rec, both levers: exactly the 23 recorder-opened runs.  Each loses its second chance and ends at
+    the burst top inside the batch's handler, 251-274 objects fewer (57 in k2048 record); the 2 oe
+    stalls among them ("recorder,dispatcher") become inside endings.  XA keeps the recorder's refusal
+    (absorbed, as before); XB removes it (the trace is compiled).  XB-rec's 11 373 grants are recorder
+    allocations past the top that THE WINDOW would otherwise have lent; outside the 23 they changed
+    no driver line.
+  - XA-lit: the same 23, plus 8 k2048-string runs whose paint absorbed a refusal raised while the
+    interpreter ran a just-recorded instruction (vm RECORD/C, J->state RECORD): no reserve, they end
+    at the burst top inside (255 objects fewer).  The other 828 firings were program-visible
+    refusals caught by the batch's pcall at the end of a fill, whose outcome did not change.
+  - XB-lit: grants PROGRAM allocations while a trace is being recorded (unbounded in principle):
+    909 runs change, most by +1/+2 objects held; the same 23 and 8 lose their second chance, but the
+    8 k2048-string runs now go DOWN (paint,batch -> resume): outside landings +8 there, so 1012 ->
+    1018 overall; the peak excursion past cap + G grows by up to 444 B (still inside the 4 KiB bound
+    in these runs).  Not a candidate.
+Verdict on the lever, hermetically: restricted to the recorder it is surgical and harmless here, but
+it reaches 23 of 2 192 second chances (1 %).  The other 2 169 were opened by the paint absorbing a
+verdict refusal, and every remaining second-chance outside landing (19 oe stalls, 103 k2048 downs)
+is one of those.  In the machine all three second-chance downs showed pf = 1 (a paint absorption);
+if the in-machine OCLJREF lines show the paint as the opener there too, this lever does not reach
+them.  What would: making a refusal that some non-program handler absorbs not count as the
+program's (it is the VERDICT's refusal in every absorbed case here), which this experiment did not
+test.
+
+-------------------------------------------------------------------------
+8. WHAT THIS DOES NOT ESTABLISH
+-------------------------------------------------------------------------
+- Nothing here ran in the machine; the in-machine second-chance downs (3 in 30) are not reproduced
+  by the census probe (0 of 1 401) and only partly by the machine-like shapes.
+- The heartbeat, OpenOS-timer and kernel-garbage probes are models of the machine, not the machine.
+- One seed and one capk (384); the census's other seeds/capk were not swept.
+- The Linux build of the instrumented source was compiled, not run.
+- For the in-machine run, per down: take the OCLJREF lines of the machine's st=; opened=1 marks
+  the refusal that opened the reserve tier; its recorder= (1: the recorder dropped it) and at=
+  (paint's line in the probe chunk, an OpenOS file, or =machine with kernel=1/kthr=1) name the
+  absorber's site; win0=2 says it was a verdict, over > 4096 with win0 != 2 a window overrun;
+  the lines after it, up to the down, are the "extra" refusals.  Run with OCLJ_REFLOG=1 (2 adds the
+  proofs, enough to see each verdict being formed).
+
+-------------------------------------------------------------------------
+9. COMMANDS AND FILES
+-------------------------------------------------------------------------
+Environment: . .../scratchpad/wall/env.sh (gcc on PATH, OCLJ_JNI).  Every measured run goes through
+affrun.exe 3FC3FC default (job.sh, job2.sh, mt.sh).
+  sh build-shim.sh                 mkref.py -> src/lj52shim.c; compile plain+instrumented, both variants,
+                                   warning count; build-native.sh's source gates on src/
+  sh build-drv.sh                  bin/orig_plain.exe, bin/orig_ref.exe, bin/lref_ref.exe (census link line:
+                                   -DFIXSEED --wrap=lj_prng_seed_secure --disable-dynamicbase,
+                                   --disable-high-entropy-va; lref_* add drv/wrapcp.c, --wrap=lj_vm_cpcall)
+  sh build-drv.sh <obj>...         bin/lref_<obj>.exe for extra objects
+  sh mt.sh <tag> <shim.o> [VAR=v]  mem_test.c on run-mem.sh's compile line -> mtout/<tag>.{out,err}
+  sh census.sh <exe> <shape> <jit> <ncaps> <tag>
+                                   one process per cap, offsets 0,16,..: probe2.lua <shape> <off> <off> 16
+                                   384 <jit> 1 1 0 0 -1 24 10 -> out/<tag>.tsv + out/<tag>.err/<off>.err
+  sh census2.sh <exe> <shape> <jit> <ncaps> <tag> <probe.lua> <hb>     the same with probe and heartbeat
+  sh ident.sh A.tsv B.tsv          whole-driver-line identity by cap
+  python analyze.py <tag>...       the classification (section 2.4) -> out/<tag>.class.tsv
+  python compare.py <variant>...   experiment against baseline; python changed.py <variant>
+  sh build-xp.sh; sh xpsweep.sh <variant> 1|2      the experiment (section 7)
+  wsl -e sh linux-cc.sh            Linux compile check (MSYS_NO_PATHCONV=1)
+The deterministic case:
+  OCLJ_REFLOG=3 sh job.sh lref_ref.exe string 2864 1 <abs dir>      (also orig_plain.exe, orig_ref.exe)
+  OCLJ_REFLOG=1 affrun ... bin/lref_ref.exe ctl_rec.lua string 0 0 16 384 1 1 1 0 0 -1 24 10   (control)
+Files:
+  src/lj52shim.c, src/lj52shim.h   THE INSTRUMENTED SOURCE (deliverable)
+  src-plain/                        the repo's source as copied (md5 9b912f60 / 1e1dba02)
+  tools/mkref.py, tools/frag_*.c    how src/ is made; tools/mkxp.py the experiment; tools/mkalloc.py the
+                                    scratch per-allocation tracer
+  drv/lj_repro.c, drv/probe2.lua    frozen copies of wall2/repro's (cmp-identical); drv/lj_ref.c (mkdrv.py),
+                                    drv/wrapcp.c, drv/ctl_rec.lua, drv/probe2oe.lua, drv/probe2k_*.lua
+  obj/, obj-linux/, bin/            objects and executables; obj/v1/ the objects before the Linux-branch edit
+  mtout/                            every mem_test run
+  out/                              every census (.tsv, .err/, .class.tsv), analysis-*.txt, compare-*.txt,
+                                    det/ (the deterministic case), ctl/ (the positive control), oe12032/
+                                    (one oe stall at level 3), xp-*.log
+  gatectl/                          the sabotaged copy that the getenv gate must (and does) refuse

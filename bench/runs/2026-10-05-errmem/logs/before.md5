@@ -1,0 +1,5 @@
+a93f546e26d5b897711ec69cd8d09d45 *build/native/luajit-windows-x86_64/src/libluajit.a
+9371db393c8220f32a59327c57b304eb *build/native/libdir-additive/libjnluajit52-windows-x86_64.dll
+7c3d2e1494b8a93b719b6dc75af5a5cd *build/native/libdir/libjnlua52-windows-x86_64.dll
+c07d27d06fa265f3658e91091719742f *build/native/dist/libjnluajit52-linux-x86_64.so
+9371db393c8220f32a59327c57b304eb *build/native/dist/libjnluajit52-windows-x86_64.dll

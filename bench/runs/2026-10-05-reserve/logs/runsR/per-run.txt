@@ -1,0 +1,25 @@
+r-record-r1-R-D    pf=2 oe=0 n=3  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 3:28B:t1>1:o0:w2:rec0:k0:INTERP:ff/19:=/mnt/561/autorun.lua:29
+r-record-r1-R-L    pf=0 oe=0 n=1  1:40B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/a64/autorun.lua:29
+r-record-r1-R-O    pf=0 oe=0 n=1  1:52B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/4ca/autorun.lua:29
+r-record-r10-R-D   pf=3 oe=0 n=4  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1280 | 3:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1280 | 4:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/a1b/autorun.lua:31
+r-record-r2-R-D    pf=0 oe=0 n=1  1:28B:t0>1:o1:w2:rec0:k0:INTERP:ff/19:=/mnt/fa7/autorun.lua:29
+r-record-r2-R-L    pf=2 oe=0 n=3  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 3:40B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/700/autorun.lua:29
+r-record-r2-R-O    pf=0 oe=0 n=1  1:52B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/d62/autorun.lua:29
+r-record-r3-R-D    pf=1 oe=0 n=2  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:28B:t1>1:o0:w2:rec0:k0:INTERP:ff/19:=/mnt/3d1/autorun.lua:29
+r-record-r3-R-L    pf=0 oe=0 n=1  1:28B:t0>1:o1:w2:rec0:k0:INTERP:ff/19:=/mnt/944/autorun.lua:29
+r-record-r3-R-O    pf=0 oe=0 n=1  1:52B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/e00/autorun.lua:46
+r-record-r4-R-D    pf=4 oe=0 n=5  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 3:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 4:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1280 | 5:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/0cd/autorun.lua:31
+r-record-r4-R-L    pf=1 oe=0 n=2  1:56B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:117 | 2:52B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/451/autorun.lua:46
+r-record-r4-R-O    pf=0 oe=0 n=1  1:88B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/f17/autorun.lua:31
+r-record-r5-R-D    pf=2 oe=0 n=3  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:56B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:117 | 3:88B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/c05/autorun.lua:31
+r-record-r5-R-L    pf=2 oe=0 n=3  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1280 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 3:88B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/113/autorun.lua:31
+r-record-r5-R-O    pf=0 oe=0 n=1  1:88B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/623/autorun.lua:31
+r-record-r6-R-D    pf=1 oe=0 n=2  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:28B:t1>1:o0:w2:rec0:k0:INTERP:ff/19:=/mnt/7e6/autorun.lua:29
+r-record-r7-R-D    pf=2 oe=0 n=3  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1280 | 3:28B:t1>1:o0:w2:rec0:k0:INTERP:ff/19:=/mnt/339/autorun.lua:29
+r-record-r8-R-D    pf=3 oe=0 n=4  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 3:56B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:117 | 4:52B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/884/autorun.lua:46
+r-record-r9-R-D    pf=2 oe=0 n=3  1:64B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 2:64B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=machine:1261 | 3:52B:t1>1:o0:w2:rec0:k0:INTERP:lua/0:=/mnt/cc5/autorun.lua:46
+r-string-r1-R-D    pf=0 oe=0 n=1  1:16384B:t0>1:o1:w0:rec0:k0:INTERP:lua/0:=/mnt/c18/autorun.lua:44
+r-string-r2-R-D    pf=0 oe=0 n=1  1:16384B:t0>1:o1:w0:rec0:k0:INTERP:lua/0:=/mnt/61f/autorun.lua:44
+r-string-r3-R-D    pf=0 oe=0 n=1  1:16384B:t0>1:o1:w0:rec0:k0:INTERP:lua/0:=/mnt/a27/autorun.lua:44
+r-string-r4-R-D    pf=0 oe=0 n=1  1:16384B:t0>1:o1:w0:rec0:k0:INTERP:lua/0:=/mnt/c52/autorun.lua:44
+r-string-r5-R-D    pf=0 oe=0 n=1  1:52B:t0>1:o1:w2:rec0:k0:INTERP:lua/0:=/mnt/2f8/autorun.lua:29

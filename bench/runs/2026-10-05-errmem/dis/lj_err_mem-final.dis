@@ -1,0 +1,54 @@
+00000000000006e0 <lj_err_mem>:
+     6e0:	push   %rbx
+     6e1:	sub    $0x20,%rsp
+     6e5:	movzbl 0xb(%rcx),%eax
+     6e9:	mov    %rcx,%rbx
+     6ec:	cmp    $0x5,%al
+     6ee:	je     76e <lj_err_mem+0x8e>
+     6f0:	cmp    $0x6,%al
+     6f2:	je     773 <lj_err_mem+0x93>
+     6f4:	mov    0x10(%rcx),%rax
+     6f8:	mov    0x180(%rax),%rax
+     6ff:	test   %rax,%rax
+     702:	je     708 <lj_err_mem+0x28>
+     704:	mov    %rax,0x20(%rcx)
+     708:	movabs $0x7fffffffffff,%rax
+     712:	mov    0x20(%rbx),%rdx
+     716:	and    -0x10(%rdx),%rax
+     71a:	cmpb   $0x0,0xa(%rax)
+     71e:	jne    736 <lj_err_mem+0x56>
+     720:	mov    0x20(%rax),%rax
+     724:	movzbl -0x5d(%rax),%eax
+     728:	lea    (%rdx,%rax,8),%rax
+     72c:	cmp    %rax,0x30(%rbx)
+     730:	jb     787 <lj_err_mem+0xa7>
+     732:	mov    %rax,0x28(%rbx)
+     736:	cmp    %rdx,0x28(%rbx)
+     73a:	jb     781 <lj_err_mem+0xa1>
+     73c:	xor    %edx,%edx
+     73e:	mov    %rbx,%rcx
+     741:	call   430 <lj_err_str>
+     746:	mov    0x28(%rbx),%rdx
+     74a:	lea    0x8(%rdx),%rcx
+     74e:	mov    %rcx,0x28(%rbx)
+     752:	mov    $0x1fffb,%ecx
+     757:	shl    $0x2f,%rcx
+     75b:	or     %rcx,%rax
+     75e:	mov    %rbx,%rcx
+     761:	mov    %rax,(%rdx)
+     764:	mov    $0x4,%edx
+     769:	call   3d0 <lj_err_throw>
+     76e:	call   690 <lj_err_err>
+     773:	mov    0x50(%rcx),%rcx
+     777:	mov    $0x4,%edx
+     77c:	call   781 <lj_err_mem+0xa1>
+     781:	mov    %rdx,0x28(%rbx)
+     785:	jmp    73c <lj_err_mem+0x5c>
+     787:	mov    $0x1fff9,%eax
+     78c:	mov    %rdx,0x28(%rbx)
+     790:	shl    $0x2f,%rax
+     794:	or     %rbx,%rax
+     797:	mov    %rax,-0x10(%rdx)
+     79b:	jmp    73c <lj_err_mem+0x5c>
+     79d:	nopl   (%rax)
+

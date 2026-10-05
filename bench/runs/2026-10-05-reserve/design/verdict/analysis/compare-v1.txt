@@ -1,0 +1,148 @@
+====================================================================================================
+string_j1  (baseline L4_string_j1)
+  runs 4096 (bad lines 0); differ 442
+  outside landings        1 -> 0      second chances  441 -> 0      of them outside   0 -> 0     recorder-opened 4 -> 0   recorder-absorbed refusals 4 -> 0
+  held verdicts: 1281 holds in 442 runs; refusals that opened nothing (addr=0): 0, absorbed by {}
+  refusals/run  base 1:3655, 2:398, 3:40, 4:3   verdict 1:4096
+  absorbers     base {'batch': 4095, 'paint': 483, 'dispatcher': 1, 'recorder': 4}   verdict {'batch': 4096}
+  held count: mean 5185.6 -> 5156.8 (0.994x); per-cap delta min -283 median 0 max 30; caps lower 441, equal 3654, higher 1
+  ... in the baseline's second-chance runs: delta min -283 median -268 max -246 (n 441)
+  collects: mean 126.7 -> 123.8
+  identity where nothing fired: 3654 of 3654 quiet caps identical
+====================================================================================================
+record_j1  (baseline L4_record_j1)
+  runs 4096 (bad lines 0); differ 161
+  outside landings        0 -> 0      second chances  161 -> 0      of them outside   0 -> 0     recorder-opened 0 -> 0   recorder-absorbed refusals 0 -> 0
+  held verdicts: 447 holds in 161 runs; refusals that opened nothing (addr=0): 0, absorbed by {}
+  refusals/run  base 1:3935, 2:121, 3:40   verdict 1:4096
+  absorbers     base {'batch': 4096, 'paint': 201}   verdict {'batch': 4096}
+  held count: mean 1417.2 -> 1414.9 (0.998x); per-cap delta min -57 median 0 max 0; caps lower 161, equal 3935, higher 0
+  ... in the baseline's second-chance runs: delta min -57 median -57 max -53 (n 161)
+  collects: mean 45.8 -> 45.3
+  identity where nothing fired: 3935 of 3935 quiet caps identical
+====================================================================================================
+string_j0  (baseline L4_string_j0)
+  runs 1024 (bad lines 0); differ 166
+  outside landings        0 -> 0      second chances  166 -> 0      of them outside   0 -> 0     recorder-opened 0 -> 0   recorder-absorbed refusals 0 -> 0
+  held verdicts: 474 holds in 166 runs; refusals that opened nothing (addr=0): 0, absorbed by {}
+  refusals/run  base 1:858, 2:166   verdict 1:1024
+  absorbers     base {'batch': 1024, 'paint': 166}   verdict {'batch': 1024}
+  held count: mean 4879.3 -> 4835.0 (0.991x); per-cap delta min -273 median 0 max 0; caps lower 166, equal 858, higher 0
+  ... in the baseline's second-chance runs: delta min -273 median -273 max -273 (n 166)
+  collects: mean 129.3 -> 121.1
+  identity where nothing fired: 858 of 858 quiet caps identical
+====================================================================================================
+record_j0  (baseline L4_record_j0)
+  runs 1024 (bad lines 0); differ 36
+  outside landings        0 -> 0      second chances   36 -> 0      of them outside   0 -> 0     recorder-opened 0 -> 0   recorder-absorbed refusals 0 -> 0
+  held verdicts: 108 holds in 36 runs; refusals that opened nothing (addr=0): 0, absorbed by {}
+  refusals/run  base 1:988, 2:36   verdict 1:1024
+  absorbers     base {'batch': 1024, 'paint': 36}   verdict {'batch': 1024}
+  held count: mean 1350.2 -> 1348.2 (0.999x); per-cap delta min -57 median 0 max 0; caps lower 36, equal 988, higher 0
+  ... in the baseline's second-chance runs: delta min -57 median -57 max -57 (n 36)
+  collects: mean 44.6 -> 44.2
+  identity where nothing fired: 988 of 988 quiet caps identical
+====================================================================================================
+oe_string_j1  (baseline X_oe_string_j1)
+  runs 2048 (bad lines 0); differ 228
+  outside landings       21 -> 0      second chances  228 -> 0      of them outside  21 -> 0     recorder-opened 7 -> 0   recorder-absorbed refusals 7 -> 0
+  held verdicts: 752 holds in 228 runs; refusals that opened nothing (addr=0): 0, absorbed by {}
+  refusals/run  base 1:1820, 2:213, 3:15   verdict 1:2048
+  absorbers     base {'batch': 2027, 'paint': 236, 'recorder': 7, 'dispatcher': 21}   verdict {'batch': 2048}
+  held count: mean 4918.0 -> 4887.8 (0.994x); per-cap delta min -291 median 0 max 0; caps lower 228, equal 1820, higher 0
+  ... in the baseline's second-chance runs: delta min -291 median -273 max -254 (n 228)
+  collects: mean 137.6 -> 133.5
+  identity where nothing fired: 1820 of 1820 quiet caps identical
+====================================================================================================
+oe_record_j1  (baseline X_oe_record_j1)
+  runs 2048 (bad lines 0); differ 72
+  outside landings        0 -> 0      second chances   72 -> 0      of them outside   0 -> 0     recorder-opened 0 -> 0   recorder-absorbed refusals 0 -> 0
+  held verdicts: 216 holds in 72 runs; refusals that opened nothing (addr=0): 0, absorbed by {}
+  refusals/run  base 1:1976, 2:72   verdict 1:2048
+  absorbers     base {'batch': 2048, 'paint': 72}   verdict {'batch': 2048}
+  held count: mean 1368.6 -> 1366.6 (0.999x); per-cap delta min -57 median 0 max 0; caps lower 72, equal 1976, higher 0
+  ... in the baseline's second-chance runs: delta min -57 median -57 max -57 (n 72)
+  collects: mean 51.6 -> 51.1
+  identity where nothing fired: 1976 of 1976 quiet caps identical
+====================================================================================================
+k2048_string_j1  (baseline X_k2048_string_j1)
+  runs 2048 (bad lines 0); differ 229
+  outside landings      828 -> 950    second chances  229 -> 0      of them outside 103 -> 0     recorder-opened 4 -> 0   recorder-absorbed refusals 6 -> 0
+  held verdicts: 513 holds in 229 runs; refusals that opened nothing (addr=0): 950, absorbed by {'resume': 950}
+  refusals/run  base 1:1819, 2:199, 3:30   verdict 1:2048
+  absorbers     base {'resume': 828, 'batch': 1220, 'paint': 253, 'recorder': 6}   verdict {'resume': 950, 'batch': 1098}
+  held count: mean 4913.6 -> 4883.8 (0.994x); per-cap delta min -295 median 0 max 0; caps lower 229, equal 1819, higher 0
+  ... in the baseline's second-chance runs: delta min -295 median -265 max -230 (n 229)
+  collects: mean 136.7 -> 131.0
+  identity where nothing fired: 1094 of 1094 quiet caps identical
+    OUTSIDE off     0 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4296 addr=0 vm=C
+    OUTSIDE off    16 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4280 addr=0 vm=C
+    OUTSIDE off    32 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4264 addr=0 vm=C
+    OUTSIDE off    48 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4248 addr=0 vm=C
+    OUTSIDE off    64 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4232 addr=0 vm=C
+    OUTSIDE off    80 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4216 addr=0 vm=C
+    OUTSIDE off    96 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4200 addr=0 vm=C
+    OUTSIDE off   112 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4184 addr=0 vm=C
+    OUTSIDE off   128 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4168 addr=0 vm=C
+    OUTSIDE off   144 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4152 addr=0 vm=C
+    OUTSIDE off   160 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4136 addr=0 vm=C
+    OUTSIDE off   176 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4120 addr=0 vm=C
+    OUTSIDE off   192 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4164 addr=0 vm=C
+    OUTSIDE off   208 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4148 addr=0 vm=C
+    OUTSIDE off   224 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4132 addr=0 vm=C
+    OUTSIDE off   240 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4116 addr=0 vm=C
+    OUTSIDE off   256 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4100 addr=0 vm=C
+    OUTSIDE off   288 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=48 tier0=0 win0=1 at==probe:133 over=4116 addr=0 vm=C
+    OUTSIDE off   304 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=48 tier0=0 win0=1 at==probe:133 over=4100 addr=0 vm=C
+    OUTSIDE off   496 term 4 (base 1) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=2 at==probe:133 over=4400 addr=0 vm=C
+    OUTSIDE off   528 term 4 (base 4) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4368 addr=0 vm=C
+    OUTSIDE off   544 term 4 (base 1) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4352 addr=0 vm=C
+    OUTSIDE off   560 term 4 (base 1) holds 1 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4336 addr=0 vm=C
+    OUTSIDE off   576 term 4 (base 1) holds 1 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4320 addr=0 vm=C
+    OUTSIDE off   592 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4304 addr=0 vm=C
+    OUTSIDE off   608 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4288 addr=0 vm=C
+    OUTSIDE off   624 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4272 addr=0 vm=C
+    OUTSIDE off   640 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4256 addr=0 vm=C
+    OUTSIDE off   656 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4240 addr=0 vm=C
+    OUTSIDE off   672 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4224 addr=0 vm=C
+====================================================================================================
+k2048_record_j1  (baseline X_k2048_record_j1)
+  runs 2048 (bad lines 0); differ 38
+  outside landings      162 -> 195    second chances   38 -> 0      of them outside   0 -> 0     recorder-opened 5 -> 0   recorder-absorbed refusals 5 -> 0
+  held verdicts: 85 holds in 38 runs; refusals that opened nothing (addr=0): 195, absorbed by {'resume': 195}
+  refusals/run  base 1:2010, 2:38   verdict 1:2048
+  absorbers     base {'paint': 33, 'batch': 1886, 'resume': 162, 'recorder': 5}   verdict {'resume': 195, 'batch': 1853}
+  held count: mean 1359.0 -> 1357.9 (0.999x); per-cap delta min -60 median 0 max 0; caps lower 38, equal 2010, higher 0
+  ... in the baseline's second-chance runs: delta min -60 median -56 max -55 (n 38)
+  collects: mean 49.1 -> 48.7
+  identity where nothing fired: 1848 of 1848 quiet caps identical
+    OUTSIDE off     0 term 4 (base 1) holds 1 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4316 addr=0 vm=C
+    OUTSIDE off    16 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4300 addr=0 vm=C
+    OUTSIDE off    32 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4284 addr=0 vm=C
+    OUTSIDE off    48 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4268 addr=0 vm=C
+    OUTSIDE off    64 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4252 addr=0 vm=C
+    OUTSIDE off    80 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4236 addr=0 vm=C
+    OUTSIDE off    96 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4220 addr=0 vm=C
+    OUTSIDE off   112 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4204 addr=0 vm=C
+    OUTSIDE off   128 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4188 addr=0 vm=C
+    OUTSIDE off   144 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4172 addr=0 vm=C
+    OUTSIDE off   160 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4156 addr=0 vm=C
+    OUTSIDE off   176 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4140 addr=0 vm=C
+    OUTSIDE off   192 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4124 addr=0 vm=C
+    OUTSIDE off   208 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4168 addr=0 vm=C
+    OUTSIDE off   224 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4152 addr=0 vm=C
+    OUTSIDE off   240 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4136 addr=0 vm=C
+    OUTSIDE off   256 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4120 addr=0 vm=C
+    OUTSIDE off   272 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4104 addr=0 vm=C
+    OUTSIDE off   288 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=48 tier0=0 win0=1 at==probe:133 over=4136 addr=0 vm=C
+    OUTSIDE off   304 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=48 tier0=0 win0=1 at==probe:133 over=4120 addr=0 vm=C
+    OUTSIDE off   320 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=48 tier0=0 win0=1 at==probe:133 over=4104 addr=0 vm=C
+    OUTSIDE off  2128 term 4 (base 1) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=2 at==probe:133 over=4400 addr=0 vm=C
+    OUTSIDE off  2144 term 4 (base 1) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=2 at==probe:133 over=4384 addr=0 vm=C
+    OUTSIDE off  2160 term 4 (base 1) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4368 addr=0 vm=C
+    OUTSIDE off  2176 term 4 (base 1) holds 3 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4352 addr=0 vm=C
+    OUTSIDE off  2192 term 4 (base 1) holds 1 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4336 addr=0 vm=C
+    OUTSIDE off  2208 term 4 (base 1) holds 1 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=1 at==probe:133 over=4320 addr=0 vm=C
+    OUTSIDE off  2224 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4304 addr=0 vm=C
+    OUTSIDE off  2240 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4288 addr=0 vm=C
+    OUTSIDE off  2256 term 4 (base 4) holds 0 unaddr 1 absorbers [resume] last: delta=80 tier0=0 win0=0 at==probe:133 over=4272 addr=0 vm=C

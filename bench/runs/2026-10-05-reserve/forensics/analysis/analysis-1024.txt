@@ -1,0 +1,53 @@
+==============================================================================
+lref_string_j1: 1024 runs, rc!=0 0, NOLINE 0
+  term: 1=1023, 2=1
+  refusals per run: 1:934, 2:81, 3:6, 4:3
+  absorbers, all 1126 refusals: batch=1023 (90.9%), paint=102 (9.1%), dispatcher=1 (0.1%)
+  absorbers, the 102 refusals after a run's first: batch=90 (88.2%), paint=12 (11.8%)
+  the refusal that opened the reserve tier, its absorber: batch=933, paint=90, dispatcher=1  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 90; their term: 1=90
+    ... ending outside the handler (term 2/4/5/7): 0 of 90
+  other runs' term: 1=933, 2=1
+  outside-handler landings: 1
+    off  2864 term 2 second-chance 0 absorbers [dispatcher] opener dispatcher; last refusal: delta=64 tier0=0 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:80 over=228
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=1126
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+lref_record_j1: 1024 runs, rc!=0 0, NOLINE 0
+  term: 1=1024
+  refusals per run: 1:1004, 2:18, 3:2
+  absorbers, all 1046 refusals: batch=1024 (97.9%), paint=22 (2.1%)
+  absorbers, the 22 refusals after a run's first: batch=20 (90.9%), paint=2 (9.1%)
+  the refusal that opened the reserve tier, its absorber: batch=1004, paint=20  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 20; their term: 1=20
+    ... ending outside the handler (term 2/4/5/7): 0 of 20
+  other runs' term: 1=1004
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=1046
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+lref_string_j0: 1024 runs, rc!=0 0, NOLINE 0
+  term: 1=1024
+  refusals per run: 1:858, 2:166
+  absorbers, all 1190 refusals: batch=1024 (86.1%), paint=166 (13.9%)
+  absorbers, the 166 refusals after a run's first: batch=166 (100.0%)
+  the refusal that opened the reserve tier, its absorber: batch=858, paint=166  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 166; their term: 1=166
+    ... ending outside the handler (term 2/4/5/7): 0 of 166
+  other runs' term: 1=858
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=1190
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+lref_record_j0: 1024 runs, rc!=0 0, NOLINE 0
+  term: 1=1024
+  refusals per run: 1:988, 2:36
+  absorbers, all 1060 refusals: batch=1024 (96.6%), paint=36 (3.4%)
+  absorbers, the 36 refusals after a run's first: batch=36 (100.0%)
+  the refusal that opened the reserve tier, its absorber: batch=988, paint=36  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 36; their term: 1=36
+    ... ending outside the handler (term 2/4/5/7): 0 of 36
+  other runs' term: 1=988
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=1060
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}

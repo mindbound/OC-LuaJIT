@@ -1,0 +1,57 @@
+OK   pristine -> b.c (exit 0)
+patch-fastfunc-errmem-top.sh: b.c  11 lines inserted into lj_err_mem (of 1175), 0 removed; clamp verified by content
+CR in b.c: 0
+CR in pristine: 1164
+830a831,841
+>   /* OC-LuaJIT (native/luajit/patch-fastfunc-errmem-top.sh): never push the
+>   ** message below the current frame.  A fast function is neither a Lua nor a
+>   ** C function: tostring's inline number path, string.char, sub, reverse,
+>   ** lower and upper store L->base but not L->top before a C call that
+>   ** allocates, so when that allocation is refused the refresh above is
+>   ** skipped and L->top can be stale below the frame.  The push would write
+>   ** the message over the frame link at L->base-1, which err_unwind then
+>   ** dereferences as a saved PC.  A no-op for Lua and C functions.
+>   */
+>   if (LJ_UNLIKELY(L->top < L->base))
+>     L->top = L->base;
+OK   in place (exit 0)
+patch-fastfunc-errmem-top.sh: c.c  11 lines inserted into lj_err_mem (of 1175), 0 removed; clamp verified by content
+OK   in place == out of place
+OK   idempotent (exit 0)
+patch-fastfunc-errmem-top.sh: d.c  already carries the ERRMEM top clamp (verified: marker, clamp and push each exactly once, in order) -- unchanged
+OK   idempotent output unchanged
+1
+OK   mangled assignment refused (exit 1)
+patch-fastfunc-errmem-top.sh: m1.c: the clamp is not inside lj_err_mem directly ahead of the push (order seen: SGPT, want SGAPT)
+OK   push not under the brace refused (exit 1)
+patch-fastfunc-errmem-top.sh: the line above the ERRMEM push is not the brace closing curr_funcisL: [  (void)0;]
+patch-fastfunc-errmem-top.sh: refusing -- has lj_err_mem in lj_err.c changed shape?
+OK   no output written
+OK   duplicated anchor refused (exit 1)
+patch-fastfunc-errmem-top.sh: m3o.c.tmp.415123: the ERRMEM push present 2 times, expected 1
+OK   throw replaced refused (exit 1)
+patch-fastfunc-errmem-top.sh: the line after the ERRMEM push is not the throw: [  lj_err_throw(L, LUA_ERRRUN);]
+patch-fastfunc-errmem-top.sh: refusing -- has lj_err_mem in lj_err.c changed shape?
+840:  setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRMEM));
+841-  if (LJ_UNLIKELY(L->top < L->base))
+842-    L->top = L->base;
+843-  lj_err_throw(L, LUA_ERRMEM);
+OK   clamp after the push refused (exit 1)
+patch-fastfunc-errmem-top.sh: m5.c: the clamp is not inside lj_err_mem directly ahead of the push (order seen: SGA, want SGAPT)
+a.c
+b.c
+c.c
+d.c
+m1.c
+m2.c
+m3.c
+m4.c
+m5.c
+o1.txt
+o2.txt
+o3.txt
+o4.txt
+o5.txt
+o6.txt
+o7.txt
+o8.txt

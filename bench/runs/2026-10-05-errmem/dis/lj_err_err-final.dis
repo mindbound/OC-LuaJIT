@@ -1,0 +1,23 @@
+0000000000000690 <lj_err_err>:
+     690:	push   %rbx
+     691:	sub    $0x20,%rsp
+     695:	mov    0x20(%rcx),%rax
+     699:	mov    %rcx,%rbx
+     69c:	cmp    %rax,0x28(%rcx)
+     6a0:	jb     6d8 <lj_err_err+0x48>
+     6a2:	mov    $0x12,%edx
+     6a7:	mov    %rbx,%rcx
+     6aa:	call   430 <lj_err_str>
+     6af:	mov    0x28(%rbx),%rdx
+     6b3:	lea    0x8(%rdx),%rcx
+     6b7:	mov    %rcx,0x28(%rbx)
+     6bb:	movabs $0xfffd800000000000,%rcx
+     6c5:	or     %rcx,%rax
+     6c8:	mov    %rbx,%rcx
+     6cb:	mov    %rax,(%rdx)
+     6ce:	mov    $0x5,%edx
+     6d3:	call   3d0 <lj_err_throw>
+     6d8:	mov    %rax,0x28(%rcx)
+     6dc:	jmp    6a2 <lj_err_err+0x12>
+     6de:	xchg   %ax,%ax
+

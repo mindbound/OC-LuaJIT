@@ -1,0 +1,36 @@
+== 14:13:22 identity start
+P_string_j1: 1024 lines
+P_record_j1: 1024 lines
+I_string_j1: 1024 lines
+I_record_j1: 1024 lines
+E_string_j1: 1024 lines
+== 14:16:23 IDENTITY plain vs instrumented, string j1:
+caps_in_both=1024 both_rc0=1024 identical=1024 differ=0 rc_nonzero=0 onlyB=0
+== 14:16:23 IDENTITY plain vs instrumented, record j1:
+caps_in_both=1024 both_rc0=1024 identical=1024 differ=0 rc_nonzero=0 onlyB=0
+== 14:16:23 lib confound: forensics L4_string_j1 (shipped shim, lib a93f546e) vs lref_E (shipped shim, current lib):
+caps_in_both=1024 both_rc0=1024 identical=1024 differ=0 rc_nonzero=0 onlyB=0
+== 14:16:24 preview: forensics L4_string_j1 vs lref_F:
+  DIFF off 576
+    A: string	576	52444	446236	32768	0	1	4895	3,1,6	479820	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	158	158	0	33636	-1	-1	490	-1
+    B: string	576	52444	446236	32768	0	1	4756	3,1,6	472060	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	150	150	0	25948	-1	-1	476	-1
+  DIFF off 560
+    A: string	560	52444	446220	32768	0	1	4895	3,1,6	479820	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	159	159	0	33652	-1	-1	490	-1
+    B: string	560	52444	446220	32768	0	1	4756	3,1,6	472060	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	151	151	0	25964	-1	-1	476	-1
+  DIFF off 592
+    A: string	592	52444	446252	32768	0	1	4895	3,1,6	479820	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	157	157	0	33620	-1	-1	490	-1
+    B: string	592	52444	446252	32768	0	1	4756	3,1,6	472060	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	149	149	0	25932	-1	-1	476	-1
+caps_in_both=1024 both_rc0=1024 identical=934 differ=90 rc_nonzero=0 onlyB=0
+== 14:16:24 preview: forensics L4_record_j1 vs lref_F:
+  DIFF off 2128
+    A: record	2128	52906	448250	32768	0	1	1367	3,1,6	481098	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	66	66	0	32848	-1	-1	137	-1
+    B: record	2128	52906	448250	32768	0	1	1339	3,1,6	473034	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	63	63	0	24784	-1	-1	134	-1
+  DIFF off 2144
+    A: record	2144	52906	448266	32768	0	1	1367	3,1,6	481098	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	65	65	0	32832	-1	-1	137	-1
+    B: record	2144	52906	448266	32768	0	1	1339	3,1,6	473034	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	62	62	0	24768	-1	-1	134	-1
+  DIFF off 2176
+    A: record	2176	52906	448298	32768	0	1	1367	3,1,6	481194	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	67	67	0	32896	-1	-1	137	-1
+    B: record	2176	52906	448298	32768	0	1	1339	3,1,6	473034	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	62	62	0	24736	-1	-1	134	-1
+caps_in_both=1024 both_rc0=1024 identical=1004 differ=20 rc_nonzero=0 onlyB=0
+== 14:16:26 fingerprints in I_string_j1: OCLJREFINIT in 1024 of 1024 err files; OCLJXP lines 1024; OCLJREF lines 1121; AFFRUN applied=1 in 1024
+== 14:16:26 identity done

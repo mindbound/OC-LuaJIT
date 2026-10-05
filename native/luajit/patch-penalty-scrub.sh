@@ -1,5 +1,6 @@
 #!/bin/sh
-# native/luajit/patch-penalty-scrub.sh -- the ONE function of LuaJIT we change.
+# native/luajit/patch-penalty-scrub.sh -- the first function of LuaJIT we
+# change (the second: native/luajit/patch-fastfunc-errmem-top.sh).
 #
 #     sh native/luajit/patch-penalty-scrub.sh <in lj_func.c> <out lj_func.c>
 #

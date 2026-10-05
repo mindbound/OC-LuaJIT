@@ -1,0 +1,3 @@
+mem exit=0 checks=86 failures=0
+wd exit=0 checks=35 failures=0
+penalty exit=0 checks=6 failures=0

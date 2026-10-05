@@ -1,0 +1,47 @@
+--- src-plain/lj52shim.c	2026-10-05 13:50:45.641146000 +0300
++++ src-plain-L4/lj52shim.c	2026-10-05 13:55:28.284981300 +0300
+@@ -279,6 +279,8 @@
+   long long     gc_odpeak;     /* the largest excursion past the cap, bytes   */
+   int           gc_win;        /* THE WINDOW: 0 shut, 1 open, 2 the verdict   */
+   long long     gc_grown;      /* bytes granted since the last proof          */
++  int           gc_rsvby;      /* L4: 1 the reserve was opened by a refusal   */
++  int           gc_rsvexp;     /* L4: an outermost arm since; close at proof  */
+   volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+   long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
+   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+@@ -1181,6 +1183,7 @@
+   if (M->gc_odstate == LJ52_OD_RESERVE) return 1;
+   if (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1)) {
+     M->gc_odstate = LJ52_OD_RESERVE;
++    M->gc_rsvby = 0; M->gc_rsvexp = 0;    /* L4: a fresh record's keeps its tier */
+     return 1;
+   }
+   return 0;
+@@ -1256,6 +1259,7 @@
+   if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
++  if (M->gc_odstate != LJ52_OD_RESERVE) { M->gc_rsvby = 1; M->gc_rsvexp = 0; }   /* L4 */
+   M->gc_odstate = LJ52_OD_RESERVE;
+   M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
+   if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
+@@ -1301,6 +1305,9 @@
+       M->gc_collects++;
+       M->gc_hyst = 1;
+       M->gc_low = used;
++      if (M->gc_rsvexp) {                 /* L4: the reserve expired at the resume */
++        M->gc_odstate = LJ52_OD_BURST; M->gc_rsvexp = 0;
++      }
+       if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
+       if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+         top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+@@ -1839,6 +1846,9 @@
+      * healing was tested.) */
+     M->wd_depth = 0;
+     if (lua_gethook(L) != NULL) lua_sethook(L, NULL, 0, 0);
++    /* L4: THE RESERVE'S LIFETIME BY RESUME -- a reserve a refusal opened
++     * expires at the first proof after this resume. */
++    if (M->gc_odstate == LJ52_OD_RESERVE && M->gc_rsvby) M->gc_rsvexp = 1;
+   }
+   lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+   lua_pushvalue(L, 2);

@@ -39,7 +39,8 @@ refusal can still land outside a handler -- has its own roadmap row.
   - near the wall, 1.16x stage C's time (median, same chain; 0.63-1.33x);
   - collections over a fill +11-19 % at 192 KB;
   - idle unchanged at 192 and 1024 KB; at 256 KB with the JIT on, 4-5 arms per idle window
-    (up to 17) against chain C's 0, cause not separated (the probe or the window).
+    (up to 17) against chain C's 0, cause not separated (the probe or the window) -- settled
+    later the same day as the probe's: stage C reads the same under it (chain I, below).
 - **Found on the way: a LuaJIT process crash** in the Windows unwinder, reachable on stage C,
   which would take the whole JVM down. Root-caused and confirmed; the fix is a three-line
   LuaJIT patch, ready but not part of this change. It has its own roadmap row.
@@ -369,6 +370,11 @@ and 1024 KB), stock 20 of 20. Chain C had a stall in 49.
   of 5 arms (1-17) on W and 4 (0-8) on V, against chain C's 0 in all four runs. Chain C ran
   the old probe and chain T has no 256 KB cell, so the probe's new footprint is not ruled
   out; the cause is not separated. No idle window refused anything.
+  - **Settled 2026-10-05, chain I** (`logs/runsI/`): stage C and the final build with the
+    unwinder fix, interleaved under the same probe, 256 KB, JIT on, batch 100, four shapes,
+    two reps each. Idle arms per 400-tick window: stage C 0, 0, 0, 0, 2, 3, 5, 16; ours 0,
+    0, 1, 1, 1, 2, 13, 15 -- a median of 1 on both, no flush on either, all 16 runs clean.
+    The rise against chain C is the probe's, not the window's.
 - **Capacity** is at least stock's in every cell but one: 1024 KB closures read 0.98-0.99x
   against a stock reading of 8 192. Stock read 7 313 there in chain C; it lands on either side
   of its holder table's doubling, and our absolute figure equals stage C's (8 084 against
@@ -515,3 +521,6 @@ generic, so it covers every such fast function.
 
 It is in `crash/patch-fastfunc-errmem-top.sh`, in the shape of the project's other LuaJIT
 patches. It is not applied here: it gets its own roadmap row and change.
+
+**Applied the same day** as `native/luajit/patch-fastfunc-errmem-top.sh`, built in by
+`build-native.sh`: [results-errmem-2026-10-05.md](results-errmem-2026-10-05.md).

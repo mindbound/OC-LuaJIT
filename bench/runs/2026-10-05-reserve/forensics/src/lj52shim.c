@@ -1,0 +1,3188 @@
+/* lj52shim.c -- implementation of the Lua 5.2 C API surface OC-JNLua needs,
+ * on top of LuaJIT 2.1 (Lua 5.1 ABI) built with LUAJIT_ENABLE_LUA52COMPAT and
+ * LUAJIT_ENABLE_CHECKHOOK.
+ *
+ * See lj52shim.h for the contract and for the two comment blocks that matter
+ * most: THE MODE GATE and the allocator STOPGAP.
+ *
+ * HOUSE RULES FOR THIS FILE (same as serializer/eris_lj.c):
+ *   - every place where LuaJIT's 5.1 semantics differ from 5.2 gets a comment
+ *     saying WHAT differs and WHY the chosen behaviour is the 5.2 one, so a
+ *     future reader never has to re-derive the reasoning;
+ *   - no getenv(), anywhere. A shipping shim has exactly ONE behaviour. The
+ *     variants this file replaces carried OCLJ_NOMODECHECK (disabled the
+ *     bytecode gate), OCLJ_TRACE (installed a LUA_MASKCOUNT hook -- the very
+ *     hook slot OC's deadline watchdog owns), OCLJ_JITOFF, OCLJ_JITOPT,
+ *     OCLJ_JITATTACH and LJ52_MEMLIMIT. Every one of those is a switch that
+ *     changes security- or scheduling-relevant behaviour from the process
+ *     environment, where no server operator would ever see it. If a JIT-off
+ *     escape hatch is wanted it belongs in OC's own config file.
+ *   - no build flags that select a known-broken behaviour.
+ */
+/* The Linux watchdog backend calls pthread_setname_np, which glibc guards with
+ * __USE_GNU.  _GNU_SOURCE only WIDENS declarations, and this file calls none of
+ * the functions whose SEMANTICS it changes (strerror_r, basename, qsort_r).
+ * Do not reach for _POSIX_C_SOURCE instead: setting it explicitly suppresses
+ * glibc's default _DEFAULT_SOURCE and would hide pthread_setname_np again,
+ * turning build-native.sh's zero-warning gate into an implicit-declaration
+ * failure. */
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* THE WATCHDOG BACKEND IS SELECTED HERE, far above the THREADING comment that
+ * explains it, for one mechanical reason: lj52_mem carries a pthread_mutex_t
+ * and a pthread_cond_t BY VALUE and is declared a little below.  windows.h is
+ * deliberately NOT hoisted with this -- it stays down at the THREADING comment,
+ * so the shipping Windows translation unit is unaffected by this change. */
+#if defined(_WIN32)
+#define LJ52_WD_WIN32 1
+#elif defined(__linux__)
+#define LJ52_WD_PTHREAD 1
+#include <errno.h>
+#include <limits.h>
+#include <pthread.h>
+#include <signal.h>
+#include <time.h>
+#else
+/* NOT "POSIX", and the distinction is load-bearing: pthread_condattr_setclock
+ * is POSIX clock-selection and macOS does not have it, so a Darwin build would
+ * have to put the deadline condvar on CLOCK_REALTIME and silently inherit an
+ * NTP-step hazard on a LIVE deadline.  A third backend is the honest answer
+ * there; refusing is the honest answer until someone can build and test one.
+ * This #error has narrowed, not vanished -- do not delete it as an oversight. */
+#error "lj52 watchdog: only the Win32 and Linux backends exist (macOS needs its own)"
+#endif
+
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+#include <luajit.h>
+
+#include "lj52shim.h"
+
+/* Inside this file we need the GENUINE 5.1 entry points that the header
+ * redirects for jnlua.c's benefit. lua_load stays redirected: it now maps to
+ * LuaJIT's own lua_loadx, which is what we would want here anyway. */
+#undef lua_resume
+#undef luaL_newstate
+#undef lua_pushcfunction
+#undef lua_setallocf
+#undef lua_setfield
+#undef lua_close
+
+#include "eris_lj.h"
+
+/* ================================================================== *
+ * registry-cached VM helpers
+ * ================================================================== */
+
+/* lua_compare, lua_arith and lua_len must fire METAMETHODS, and must fire the
+ * RIGHT ones. The only way to be sure of that on LuaJIT is to let the VM do
+ * the operation, so we keep one compiled chunk per state and call into it.
+ *
+ * The chunk is cached in the registry under a LIGHT USERDATA key -- the
+ * address of a file-static object. A string key would sit in the same
+ * namespace as everything else that stores things in the registry (jnlua's
+ * own "_LOADED", OC's persistence keys, luaL_ref's freelist), and this key can
+ * never collide with any of them. */
+static const char LJ52_HELPERS_KEY = 0;
+
+static const char LJ52_HELPERS_SRC[] =
+  /* op codes here are 5.2's: LUA_OPEQ=0 LUA_OPLT=1 LUA_OPLE=2, and
+   * LUA_OPADD=0 .. LUA_OPUNM=6. */
+  "local function cmp(op, a, b)\n"
+  "  if op == 0 then return a == b\n"
+  "  elseif op == 1 then return a < b\n"
+  "  else return a <= b end\n"
+  "end\n"
+  "local function arith(op, a, b)\n"
+  "  if op == 0 then return a + b\n"
+  "  elseif op == 1 then return a - b\n"
+  "  elseif op == 2 then return a * b\n"
+  "  elseif op == 3 then return a / b\n"
+  "  elseif op == 4 then return a % b\n"
+  "  elseif op == 5 then return a ^ b\n"
+  "  elseif op == 6 then return -a\n"
+  "  end\n"
+  "  error('bad arith op')\n"
+  "end\n"
+  "local function len(a) return #a end\n"
+  "return { cmp = cmp, arith = arith, len = len }\n";
+
+/* Compile and install the helper table. Leaves nothing on the stack.
+ * Called once from lj52_newstate; lj52_gethelper re-runs it lazily for any
+ * state we did not create. */
+static void lj52_installhelpers(lua_State *L) {
+  if (luaL_loadbuffer(L, LJ52_HELPERS_SRC, sizeof(LJ52_HELPERS_SRC) - 1,
+                      "=[lj52shim]") != 0)
+    lua_error(L);
+  lua_call(L, 0, 1);                                   /* t */
+  lua_pushlightuserdata(L, (void *)&LJ52_HELPERS_KEY); /* t k */
+  lua_insert(L, -2);                                   /* k t */
+  lua_rawset(L, LUA_REGISTRYINDEX);
+}
+
+/* Pushes helpers[name]. Raises on failure; every caller is reached from a
+ * protected frame in jnlua. */
+static void lj52_gethelper(lua_State *L, const char *name) {
+  lua_pushlightuserdata(L, (void *)&LJ52_HELPERS_KEY);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  if (!lua_istable(L, -1)) {
+    lua_pop(L, 1);
+    lj52_installhelpers(L);
+    lua_pushlightuserdata(L, (void *)&LJ52_HELPERS_KEY);
+    lua_rawget(L, LUA_REGISTRYINDEX);
+  }
+  lua_getfield(L, -1, name);
+  lua_remove(L, -2);
+}
+
+/* ================================================================== *
+ * lua_pushcfunction memo
+ * ================================================================== */
+
+/* See the long comment in lj52shim.h. The memo table lives at
+ * registry[LJ52_CF_RIDX]; keys are the C function pointers as light userdata,
+ * values are the one GCfunc we ever build for them in this state.
+ *
+ * Casting a function pointer to void* is not something ISO C blesses, but it
+ * is well defined on every ABI this DLL can be built for (Win64, SysV x64) and
+ * the union spelling keeps -Wall -Wpedantic quiet. */
+typedef union { lua_CFunction f; void *p; } lj52_cfkey;
+
+/* An address in this DLL's image, used only for its address -- see the
+ * pre-intern in lj52_newstate. */
+static const char LJ52_LIGHTUD_SEED = 0;
+
+static void lj52_pushcfunction_raw(lua_State *L, lua_CFunction f) {
+  lj52_cfkey k;
+  k.p = NULL;
+  k.f = f;
+  lua_rawgeti(L, LUA_REGISTRYINDEX, LJ52_CF_RIDX);
+  if (!lua_istable(L, -1)) {
+    /* A state we did not create (or one whose registry has been reset).
+     * Fall back to the plain 5.1 behaviour rather than failing. */
+    lua_pop(L, 1);
+    lua_pushcclosure(L, f, 0);
+    return;
+  }
+  lua_pushlightuserdata(L, k.p);   /* t key */
+  lua_rawget(L, -2);               /* t val */
+  if (lua_isfunction(L, -1)) {     /* warm: allocation-free */
+    lua_remove(L, -2);
+    return;
+  }
+  lua_pop(L, 1);                   /* t */
+  lua_pushlightuserdata(L, k.p);   /* t key */
+  lua_pushcclosure(L, f, 0);       /* t key fn   -- cold: once per state */
+  lua_pushvalue(L, -1);            /* t key fn fn */
+  lua_insert(L, -4);               /* fn t key fn */
+  lua_rawset(L, -3);               /* fn t */
+  lua_pop(L, 1);                   /* fn */
+}
+
+/* ================================================================== *
+ * memory accounting
+ * ================================================================== */
+
+/* Read the long comment in lj52shim.h first; it explains why jnlua's own
+ * l_alloc_checked cannot run on LuaJIT and why this reimplements its
+ * arithmetic instead of wrapping it.
+ *
+ * One record per lua_State, reachable from every thread of that state through
+ * lua_getallocf, because allocf/allocd live in the shared global_State.  No
+ * table keyed by lua_State*, and therefore no lock: a server running twenty
+ * machines on twenty threads touches twenty disjoint records. */
+/* ===================================================================== */
+/* OCLJ REFUSAL FORENSICS -- THIS IS AN INSTRUMENTED COPY, NOT THE SHIM.  */
+/* ===================================================================== */
+/* Made by mkref.py from the repo's lj52shim.c.  No branch of the shim's
+ * logic is changed: the hooks below only READ the record and the VM, and
+ * write their own fields (oc_*), their own rings and stderr.  At every
+ * refusal (both paths, every call into lj52_gc_refused) a record is kept in
+ * a static ring of OCLJ_RING_N; with the environment variable OCLJ_REFLOG
+ * set (read once per state, at lj52_newstate) each one is also printed as
+ * one self-contained line "OCLJREF| k=v ..." on stderr, flushed.
+ *   OCLJ_REFLOG=1 (or any value but 0, 2, 3)  refusals
+ *   OCLJ_REFLOG=2                             + every proven cycle (OCLJPRF|)
+ *   OCLJ_REFLOG=3                             + every arm, with its cause (OCLJARM|)
+ * Arms and proofs are always counted per state and kept in a second ring.
+ * The variable is read WITHOUT the C library's environment reader on
+ * purpose: build-native.sh refuses a shim whose code names that reader, and
+ * this copy must build under it.  A diagnostic copy only; never ship it. */
+#define OCLJ_RING_N   256
+#define OCLJ_GCRING_N 1024
+typedef struct oclj_refrec {
+  long long gseq, seq, calls;
+  long long delta, used, total, G, credit, top, low, grown, gctotal, gcthresh;
+  void *M, *curL, *mainL, *kby;
+  int legacy, kernel, wd_depth, kthr, mainthr;
+  int tier0, tier1, win0, win1, hyst, armed0, armed1, armby0, armby1;
+  int tryproof, trytier, opened;
+  int vmstate, jstate, hookmask, gcstate;
+  int incp, cfnres, recorder;           /* the innermost C frame is a cpcall; */
+                                        /* inside the trace recorder's cpcall */
+  int trec, tpar, texit;                /* J->cur.traceno, J->parent, J->exitno */
+  int fkind, ffid, line, pcsrc, ctx, tline;
+  long arms[5], proofs, lends, collects;
+  char chunk[64], tchunk[64];
+} oclj_refrec;
+typedef struct oclj_gcev {
+  long long gseq, calls, used, total, low, grown;
+  void *M;
+  int kind, why, cause, tier0, tier1, win0, win1, flush, vmstate, jstate, inref;
+} oclj_gcev;
+
+typedef struct lj52_mem {
+  lj52_envfn    envfn;      /* jnlua's getthreadenv                          */
+  lj52_getmemfn getmem;     /* jnlua's getluamemory                          */
+  lj52_setmemfn setmem;     /* jnlua's setluamemory                          */
+  const char   *jskey;      /* jnlua's JNLUA_JAVASTATE, not a copy of it     */
+  jobject      *javaref;    /* &(the weak global ref) inside jnlua's userdata */
+  int           accounting; /* jnlua asked for a capped state (ud != NULL)   */
+  int           norefuse;   /* >0: charge, but never refuse -- see below     */
+  long long     pending;    /* bytes moved while nobody could be told yet    */
+  void         *heap;       /* this state's own lj_alloc arena; NULL = libc  */
+  /* -- the accounting's C side; see docs/accounting-sync.md -- */
+  long long     used;       /* every successful delta since birth, BOTH modes */
+  long long     total;      /* the cap Java handed over; valid once csync     */
+  int           csync;      /* 1 = C owns the figures: no JNI per allocation  */
+  long long     mem_reads;  /* lj52_mem_used calls that returned the figure   */
+  long long     mem_calls;  /* lj52_alloc calls on this record                */
+  long long     mem_jni;    /* ... of which crossed into the JVM (legacy)     */
+  /* -- the deadline watchdog; see its section below -- */
+  lua_State    *L;          /* main thread: what the timer callback hooks    */
+  double        wd_due;     /* ABSOLUTE ms of the next fire; 0 == disarmed.  */
+#if defined(LJ52_WD_PTHREAD)
+  /* THE OWNERSHIP RULE, and it must not be lost: wd_mtx is a LEAF.  Nothing
+   * else may be acquired while it is held, and NO LUA API CALL may be made
+   * while it is held.  The timer thread holds it across lj52_wd_inject, which
+   * is what makes lj52_wd_cancel block; a Lua call underneath it would invite
+   * the allocator, and the allocator is lj52_alloc, which touches this same
+   * record. */
+  pthread_t       wd_thread;
+  pthread_mutex_t wd_mtx;
+  pthread_cond_t  wd_cv;     /* CLOCK_MONOTONIC -- see lj52_wd_start          */
+  double          wd_wake;   /* when the thread's CURRENT sleep ends; 0 ==    */
+                             /* parked indefinitely.  Thread writes, Lua      */
+                             /* thread reads to decide whether to signal.     */
+  int             wd_started;/* mutex + cond + thread all exist               */
+  int             wd_quit;   /* teardown: the thread must return              */
+#else
+  void         *wd_timer;   /* pending Win32 timer-queue timer, or NULL      */
+#endif
+  int           wd_depth;   /* nested arms                                   */
+  double        wd_stack[LJ52_WD_MAXDEPTH]; /* absolute deadlines, ms      */
+  lua_State    *wd_for[LJ52_WD_MAXDEPTH];   /* the thread each arm protects */
+  lua_State    *wd_by[LJ52_WD_MAXDEPTH];    /* the thread that armed each   */
+  int           wd_skip[LJ52_WD_MAXDEPTH];  /* fires skipped on each armer; */
+                                            /* see THE THREAD FILTER        */
+  /* Diagnostics, written by the timer thread and the hook, read by stats().
+   * Plain ints on purpose: they are counters for a human, not for logic. */
+  volatile int  wd_fired;    /* the current timer has fired at least once   */
+  volatile long wd_fires;    /* first fires, ever                            */
+  volatile long wd_refires;  /* periodic re-fires, ever                      */
+  volatile long wd_filtered; /* hook invocations ignored by the thread filter */
+  /* The reliability instrument, on BOTH backends, because the Win32 one has an
+   * open finding against it (fires=0 in 2 of ~6 runs under host load) and
+   * "is this backend better" has to be answerable with a number. */
+  volatile int  wd_degraded; /* last program() fell back to the standing hook */
+  /* -- the emergency collector; see lj52_gc_pressure below -- */
+  int           gc_armed;      /* a cycle has been demanded, not yet proven   */
+  int           gc_busy;       /* re-entrancy guard; see the note below       */
+  /* Fixed-width C types, not LuaJIT's: lj_obj.h is included ~300 lines BELOW
+   * this struct, so MSize and friends are not in scope here.  These mirror
+   * gc.stepmul (MSize, lj_obj.h:614) and gc.currentwhite (uint8_t, :597). */
+  uint32_t      gc_savedmul;   /* gc.stepmul to put back when we disarm       */
+  uint8_t       gc_white;      /* gc.currentwhite latched at arm time         */
+  unsigned      gc_armedcalls; /* allocator calls since arming -- the bailout */
+  volatile long gc_arms;       /* diagnostics, for a human and for the tests  */
+  volatile long gc_collects;   /* arms that were PROVEN to complete a cycle   */
+  volatile long gc_bailouts;   /* arms abandoned by the safety valve          */
+  volatile long gc_refusals;   /* allocations refused -> lj_err_mem           */
+  int           gc_moved;      /* the collector left GCSpause since the arm   */
+  volatile long gc_parkresets; /* parked arms restarted; THE PARK RESET below */
+  /* -- the collector at the wall: THE CREDIT and THE CADENCE below -- */
+  int           gc_odstate;    /* LJ52_OD_BURST, or _RESERVE after a refusal  */
+  int           gc_armby;      /* why the armed cycle was armed: LJ52_ARM_*   */
+  int           gc_hyst;       /* a cycle has been proven: gc_low is valid    */
+  long long     gc_low;        /* used at the last proof, lowered by frees    */
+  long long     gc_seentotal;  /* the cap the last allocator call was under   */
+  volatile long gc_overdrafts; /* growths granted past the cap, on credit     */
+  long long     gc_odpeak;     /* the largest excursion past the cap, bytes   */
+  int           gc_win;        /* THE WINDOW: 0 shut, 1 open, 2 the verdict   */
+  long long     gc_grown;      /* bytes granted since the last proof          */
+  volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+  long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
+  /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+  int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
+                                  /* flush at the next safe point (wd_arm)    */
+  volatile long gc_traceflushes;  /* flushes performed at the safe point      */
+  volatile long gc_flushrefusals; /* flushes refused there: HOOK_GC was set   */
+  long long     gc_flushbytes;    /* GCtrace metadata unlinked, cumulative    */
+  /* -- OCLJ REFUSAL FORENSICS (the instrumented copy only; see oclj_refrec) -- */
+  int           oc_log;        /* OCLJ_REFLOG, read once at lj52_newstate     */
+  int           oc_inref;      /* between oclj_ref_pre and oclj_ref_post      */
+  int           oc_tryproof;   /* a proof ran inside the refusal's own TRY    */
+  int           oc_trytier;    /* ... and the tier it left                    */
+  int           oc_pwin, oc_ptier, oc_parmby;   /* a proof's state before it  */
+  long long     oc_pgrown;
+  long          oc_arms[5];    /* by cause: 0 gate 1 wall(cadence) 2 window  */
+                               /* 3 refusal 4 flush                           */
+  long          oc_proofs;     /* proven cycles                               */
+  oclj_refrec   oc_cur;        /* the refusal being recorded                  */
+} lj52_mem;
+/* OCLJ REFUSAL FORENSICS: the hooks, defined after the collector. */
+static void oclj_ref_init(lj52_mem *M);
+static void oclj_ref_pre(lj52_mem *M, long long total, long long used, long long delta, int legacy);
+static void oclj_ref_post(lj52_mem *M);
+static void oclj_arm_note(lj52_mem *M, int why);
+static void oclj_prf_pre(lj52_mem *M);
+static void oclj_prf_post(lj52_mem *M, long long total, long long used);
+
+static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
+/* Defined below the LuaJIT-internal includes -- it needs G(), LJ_MAX_MEM and
+ * HOOK_GC -- but called from lj52_alloc, which is above them. */
+static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int kind);
+/* What an allocator call was, for lj52_gc_pressure.  Only ATTEMPTS to grow
+ * count toward the safety valve: see THE VALVE COUNTS ATTEMPTS below. */
+#define LJ52_GP_FREE 0                  /* a free or a shrink               */
+#define LJ52_GP_GROW 1                  /* a growth that was granted        */
+#define LJ52_GP_TRY  2                  /* a growth that was refused        */
+/* THE CREDIT at the cap, the refusal that opens its reserve tier, and THE
+ * WINDOW past a tier's top (its look and its lend); all defined with the
+ * collector, below the LuaJIT-internal includes. */
+static long long lj52_gc_credit(lj52_mem *M, long long total, long long used);
+static void lj52_gc_refused(lj52_mem *M, long long total, long long used);
+static void lj52_gc_look(lj52_mem *M, long long total, long long used);
+static int lj52_gc_lend(lj52_mem *M, long long total, long long used, long long delta);
+
+/* The record for L, or NULL for a state this shim did not create. */
+static lj52_mem *lj52_memof(lua_State *L) {
+  void *ud = NULL;
+  if (L == NULL) return NULL;
+  return lua_getallocf(L, &ud) == lj52_alloc ? (lj52_mem *)ud : NULL;
+}
+
+/* Plain libc: the FALLBACK backing store, used only by a state whose own
+ * lj_alloc arena could not be created (see lj52_back).  Until 2026-10-02 every
+ * state lived here -- jnlua's l_alloc_unchecked is realloc/free too, which is
+ * why it was the original choice -- and that cost up to 2.6x on
+ * allocation-heavy code against LuaJIT's own allocator
+ * (bench/results-allocator-2026-10-02.md). */
+static void *lj52_libc(void *ptr, size_t nsize) {
+  if (nsize == 0) { free(ptr); return NULL; }
+  return realloc(ptr, nsize);
+}
+
+/* THE BACKING STORE under the accounting.  Each state has its own lj_alloc
+ * arena -- LuaJIT's allocator, the one luaL_newstate would have given it --
+ * created in lj52_newstate before the state and destroyed in lj52_close after
+ * it; M->heap names it.  Every block of a state is allocated, resized and
+ * freed through that one arena for the state's whole life, lua_close
+ * included, so no block ever crosses allocators: the heap-corruption hazard
+ * the "allocator ownership" note in lj52shim.h describes needs a block to
+ * change hands, and none can.  A state whose arena could not be created
+ * (M->heap == NULL) lives on the C library instead, equally consistently.
+ * Defined below the LuaJIT-internal includes, which lj_alloc_f needs. */
+static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize);
+
+/* THE ALLOCATOR.  Reproduces l_alloc_checked's arithmetic exactly -- charge
+ * nsize for a fresh block, nsize-osize for a resize, credit osize on free, and
+ * treat total <= 0 or a shrink as always permitted -- with two differences,
+ * both deliberate:
+ *
+ *   1. It never calls the Lua API.  jnlua reaches the Java object through
+ *      getjavastate() -> lua_getfield() on every single allocation; we read it
+ *      from a pointer cached when jnlua bound it (lj52_setfield).  This is the
+ *      whole fix: re-entering the VM from inside a lua_Alloc callback is what
+ *      takes the JVM down on LuaJIT.
+ *
+ *   2. It charges only what it actually got.  jnlua writes used+delta before
+ *      knowing whether realloc succeeded, so a failed resize permanently
+ *      inflates the machine's usage.  Ours charges after the fact.
+ *
+ * And it refuses later than the cap: THE CREDIT and THE WINDOW lend a
+ * bounded excursion past it, and arm the collector to repay it.
+ *
+ * norefuse is the other half of this change; see lj52_pushcfunction. */
+/* The Java side stores used/total as jint, so that is what crosses the JNI
+ * boundary -- but the arithmetic in between is done in long long and saturated
+ * on the way out.  jnlua does it all in int, computing `int delta` from a
+ * size_t expression (jnlua.c:268) and `used - osize` by promote-and-truncate
+ * (jnlua.c:265); both are accidentally correct only while every quantity fits
+ * in 32 bits.  Being right costs nothing here.  Note the clamp is to the jint
+ * RANGE, not to zero: a `used` that has gone negative is a bug worth seeing
+ * (see the pending accumulator below), and mem_test's M4b asserts on it, so
+ * silently flooring it at zero would hide exactly what we want reported. */
+static jint lj52_clampi(long long v) {
+  if (v > 2147483647LL) return 2147483647;
+  if (v < -2147483647LL - 1) return -2147483647 - 1;
+  return (jint)v;
+}
+
+static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  lj52_mem *M = (lj52_mem *)ud;
+  JNIEnv *env;
+  jobject obj;
+  jint jtotal = 0, jused = 0;
+  long long total, used, delta;
+  void *p;
+
+  /* jnlua's delta: the whole block when it is new, the difference when it is
+   * resized, and a credit of the old size when it is freed. */
+  delta = nsize == 0 ? -(long long)osize
+                     : (ptr == NULL ? (long long)nsize
+                                    : (long long)nsize - (long long)osize);
+
+  if (M == NULL) return lj52_libc(ptr, nsize);
+  M->mem_calls++;
+
+  /* C MODE (docs/accounting-sync.md): once the Java side has handed the cap
+   * over (lj52_mem_settotal, from LuaStateLuaJIT's capped constructor and its
+   * setTotalMemory override), the figures live here and nothing below crosses
+   * into the JVM.  The arithmetic, the refusal (with THE CREDIT at the cap)
+   * and the emergency collector's trip-wire are the legacy path's own, under
+   * one predicate: the accounting
+   * flag jnlua flips off before close, and a cap.  Java reads `used` back
+   * through lj52_mem_used when, and only when, getFreeMemory() runs -- the
+   * one reader of the figure jnlua has. */
+  if (M->csync) {
+    int acct = M->accounting && M->total > 0;
+    if (nsize == 0) {
+      /* BEFORE the free, as below: the disarm check wants the post-free heap. */
+      if (acct) lj52_gc_pressure(M, M->total, M->used + delta, LJ52_GP_FREE);
+      lj52_back(M, ptr, osize, 0);
+      M->used += delta;
+      return NULL;
+    }
+    if (acct && delta > 0 && M->total - M->used < delta)
+      lj52_gc_look(M, M->total, M->used);   /* THE WINDOW: a finished cycle first */
+    if (acct && delta > 0 && !M->norefuse && M->total - M->used < delta
+        && M->total + lj52_gc_credit(M, M->total, M->used) - M->used < delta
+        && !lj52_gc_lend(M, M->total, M->used, delta)) {
+      M->gc_refdelta = delta;
+      oclj_ref_pre(M, M->total, M->used, delta, 0);
+      lj52_gc_refused(M, M->total, M->used);
+      oclj_ref_post(M);
+      return NULL;                      /* -> lj_err_mem -> LUA_ERRMEM */
+    }
+    p = lj52_back(M, ptr, osize, nsize);
+    if (p != NULL) {
+      M->used += delta;
+      if (delta > 0) M->gc_grown += delta;
+      if (acct) lj52_gc_pressure(M, M->total, M->used, delta > 0 ? LJ52_GP_GROW : LJ52_GP_FREE);
+    }
+    return p;
+  }
+
+  /* LEGACY MODE, every state until it hands over and forever on the dropin
+   * (OpenComputers' own LuaState class cannot carry the overrides).  Exactly
+   * the per-allocation JNI path this file always had, plus M->used kept in
+   * step, so that at a handover C already holds the figure Java holds.
+   *
+   * Ordered so the JNI call is the LAST thing tried, not the first: this runs
+   * on every allocation, and during lua_close -- where jnlua disarms us and
+   * then frees the entire heap -- getthreadenv() would otherwise be called
+   * once per block for nothing. */
+  obj = M->accounting && M->javaref != NULL ? *M->javaref : NULL;
+  env = obj != NULL && M->envfn != NULL ? M->envfn() : NULL;
+  if (obj == NULL || env == NULL) {
+    /* Not chargeable YET, or no longer.  There is a real window here:
+     * controlled_newstate installs the cap before newstate_protected has bound
+     * the Java LuaState, so the state's own creation is allocated before
+     * anyone can be told about it -- and jnlua clears the binding again at
+     * close.  Bank the bytes rather than dropping them.  Dropping them is not
+     * merely imprecise, it makes `used` go NEGATIVE the moment those blocks
+     * are freed under a live binding, and a negative `used` reads back through
+     * NativeLuaArchitecture as a machine with MORE memory than its cap, or as
+     * a nonsense total.  Measured, before this was banked: used fell to
+     * -387188 across an ordinary allocate-then-collect cycle. */
+    p = lj52_back(M, ptr, osize, nsize);
+    if (p != NULL || nsize == 0) {
+      M->pending += delta;
+      M->used += delta;
+    }
+    return p;
+  }
+
+  M->mem_jni++;
+  M->getmem(env, obj, &jtotal, &jused);
+  total = jtotal;
+  used = jused;
+  if (M->pending != 0) {                /* first chargeable call: settle up */
+    used += M->pending;
+    M->pending = 0;
+    M->setmem(env, obj, lj52_clampi(used));
+  }
+  if (nsize == 0) {
+    /* BEFORE the free, not after: a free is the one call that can take us back
+     * under the watermark, and the disarm check wants to see the heap as the
+     * VM will see it at the next safepoint. */
+    lj52_gc_pressure(M, total, used + delta, LJ52_GP_FREE);
+    lj52_back(M, ptr, osize, 0);
+    M->setmem(env, obj, lj52_clampi(used + delta));
+    M->used += delta;
+    return NULL;
+  }
+  if (delta > 0 && total - used < delta)
+    lj52_gc_look(M, total, used);           /* THE WINDOW: a finished cycle first */
+  if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse
+        || total + lj52_gc_credit(M, total, used) - used >= delta
+        || lj52_gc_lend(M, total, used, delta))) {
+    /* We are at the wall, past the credit too.  We still do not collect
+     * here -- C1/C5/C6 -- but the refusal arms, from any headroom, and opens
+     * the credit's reserve tier for whatever the program does next: see
+     * THE CREDIT, in the collector section. */
+    M->gc_refdelta = delta;
+    oclj_ref_pre(M, total, used, delta, 1);
+    lj52_gc_refused(M, total, used);
+    oclj_ref_post(M);
+    return NULL;                        /* -> lj_err_mem -> LUA_ERRMEM */
+  }
+  p = lj52_back(M, ptr, osize, nsize);
+  if (p != NULL) {
+    M->setmem(env, obj, lj52_clampi(used + delta));
+    M->used += delta;
+    if (delta > 0) M->gc_grown += delta;
+    lj52_gc_pressure(M, total, used + delta, delta > 0 ? LJ52_GP_GROW : LJ52_GP_FREE);
+  }
+  return p;
+}
+
+/* THE CORES of the accounting's Java boundary (docs/accounting-sync.md),
+ * keyed by lua_State so native tests can drive them without a JVM; the JNI
+ * wrappers below only find the state.  Both call nothing but lua_getallocf
+ * (through lj52_memof): no Lua API call that can raise or allocate, and never
+ * the watchdog mutex.  They run under the Java LuaState's monitor, as every
+ * allocation does.
+ *
+ * lj52_mem_used: the figure, or -1 when there is no record (a state not made
+ * by lj52_newstate, or its luaL_newstate fallback) or the state has not handed
+ * over -- the Java side then falls back to jnlua's own figure, which legacy
+ * mode keeps current and which is 0 on an uncapped state.
+ *
+ * lj52_mem_settotal: records the cap and hands the figures over for good. */
+long long lj52_mem_used(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  if (M == NULL || !M->csync) return -1;
+  M->mem_reads++;
+  return M->used;
+}
+
+void lj52_mem_settotal(lua_State *L, long long total) {
+  lj52_mem *M = lj52_memof(L);
+  if (M == NULL) return;
+  M->total = total;
+  M->csync = 1;
+}
+
+#ifdef LJ52_ADDITIVE
+/* THE JNI WRAPPERS, additive build only: they are natives of LuaStateLuaJIT,
+ * a class the dropin never sees (build-native.sh pins its export set with no
+ * LuaStateLuaJIT_* name).  The state comes from jnlua's own `luaState` field --
+ * fixed from newstate until close zeroes it before lua_close -- not
+ * `luaThread`, which jnlua swaps on every Java-function call.  GetObjectClass,
+ * not FindClass, so no class-loader context is involved; the field ID is the
+ * same for every instance and is cached with relaxed atomics (machine threads
+ * hold DIFFERENT monitors).  A NULL ID returns at once and leaves the pending
+ * NoSuchFieldError to Java. */
+static lua_State *lj52_jstate(JNIEnv *env, jobject obj) {
+  static jfieldID cached;
+  jfieldID f = __atomic_load_n(&cached, __ATOMIC_RELAXED);
+  if (f == NULL) {
+    jclass c = (*env)->GetObjectClass(env, obj);
+    if (c == NULL) return NULL;
+    f = (*env)->GetFieldID(env, c, "luaState", "J");
+    (*env)->DeleteLocalRef(env, c);
+    if (f == NULL) return NULL;
+    __atomic_store_n(&cached, f, __ATOMIC_RELAXED);
+  }
+  return (lua_State *)(uintptr_t)(*env)->GetLongField(env, obj, f);
+}
+
+JNIEXPORT jlong JNICALL
+Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljUsedMemory(JNIEnv *env, jobject obj) {
+  lua_State *L = lj52_jstate(env, obj);
+  return L != NULL ? (jlong)lj52_mem_used(L) : (jlong)-1;
+}
+
+JNIEXPORT void JNICALL
+Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljSetTotalMemory(JNIEnv *env, jobject obj, jint total) {
+  lua_State *L = lj52_jstate(env, obj);
+  if (L != NULL) lj52_mem_settotal(L, (long long)total);
+}
+#endif
+
+/* jnlua's three lua_setallocf sites, intercepted.  We install nothing: the
+ * (lj52_alloc, record) pairing set at newstate must survive, because it is how
+ * lj52_memof finds the record.  All that changes is a flag. */
+void lj52_setallocf(lua_State *L, lua_Alloc f, void *ud,
+                    lj52_envfn envfn, lj52_getmemfn getmem,
+                    lj52_setmemfn setmem, const char *jskey) {
+  lj52_mem *M = lj52_memof(L);
+  (void)f;
+  if (M == NULL) return;
+  M->envfn = envfn;
+  M->getmem = getmem;
+  M->setmem = setmem;
+  M->jskey = jskey;
+  M->accounting = ud != NULL;
+}
+
+/* Cache the Java LuaState as jnlua binds it, so the allocator never has to ask
+ * the VM for it.  Everything else forwards untouched; the guard is an integer
+ * compare, and the strcmp only runs for registry writes, of which jnlua does a
+ * handful in a state's lifetime.
+ *
+ * The value stored is a FULL userdata holding a weak global ref, and we keep
+ * its ADDRESS rather than the ref, so we follow jnlua if it ever rewrites the
+ * ref in place.  The userdata is kept alive by the registry entry itself, and
+ * close_protected clears that entry by storing nil -- which lands here and
+ * clears the cache in the same breath. */
+void lj52_setfield(lua_State *L, int idx, const char *k) {
+  if (idx == LUA_REGISTRYINDEX && k != NULL) {
+    lj52_mem *M = lj52_memof(L);
+    if (M != NULL && M->jskey != NULL && strcmp(k, M->jskey) == 0)
+      M->javaref = lua_type(L, -1) == LUA_TUSERDATA
+                     ? (jobject *)lua_touserdata(L, -1) : NULL;
+  }
+  lua_setfield(L, idx, k);
+}
+
+/* ================================================================== *
+ * the deadline watchdog
+ * ================================================================== */
+
+/* WHY THIS EXISTS.  OpenComputers enforces its per-resume timeout with a
+ * COUNT HOOK: machine.lua arms debug.sethook(co, checkDeadline, "", N)
+ * before every resume of the sandbox and inside every sandbox
+ * coroutine.resume, and never clears the outer one.  On PUC Lua that is
+ * cheap.  On LuaJIT it is ruinous, for two reasons that compose:
+ *   - hooks are GLOBAL to the state, not per-thread (lj_dispatch.c:337-348),
+ *     and an armed count hook forces instruction dispatch for the whole VM
+ *     (lj_dispatch.c:121) and aborts any trace being recorded (:345);
+ *   - the CHECKHOOK patch we need in order to boot at all makes every compiled
+ *     trace exit to the interpreter on entry while a hook is set.
+ * Measured inside a real machine (docs/research/hook-vs-jit.md section 6): the
+ * same loop in the sandbox is 18.8x SLOWER with the JIT on than off, OpenOS
+ * boots 40% slower, and ~2700 traces are compiled and thrown away per boot.
+ * CHECKHOOK's own comment says it is "only useful if hooks are NOT set most
+ * of the time" -- it was written for an asynchronous interrupt, which is what
+ * this is.
+ *
+ * WHAT IT IS.  arm(seconds, fn) programs a one-shot OS timer and touches no
+ * hook at all.  When the timer expires, its callback -- on a thread that is
+ * not the Lua thread -- calls lua_sethook(L, hook, LUA_MASKCOUNT, 1).  The
+ * next trace-entry guard fails, the trace exits, the interpreter fires the
+ * hook on the very next instruction, and the hook calls fn.  fn is
+ * machine.lua's own checkDeadline: the tooLongWithoutYielding sentinel and
+ * the +0.5s grace stay exactly as OC wrote them.  Its count=1 re-arm -- the
+ * post-expiry escalation that kept a pcall-swallowing loop from escaping --
+ * is DELETED by kernel site 12 (native/kernel/patch-machine-lua.lua): on
+ * LuaJIT it was a per-VM hook, unfiltered, that reached the kernel thread.
+ * The escalation is ours instead: the hook the timer installs is count=1 and
+ * is re-fired every LJ52_WD_REFIRE_MS from the first fire until disarm(), so
+ * past the grace checkDeadline raises on every instruction with no help from
+ * Lua.  What changes is only who arms the hook and when: never, until the
+ * deadline has actually passed.  Between deadlines g->hookmask is zero and
+ * traces run.
+ *
+ * disarm() cancels the timer -- BLOCKING until a callback already in flight
+ * has finished -- and clears the hook (ours; since site 12 there is no
+ * other).  It must be called when the resume returns, or a deadline that
+ * expires while the machine is idle between ticks would set a count=1 hook
+ * that fires on the first instruction of the NEXT resume as a spurious
+ * timeout.
+ *
+ * ARMS NEST.  The kernel arms around the sandbox resume, the sandbox's
+ * coroutine.resume wrapper arms around each user coroutine, and the
+ * synchronous-__gc path arms around a finaliser -- one inside the other.  So
+ * arm pushes an absolute deadline and the timer always runs for the top of
+ * the stack.  This is BETTER than what OC's machine.lua does on LuaJIT today:
+ * its inner debug.sethook(co) clears the one global hook, and the outer
+ * resume then runs with no deadline at all until it yields -- a per-thread-
+ * hooks assumption that holds on PUC and not here.
+ *
+ * ... AND A STACK CAN LEAK, so it is built to heal.  After a deadline fires,
+ * our count=1 hook is GLOBAL (hooks are, on LuaJIT), so it also runs on the
+ * parent's own instructions between the child's resume returning and
+ * disarm() being called.  THE THREAD FILTER at lj52_wd_hook keeps those from
+ * calling checkDeadline -- but an error can land in that window on its own
+ * (LUA_ERRMEM at the wrapper's table.pack), disarm() is then never reached,
+ * and if the error is caught by a sandbox pcall (OpenOS's event loop catches
+ * callback errors) the machine lives on with one stale entry left on the
+ * stack.  (When this was written the leak was routine: checkDeadline's Lua
+ * re-arm, since deleted by kernel site 12, fired unfiltered on those
+ * instructions and errored there past the grace.)  A
+ * naive pop-one disarm would deepen the stack by one per such leak and, worse,
+ * re-program the stale, already-expired deadline the moment a legitimate one
+ * popped above it: a spurious "too long without yielding" on the very next
+ * instruction.  (Found in adversarial review, not in testing.)  So:
+ *   - arm() RETURNS its depth, and disarm(token) restores the stack TO that
+ *     level rather than popping one entry -- whatever leaked inside is gone;
+ *   - the kernel's main-loop arm passes outermost=true and RESETS the stack
+ *     first, so every resume starts clean no matter what the previous one
+ *     left behind.  OC's stock kernel has the same self-healing property by
+ *     accident: its arm simply overwrites the one global hook.
+ * depth() exists for the tests and for diagnostics; the sandbox cannot reach
+ * any of these.
+ *
+ * WHO MAY CALL IT.  The table is a raw global (_OCLJ_WATCHDOG), captured by
+ * the kernel as an upvalue before it builds the sandbox; the sandbox's debug
+ * table exposes getinfo and traceback only (machine.lua:1001), so sandbox
+ * code can neither arm a standing hook nor clear ours.  Being reachable from
+ * the raw _G also makes the table and its two C functions PERMANENTS for the
+ * serializer, which is what lets a kernel holding them as upvalues persist.
+ *
+ * THREADING, stated plainly.  lua_sethook from another thread is the case
+ * CHECKHOOK documents (lj_record.c:2963, "from a signal handler or another
+ * native thread") and what prototype/watchdog/ validated on hardware.  The
+ * callback does exactly one thing, lua_sethook, and nothing else; disarm
+ * cancels the timer BEFORE touching the hook itself, and arm creates the new
+ * timer only AFTER cancelling any old one, so the callback never runs
+ * concurrently with a lua_sethook on the Lua thread.  The kernel makes no
+ * lua_sethook of its own while an arm is live: checkDeadline's count=1 re-arm
+ * was deleted by kernel site 12, and the two debug.sethook calls machine.lua
+ * keeps (calcHookInterval's bogomips probe) run at boot, before the first
+ * arm.
+ *
+ * ... WHICH IS NOT THE WHOLE STORY, and the adversarial review said so.
+ * g->hookmask is ONE byte holding both the event bits (LUA_MASKCOUNT and
+ * friends) and LuaJIT's own state bits: HOOK_ACTIVE while a hook is running,
+ * HOOK_GC inside a finaliser, HOOK_VMEVENT inside a VM event.  The Lua thread
+ * read-modify-writes that byte constantly and never through lua_sethook --
+ * hook_enter/hook_leave around EVERY hook call, hook_entergc/hook_restore
+ * around every finaliser, and the VM-event pair around every trace event --
+ * and lua_sethook itself is a plain RMW too (lj_dispatch.c:344).  Two threads
+ * doing plain RMWs on one byte lose updates in both directions:
+ *   - the Lua thread's restore lands last: the count bit the callback just set
+ *     is GONE.  With a one-shot timer that resume's deadline is never
+ *     enforced.  Hence the timer RE-FIRES every LJ52_WD_REFIRE_MS until
+ *     disarm() cancels it -- the escalation prototype/watchdog/ ran -- so a
+ *     lost update costs one interval, not the deadline;
+ *   - the callback's stale value lands last: a state bit the Lua thread had
+ *     just CLEARED is back.  A resurrected HOOK_ACTIVE is a hook that never
+ *     runs again -- callhook refuses while ACTIVE is set, every later
+ *     lua_sethook preserves the non-event bits, and the only clear is a
+ *     hook_leave that can no longer happen.  The machine is then silently
+ *     undefended for the rest of its life.  And the re-fire that fixes the
+ *     first direction multiplies exposure to this one: during the 0.5 s
+ *     grace after a fire, our own count=1 hook has the Lua thread in
+ *     hook_enter/hook_leave on every instruction while the timer lands ten
+ *     more RMWs into that stream.
+ * So the timer thread does NOT call lua_sethook.  lj52_wd_inject stores
+ * hookf and hookcount (aligned words, atomic on x64), then ORs the single
+ * count bit into hookmask with an atomic fetch-or.  An OR cannot resurrect a
+ * cleared bit and cannot clear a set one, so the second direction cannot
+ * happen; the first still can (a plain store of a stale byte can still drop
+ * the ORed bit) and the re-fire still covers it, and the re-fire is now
+ * harmless to repeat.  This is the discipline LuaJIT's own profiler -- the one
+ * sanctioned cross-thread writer of hookmask -- gets from a mutex it wraps
+ * around both its RMW and the Lua thread's hook_enter/leave
+ * (lj_profile.c:98-131); we cannot have that mutex, so we use the operation
+ * that does not need one.  lj_trace_abort is deliberately not called: the
+ * CHECKHOOK guard makes a trace recorded across the fire exit on its next
+ * entry anyway.  lj_dispatch_update is still called, and still races the Lua
+ * thread's own dispatch updates on trace start/stop; that tear is bounded by
+ * the re-fire and by the recorder's next hot event, and is recorded.
+ *
+ * TWO BACKENDS IMPLEMENT THIS, and everything above is common to both: the
+ * rule that the timer thread never calls lua_sethook, the store-then-atomic-OR
+ * in lj52_wd_inject, and the periodic re-fire that covers a dropped bit.  Only
+ * the CLOCK and the TIMER differ.  Win32 uses a timer-queue timer; Linux parks
+ * one thread per machine in pthread_cond_timedwait on a CLOCK_MONOTONIC
+ * condvar, where the mutex that thread holds across lj52_wd_inject IS the
+ * blocking cancel.  macOS has neither and gets an #error until someone can
+ * build and test a third. */
+
+#ifdef LJ52_WD_WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
+/* LuaJIT internals, for the one thing the timer thread must do without
+ * lua_sethook (see lj52_wd_inject), and for each state's own allocator arena
+ * (lj_alloc.h, lj_prng.h: see lj52_back and lj52_newstate). */
+#include "lj_obj.h"
+#include "lj_dispatch.h"
+#include "lj_jit.h"
+#include "lj_alloc.h"
+#include "lj_prng.h"
+
+static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
+  if (M->heap != NULL) return lj_alloc_f(M->heap, ptr, osize, nsize);
+  return lj52_libc(ptr, nsize);
+}
+
+/* ===================================================================== */
+/* THE EMERGENCY COLLECTOR.                                              */
+/* ===================================================================== */
+/*
+ * WHAT IT IS FOR.  PUC Lua's luaM_realloc_ runs luaC_fullgc(L, 1) and RETRIES
+ * when the allocator refuses; LuaJIT's lj_mem_realloc calls lj_err_mem on the
+ * first refusal and the machine dies.  Measured (memory-accounting.md 8c):
+ * `sieve` completes on PUC 3/3 and dies on ours 6/6 in a 3072 real-KB machine
+ * whose LIVE SET is 52.4 KB -- over 98% garbage at the moment of refusal.
+ *
+ * WHY THIS DOES NOT COLLECT AT THE REFUSAL.  Three verified constraints each
+ * independently forbid it (memory-accounting.md 11):
+ *   C1  lj_gc_fullgc's loop (lj_gc.c:800) runs on gc.state, and GCSatomic
+ *       returns LJ_MAX_MEM WITHOUT advancing state while tvref(g->jit_base) is
+ *       set (:673-677).  :799 forces GCSpause first, so an on-trace call hangs
+ *       unconditionally -- not as a race.
+ *   C5  a collect at lj_tab.c:123-124 frees the table under construction:
+ *       unreachable, current-white, already rooted.
+ *   C6  L->top is stale at arbitrary allocation points, and from
+ *       lj_mem_newgco the object is partially initialised AND already rooted
+ *       and whitened (lj_gc.c:893-895).
+ * So the allocator still never collects.  It writes two scalars the VM already
+ * owns and lets the VM collect at a point the VM already considers safe.
+ *
+ * THE TWO CARRIERS, both the VM's own idioms.
+ *   g->gc.threshold = g->gc.total  is "collect at the very next checkpoint":
+ *       ~49 lj_gc_check sites, lj_meta.c:382, the interpreter's inline compares
+ *       and the JIT's asm_gc_check all test total >= threshold and CALL the
+ *       collector.  It is exactly what lj_gc.c:753 and lj_api.c:1252 write.
+ *   g->gc.stepmul = 0  makes that step UNBOUNDED: lj_gc.c:734-736 turns a zero
+ *       stepmul into lim = LJ_MAX_MEM, and the loop at :739-746 then runs to
+ *       GCSpause.  A whole cycle, not a 2000-unit slice.
+ *
+ * WRITE gc.total, NEVER 0.  lj_gc.c:737-738 charges
+ *     if (total > threshold) debt += total - threshold
+ * at the entry of the armed step.  With 0 that is the WHOLE HEAP as debt; it
+ * survives any step that does not reach GCSpause -- i.e. every on-trace bail
+ * through the LJ_MAX_MEM sentinel -- and then :751-755 pins threshold = total
+ * and repays 1024 bytes per step for thousands of steps.  Invisible in a
+ * pass/fail benchmark; it would surface as an unexplained throughput
+ * regression on the JIT-ON path.  With gc.total the charge is exactly zero.
+ *
+ * GCSpause IS NOT EVIDENCE THAT A CYCLE RAN, which is why we latch the white.
+ * gc_onestep reaches GCSpause from GCSsweep (:700, "skip this phase to help
+ * the JIT") and from GCSfinalize (:719) WITHOUT ever calling atomic().  Since
+ * the whole finding of section 8 is that the collector is chronically behind,
+ * mid-sweep is the NORMAL state to arm from -- so disarming on GCSpause alone
+ * would credit a tail-of-sweep that re-marked nothing.  atomic() flips
+ * g->gc.currentwhite at lj_gc.c:654 and is its only writer in normal operation
+ * (:612 is freeall teardown, lj_state.c:282 is state init).  So
+ * "currentwhite changed AND state == GCSpause" is an exact
+ * mark-plus-atomic-plus-sweep-completed predicate.
+ *
+ * Compare the whole byte for inequality on purpose: pulling in lj_gc.h for
+ * LJ_GC_WHITES would drag lj_gc_step/lj_gc_fullgc declarations into this
+ * file's scope, which is the very thing build-native.sh's gate forbids.
+ *
+ * THE WATERMARK IS FIXED, AND DELIBERATELY SO.  total/4, floor 128 KB.  The
+ * quantity it must cover is the largest allocation burst between two
+ * safepoints, and lj_tab_resize grows the array part with lj_mem_realloc
+ * (lj_tab.c:249) rather than alloc-new-then-free-old, so the positive deltas
+ * telescope to the FINAL array size -- 64 KB per repetition for `sieve` at
+ * N=8192, matching 8c's measurement, 512 KB at N=65536.  768 KB on a 3072-KB
+ * machine covers all of them with margin.  An earlier design learned this
+ * watermark at runtime; that was deleted, because the proxy available inside
+ * the allocator measures the collector's RUN rate, not safepoint density, and
+ * cannot observe the quantity its own correctness condition names.
+ *
+ * WHAT THIS BUYS, AND WHAT IT DOES NOT.  The survival condition becomes
+ *     live + largest inter-safepoint burst  <=  cap
+ * where PUC's is
+ *     live + largest single allocation      <=  cap.
+ * The gap is real and irreducible without a finer safepoint, which would
+ * reintroduce C5 and C6.  This narrows the divergence; it does not close it.
+ *
+ * FLUSHING TRACES UNDER MEMORY PRESSURE (2026-09-22).  Since the persist-side
+ * flush went, trace metadata -- GCtrace, IR, snapshots, charged to the RAM
+ * cap through this allocator, unlike the machine code -- stays resident until
+ * LuaJIT's own self-flush at 1000 live traces or a full 2 MB mcode reserve.
+ * Measured: ~460 live traces are ~90 KB sandbox-visible at the 256 KB tier
+ * (docs/roadmap.md, the jit.opt row) -- a third of the machine, and no cycle
+ * can reclaim a byte of it: gc_traverse_proto marks pt->trace (lj_gc.c:287),
+ * so traces live exactly as long as the program that made them.
+ *
+ * THE PREDICATE IS "A PROVEN CYCLE DID NOT RESTORE HEADROOM", never "we
+ * armed".  In the gc_collects++ branch below, with the cycle complete and
+ * `used` the heap as it stands after it, headroom still under HALF the
+ * watermark means garbage was not what filled the machine, and resident
+ * trace metadata is the one reclaimable thing left.  Arming is the wrong
+ * trigger: a small machine idling near its watermark arms constantly (the
+ * 2026-09-15 census boot of AxisOS: 99542 arms) and would lose its compiled
+ * code on every resume for nothing.  gc_flush_wanted is a FLAG.  The
+ * allocator sets it and does nothing else.
+ *
+ * HALF THE WATERMARK, NOT THE WHOLE (2026-10-04; LJ52_GC_FLUSHSHIFT).  The
+ * watermark is where the emergency cycle starts to run; it is not "out of
+ * memory".  A 192 KB machine whose kernelMemory holds no compiled code (site
+ * 13 of the patched kernel) idles with OpenOS at 106-145 KB free against a
+ * 130 KB watermark, so with the whole watermark as the predicate every cycle
+ * it proved at idle asked for the flush, and it threw away ~25 KB of
+ * compiled code 8-20 times in 10 s, to recompile it at the next resume.
+ * Half the watermark (12.5% of the cap past 512 KB, 64 KB below) leaves that
+ * machine alone and still flushes a program that holds its data closer to
+ * the wall -- before the wall, so the traces come back before the refusal
+ * (mem_test W15; the harness's mem-2).
+ *
+ * THE FLUSH CANNOT HAPPEN HERE.  lj_trace_flushall frees machine code and
+ * rewrites bytecode (trace_unpatch) and must run on the Lua thread at a point
+ * where nothing compiled is executing or being recorded; the allocator is
+ * called from inside both.  So the flag is consumed at THE SAFE POINT:
+ * lj52_wd_arm, the C function the kernel calls on the Lua thread before every
+ * sandbox resume.  A C function the interpreter called is on-trace nowhere --
+ * a trace records neither a call to a C function nor anything past one --
+ * and is where luaJIT_setmode, i.e. jit.flush(), is meant to be called from.
+ * lj52_gc_flushtraces does, in order: clear the flag; measure what is
+ * resident (by the formula lj_trace_free credits back, so the stat is the
+ * bytes the sweep will return); return if nothing is; refuse under HOOK_GC,
+ * because luaJIT_setmode RAISES there (lj_dispatch.c:253-259, LJ_ERR_NOGCMM)
+ * and an error out of a C function the kernel called is a kernel crash, so
+ * it is checked first and counted, never caught; call luaJIT_setmode(L, 0,
+ * LUAJIT_MODE_FLUSH), the public API, which is lj_trace_flushall and resets
+ * the penalty cache with it; then RE-ARM the emergency cycle exactly as the
+ * allocator arms it -- stepmul 0, threshold = total, white latched -- so the
+ * GCtrace objects the flush unlinked are swept at the very next checkpoint
+ * rather than whenever the chronically-behind collector gets there.  The
+ * re-arm is skipped while a cycle is already armed (stepmul is 0 then, and
+ * latching that as gc_savedmul would make the disarm restore 0) and under a
+ * host GCSTOP, the two states the allocator's own arm respects.
+ *
+ * THIS CALLS NOTHING BACK INTO LUA, with one bounded exception that is
+ * LuaJIT's own: lj_trace_flushall sends the "flush" VM event, which reaches a
+ * Lua handler only where jit.attach installed one.  The sandbox cannot --
+ * machine.lua strips `jit` -- and the harness's counter (OcljSmoke.scala,
+ * JIT PROBE) is exactly the instrument that shows a flush happened.  The
+ * same event fires for LuaJIT's self-flush and for jit.flush() today.
+ *
+ * WHAT IT COSTS.  The next resume runs interpreted until its loops are hot
+ * again (56 iterations each, milliseconds), and the machine gets back what
+ * the traces held.  What it does NOT solve: a machine whose LIVE DATA alone
+ * is past half the watermark raises the flag at every proven cycle and
+ * flushes at every resume, because for that machine the predicate is true
+ * and there is nothing else to reclaim.  That is a machine that is out of memory; staying
+ * interpreted is the right degradation, and trace_flushes in _OCLJ_GCSTATS
+ * makes it visible rather than mysterious.
+ *
+ * TESTED in test/native/mem_test.c P0-P2: a live hold that a cycle cannot
+ * resolve flushes exactly once at the arm and the accounted `used` drops by
+ * at least the metadata; a garbage hold that a cycle DOES resolve never sets
+ * the flag.  Both were first run against the shim before this section
+ * existed, and the flush half failed there.
+ *
+ * THE PARK RESET (2026-10-04; docs/roadmap.md, "the collector at the wall").
+ * An arm that lands while the collector sweeps -- GCSsweepstring, GCSsweep or
+ * GCSfinalize, the normal state to arm from, per the paragraph on GCSpause
+ * above -- is honoured by the next checkpoint only up to the END OF THE OLD
+ * CYCLE: gc_onestep reaches GCSpause from the sweep without atomic(), and
+ * lj_gc_step then returns with threshold = 2 x estimate (lj_gc.c:742).  The
+ * white has not flipped, so the latch stays armed, stepmul stays 0 -- and
+ * with the live set over half the cap, gc.total never reaches that threshold
+ * again before the cap: no checkpoint fires, the collector is PARKED, and the
+ * machine is refused at the wall with its garbage uncollected until the
+ * valve below gives up or the kernel's own collect runs.  mem_test W5a/W5b
+ * reproduce it against the previous object: armed, state 0, stepmul 0,
+ * threshold twice gc.total, and a 64-byte churn refused after 3195 tables
+ * with not one collection.
+ *
+ * So in the armed branch: at GCSpause, the white unchanged, and the
+ * threshold past gc.total, write threshold = gc.total again.  That is the
+ * arm's own intent restored, and the next checkpoint starts a FRESH cycle at
+ * stepmul 0, which does pass through atomic() and is proven by the latch.
+ * It cannot fire inside a step: the only allocator calls a step makes are
+ * lj_str_resize in GCSsweepstring/GCSsweep, before the state reaches
+ * GCSpause, and lj_buf_shrink in atomic(); finalizers return early on
+ * HOOK_GC.  It fires only once the collector has been seen OUTSIDE GCSpause
+ * since the arm (gc_moved): an arm made AT the pause, followed by a free --
+ * lj_tab_resize allocates the new hash part and frees the old one -- leaves
+ * gc.total under the arm's threshold too, and that is not a park, only a
+ * free.  The same rule ends the two-flip alias mem_test's settle_gc works
+ * around (two full collections while armed flip the white back to the
+ * latched value), whenever any allocator call saw the collector mid-cycle.
+ *
+ * THE CREDIT (2026-10-04).  PUC Lua, refused at the cap, runs a full
+ * collection inside luaM_realloc_ and tries again; a program that catches
+ * "not enough memory" and drops its data therefore carries on.  We cannot
+ * collect inside the allocator (C1-C7), so until this change the program's
+ * own NEXT allocation -- the error message it builds, the string it formats
+ * -- was refused too, before any checkpoint could collect what it dropped:
+ * 20 of 60 capacity runs at OC's default scale ended that way or with the
+ * machine down, against 0 of 20 on stock (bench/results-ramscale-
+ * 2026-10-03.md).  So a growth that would pass the cap is LENT up to a
+ * bounded credit, charged like any other, and the collector armed to repay
+ * it at the next checkpoint.  G = total/16, clamped to 32 KB..512 KB:
+ *   - BURST, the default tier: up to G/2 past the cap.  Before any refusal
+ *     the heap stops at total + G/2 (+ THE WINDOW below, for the sandbox),
+ *     so when the refusal comes at least G/2 (G/2 - LJ52_GC_LEND) is left
+ *     for what the program does next;
+ *   - RESERVE, after a refusal: up to G.  The refusal opens it; a proof that
+ *     finds the heap back under the cap closes it.  A proof that does not --
+ *     the cycle ran before the program dropped its data -- leaves it open,
+ *     which is what lets "catch, format the message, drop, carry on" work;
+ *   - a record that has proven no cycle yet and finds the live data
+ *     already past total + G/2 (a state eris loaded, with its cap restored
+ *     under what the machine held when it was saved: the record is fresh,
+ *     the bytes are not) takes the RESERVE tier, so the first allocation
+ *     after a load is not refused for history the record never saw.  Only
+ *     a fresh record: in one that has run cycles, the heap passes total +
+ *     G/2 legitimately on the kernel's slice below, and taking that as a
+ *     reserve would spend the second tier before any refusal.  Nor bytes
+ *     THE WINDOW lent: in a fresh record they would open the second tier
+ *     with no refusal at all (mem_test W11w);
+ *   - THE KERNEL'S SLICE: LJ52_GC_KSLICE more, for the kernel only -- no
+ *     resume armed (wd_depth 0: between resumes, where Java's signal pushes
+ *     land too), or the thread that made the outermost arm (the kernel after
+ *     coroutine.resume returned and before the disarm; cur_L is restored to
+ *     the resumer, vm_x64.dasc:1625).  The sandbox that spent both tiers
+ *     and its window cannot take the kernel down with it on the table.pack
+ *     it does after every resume (machine.lua): the kernel keeps
+ *     LJ52_GC_KSLICE - LJ52_GC_LEND past the sandbox's ceiling.
+ * No credit at all where nothing could repay it: under HOOK_GC (a finalizer;
+ * PUC's cap is hard there too) and under a host GCSTOP.  The bound is
+ * absolute, not incremental: used + delta <= total + G + the slice for
+ * every growth outside the norefuse window -- the sandbox's own, total + G
+ * + LJ52_GC_LEND, inside it -- so caught refusals cannot ratchet it
+ * (mem_test W7, W7k), and the excursion is charged -- getFreeMemory reads
+ * 0, both Java sides clamp it there.  What it does not fix: a single
+ * request larger than headroom + credit (+ the window), retried with no
+ * checkpoint between the tries (mem_test W9, printed, not asserted), is
+ * refused where PUC would collect and succeed; any checkpoint between the
+ * tries cures it.
+ *
+ * THE CADENCE (2026-10-04).  Until this change, once a proven cycle left the
+ * heap inside the watermark, the very next allocator call armed again, so
+ * every GC checkpoint paid a whole O(heap) cycle: 20-120x stock's time over
+ * the last quarter of a fill.  Stock collects once per (cap - live) bytes.
+ * The arm while unarmed is now:
+ *   - no cycle proven yet: headroom < w, as before;
+ *   - below the cap: headroom < min(w, (total - gc_low)/2) -- re-arm after
+ *     half the post-cycle headroom is used, two cycles per (cap - live)
+ *     bytes, twice stock's count; and a growth past the cap always arms;
+ *   - past the cap (the last proof left the heap there): when the distance
+ *     to the top of the current tier -- the kernel's slice included, when it
+ *     is the kernel allocating -- has halved since that proof.  Halving, not
+ *     every grant: a program holding data past the cap pays log2 cycles per
+ *     tier, and one that drops its data is repaid within half the tier;
+ *   - past the tier's top itself, THE WINDOW below arms instead: each
+ *     sandbox crossing it lends demands the cycle that decides it, so a
+ *     program whose live data and newest garbage straddle the top pays a
+ *     cycle per crossing there -- stock's rate, which collects at every
+ *     allocation that does not fit.
+ * mem_test W4: 20000 64-byte tables over 256 KB live with 64 KB of headroom
+ * took 10000 full cycles (one per checkpoint pair) before; the bound now is
+ * three times stock's count.  A fill of 512 KB of live 64-byte tables to
+ * the refusal costs 21 full cycles, against 1554 before (W12).
+ *
+ * NO BACK-OFF.  The design review proposed suspending pre-emptive cycles
+ * once one freed less than half of what was allocated since the proof
+ * before it -- a fill, where further cycles below the cap find the same
+ * live set.  It was built, and it saved 9 of those 21 cycles; it was
+ * removed because it suppresses the proofs the trace flush is asked for at
+ * (FLUSHING TRACES above), in two ways.  A program's first cycle frees its
+ * own garbage, leaves the heap outside the watermark and so rightly asks
+ * for no flush -- and the back-off it engages stops every cycle after it
+ * while the program grows to within 100 KB of the cap (mem_test W14; what
+ * the harness's mem-2 hit on both builds that had a back-off).  And a
+ * back-off engaged by one program can outlive it into the next (W13, found
+ * hermetically while chasing the first of those).  The flush needs one
+ * proof inside the watermark; halving the gate gives it that, at log2
+ * cost.
+ *
+ * THE WINDOW (2026-10-05; docs/roadmap.md, "A refusal at a credit tier's
+ * top can land outside the program's handler").  THE CREDIT moved the
+ * refusal from the cap to a tier's top, but it still came at whichever
+ * allocation first found used + delta past that top -- and `used` is the
+ * live data PLUS everything allocated since the last proven cycle PLUS what
+ * the frame of that cycle's checkpoint still pinned.  So refusals were
+ * spread over the allocation sites by bytes, and some landed where the
+ * program has no handler -- the capacity probe's step between batches (a
+ * stall), OpenOS's dispatcher after a resume (the sandbox down) -- although
+ * a collection would have made room: 431 of 16384 hermetic probe runs on
+ * stage C, every one garbage-covered; 0 on PUC, which collects at the
+ * refusal and retries (mem_test W16, W16R, W16Rj).  We cannot collect there
+ * (C1-C7).  So a SANDBOX growth past its tier's top S (total + G/2, or
+ * total + G in the reserve tier) is LENT, up to LJ52_GC_LEND past S, and
+ * arms the cycle that will decide it; the window stays open until a proven
+ * cycle says what the heap holds:
+ *   - back under S: the window shuts -- garbage covered the crossing;
+ *   - past S even without the bytes granted since the PREVIOUS proof, i.e.
+ *     data that survived two consecutive cycles: THE VERDICT, and the next
+ *     crossing is refused while that proof's heap stays past the current S
+ *     -- read against the current S so that a cap raised, or frees that took
+ *     gc_low back under S, between the proof and that crossing void it; the
+ *     two are usually one allocator call apart, and no test reaches the
+ *     case.  That refusal shuts the window
+ *     and arms a cycle, so the crossing after it is lent and decided anew:
+ *     a program that catches its refusals and keeps allocating pays a cycle
+ *     per refusal -- stock's emergency collection per refusal -- and never
+ *     passes the ceiling;
+ *   - otherwise it stays open.  The excess is no older than the previous
+ *     proof, and the frame that allocated it may still pin it: a cycle run
+ *     at a check inside a loop marks that frame's registers (lj_gc.c:
+ *     309-313), so its proof counts junk that is dead the moment the loop's
+ *     function returns (W16: the batch's last checkpoint, then the stage
+ *     string outside the handler; a verdict on that one proof refused it).
+ * THE LOOK: a growth that would pass the cap first proves a cycle that has
+ * ended, so a proof's figure is the heap the cycle left, not that plus the
+ * request that observed it, and its decision reaches the first allocation
+ * after that cycle -- most often in the code whose checkpoint ran it --
+ * not the second: read one call late, it reached the allocation after the
+ * batch had returned -- event.timer's record, outside the handler (W16,
+ * W16R; in the hermetic W16 sweeps, 30 and 29 landings outside the handler
+ * without it, 0 with it).
+ * A refusal shuts the window, so the cycle it arms decides the next
+ * crossing: a caught refusal in the reserve tier opens no room, and without
+ * this the program's next allocation -- its "done/..." string, allocate-
+ * first -- was refused before any checkpoint could run (W16Rj).  The
+ * window arms its own cycle: THE CADENCE would arm the same grant (regime
+ * P: top - used < 0), but once a proof has left the heap past the top it
+ * gets there by right-shifting a negative number.
+ * The kernel gets no window (C6b, W7k): its slice lies past every window
+ * (LJ52_GC_LEND <= LJ52_GC_KSLICE, checked at compile time), so it keeps
+ * LJ52_GC_KSLICE - LJ52_GC_LEND past the sandbox's ceiling (W19); and when
+ * its slice took the heap past S between resumes, the sandbox's next
+ * allocation -- the dispatcher's table.pack -- is a crossing like any
+ * other, lent, its cycle run at that call's own check.  No window under
+ * HOOK_GC or a host GCSTOP, as no credit.  Nothing of it crosses eris: it
+ * is shut on a fresh record, decided anew at every proof, and read against
+ * the current top.  The bound stays absolute: the sandbox's used + delta <=
+ * total + G + LJ52_GC_LEND, every thread's <= total + G + LJ52_GC_KSLICE as
+ * before, so caught refusals cannot ratchet it (W7, re-scoped to G + the
+ * window; W7k).  What it costs: a cycle per crossing while live data plus
+ * the newest junk straddles a top; and a program whose live data sits past
+ * S by less than its own garbage per cycle never gets the verdict -- lent
+ * within the ceiling, a cycle per crossing, never refused.  What it does
+ * not fix: a window overrun before a checkpoint proves its cycle (more than
+ * LJ52_GC_LEND with no checkpoint, a single request past S + LJ52_GC_LEND,
+ * or the kernel spending more than that of its slice past S between
+ * resumes), and garbage pinned across two consecutive cycles, are still
+ * refused wherever they land.
+ *
+ * THE VALVE COUNTS ATTEMPTS.  LJ52_GC_ARMCAP counts allocator calls that
+ * try to GROW (granted or refused), never frees or shrinks.  An armed cycle
+ * that sweeps more than 65 536 dead blocks -- one sweep of a machine full of
+ * garbage -- used to trip it from its own frees and report a bailout, the
+ * signal reserved for a latch that is not seeing its flip (mem_test W5c:
+ * 100 000 garbage tables, bailouts 0 -> 1 on the previous object).
+ */
+
+#define LJ52_GC_WMIN   (128 * 1024)     /* watermark floor                   */
+#define LJ52_GC_ARMCAP (1 << 16)        /* allocator calls before we give up */
+/* THE CREDIT: G = total >> ODSHIFT, clamped.  G/2 stays under the watermark
+ * at every cap (w >= total/4), so the credit is a fallback past the cap,
+ * never the routine buffer.  The 32 KB floor binds on the 192 KB stick (cap
+ * ~509 KB at OC's 1.8); the 512 KB ceiling bounds the host-side excursion
+ * per machine at any cap, Int.MaxValue included. */
+#define LJ52_GC_ODSHIFT 4
+#define LJ52_GC_ODMIN  (32 * 1024)
+#define LJ52_GC_ODMAX  (512 * 1024)
+#define LJ52_GC_KSLICE (16 * 1024)      /* the kernel's own, past the credit */
+#define LJ52_GC_LEND   (4 * 1024)       /* THE WINDOW; <= KSLICE: the bound  */
+#if LJ52_GC_LEND > LJ52_GC_KSLICE
+#error "THE WINDOW must sit inside the kernel's slice, or the bound over every thread moves"
+#endif
+#if LJ52_GC_KSLICE - LJ52_GC_LEND < 12 * 1024
+#error "the kernel must keep 12 KiB past the sandbox's ceiling (mem_test W19)"
+#endif
+#define LJ52_GC_HYSTSHIFT 1             /* re-arm after half the headroom    */
+#define LJ52_GC_FLUSHSHIFT 1            /* flush inside half the watermark   */
+#define LJ52_OD_BURST   0               /* credit tiers                      */
+#define LJ52_OD_RESERVE 1
+#define LJ52_ARM_GATE  0                /* armed below the cap: pre-emptive  */
+#define LJ52_ARM_WALL  1                /* armed past the cap, or refused    */
+#define LJ52_ARM_FLUSH 2                /* armed by the flush at the safe point */
+
+/* GCSpause, WITHOUT including lj_gc.h.
+ *
+ * The collector-state enum is lj_gc.h:11-14, and GCSpause is its first member,
+ * so its value is 0.  We do not include that header to say so, because it also
+ * declares lj_gc_step and lj_gc_fullgc -- and bringing those into this file's
+ * scope is precisely what build-native.sh's collector gate forbids.  The
+ * alternative, spelling the constant here, moves the risk from "the shim can
+ * call the collector" to "the enum could be reordered", which is the smaller
+ * risk and, unlike the other one, is CHECKABLE AT BUILD TIME: build-native.sh
+ * asserts the enum still begins with GCSpause.  The enum's own comment reads
+ * "Order matters." */
+#define LJ52_GCS_PAUSE 0
+
+/* ARM: demand one whole cycle at the next checkpoint.  stepmul 0 makes
+ * lj_gc_step's budget LJ_MAX_MEM; threshold = gc.total, NOT 0 (see above).
+ * The white is latched for the proof, the state for THE PARK RESET.  The
+ * allocator and the flush at the safe point both arm through here. */
+static void lj52_gc_arm(lj52_mem *M, global_State *g, int why)
+{
+  M->gc_armby = why;
+  M->gc_savedmul = g->gc.stepmul;
+  M->gc_white    = g->gc.currentwhite;
+  g->gc.stepmul  = 0;
+  g->gc.threshold = g->gc.total;
+  M->gc_moved = g->gc.state != LJ52_GCS_PAUSE;
+  M->gc_armed = 1;
+  M->gc_armedcalls = 0;
+  M->gc_arms++;
+  oclj_arm_note(M, why);
+}
+
+/* G for a cap; see THE CREDIT. */
+static long long lj52_gc_odmax(long long total)
+{
+  total >>= LJ52_GC_ODSHIFT;
+  return total < LJ52_GC_ODMIN ? LJ52_GC_ODMIN : total > LJ52_GC_ODMAX ? LJ52_GC_ODMAX : total;
+}
+
+/* The tier a record is in for this heap: RESERVE after a refusal, or a fresh
+ * record (no cycle proven) whose live data is already past the burst tier,
+ * which then keeps it -- not bytes THE WINDOW lent it: a window is open
+ * (gc_win) only once this record has itself granted past the top.  See THE
+ * CREDIT. */
+static int lj52_gc_reserve(lj52_mem *M, long long total, long long used)
+{
+  if (M->gc_odstate == LJ52_OD_RESERVE) return 1;
+  if (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1)) {
+    M->gc_odstate = LJ52_OD_RESERVE;
+    return 1;
+  }
+  return 0;
+}
+
+/* THE KERNEL'S SLICE: is the thread running the kernel's?  See THE CREDIT. */
+static int lj52_gc_kernel(lj52_mem *M, global_State *g)
+{
+  return M->wd_depth == 0 || gco2th(gcref(g->cur_L)) == M->wd_by[0];
+}
+
+/* How far past the cap this growth may go.  Read only on the slow path, when
+ * the growth would not otherwise fit. */
+static long long lj52_gc_credit(lj52_mem *M, long long total, long long used)
+{
+  global_State *g;
+  long long c;
+  if (M->L == NULL || total <= 0) return 0;
+  g = G(M->L);
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return 0;
+  c = lj52_gc_odmax(total);
+  if (!lj52_gc_reserve(M, total, used)) c >>= 1;
+  if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;
+  return c;
+}
+
+/* THE WINDOW's look: a growth that would pass the cap first sees whether
+ * the armed cycle has ended, so the proof's figure is the heap that cycle
+ * left -- not that plus the request -- and the window is decided before the
+ * request is judged.  It is the armed branch of lj52_gc_pressure, with its
+ * guards (norefuse, HOOK_GC, GCSTOP: nothing is observed there), as a FREE:
+ * a look is not an attempt, and the valve must not count it.  The park
+ * reset it can run is the one the same call's GROW or TRY would run a
+ * moment later, against the same gc.total (LuaJIT adds the block only after
+ * the allocator returns).  Only on the slow path: below the cap the call
+ * is the stage-C allocator's, unchanged. */
+static void lj52_gc_look(lj52_mem *M, long long total, long long used)
+{
+  if (M->gc_armed) lj52_gc_pressure(M, total, used, LJ52_GP_FREE);
+}
+
+/* THE WINDOW: lend a sandbox growth the credit refused?  Up to LJ52_GC_LEND
+ * past the top it was refused at, unless the verdict stands, and arm the
+ * cycle that will decide it.  Never the kernel's, never under HOOK_GC or a
+ * host GCSTOP. */
+static int lj52_gc_lend(lj52_mem *M, long long total, long long used, long long delta)
+{
+  global_State *g;
+  long long top;
+  if (M->L == NULL || total <= 0) return 0;
+  g = G(M->L);
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM || lj52_gc_kernel(M, g))
+    return 0;
+  top = total + lj52_gc_credit(M, total, used);
+  if (used + delta > top + LJ52_GC_LEND) return 0;      /* the ceiling */
+  if (M->gc_win == 2 && M->gc_low > top) return 0;      /* the verdict */
+  M->gc_win = 1;
+  M->gc_lends++;
+  if (!M->gc_armed) lj52_gc_arm(M, g, LJ52_ARM_WALL);   /* the window's cycle */
+  return 1;
+}
+
+/* A refusal: counted, the valve and the proof seen to first, then the
+ * reserve tier opened and the collector armed -- from ANY headroom, so the
+ * garbage that would have covered the request is collected at the next
+ * checkpoint and a retry after it succeeds (mem_test W2b/W2c).  Not under
+ * HOOK_GC or a host GCSTOP, the two states the allocator never touches. */
+static void lj52_gc_refused(lj52_mem *M, long long total, long long used)
+{
+  global_State *g;
+  M->gc_refusals++;
+  lj52_gc_pressure(M, total, used, LJ52_GP_TRY);
+  if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+  g = G(M->L);
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
+  M->gc_odstate = LJ52_OD_RESERVE;
+  M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
+  if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
+  else lj52_gc_arm(M, g, LJ52_ARM_WALL);
+}
+
+static void lj52_gc_pressure(lj52_mem *M, long long total, long long used, int kind)
+{
+  global_State *g;
+  long long w, gate, top;
+  int arm;
+
+  /* gc_busy guards nothing today -- this function calls nothing that can
+   * re-enter the allocator, it only reads and writes scalars.  It is here so
+   * that the day someone adds a call, the guard is already in place rather
+   * than being the thing they forgot. */
+  if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+  M->gc_busy = 1;
+  g = G(M->L);
+
+  /* Two states where the VM owns gc.threshold and we must not touch it:
+   * inside a finalizer (gc_call_finalizer sets HOOK_GC at lj_gc.c:514 and
+   * parks threshold at LJ_MAX_MEM at :516), and after a host lua_gc(GCSTOP),
+   * which OC does around persistence. */
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) {
+    M->gc_busy = 0;
+    return;
+  }
+
+  M->gc_seentotal = total;
+  if (kind == LJ52_GP_GROW && used > total) {   /* a growth lent on credit */
+    M->gc_overdrafts++;
+    if (used - total > M->gc_odpeak) M->gc_odpeak = used - total;
+  }
+  w = total / 4;
+  if (w < LJ52_GC_WMIN) w = LJ52_GC_WMIN;
+
+  if (M->gc_armed) {
+    if (g->gc.state != LJ52_GCS_PAUSE) M->gc_moved = 1;
+    if (g->gc.currentwhite != M->gc_white && g->gc.state == LJ52_GCS_PAUSE) {
+      oclj_prf_pre(M);
+      if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
+      M->gc_armed = 0;
+      M->gc_collects++;
+      M->gc_hyst = 1;
+      M->gc_low = used;
+      if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
+      if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+        top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+                                                        : lj52_gc_odmax(total) >> 1);
+        M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;
+      }
+      M->gc_grown = 0;
+      /* THE FLUSH PREDICATE -- at the proof, never at the arm.  The cycle
+       * has run to completion and `used` is the heap as it stands after it.
+       * Headroom still short means garbage was not what filled the machine,
+       * and resident trace metadata is the reclaimable part no cycle can
+       * touch.  A flag only: the flush itself must wait for the safe point.
+       * See FLUSHING TRACES UNDER MEMORY PRESSURE above.  Never raised by
+       * the proof of a cycle the flush itself armed: that is the
+       * flush -> re-arm -> proof -> flush loop. */
+      if (M->gc_armby != LJ52_ARM_FLUSH && total - used < (w >> LJ52_GC_FLUSHSHIFT))
+        M->gc_flush_wanted = 1;
+      oclj_prf_post(M, total, used);
+    } else {
+      if (M->gc_moved && g->gc.state == LJ52_GCS_PAUSE && g->gc.threshold > g->gc.total) {
+        /* THE PARK RESET: the old cycle ended without atomic(); start a
+         * fresh one at the next checkpoint.  See above. */
+        g->gc.threshold = g->gc.total;
+        M->gc_moved = 0;
+        M->gc_parkresets++;
+      }
+      if (kind != LJ52_GP_FREE && ++M->gc_armedcalls > LJ52_GC_ARMCAP) {
+        /* The safety valve.  While armed, EVERY lj_gc_step from any site is
+         * unbounded, so the window must not be allowed to persist if the
+         * latch somehow never resolves.  A nonzero bailouts count is a bug
+         * in this code, not a tuning signal: it means the white flip is not
+         * being seen and the disarm argument needs re-deriving.  Attempts
+         * only: see THE VALVE COUNTS ATTEMPTS. */
+        if (g->gc.stepmul == 0) g->gc.stepmul = M->gc_savedmul;
+        M->gc_armed = 0;
+        M->gc_bailouts++;
+      }
+    }
+    M->gc_busy = 0;
+    return;
+  }
+
+  /* THE CADENCE; see above. */
+  if (M->gc_hyst && used < M->gc_low) M->gc_low = used;
+  if (!M->gc_hyst) {
+    arm = total - used < w;
+  } else if (M->gc_low < total) {
+    gate = (total - M->gc_low) >> LJ52_GC_HYSTSHIFT;
+    if (gate > w) gate = w;
+    arm = used > total || total - used < gate;
+  } else {
+    top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+                                                    : lj52_gc_odmax(total) >> 1);
+    if (lj52_gc_kernel(M, g)) top += LJ52_GC_KSLICE;   /* where the kernel is refused */
+    arm = top - used < (top - M->gc_low) >> 1;
+  }
+  if (arm) lj52_gc_arm(M, g, used > total ? LJ52_ARM_WALL : LJ52_ARM_GATE);
+  M->gc_busy = 0;
+}
+
+/* ===================================================================== */
+/* OCLJ REFUSAL FORENSICS: the hooks (instrumented copy only).           */
+/* ===================================================================== */
+/* Everything here READS the record and the VM.  It writes only the oc_*
+ * fields, the two static rings, and stderr.  Nothing allocates through the
+ * Lua allocator, nothing calls the Lua API, and the frame walk is bounded
+ * and checks each frame slot before it follows it.
+ *
+ * WHERE: the running thread is g->cur_L; its base is lj_err_mem's own
+ * choice (g->jit_base while a trace runs, else L->base).  The current
+ * frame's function gives fk (lua, c, ff with its ffid); the nearest Lua
+ * frame gives at=chunk:line, its PC taken as lj_debug's debug_framepc takes
+ * it (pcsrc 1: the C frame's saved PC, top frame; 2: the next frame's link;
+ * 3: a continuation) -- not on a trace, where the saved PC is stale.  ctx
+ * names the JIT context: "rec" = the recorder's own J->pt/J->pc (J->state
+ * not idle), "trace" = the executing trace's start (vmstate >= 0).
+ *
+ * RECORDER: the refusal was raised inside the trace recorder's protected
+ * call, whose error trace_abort drops (lj_trace.c), i.e. the program never
+ * sees it.  Decided as: the innermost C frame is a cpcall frame
+ * (lj_vm_cpcall: saved PC == L, negative nres), J->state is not idle, and
+ * vmstate is neither C, GC nor EXIT.  vmstate alone is NOT enough: it stays
+ * RECORD after lj_record_ins returns, while the interpreter executes the
+ * instruction just recorded, and an allocation there reaches the program. */
+#include "lj_frame.h"
+#include "lj_debug.h"
+
+#if !defined(LJ52_WD_WIN32)
+extern char **environ;
+#endif
+
+static oclj_refrec oclj_ring[OCLJ_RING_N] __attribute__((used));
+static long long   oclj_ringn __attribute__((used));
+static oclj_gcev   oclj_gcring[OCLJ_GCRING_N] __attribute__((used));
+static long long   oclj_gcringn __attribute__((used));
+static long long   oclj_gseq;
+
+/* The rings, for a test or a debugger: the refusal ring (OCLJ_RING_N
+ * entries; *n records ever written, the newest at (*n - 1) % cap) and the
+ * arm/proof ring.  Not JNIEXPORT: the DLL's export table is unchanged. */
+const void *oclj_refring(long long *n, int *cap)
+{
+  *n = __atomic_load_n(&oclj_ringn, __ATOMIC_RELAXED);
+  *cap = OCLJ_RING_N;
+  return (const void *)oclj_ring;
+}
+const void *oclj_gcevring(long long *n, int *cap)
+{
+  *n = __atomic_load_n(&oclj_gcringn, __ATOMIC_RELAXED);
+  *cap = OCLJ_GCRING_N;
+  return (const void *)oclj_gcring;
+}
+
+static void oclj_ref_init(lj52_mem *M)
+{
+  char buf[16];
+  int lv = 0, have = 0;
+#if defined(LJ52_WD_WIN32)
+  DWORD n = GetEnvironmentVariableA("OCLJ_REFLOG", buf, (DWORD)sizeof buf);
+  if (n > 0 && n < sizeof buf) have = 1;
+  else if (n >= sizeof buf) { have = 1; buf[0] = '1'; buf[1] = 0; }
+#else
+  char **e;
+  for (e = environ; e != NULL && *e != NULL; e++) {
+    if (strncmp(*e, "OCLJ_REFLOG=", 12) == 0 && (*e)[12] != 0) {
+      size_t j;
+      for (j = 0; j < sizeof buf - 1 && (*e)[12 + j] != 0; j++) buf[j] = (*e)[12 + j];
+      buf[j] = 0;
+      have = 1;
+      break;
+    }
+  }
+#endif
+  if (have)
+    lv = (buf[0] == '0' && buf[1] == 0) ? 0
+       : (buf[0] == '2' && buf[1] == 0) ? 2
+       : (buf[0] == '3' && buf[1] == 0) ? 3 : 1;
+  M->oc_log = lv;
+  if (lv > 0) {
+    fprintf(stderr, "OCLJREFINIT| st=%p level=%d ring=%d gcring=%d\n",
+            (void *)M, lv, OCLJ_RING_N, OCLJ_GCRING_N);
+    fflush(stderr);
+  }
+}
+
+static const char *oclj_vmname(int32_t st)
+{
+  static const char *const n[] = {"INTERP", "C", "GC", "EXIT", "RECORD", "OPT", "ASM"};
+  if (st >= 0) return "TRACE";
+  st = ~st;
+  return (st >= 0 && st < 7) ? n[st] : "?";
+}
+
+static const char *oclj_jname(int js)
+{
+  switch (js) {
+  case LJ_TRACE_IDLE: return "IDLE";
+  case LJ_TRACE_ACTIVE: return "ACTIVE";
+  case LJ_TRACE_RECORD: return "RECORD";
+  case LJ_TRACE_RECORD_1ST: return "RECORD_1ST";
+  case LJ_TRACE_START: return "START";
+  case LJ_TRACE_END: return "END";
+  case LJ_TRACE_ASM: return "ASM";
+  case LJ_TRACE_ERR: return "ERR";
+  default: return "?";
+  }
+}
+
+static const char *oclj_fkname(int fk)
+{
+  switch (fk) {
+  case -2: return "badframe";
+  case -1: return "badbase";
+  case 1: return "lua";
+  case 2: return "c";
+  case 3: return "ff";
+  default: return "none";
+  }
+}
+
+/* The chunkname's last cap-1 bytes, blanks and '|' made '_'.  Reads the
+ * GCstr's own bytes; allocates nothing. */
+static void oclj_chunk(char *out, size_t cap, GCproto *pt)
+{
+  GCstr *s;
+  const char *p;
+  size_t n, i, from, k = 0;
+  out[0] = 0;
+  if (pt == NULL) return;
+  s = proto_chunkname(pt);
+  if (s == NULL) return;
+  p = strdata(s);
+  n = (size_t)s->len;
+  from = n > cap - 1 ? n - (cap - 1) : 0;
+  for (i = from; i < n && k < cap - 1; i++) {
+    unsigned char c = (unsigned char)p[i];
+    out[k++] = (c <= 32 || c >= 127 || c == '|') ? '_' : (char)c;
+  }
+  out[k] = 0;
+}
+
+static void oclj_where(lua_State *L, global_State *g, oclj_refrec *r, int ontrace)
+{
+  TValue *stk, *base, *frame, *bot, *nextframe = NULL;
+  int i;
+  r->fkind = 0; r->ffid = -1; r->line = -1; r->pcsrc = 0; r->chunk[0] = 0;
+  if (L == NULL) return;
+  stk = tvref(L->stack);
+  base = tvref(g->jit_base);
+  if (base == NULL) base = L->base;
+  if (base < stk + 1 + LJ_FR2 || base > stk + L->stacksize) { r->fkind = -1; return; }
+  bot = stk + LJ_FR2;
+  frame = base - 1;
+  for (i = 0; i < 256 && frame > bot; i++) {
+    GCfunc *fn;
+#if LJ_FR2
+    if (!tvisfunc(frame - 1)) { if (i == 0) r->fkind = -2; return; }
+#endif
+    fn = frame_func(frame);
+    if (i == 0) {
+      r->fkind = isluafunc(fn) ? 1 : fn->c.ffid > FF_C ? 3 : 2;
+      r->ffid = fn->c.ffid;
+    }
+    if (isluafunc(fn)) {
+      GCproto *pt = funcproto(fn);
+      const BCIns *ins = NULL;
+      if (nextframe == NULL) {
+        void *cf = cframe_raw(L->cframe);
+        if (!ontrace && cf != NULL && (char *)cframe_pc(cf) != (char *)cframe_L(cf)) {
+          ins = cframe_pc(cf);
+          r->pcsrc = 1;
+        }
+      } else if (frame_islua(nextframe)) {
+        ins = frame_pc(nextframe);
+        r->pcsrc = 2;
+      } else if (frame_iscont(nextframe)) {
+        ins = frame_contpc(nextframe);
+        r->pcsrc = 3;
+      }
+      oclj_chunk(r->chunk, sizeof r->chunk, pt);
+      if (ins != NULL) {
+        BCPos pos = proto_bcpos(pt, ins) - 1;
+        r->line = pos <= pt->sizebc ? (int)lj_debug_line(pt, pos) : -1;
+      }
+      return;
+    }
+    nextframe = frame;
+    frame = frame_prev(frame);
+  }
+}
+
+/* lj52_gc_credit without its one side effect (lj52_gc_reserve can move a
+ * fresh record to the reserve tier): the same arithmetic, read only. */
+static long long oclj_credit(lj52_mem *M, global_State *g, long long total, long long used, int kernel)
+{
+  long long c;
+  if (M->L == NULL || total <= 0) return 0;
+  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return 0;
+  c = lj52_gc_odmax(total);
+  if (!(M->gc_odstate == LJ52_OD_RESERVE
+        || (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1))))
+    c >>= 1;
+  if (kernel) c += LJ52_GC_KSLICE;
+  return c;
+}
+
+static void oclj_ref_pre(lj52_mem *M, long long total, long long used, long long delta, int legacy)
+{
+  oclj_refrec *r = &M->oc_cur;
+  global_State *g = M->L != NULL ? G(M->L) : NULL;
+  memset(r, 0, sizeof *r);
+  M->oc_inref = 1;
+  M->oc_tryproof = 0;
+  M->oc_trytier = -1;
+  r->gseq = __atomic_add_fetch(&oclj_gseq, 1, __ATOMIC_RELAXED);
+  r->seq = M->gc_refusals + 1;
+  r->calls = M->mem_calls;
+  r->M = (void *)M;
+  r->legacy = legacy;
+  r->delta = delta;
+  r->used = used;
+  r->total = total;
+  r->G = total > 0 ? lj52_gc_odmax(total) : 0;
+  r->tier0 = M->gc_odstate;
+  r->win0 = M->gc_win;
+  r->hyst = M->gc_hyst;
+  r->armed0 = M->gc_armed;
+  r->armby0 = M->gc_armby;
+  r->low = M->gc_low;
+  r->grown = M->gc_grown;
+  r->wd_depth = M->wd_depth;
+  r->mainL = (void *)M->L;
+  r->kby = M->wd_depth > 0 ? (void *)M->wd_by[0] : NULL;
+  r->vmstate = 0x7fffffff;
+  r->jstate = -1;
+  r->trec = r->tpar = r->texit = -1;
+  r->tline = -1;
+  if (g != NULL) {
+    lua_State *L = gco2th(gcref(g->cur_L));
+    int ontrace = g->vmstate >= 0;
+    r->curL = (void *)L;
+    r->kthr = M->wd_depth > 0 && L == M->wd_by[0];
+    r->mainthr = L == M->L;
+    r->kernel = lj52_gc_kernel(M, g);
+    r->credit = oclj_credit(M, g, total, used, r->kernel);
+    r->top = total + r->credit;
+    r->vmstate = g->vmstate;
+    r->hookmask = g->hookmask;
+    r->gcstate = g->gc.state;
+    r->gctotal = (long long)g->gc.total;
+    r->gcthresh = (long long)g->gc.threshold;
+    if (L != NULL) {
+      void *cf = cframe_raw(L->cframe);
+      if (cf != NULL) {
+        r->cfnres = cframe_nres(cf);
+        r->incp = r->cfnres < 0 && (char *)cframe_pc(cf) == (char *)cframe_L(cf);
+      }
+    }
+#if LJ_HASJIT
+    {
+      jit_State *J = G2J(g);
+      r->jstate = J->state;
+      if (J->state != LJ_TRACE_IDLE) {
+        r->recorder = r->incp && g->vmstate < 0 && g->vmstate != ~LJ_VMST_C
+                      && g->vmstate != ~LJ_VMST_GC && g->vmstate != ~LJ_VMST_EXIT;
+        r->trec = (int)J->cur.traceno;
+        r->tpar = (int)J->parent;
+        r->texit = (int)J->exitno;
+        r->ctx = 1;
+        if (J->pt != NULL) {
+          oclj_chunk(r->tchunk, sizeof r->tchunk, J->pt);
+          if (J->pc != NULL) {
+            BCPos pos = proto_bcpos(J->pt, J->pc);
+            r->tline = pos <= J->pt->sizebc ? (int)lj_debug_line(J->pt, pos) : -1;
+          }
+        }
+      } else if (ontrace && (MSize)g->vmstate < J->sizetrace) {
+        GCtrace *T = (GCtrace *)gcref(J->trace[g->vmstate]);
+        r->ctx = 2;
+        if (T != NULL) {
+          GCproto *pt = gco2pt(gcref(T->startpt));
+          const BCIns *spc = mref(T->startpc, const BCIns);
+          oclj_chunk(r->tchunk, sizeof r->tchunk, pt);
+          if (pt != NULL && spc != NULL) {
+            BCPos pos = proto_bcpos(pt, spc);
+            r->tline = pos <= pt->sizebc ? (int)lj_debug_line(pt, pos) : -1;
+          }
+        }
+      }
+    }
+#endif
+    oclj_where(L, g, r, ontrace);
+  }
+}
+
+static void oclj_ref_post(lj52_mem *M)
+{
+  oclj_refrec *r = &M->oc_cur;
+  long long i;
+  long long ceil;
+  int k;
+  r->tier1 = M->gc_odstate;
+  r->win1 = M->gc_win;
+  r->armed1 = M->gc_armed;
+  r->armby1 = M->gc_armby;
+  r->tryproof = M->oc_tryproof;
+  r->trytier = M->oc_trytier;
+  r->opened = r->tier1 == LJ52_OD_RESERVE
+              && (r->tier0 != LJ52_OD_RESERVE || (r->tryproof && r->trytier != LJ52_OD_RESERVE));
+  for (k = 0; k < 5; k++) r->arms[k] = M->oc_arms[k];
+  r->proofs = M->oc_proofs;
+  r->lends = M->gc_lends;
+  r->collects = M->gc_collects;
+  M->oc_inref = 0;
+  i = __atomic_fetch_add(&oclj_ringn, 1, __ATOMIC_RELAXED);
+  oclj_ring[i & (OCLJ_RING_N - 1)] = *r;
+  if (M->oc_log <= 0) return;
+  ceil = r->kernel ? r->top : r->top + LJ52_GC_LEND;
+  fprintf(stderr,
+          "OCLJREF| gseq=%lld st=%p seq=%lld mode=%s delta=%lld used=%lld total=%lld G=%lld"
+          " credit=%lld top=%lld ceil=%lld over=%lld"
+          " tier0=%d tier1=%d opened=%d tryproof=%d win0=%d win1=%d hyst=%d"
+          " armed0=%d armby0=%d armed1=%d armby1=%d low=%lld grown=%lld"
+          " kernel=%d wd=%d kthr=%d mainthr=%d curL=%p mainL=%p kby=%p"
+          " vm=%s vmstate=%d jst=%s jstate=%d incp=%d cfnres=%d recorder=%d"
+          " trec=%d tpar=%d texit=%d hook=%d gcst=%d gctotal=%lld gcthr=%lld"
+          " fk=%s ffid=%d at=%s:%d pcsrc=%d ctx=%s cat=%s:%d"
+          " calls=%lld arms=%ld/%ld/%ld/%ld/%ld proofs=%ld lends=%ld collects=%ld\n",
+          r->gseq, r->M, r->seq, r->legacy ? "legacy" : "c", r->delta, r->used, r->total, r->G,
+          r->credit, r->top, ceil, r->used + r->delta - r->top,
+          r->tier0, r->tier1, r->opened, r->tryproof, r->win0, r->win1, r->hyst,
+          r->armed0, r->armby0, r->armed1, r->armby1, r->low, r->grown,
+          r->kernel, r->wd_depth, r->kthr, r->mainthr, r->curL, r->mainL, r->kby,
+          oclj_vmname(r->vmstate), r->vmstate, oclj_jname(r->jstate), r->jstate,
+          r->incp, r->cfnres, r->recorder,
+          r->trec, r->tpar, r->texit, r->hookmask, r->gcstate, r->gctotal, r->gcthresh,
+          oclj_fkname(r->fkind), r->ffid, r->chunk[0] ? r->chunk : "?", r->line, r->pcsrc,
+          r->ctx == 1 ? "rec" : r->ctx == 2 ? "trace" : "-",
+          r->tchunk[0] ? r->tchunk : "?", r->tline,
+          r->calls, r->arms[0], r->arms[1], r->arms[2], r->arms[3], r->arms[4],
+          r->proofs, r->lends, r->collects);
+  fflush(stderr);
+}
+
+static void oclj_gc_note(lj52_mem *M, int kind, int why, int cause, long long total,
+                         long long used, int tier0, int win0, long long grown)
+{
+  oclj_gcev e;
+  global_State *g = M->L != NULL ? G(M->L) : NULL;
+  long long i;
+  e.gseq = __atomic_add_fetch(&oclj_gseq, 1, __ATOMIC_RELAXED);
+  e.calls = M->mem_calls;
+  e.used = used;
+  e.total = total;
+  e.low = M->gc_low;
+  e.grown = grown;
+  e.M = (void *)M;
+  e.kind = kind;
+  e.why = why;
+  e.cause = cause;
+  e.tier0 = tier0;
+  e.tier1 = M->gc_odstate;
+  e.win0 = win0;
+  e.win1 = M->gc_win;
+  e.flush = M->gc_flush_wanted;
+  e.vmstate = g != NULL ? g->vmstate : 0;
+#if LJ_HASJIT
+  e.jstate = g != NULL ? (int)G2J(g)->state : -1;
+#else
+  e.jstate = -1;
+#endif
+  e.inref = M->oc_inref;
+  i = __atomic_fetch_add(&oclj_gcringn, 1, __ATOMIC_RELAXED);
+  oclj_gcring[i & (OCLJ_GCRING_N - 1)] = e;
+  if (kind == 'P' && M->oc_log >= 2) {
+    fprintf(stderr,
+            "OCLJPRF| gseq=%lld st=%p proof=%ld used=%lld total=%lld low=%lld grown=%lld"
+            " win0=%d win1=%d tier0=%d tier1=%d armby=%d flush=%d inref=%d vm=%s jst=%s calls=%lld\n",
+            e.gseq, e.M, M->oc_proofs, e.used, e.total, e.low, e.grown,
+            e.win0, e.win1, e.tier0, e.tier1, e.why, e.flush, e.inref,
+            oclj_vmname(e.vmstate), oclj_jname(e.jstate), e.calls);
+    fflush(stderr);
+  } else if (kind == 'A' && M->oc_log >= 3) {
+    static const char *const cn[] = {"gate", "wall", "window", "refusal", "flush"};
+    fprintf(stderr,
+            "OCLJARM| gseq=%lld st=%p why=%d cause=%s used=%lld total=%lld low=%lld"
+            " tier=%d win=%d inref=%d vm=%s jst=%s calls=%lld\n",
+            e.gseq, e.M, e.why, (cause >= 0 && cause < 5) ? cn[cause] : "?", e.used, e.total, e.low,
+            e.tier1, e.win1, e.inref, oclj_vmname(e.vmstate), oclj_jname(e.jstate), e.calls);
+    fflush(stderr);
+  }
+}
+
+/* Called at the end of lj52_gc_arm.  The cause: the flush's arm; inside
+ * lj52_gc_pressure (gc_busy) THE CADENCE's, gate below the cap or wall past
+ * it; inside a refusal (between the pre and post hooks) the refusal's own;
+ * otherwise THE WINDOW's lend, the one remaining caller. */
+static void oclj_arm_note(lj52_mem *M, int why)
+{
+  int cause = why == LJ52_ARM_FLUSH ? 4
+            : M->gc_busy ? (why == LJ52_ARM_GATE ? 0 : 1)
+            : M->oc_inref ? 3 : 2;
+  long long total = M->csync ? M->total : M->gc_seentotal;
+  M->oc_arms[cause]++;
+  oclj_gc_note(M, 'A', why, cause, total, M->used, M->gc_odstate, M->gc_win, M->gc_grown);
+}
+
+/* A proven cycle: called at the top of lj52_gc_pressure's proof branch
+ * (before) and at its end (after). */
+static void oclj_prf_pre(lj52_mem *M)
+{
+  M->oc_pwin = M->gc_win;
+  M->oc_ptier = M->gc_odstate;
+  M->oc_parmby = M->gc_armby;
+  M->oc_pgrown = M->gc_grown;
+}
+
+static void oclj_prf_post(lj52_mem *M, long long total, long long used)
+{
+  M->oc_proofs++;
+  if (M->oc_inref) {
+    M->oc_tryproof = 1;
+    M->oc_trytier = M->gc_odstate;
+  }
+  oclj_gc_note(M, 'P', M->oc_parmby, -1, total, used, M->oc_ptier, M->oc_pwin, M->oc_pgrown);
+}
+
+/* THE FLUSH, at the safe point.  Called by lj52_wd_arm on the Lua thread --
+ * inside a C function the interpreter called, so nothing compiled is
+ * executing and nothing is being recorded -- once the collector has raised
+ * gc_flush_wanted.  See FLUSHING TRACES UNDER MEMORY PRESSURE above for the
+ * predicate, the ordering, and why none of this can happen in the allocator.
+ * Raises nothing: an error out of here is an error in the kernel's resume
+ * path. */
+static void lj52_gc_flushtraces(lua_State *L, lj52_mem *M)
+{
+  global_State *g = G(L);
+  jit_State *J = G2J(g);
+  MSize i;
+  long long bytes = 0;
+
+  M->gc_flush_wanted = 0;               /* consumed, whatever happens below  */
+
+  /* What is resident, by the formula lj_trace_free credits back (lj_trace.c
+   * :172-183): the GCtrace header, the IR with its constants, the snapshots
+   * and the snapshot map.  Machine code is not in this figure; it is not
+   * charged to the machine either. */
+  for (i = 1; i < J->sizetrace; i++) {
+    GCtrace *T = (GCtrace *)gcref(J->trace[i]);
+    if (T != NULL)
+      bytes += (long long)(((sizeof(GCtrace)+7)&~7)
+                           + (size_t)(T->nins - T->nk) * sizeof(IRIns)
+                           + (size_t)T->nsnap * sizeof(SnapShot)
+                           + (size_t)T->nsnapmap * sizeof(SnapEntry));
+  }
+  if (bytes == 0) return;               /* nothing is live: nothing to flush */
+
+  /* luaJIT_setmode RAISES under HOOK_GC (lj_dispatch.c:253-259,
+   * LJ_ERR_NOGCMM) rather than returning failure, so that case is checked
+   * here first and counted; its return is checked as well because the
+   * public contract says 1 on success and nothing else is a flush. */
+  if ((g->hookmask & HOOK_GC) || luaJIT_setmode(L, 0, LUAJIT_MODE_FLUSH) != 1) {
+    M->gc_flushrefusals++;
+    return;
+  }
+  M->gc_traceflushes++;
+  M->gc_flushbytes += bytes;
+
+  /* Re-arm the emergency cycle exactly as the allocator arms it, so the
+   * GCtrace objects the flush just unlinked are swept at the very next
+   * checkpoint instead of whenever the chronically-behind collector gets
+   * there.  Skipped when a cycle is already armed -- gc.stepmul is 0 then,
+   * and latching it as gc_savedmul would make the disarm restore 0 -- and
+   * under a host GCSTOP (threshold parked at LJ_MAX_MEM), which the VM
+   * owns; both are the allocator's own rules. */
+  if (!M->gc_armed && g->gc.threshold != LJ_MAX_MEM) lj52_gc_arm(M, g, LJ52_ARM_FLUSH);
+}
+
+#define LJ52_WD_REFIRE_MS 50            /* see THREADING above */
+#define LJ52_WD_MAXMS     4294967000.0  /* ~49 d.  The Win32 DWORD bound, kept
+                                         * on Linux ON PURPOSE: one policy and
+                                         * one behaviour to test, rather than a
+                                         * config value that means two things. */
+#define LJ52_WD_MAXWAIT_MS 3600000.0    /* caps one WAIT, never the deadline  */
+#define LJ52_WD_STACKSZ   (128 * 1024)  /* not glibc's 8 MB: fifty machines is
+                                         * then ~1.5 MB of real memory rather
+                                         * than 400 MB of reserved address
+                                         * space, which is the number someone
+                                         * screenshots. */
+static const char LJ52_WD_KEY = 0;      /* registry slot for the armed fn */
+
+/* Monotonic milliseconds.
+ *
+ * CLOCK_MONOTONIC and not CLOCK_BOOTTIME: it excludes host suspend, which is
+ * what QueryPerformanceCounter does, so a wd_stack deadline means the same
+ * thing on both backends.  Only ever used as differences, so the epoch is as
+ * irrelevant as QPC's, and a double still resolves to microseconds after a year
+ * of uptime.  vDSO on x86-64 and aarch64, so no syscall. */
+#if defined(LJ52_WD_PTHREAD)
+static double lj52_wd_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
+}
+#else
+static double lj52_wd_now(void) {
+  static LARGE_INTEGER freq;
+  LARGE_INTEGER t;
+  if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+  QueryPerformanceCounter(&t);
+  return (double)t.QuadPart * 1000.0 / (double)freq.QuadPart;
+}
+#endif
+
+/* The hook the timer installs.  Runs on the Lua thread, on the first
+ * instruction after the trace exit.  callhook() has already reserved
+ * 1+LUA_MINSTACK slots (lj_dispatch.c), so the push is safe, and an error
+ * raised by fn propagates out of the hook exactly as it does from a Lua hook
+ * installed by debug.sethook -- which is how "too long without yielding" has
+ * always been raised. */
+static void lj52_wd_hook(lua_State *L, lua_Debug *ar) {
+  lj52_mem *M = lj52_memof(L);
+  (void)ar;
+  /* THE THREAD FILTER.  The hook is global and the timer thread cannot know
+   * whether the sandbox is still running when it installs it.  If the fire
+   * lands in the microseconds between the sandbox coroutine yielding and the
+   * kernel reaching disarm(), the hook runs on the KERNEL's coroutine --
+   * checkDeadline sees realTime past the deadline, raises inside main(), and
+   * the machine crashes with "too long without yielding" although the sandbox
+   * yielded on time.  OC's design excludes that crash (PUC hooks are per-
+   * thread; the kernel thread has none).
+   *
+   * The predicate took three tries, and the two failures are worth keeping.
+   *   (a) "fire only on the thread the arm is FOR" leaves a hole for any
+   *       thread running sandbox code without an entry of its own -- a
+   *       coroutine nested past LJ52_WD_MAXDEPTH gets none, so its fires
+   *       matched nothing and it ran with no deadline at all.  Reproduced in
+   *       adversarial review: 1500 ms under a 300 ms deadline, checkDeadline
+   *       called zero times.
+   *   (b) "skip only the thread that ARMED" closes that hole but breaks the
+   *       case where the armer is itself what overruns -- which is every
+   *       wd_test case, and W2 hung on it.
+   * Both facts are needed, so both are recorded.  A fire is skipped only when
+   * the running thread is a PARENT WAITING ON A CHILD: it armed one of the
+   * live entries and is not the thread the top entry protects.  Then, and
+   * only then, is the fire spurious -- its child has already returned and
+   * disarm() is a few instructions away.  Everything else fires: the
+   * protected thread itself, and any thread that armed nothing (the deep
+   * nesting of (a)).  The count=1 hook stays set, harmless, until disarm()
+   * clears it.
+   *
+   *   (c) ... AND "A FEW INSTRUCTIONS AWAY" IS A CLAIM, NOT A FACT, so the
+   *       skip is bounded (found reviewing kernel site 12, 2026-09-21).  If
+   *       an error lands in the sandbox wrapper between its raw
+   *       coroutine.resume returning and its disarm(wd) -- LUA_ERRMEM at the
+   *       table.pack, a stack overflow inside callhook -- the entry stays
+   *       (wd_for = the child, wd_by = the parent), the parent's pcall
+   *       swallows the error, and the parent runs on.  Every fire on it then
+   *       matched this predicate: it was filtered FOREVER, until it yielded
+   *       to its own parent, and a `while true do end` there wedged the
+   *       executor where PUC's per-thread hook would have killed it.  So each
+   *       entry carries a skip budget, LJ52_WD_SKIPMAX, reset when the entry
+   *       is armed and charged to the first live entry the running thread
+   *       armed.  The kernel's real windows are 4-5 bytecodes (17 at worst,
+   *       counted in lj52shim.h at the constant); a parent still being
+   *       skipped after 64 is not on its way to disarm(), and from then on it
+   *       fires -- checkDeadline runs on it exactly as PUC would have run its
+   *       own hook, and the leak degrades to OC's behaviour instead of a
+   *       hang.  wd_filtered keeps counting the skips, so a leak shows in
+   *       stats() as exactly LJ52_WD_SKIPMAX per leaked entry.  wd_test W10a-b
+   *       (the leak, fail-first against the unbounded shim) and W10g (the
+   *       normal path, which a budget of 0 fails). */
+  if (M != NULL && M->wd_depth > 0 && M->wd_for[M->wd_depth - 1] != L) {
+    int i;
+    for (i = 0; i < M->wd_depth; i++)
+      if (M->wd_by[i] == L) break;
+    if (i < M->wd_depth && M->wd_skip[i] < LJ52_WD_SKIPMAX) {
+      M->wd_skip[i]++;
+      M->wd_filtered++;
+      return;
+    }
+  }
+  lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  if (lua_isfunction(L, -1)) lua_call(L, 0, 0);
+  else lua_pop(L, 1);
+}
+
+/* Install the count=1 hook FROM ANOTHER THREAD, without lua_sethook.
+ * Order matters and x86-TSO keeps it: hookf and hookcount are in place
+ * before the interpreter can see the count bit.  See THREADING above. */
+static void lj52_wd_inject(lj52_mem *M) {
+  global_State *g = G(M->L);
+  g->hookf = lj52_wd_hook;
+  g->hookcount = g->hookcstart = 1;
+  __atomic_fetch_or(&g->hookmask, (uint8_t)LUA_MASKCOUNT, __ATOMIC_SEQ_CST);
+  lj_dispatch_update(g, 0);
+}
+
+#if defined(LJ52_WD_PTHREAD)
+
+/* Sleep until `due`, or LJ52_WD_MAXWAIT_MS from now, whichever is sooner.
+ * Enters and leaves with wd_mtx held. */
+static void lj52_wd_wait_until(lj52_mem *M, double due) {
+  struct timespec ts;
+  double now = lj52_wd_now();
+  double ms  = (due > now + LJ52_WD_MAXWAIT_MS) ? now + LJ52_WD_MAXWAIT_MS : due;
+  double sec = floor(ms / 1000.0);
+  ts.tv_sec  = (time_t)sec;
+  ts.tv_nsec = (long)((ms - sec * 1000.0) * 1000000.0);
+  if (ts.tv_nsec < 0L)         ts.tv_nsec = 0L;
+  if (ts.tv_nsec > 999999999L) ts.tv_nsec = 999999999L;
+  /* wd_wake is the END OF THE SLEEP WE ARE ABOUT TO TAKE and must never be
+   * EARLIER than that: program() skips its signal when the new deadline is not
+   * before wd_wake, so a wd_wake that understated the sleep would let the
+   * thread sleep straight through a deadline.  Overstating it merely costs a
+   * spurious signal.  It is derived from the same `ms` as ts, cap included, so
+   * it can be neither. */
+  M->wd_wake = ms;
+  (void)pthread_cond_timedwait(&M->wd_cv, &M->wd_mtx, &ts);
+}
+
+/* The ONLY thing that ever runs off the Lua thread on this backend.
+ *
+ * DELIVERY IS DERIVED, NOT REGISTERED.  Every iteration re-reads wd_due and
+ * recomputes its sleep from it, so a spurious wake costs one re-check and a
+ * LOST wake is not expressible -- there is no queued notification whose loss
+ * would be silent.  That is the structural answer to the Win32 backend's open
+ * finding (fires=0 in 2 of ~6 runs under host load).
+ *
+ * ITS ONLY BLOCKING POINT, EVER, IS ITS OWN CONDVAR.  It takes no second lock,
+ * never allocates, calls no Lua or JNI API, does no I/O, and enters the VM only
+ * through lj52_wd_inject -- two word stores, one atomic OR, one
+ * lj_dispatch_update, all non-blocking.  Keep that true and lj52_wd_stop can
+ * never hang on its join; break it and it hangs a Minecraft server thread. */
+static void *lj52_wd_thread(void *p) {
+  lj52_mem *M = (lj52_mem *)p;
+  pthread_mutex_lock(&M->wd_mtx);
+  for (;;) {
+    double now;
+    if (M->wd_quit) break;
+    if (M->wd_due == 0.0) {              /* disarmed: park */
+      M->wd_wake = 0.0;
+      pthread_cond_wait(&M->wd_cv, &M->wd_mtx);
+      continue;
+    }
+    now = lj52_wd_now();
+    if (now < M->wd_due) { lj52_wd_wait_until(M, M->wd_due); continue; }
+    if (!M->wd_fired) { M->wd_fired = 1; M->wd_fires++; } else M->wd_refires++;
+    lj52_wd_inject(M);                   /* MUTEX HELD -- this IS the cancel */
+    /* Re-fire measured from NOW, not from the previous due, so a thread that
+     * lost the CPU wakes owing exactly one re-fire rather than a backlog. */
+    M->wd_due = now + (double)LJ52_WD_REFIRE_MS;
+  }
+  M->wd_wake = 0.0;
+  pthread_mutex_unlock(&M->wd_mtx);
+  return NULL;
+}
+
+/* Withdraw the deadline, waiting for any in-flight injection to finish.
+ *
+ * pthread_mutex_lock IS THE WAIT.  The thread holds wd_mtx continuously from
+ * entering its loop to leaving it, releasing it only inside the condvar waits
+ * -- that is, only while asleep with nothing in flight -- and in particular it
+ * holds it across lj52_wd_inject.  So either it is asleep and we take the mutex
+ * at once, or it is mid-fire and we block until that completes.
+ *
+ * The invariant is STRONGER than DeleteTimerQueueTimer's: afterwards no
+ * injection can even START, because the only path into the fire block needs
+ * wd_due != 0 and only the Lua thread sets that, in program(), which by
+ * contract runs after this.  So arm's window (cancel, mutate wd_depth/wd_stack,
+ * program) and disarm's (cancel, then clear the hook) are genuinely exclusive
+ * of the timer thread -- and that falls out of "the callback runs under the
+ * lock the canceller takes", not out of an ordering argument a reader has to
+ * reconstruct.
+ *
+ * Deliberately NO signal: correctness needs only that no fire happen after we
+ * return, which clearing wd_due under the mutex gives. Skipping it is what
+ * makes disarm syscall-free, and the stale sleep it leaves usually makes the
+ * next arm syscall-free too. */
+static void lj52_wd_cancel(lj52_mem *M) {
+  if (!M->wd_started) return;
+  pthread_mutex_lock(&M->wd_mtx);
+  M->wd_due = 0.0;
+  pthread_mutex_unlock(&M->wd_mtx);
+}
+
+#else  /* LJ52_WD_WIN32 */
+
+/* Timer callback: the ONLY thing that ever runs off the Lua thread. */
+static VOID CALLBACK lj52_wd_fire(PVOID p, BOOLEAN timedOut) {
+  lj52_mem *M = (lj52_mem *)p;
+  (void)timedOut;
+  if (!M->wd_fired) { M->wd_fired = 1; M->wd_fires++; } else M->wd_refires++;
+  lj52_wd_inject(M);
+}
+
+/* Cancel the pending timer, waiting for an in-flight callback to finish. */
+static void lj52_wd_cancel(lj52_mem *M) {
+  if (M->wd_timer != NULL) {
+    DeleteTimerQueueTimer(NULL, (HANDLE)M->wd_timer, INVALID_HANDLE_VALUE);
+    M->wd_timer = NULL;
+  }
+}
+
+#endif
+
+/* Program the timer for the deadline at the top of the stack -- or, if that
+ * deadline has already passed, install the hook right now, synchronously. */
+static void lj52_wd_program(lj52_mem *M) {
+  double remaining = M->wd_stack[M->wd_depth - 1] - lj52_wd_now();
+#if defined(LJ52_WD_WIN32)
+  HANDLE h = NULL;
+#endif
+  M->wd_fired = 0;
+  /* WRITTEN NEGATED, AND THAT IS A FIX RATHER THAN A STYLE CHOICE.  `secs`
+   * reaches wd_stack through luaL_checknumber, which accepts NaN, so `remaining`
+   * can be NaN -- and NaN fails BOTH `<= 0.0` and `>= LJ52_WD_MAXMS`, so the old
+   * spelling fell through to the cast below.  (DWORD)(NaN + 5.0) is undefined;
+   * on x86-64 cvttsd2si yields INT_MIN, so the "timer" would land about 24.8
+   * days out and the machine would run UNDEFENDED.  Negated, NaN takes the safe
+   * branch of each test.  Not reachable from a sandbox today -- _OCLJ_WATCHDOG
+   * is a raw global the sandbox never sees, and machine.lua only ever passes a
+   * finite difference or math.huge -- but it is reachable from the raw API, and
+   * the failure is silent. */
+  if (!(remaining > 0.0)) {             /* already past, or NaN */
+    lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1);
+    return;
+  }
+  /* OC's computer.timeout has no upper bound (Settings.scala: `max 0`), and
+   * an admin disabling the watchdog with a huge value would otherwise hand
+   * CreateTimerQueueTimer a (DWORD) of an out-of-range double -- undefined,
+   * and on x64 GCC typically 0: a timer that fires at once and leaves the
+   * whole tick running under a count=1 hook.  Past what a DWORD of
+   * milliseconds can express (~49 days) there is no deadline to enforce. */
+  if (!(remaining < LJ52_WD_MAXMS)) return;  /* too far out, or +inf */
+
+#if defined(LJ52_WD_PTHREAD)
+  if (!M->wd_started) {          /* no thread: slow rather than undefended */
+    M->wd_degraded = 1;
+    lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000);
+    return;
+  }
+  pthread_mutex_lock(&M->wd_mtx);
+  /* +5 ms for the reason given below: checkDeadline compares against
+   * computer.realTime(), Java's wall clock, not this counter. */
+  M->wd_due = M->wd_stack[M->wd_depth - 1] + 5.0;
+  /* Signal ONLY if we moved the wake earlier.  wd_wake == 0 means parked
+   * indefinitely, i.e. waking at +infinity, so any deadline is earlier. */
+  if (M->wd_wake == 0.0 || M->wd_due < M->wd_wake)
+    pthread_cond_signal(&M->wd_cv);
+  M->wd_degraded = 0;
+  pthread_mutex_unlock(&M->wd_mtx);
+  return;
+#else
+  /* +5 ms so that when checkDeadline reads computer.realTime() -- Java's
+   * wall clock, not this counter -- the deadline it compares against has
+   * genuinely passed.  If it had not, the count=1 hook would simply call
+   * checkDeadline again on the next instruction, which is correct but slow. */
+  /* Period LJ52_WD_REFIRE_MS, not WT_EXECUTEONLYONCE: the callback keeps
+   * re-asserting the hook until disarm() cancels it.  See THREADING above. */
+  if (!CreateTimerQueueTimer(&h, NULL, lj52_wd_fire, M,
+                             (DWORD)(remaining + 5.0), LJ52_WD_REFIRE_MS, 0)) {
+    /* No timer: fall back to the standing hook OC has always used.  The
+     * machine is then slow rather than undefended. */
+    M->wd_degraded = 1;
+    lua_sethook(M->L, lj52_wd_hook, LUA_MASKCOUNT, 1000);
+    return;
+  }
+  M->wd_timer = (void *)h;
+  M->wd_degraded = 0;
+#endif
+}
+
+#if defined(LJ52_WD_PTHREAD)
+/* EAGER, at state creation rather than lazily at the first arm.  pthread_create
+ * is fallible, and discovering that at newstate gives a machine that BOOTS on
+ * the standing-hook fallback; discovering it on the first arm puts a fallible
+ * call in the middle of a game tick.  Afterwards the invariant is total:
+ * wd_started == 1 means mutex, cond and thread all exist for the rest of the
+ * record's life, and 0 means none of them do.  One int guards every entry. */
+static void lj52_wd_start(lj52_mem *M) {
+  pthread_condattr_t ca;
+  pthread_attr_t     ta;
+  sigset_t           block, old;
+  size_t             stk = LJ52_WD_STACKSZ;
+  int                rc;
+
+  M->wd_quit = 0;
+  if (pthread_mutex_init(&M->wd_mtx, NULL) != 0) return;
+  if (pthread_condattr_init(&ca) != 0) goto err_mtx;
+  /* NOT OPTIONAL.  A condvar's default clock is CLOCK_REALTIME, and on it an
+   * NTP step or `date -s` moves a LIVE deadline -- into next week, or into the
+   * past.  prototype/watchdog/harness.c does exactly that, with the comment
+   * "pthread_cond uses REALTIME"; do not carry it forward.  If clock selection
+   * is unavailable, take the standing-hook fallback rather than ship a timer
+   * that is subtly wrong. */
+  if (pthread_condattr_setclock(&ca, CLOCK_MONOTONIC) != 0) {
+    pthread_condattr_destroy(&ca);
+    goto err_mtx;
+  }
+  rc = pthread_cond_init(&M->wd_cv, &ca);
+  pthread_condattr_destroy(&ca);
+  if (rc != 0) goto err_mtx;
+  if (pthread_attr_init(&ta) != 0) goto err_cv;
+#ifdef PTHREAD_STACK_MIN
+  if (stk < (size_t)PTHREAD_STACK_MIN) stk = (size_t)PTHREAD_STACK_MIN;
+#endif
+  (void)pthread_attr_setstacksize(&ta, stk);
+  /* THIS THREAD IS INVISIBLE TO HOTSPOT -- it is never AttachCurrentThread'd --
+   * so it must never be the one chosen to take an asynchronous signal the JVM
+   * owns: SIGQUIT's thread dump, SIGTERM, SIGINT, HotSpot's own SR_signum.
+   * Block everything across the create; the child inherits the mask.  The four
+   * synchronously generated ones stay unblocked, because blocking a
+   * hardware-generated SIGSEGV/SIGBUS/SIGFPE/SIGILL is undefined. */
+  sigfillset(&block);
+  sigdelset(&block, SIGSEGV); sigdelset(&block, SIGBUS);
+  sigdelset(&block, SIGFPE);  sigdelset(&block, SIGILL);
+  pthread_sigmask(SIG_SETMASK, &block, &old);
+  rc = pthread_create(&M->wd_thread, &ta, lj52_wd_thread, M);
+  pthread_sigmask(SIG_SETMASK, &old, NULL);
+  pthread_attr_destroy(&ta);
+  if (rc != 0) goto err_cv;
+  M->wd_started  = 1;
+  M->wd_degraded = 0;
+  (void)pthread_setname_np(M->wd_thread, "ocljit-wd");
+  return;
+
+err_cv:
+  pthread_cond_destroy(&M->wd_cv);
+err_mtx:
+  pthread_mutex_destroy(&M->wd_mtx);
+  /* wd_started stays 0: every entry point then takes the standing-hook path,
+   * which is slow rather than undefended. */
+  M->wd_degraded = 1;
+}
+
+/* Join the thread and destroy the primitives.  MUST happen before the record
+ * is freed and before lua_close, because the thread reaches into G(M->L). */
+static void lj52_wd_stop(lj52_mem *M) {
+  if (!M->wd_started) return;
+  pthread_mutex_lock(&M->wd_mtx);
+  M->wd_quit = 1;
+  M->wd_due  = 0.0;
+  pthread_cond_signal(&M->wd_cv);
+  pthread_mutex_unlock(&M->wd_mtx);
+  pthread_join(M->wd_thread, NULL);
+  pthread_cond_destroy(&M->wd_cv);
+  pthread_mutex_destroy(&M->wd_mtx);
+  M->wd_started = 0;
+}
+#else
+#define lj52_wd_start(M)  ((void)0)
+#define lj52_wd_stop(M)   lj52_wd_cancel(M)
+#endif
+
+/* _OCLJ_WATCHDOG.arm(seconds, fn [, outermost [, protects]]) -> depth token.
+ * `protects` is the thread about to be resumed; it defaults to the caller,
+ * which is what a test (or any caller that arms for itself) wants. */
+static int lj52_wd_arm(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  double secs = luaL_checknumber(L, 1);
+  int outermost;
+  /* NaN -> fire now, the maximally defensive reading; +inf survives to the
+   * range guard in program().  Belt and braces with the negated tests there:
+   * this one is at the SOURCE, which is where a future caller is likeliest to
+   * introduce a NaN, and the file's own rule is that nothing may fail after the
+   * cancel further down. */
+  if (!(secs >= 0.0)) secs = 0.0;
+  lua_State *co;
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  outermost = lua_toboolean(L, 3);
+  co = lua_isthread(L, 4) ? lua_tothread(L, 4) : L;
+  if (M == NULL) return luaL_error(L, "watchdog: not an lj52 state");
+  /* THE SAFE POINT for the trace flush under memory pressure: on the Lua
+   * thread, inside a C call the interpreter made, before the resume that
+   * would run compiled code.  Before the cap check on purpose -- a nested
+   * arm past the cap is still a safe point, and the flag was raised by a
+   * proven cycle that found the machine short.  See FLUSHING TRACES UNDER
+   * MEMORY PRESSURE in the collector section. */
+  if (M->gc_flush_wanted) lj52_gc_flushtraces(L, M);
+  /* At the cap: push nothing, touch nothing, and hand back a token disarm()
+   * will treat as a no-op.  The enclosing deadline stays live, which is what
+   * a nested arm would have set anyway (the sandbox wrapper passes the same
+   * `deadline`).  The first version of this function cancelled the live
+   * timer and THEN raised -- so a sandbox nested past the cap whose pcall
+   * swallowed the error ran with no deadline at all.  Found in adversarial
+   * review.  Nothing here may fail after the cancel below. */
+  if (!outermost && M->wd_depth >= LJ52_WD_MAXDEPTH) {
+    lua_pushinteger(L, M->wd_depth + 1);
+    return 1;
+  }
+  lj52_wd_cancel(M);
+  if (outermost) {
+    /* Heal whatever the last resume leaked: the stack, AND the hook.  A
+     * skipped disarm leaves our count=1 hook in place (fired, never
+     * cleared), and a new resume that started under it would run one hook
+     * call per instruction until something cleared it.  OC's stock kernel is
+     * immune by accident -- its next arm simply overwrites the hook.  Only
+     * the OUTERMOST arm may do this: inside a nested arm that same count=1
+     * hook is the escalation a pcall-swallowing loop must not be allowed to
+     * escape -- and the only one there is, since kernel site 12 deleted
+     * checkDeadline's Lua re-arm.  (wd_test W8c, found the first time the
+     * healing was tested.) */
+    M->wd_depth = 0;
+    if (lua_gethook(L) != NULL) lua_sethook(L, NULL, 0, 0);
+  }
+  lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+  lua_pushvalue(L, 2);
+  lua_rawset(L, LUA_REGISTRYINDEX);
+  M->wd_stack[M->wd_depth] = lj52_wd_now() + secs * 1000.0;
+  M->wd_for[M->wd_depth] = co;
+  M->wd_by[M->wd_depth] = L;
+  M->wd_skip[M->wd_depth] = 0;          /* a fresh skip budget; see the hook */
+  M->wd_depth++;
+  lj52_wd_program(M);
+  lua_pushinteger(L, M->wd_depth);
+  return 1;
+}
+
+/* _OCLJ_WATCHDOG.disarm([token])  -- restore the stack to BELOW the level arm
+ * returned; with no token, pop one (the tests use that form). */
+static int lj52_wd_disarm(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  int to;
+  if (M == NULL) return 0;
+  to = lua_isnoneornil(L, 1) ? M->wd_depth - 1 : (int)luaL_checkinteger(L, 1) - 1;
+  if (to < 0) to = 0;
+  lj52_wd_cancel(M);
+  /* Clear the hook -- ours, fired or not; since kernel site 12 deleted
+   * checkDeadline's Lua re-arm there is no other ("avoid gc issues", as the
+   * kernel's own comment at the coroutine.resume site puts it).  Guarded so
+   * the common case -- nothing armed, the resume simply yielded -- does not
+   * pay lj_trace_abort + lj_dispatch_update on every return. */
+  if (lua_gethook(L) != NULL) lua_sethook(L, NULL, 0, 0);
+  /* A token deeper than the current stack means an outermost arm already
+   * reset underneath us; there is nothing of ours left to remove. */
+  if (to < M->wd_depth) M->wd_depth = to;
+  if (M->wd_depth == 0) {
+    lua_pushlightuserdata(L, (void *)&LJ52_WD_KEY);
+    lua_pushnil(L);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+  } else {
+    lj52_wd_program(M);
+  }
+  return 0;
+}
+
+/* _OCLJ_WATCHDOG.depth() -- for the tests and for diagnostics. */
+static int lj52_wd_depth(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  lua_pushinteger(L, M ? M->wd_depth : -1);
+  return 1;
+}
+
+/* _OCLJ_WATCHDOG.stats() -> fires, refires, filtered, depth, hooked
+ * Read on the Lua thread at a quiet moment; the harness prints it after the
+ * timeout probe so "the watchdog fired" is an observation with a number. */
+static int lj52_wd_stats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  lua_pushinteger(L, M ? M->wd_fires : -1);
+  lua_pushinteger(L, M ? M->wd_refires : -1);
+  lua_pushinteger(L, M ? M->wd_filtered : -1);
+  lua_pushinteger(L, M ? M->wd_depth : -1);
+  lua_pushboolean(L, lua_gethook(L) != NULL);
+  return 5;
+}
+
+/* ================================================================== *
+ * JIT accounting, for measurement only
+ * ================================================================== */
+
+/* _OCLJ_JITSTATS() -> mcode_bytes, maxmcode_bytes, traces_used, jit_on,
+ *                     traces_live
+ *
+ * Three things this project needs to measure and cannot reach any other way.
+ *
+ * MCODE IS INVISIBLE TO THE RAM CAP.  Machine code is VirtualAlloc'd by
+ * lj_mcode.c and never passes g->allocf, so the per-machine cap the shim
+ * enforces cannot see a byte of it -- up to maxmcode (2048 KB by default,
+ * lj_jit.h) per state, which for a 1 MB machine exceeds its entire advertised
+ * RAM.  J->szallmcarea (lj_jit.h:510, accumulated at lj_mcode.c:369) is the
+ * running total, so this is the number that says what a machine ACTUALLY
+ * costs a server.
+ *
+ * AND IT IS THE TRACE-FLUSH SIGNATURE.  lj_trace_flushall zeroes szallmcarea
+ * (lj_mcode.c:378), so a reading of 0 after a persist is proof the serializer
+ * discarded every compiled trace in the VM.  eris_lj.c does that at two gated
+ * sites (:1209 persist, :2127 restore) whenever a for-in loop is involved --
+ * which was free while traces never ran and is not free now.  Sampling this
+ * around a save is how we find out whether a world save leaves the machine
+ * cold.
+ *
+ * AND traces_used IS NOT A LIVE COUNT.  It is J->freetrace-1, where the
+ * scan for the next free trace slot starts, and it cannot tell "nothing is
+ * being recorded" from "every recording aborts": in the 2026-09-22 penalty-
+ * cache regression (native/luajit/patch-penalty-scrub.sh) it froze at 468
+ * while the machine ran interpreted.  traces_live is the number of non-NULL
+ * J->trace[i] slots, 1..sizetrace-1 -- the traces that EXIST right now.  It
+ * is 0 after a flush and it is the number that says whether compiled code is
+ * present; traces_used is kept because every log since 2026-09-03 quotes it.
+ * Since 2026-09-22 a flush can also be OURS: the emergency collector's
+ * trace flush under memory pressure (lj52_gc_flushtraces) zeroes this the
+ * same way, and _OCLJ_GCSTATS's trace_flushes says whether it did.
+ *
+ * A raw global like _OCLJ_NATIVE and _OCLJ_WATCHDOG: the sandbox never sees
+ * raw _G, and jit.util -- the usual way to ask these questions -- is
+ * deliberately kept out of it (docs/research/os-shape-census.md).  Read-only,
+ * and it allocates nothing. */
+static int lj52_jitstats(lua_State *L) {
+  jit_State *J = L2J(L);
+  MSize i, live = 0;
+  for (i = 1; i < J->sizetrace; i++)
+    if (gcref(J->trace[i]) != NULL) live++;
+  lua_pushnumber(L, (lua_Number)J->szallmcarea);
+  lua_pushnumber(L, (lua_Number)(J->param[JIT_P_maxmcode] << 10));
+  lua_pushinteger(L, (lua_Integer)(J->freetrace ? J->freetrace - 1 : 0));
+  lua_pushboolean(L, (J->flags & JIT_F_ON) != 0);
+  lua_pushinteger(L, (lua_Integer)live);
+  return 5;
+}
+
+/* _OCLJ_GCSTATS() -> arms, collects, bailouts, refusals, armed,
+ *                    gc_total, gc_threshold, gc_stepmul, gc_state,
+ *                    trace_flushes, flush_wanted, flush_refusals, flush_bytes,
+ *                    heap, c_total, c_used, csync, used_reads, alloc_calls,
+ *                    alloc_jni
+ *
+ * THE INSTRUMENT FOR THE EMERGENCY COLLECTOR, and it is not optional.  A
+ * `sieve` that passes with arms == 0 proves nothing about this code -- it
+ * would mean the run never approached the watermark and the trip-wire was
+ * never exercised, which is exactly the class of false green that
+ * bench/oc/sieve.lua's own retracted paragraph records.  The acceptance test
+ * asserts arms >= 1 AND collects == arms AND bailouts == 0.
+ *
+ * bailouts is the one that matters most.  A nonzero count means the
+ * currentwhite latch is not seeing flips it should, so the disarm predicate --
+ * the whole safety argument for handing the collector an unbounded budget --
+ * needs re-deriving.  It is a bug signal, never a tuning knob.
+ *
+ * The four gc.* fields are returned raw so a test can tell "never armed" from
+ * "armed and still waiting": armed == true with a stepmul of 0 is the window
+ * being open, and it should never be observable at rest.
+ *
+ * The last four are the trace flush under pressure (FLUSHING TRACES UNDER
+ * MEMORY PRESSURE, in the collector section), APPENDED so every reader of
+ * the first nine keeps working against either native.  trace_flushes counts
+ * flushes performed at the safe point; flush_wanted is the flag as it stands
+ * (true at rest means a proven cycle found the machine short and no resume
+ * has happened since); flush_refusals counts safe points that found HOOK_GC
+ * set, which should read 0 -- the kernel does not resume from inside a
+ * finalizer; flush_bytes is the trace metadata every flush unlinked, in
+ * total, by the formula the sweep then credits back.  A machine that shows
+ * trace_flushes climbing resume after resume is a machine whose LIVE data
+ * alone is past the watermark: nothing to reclaim, correctly interpreted.
+ *
+ * The 14th, heap, appended 2026-10-02: 1 when this state's blocks live in its
+ * own lj_alloc arena (lj52_back), 0 when it fell back to the C library, -1
+ * when the state is not on lj52_alloc at all (no record: created outside
+ * lj52_newstate, or by its luaL_newstate fallback, unaccounted).  It is the
+ * fingerprint that says which allocator a measurement ran on.  It reports
+ * that the arena exists; lj52_back is the only path to memory and chooses by
+ * that same pointer, so existence is use.
+ *
+ * Read-only, allocates nothing, raw global like _OCLJ_JITSTATS -- the sandbox
+ * never sees raw _G. */
+static int lj52_gcstats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  global_State *g = G(L);
+  lua_pushinteger(L, M ? M->gc_arms : -1);
+  lua_pushinteger(L, M ? M->gc_collects : -1);
+  lua_pushinteger(L, M ? M->gc_bailouts : -1);
+  lua_pushinteger(L, M ? M->gc_refusals : -1);
+  lua_pushboolean(L, M ? M->gc_armed : 0);
+  lua_pushnumber(L, (lua_Number)g->gc.total);
+  lua_pushnumber(L, (lua_Number)g->gc.threshold);
+  lua_pushnumber(L, (lua_Number)g->gc.stepmul);
+  lua_pushinteger(L, (lua_Integer)g->gc.state);
+  lua_pushinteger(L, M ? M->gc_traceflushes : -1);
+  lua_pushboolean(L, M ? M->gc_flush_wanted : 0);
+  lua_pushinteger(L, M ? M->gc_flushrefusals : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->gc_flushbytes : -1);
+  lua_pushinteger(L, M ? (M->heap != NULL) : -1);
+  /* 15-20, appended 2026-10-03 (docs/accounting-sync.md): the C-owned cap and
+   * figure, whether the state has handed over, how often Java read the figure,
+   * and every allocator call against the ones that crossed into the JVM.  In C
+   * mode alloc_jni stops moving while alloc_calls climbs: the fingerprint that
+   * the fast path is live.  Twenty values is LUA_MINSTACK, so no checkstack and
+   * no allocation. */
+  lua_pushnumber(L, M ? (lua_Number)M->total : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->used : -1);
+  lua_pushinteger(L, M ? M->csync : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->mem_reads : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->mem_calls : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->mem_jni : -1);
+  return 20;
+}
+
+/* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets,
+ *                      od_limit, kernel_slice, gc_low, armby, hyst,
+ *                      window, lends, win, refused
+ *
+ * The collector at the wall (docs/roadmap.md; THE CREDIT, THE CADENCE and
+ * THE PARK RESET in the collector section).  overdrafts counts growths lent
+ * past the cap; od_peak is the largest excursion past it, in bytes, ever;
+ * od_state the credit tier (0 burst, 1 reserve); park_resets the parked arms
+ * restarted; od_limit G for the cap the last allocator call was under (the
+ * sandbox's bound: used <= cap + od_limit); kernel_slice the kernel's extra.
+ * The last three are THE CADENCE's own state as it stands: the heap the
+ * last proof left (lowered by frees), why the last cycle was armed (0 gate,
+ * 1 wall or refusal, 2 the flush), and whether a cycle has been proven at
+ * all -- what the harness's mem-2 needed to see why a hold got no cycle
+ * (2026-10-04).  window is THE WINDOW's LJ52_GC_LEND (the sandbox's bound is
+ * then used <= cap + od_limit + window), lends the growths it lent, win its
+ * state (0 shut, 1 open, 2 the verdict), refused the size of the last
+ * refused request (what a landing outside a handler was asking for: the
+ * hermetic W16 cases judge "covered" by it, and a capacity run's stall is
+ * attributed by it).  A separate global, not more
+ * _OCLJ_GCSTATS positions: twenty values is LUA_MINSTACK, which is what
+ * lets that one push without a checkstack.  Read-only,
+ * allocates nothing, raw global -- the sandbox never sees it. */
+static int lj52_wallstats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  lua_pushinteger(L, M ? M->gc_overdrafts : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->gc_odpeak : -1);
+  lua_pushinteger(L, M ? M->gc_odstate : -1);
+  lua_pushinteger(L, M ? M->gc_parkresets : -1);
+  lua_pushnumber(L, M ? (lua_Number)(M->gc_seentotal > 0 ? lj52_gc_odmax(M->gc_seentotal) : 0) : -1);
+  lua_pushinteger(L, M ? LJ52_GC_KSLICE : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->gc_low : -1);
+  lua_pushinteger(L, M ? M->gc_armby : -1);
+  lua_pushinteger(L, M ? M->gc_hyst : -1);
+  lua_pushinteger(L, M ? LJ52_GC_LEND : -1);
+  lua_pushinteger(L, M ? M->gc_lends : -1);
+  lua_pushinteger(L, M ? M->gc_win : -1);
+  lua_pushnumber(L, M ? (lua_Number)M->gc_refdelta : -1);
+  return 13;
+}
+
+/* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
+static void lj52_wd_install(lua_State *L) {
+  lua_createtable(L, 0, 2);
+  lua_pushcclosure(L, lj52_wd_arm, 0);
+  lua_setfield(L, -2, "arm");
+  lua_pushcclosure(L, lj52_wd_disarm, 0);
+  lua_setfield(L, -2, "disarm");
+  lua_pushcclosure(L, lj52_wd_depth, 0);
+  lua_setfield(L, -2, "depth");
+  lua_pushcclosure(L, lj52_wd_stats, 0);
+  lua_setfield(L, -2, "stats");
+  lua_setglobal(L, "_OCLJ_WATCHDOG");
+  lua_pushcclosure(L, lj52_jitstats, 0);
+  lua_setglobal(L, "_OCLJ_JITSTATS");
+  lua_pushcclosure(L, lj52_gcstats, 0);
+  lua_setglobal(L, "_OCLJ_GCSTATS");
+  lua_pushcclosure(L, lj52_wallstats, 0);
+  lua_setglobal(L, "_OCLJ_WALLSTATS");
+}
+
+/* lua_close does not free the record, so we do -- after making sure no timer
+ * callback can still arrive and hook a state that no longer exists. */
+void lj52_close(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  /* STOP, not merely cancel: on Linux the timer thread must be JOINED before
+   * lua_close, because lj52_wd_inject reaches into G(M->L) and the state is
+   * about to stop existing. */
+  if (M != NULL) {
+    lj52_wd_stop(M);
+    /* jnlua turns the accounting off before every lua_close already; doing it
+     * here as well means a close that skipped that step can never read the
+     * Java state through javaref -- which points into a userdata lua_close is
+     * about to free, and with the arena the page under it can be unmapped --
+     * nor charge a free to it. */
+    M->accounting = 0;
+    M->javaref = NULL;
+  }
+  lua_close(L);
+  /* After lua_close, never before: close frees every block -- the GG_State
+   * last -- through lj52_alloc into this arena, and only then may the arena
+   * itself go. */
+  if (M != NULL && M->heap != NULL) lj_alloc_destroy(M->heap);
+  free(M);
+}
+
+/* THE OTHER HALF OF THE MEMORY CHANGE, and it may not be separated from it.
+ *
+ * jnlua calls lua_pushcfunction(L, <something>_protected) at 38 sites, each of
+ * them in a BARE JNI frame, before the lua_pcall that protects the real work.
+ * On PUC 5.2 that pushes a light C function: a tagged pointer, no allocation,
+ * cannot fail.  On LuaJIT there is no such type, so it builds a GCfunc -- and
+ * the moment the cap above is genuinely enforced, that allocation can be
+ * REFUSED, which raises LUA_ERRMEM with no protected frame anywhere below it.
+ * On Win x64 (LJ_UNWIND_EXT) lj_err_throw then issues a RaiseException whose
+ * handler lives in LuaJIT's own generated VM assembler -- reachable only if a
+ * LuaJIT VM frame is on the machine stack, and in a bare JNI frame there is
+ * none.  The exception finds no handler, the OS terminates the process, and
+ * lua_atpanic is NEVER CALLED: the panic handler below cannot name this one on
+ * the way down, which is why the failure is completely silent.  Enforcing the
+ * cap without this is strictly worse than not enforcing it at all.
+ *
+ * The roadmap's plan was an EAGER warm-up: push all 38 once at newstate while
+ * memory is plentiful.  It cannot be written -- the 38 targets are file-static
+ * in jnlua.c, so lj52shim.c cannot name them, and the macro that could name
+ * them expands at the push sites rather than at newstate.
+ *
+ * So the guarantee is bought a different and, as it turns out, better way:
+ * inside this function the allocator CHARGES but never REFUSES.  Three
+ * properties make that safe rather than a hole:
+ *   - the overshoot is bounded by a compile-time constant.  The 38 sites push
+ *     38 DISTINCT named statics, one apiece, so a state memoises at most 38
+ *     GCfuncs (~1.5 KB with the memo table's growth).  Sandbox Lua cannot
+ *     reach lua_pushcfunction and cannot add a 39th;
+ *   - the bytes are still charged, so freeMemory stays honest and the machine
+ *     simply runs over budget by that bounded amount, which the very next
+ *     allocation refuses -- as a clean, catchable "not enough memory", at a
+ *     point where a protected frame exists;
+ *   - it covers the WHOLE body, not just the cold push, and that is load-
+ *     bearing rather than cautious.  On GC64 lua_pushlightuserdata INTERNS the
+ *     pointer's segment, and that path calls lj_mem_reallocvec
+ *     (lj_udata.c:38-58, lj_lightud_intern) -- so even the warm lookup, whose
+ *     whole point is that it allocates nothing, pushes a light userdata key
+ *     that can.  lua_rawset can grow the memo table, and every lua_push* ends
+ *     in incr_top.
+ *
+ * For the record, the one hazard that turned out NOT to exist: checkstack().
+ * jnlua guards all 38 sites with it, and LuaJIT's lua_checkstack grows the
+ * stack through lj_state_cpgrowstack -- a PROTECTED call -- and returns 0 on
+ * failure (lj_api.c) rather than throwing.  jnlua converts that to a Java
+ * IllegalStateException.  lua_pushcfunction is the only UNCONDITIONAL
+ * bare-frame LUA_ERRMEM source in
+ * jnlua.c.  lua_1load and lua_1setmetatable are the only other entry points
+ * touching the Lua API unprotected, and both are safe -- lua_load returns its
+ * status, lua_setmetatable does not allocate.  One conditional site remains,
+ * named here rather than rounded away: throw() (jnlua.c:2356-2368) calls
+ * lua_tostring in a bare frame when throw_protected itself failed, and
+ * stringifying a NON-string error value allocates.  It does not bite on the
+ * path that matters, because LuaJIT preallocates and GC-fixes the "not enough
+ * memory" message at state creation (lj_state.c:202), so lua_tostring on an
+ * ERRMEM object is a no-op; it could only bite on something like error(42)
+ * raised exactly at the wall.  Not covered by the window. */
+void lj52_pushcfunction(lua_State *L, lua_CFunction f) {
+  lj52_mem *M = lj52_memof(L);
+  if (M != NULL) M->norefuse++;
+  lj52_pushcfunction_raw(L, f);
+  if (M != NULL) M->norefuse--;
+}
+
+/* ================================================================== *
+ * state creation
+ * ================================================================== */
+
+/* An unprotected Lua error inside a JNI frame otherwise aborts the process
+ * with no diagnostic at all; at least name it on the way down. */
+static int lj52_panic(lua_State *L) {
+  const char *s = lua_tostring(L, -1);
+  fputs("LJ52 PANIC: unprotected error in call to Lua API (", stderr);
+  fputs(s ? s : "?", stderr);
+  fputs(")\n", stderr);
+  fflush(stderr);
+  return 0;
+}
+
+lua_State *lj52_newstate(void) {
+  /* The state is born on OUR allocator, with a per-state accounting record as
+   * its ud, and that pairing is never changed again -- see the memory
+   * accounting section above, and the "allocator ownership" comment in
+   * lj52shim.h for why the state's allocf is not LuaJIT's lj_alloc_f.
+   *   Under the accounting, the blocks live in LuaJIT's own allocator all the
+   * same: one lj_alloc arena per state, made here BEFORE the state so that its
+   * very first allocation (the GG_State) lands in it.  lj_alloc_create uses
+   * the PRNG it is given for its first segment only and does NOT keep it, so
+   * the arena is pointed at the stack PRNG at once -- that one lives for the
+   * whole of lua_newstate -- and re-pointed at the state's own PRNG once it
+   * exists, as lj_state_newstate does for LJ_ALLOCF_INTERNAL.  The PRNG only
+   * steers mmap probing for low addresses: Windows never consults it, and on
+   * Linux x64 the first probe normally succeeds.  If the arena cannot be
+   * made, the state falls back to the C library for its whole life (M->heap
+   * stays NULL; lj52_back; _OCLJ_GCSTATS heap = 0). */
+  lj52_mem *M = (lj52_mem *)calloc(1, sizeof(lj52_mem));
+  lua_State *L = NULL;
+  if (M != NULL) {
+    PRNGState prng;
+    if (lj_prng_seed_secure(&prng)) M->heap = lj_alloc_create(&prng);
+    if (M->heap != NULL) lj_alloc_setprng(M->heap, &prng);
+    L = lua_newstate(lj52_alloc, M);
+    if (L != NULL && M->heap != NULL) lj_alloc_setprng(M->heap, &G(L)->prng);
+  }
+  if (!L) {
+    if (M != NULL && M->heap != NULL) lj_alloc_destroy(M->heap);
+    free(M);
+    M = NULL;
+    /* Non-GC64 LuaJIT refuses a foreign allocator on x64. build-native.sh
+     * gates on this at stage 1b, so reaching here means someone linked a
+     * different libluajit.a, or memory ran out.  What this fallback hands
+     * back is a state on LuaJIT's internal allocator with NO accounting
+     * record: lj52_setallocf finds no record and returns, so the machine runs
+     * with its RAM cap silently unenforced (_OCLJ_GCSTATS reads -1 throughout;
+     * the harness's b2 and al-1 fail).  Pre-existing behaviour, kept as it
+     * was; whether it should return NULL instead is on the roadmap. */
+    L = luaL_newstate();
+    if (!L) return NULL;
+  }
+  if (M != NULL) {
+    M->L = L;                            /* the watchdog hooks this thread */
+    oclj_ref_init(M);
+    lj52_wd_start(M);                    /* no-op on Win32; see lj52_wd_start */
+  }
+  lua_atpanic(L, lj52_panic);
+
+  /* --- 5.2 registry layout -------------------------------------------
+   * 5.2 keeps the main thread at registry[LUA_RIDX_MAINTHREAD == 1] and the
+   * globals table at registry[LUA_RIDX_GLOBALS == 2]. LuaJIT keeps neither:
+   * it has LUA_GLOBALSINDEX instead. JNLua's LuaState.register(module, fns,
+   * global=true) does rawGet(REGISTRYINDEX, RIDX_GLOBALS) followed by
+   * setField, so on an unseeded LuaJIT registry it would index nil.
+   * Neither OC nor ocelot-brain calls register() today, so this is latent
+   * rather than load-bearing -- but it is one of the 5.2 invariants a caller
+   * is entitled to assume, and seeding it costs two stores at startup.
+   * Side effect worth knowing: luaL_ref numbers references from
+   * lua_objlen(registry)+1, so refs now start at 4 instead of 1, exactly as
+   * they do on 5.2 (which starts at 3). Nothing persists a raw ref number
+   * across a state, so this is safe. */
+  lua_pushthread(L);
+  lua_rawseti(L, LUA_REGISTRYINDEX, 1);
+  lua_pushvalue(L, LUA_GLOBALSINDEX);
+  lua_rawseti(L, LUA_REGISTRYINDEX, 2);
+
+  /* registry[3] = the lua_pushcfunction memo table (LJ52_CF_RIDX).
+   * Sized for its final population up front -- jnlua pushes 38 distinct C
+   * functions and nothing can add a 39th -- so no cold push ever has to rehash
+   * the node array.  That matters because a cold push runs in a bare JNI
+   * frame: every allocation removed from that path is one fewer thing the
+   * no-refuse window in lj52_pushcfunction has to cover. */
+  lua_createtable(L, 0, 64);
+  lua_rawseti(L, LUA_REGISTRYINDEX, LJ52_CF_RIDX);
+
+  /* Pre-intern a light userdata from this DLL's own address range, for the
+   * same reason.  On GC64 lua_pushlightuserdata does not just tag a pointer:
+   * lj_lightud_intern (lj_udata.c:38-58) looks the pointer's 512 GB segment up
+   * in a segment map and lj_mem_reallocvec's that map when it sees a new one.
+   * Every memo key is a C function pointer inside this image, so interning one
+   * address from the image here -- while memory is plentiful and no JNI frame
+   * is waiting -- means later pushes find the segment already present. */
+  lua_pushlightuserdata(L, (void *)&LJ52_LIGHTUD_SEED);
+  lua_pop(L, 1);
+
+  /* The VM helper chunk used by lua_compare / lua_arith / lua_len. Built
+   * eagerly so those three never have to compile anything on a hot path. */
+  lj52_installhelpers(L);
+
+  /* --- turn the JIT on ------------------------------------------------
+   * LuaJIT only sets JIT_F_ON inside luaopen_jit, and jnlua never opens the
+   * jit library (5.2 has no such library to open). Without this the state
+   * runs interpreter-only and the entire point of the exercise is lost.
+   * pcall'd because a failure here must degrade to interpreter mode, not
+   * take the JVM down; the outcome is recorded in _OCLJ_JIT so a harness can
+   * assert on it.
+   *
+   * NOTE the nresults=0. luaopen_jit installs the global `jit` table ITSELF
+   * (LJ_LIB_REG -> lj_lib_register, which writes _LOADED.jit and the global),
+   * and its `return 1` does NOT describe the top of the stack: lib_jit.c
+   * pushes four scratch values for use as upvalues, registers jit and jit.opt,
+   * and then does `L->top -= 2`, so what a caller sees on top is a leftover
+   * STRING. The base variant of this shim took that value and did
+   * lua_setglobal(L, "jit") with it, clobbering the freshly registered jit
+   * table with the string "x64" -- measured: `jit` was type string, not table.
+   * The JIT itself was still on (jit_init runs first), which is why it went
+   * unnoticed, but jit.on/jit.off/jit.status were unreachable from Lua.
+   * Asking for zero results and letting the opener do its own registration is
+   * both correct and simpler. */
+  lua_pushcclosure(L, luaopen_jit, 0);
+  lua_pushliteral(L, LUA_JITLIBNAME);
+  if (lua_pcall(L, 1, 0, 0) == 0) {
+    lua_pushliteral(L, "ok");
+  } else {
+    /* pcall pushed the error message even with nresults == 0. */
+    lua_pushfstring(L, "luaopen_jit failed: %s", lua_tostring(L, -1));
+    lua_remove(L, -2);
+  }
+  lua_setglobal(L, "_OCLJ_JIT");
+
+  /* An unfakeable marker that this state came from the LuaJIT-backed native.
+   * ocelot-brain sets includeLuaJ = !isAvailable, so a failed native load
+   * SILENTLY substitutes LuaJ -- which has no Eris, so every persistence test
+   * then passes vacuously. Any harness that claims a result must read this
+   * global out of the live state and refuse to report a pass without it. */
+  lua_pushliteral(L, "luajit/" LUAJIT_VERSION);
+  lua_setglobal(L, "_OCLJ_NATIVE");
+
+  /* _OCLJ_WATCHDOG -- the kernel's replacement for its standing count hook.
+   * A raw global like _OCLJ_NATIVE: the sandbox never sees it, and being
+   * reachable from _G makes it a permanent for the serializer. */
+  lj52_wd_install(L);
+  return L;
+}
+
+/* ================================================================== *
+ * index / length / comparison
+ * ================================================================== */
+
+int lua_absindex(lua_State *L, int idx) {
+  /* Same shape as 5.2's lua_absindex. On LuaJIT every pseudo-index
+   * (LUA_REGISTRYINDEX, LUA_ENVIRONINDEX, LUA_GLOBALSINDEX and the upvalue
+   * indices) is <= LUA_REGISTRYINDEX, so 5.2's test transfers unchanged.
+   * Using LUA_GLOBALSINDEX as the floor instead would mangle
+   * LUA_REGISTRYINDEX, which is more negative. */
+  return (idx > 0 || idx <= LUA_REGISTRYINDEX) ? idx : lua_gettop(L) + idx + 1;
+}
+
+size_t lua_rawlen(lua_State *L, int idx) {
+  /* 5.2's lua_rawlen is 5.1's lua_objlen: raw length, no __len. */
+  return lua_objlen(L, idx);
+}
+
+int lua_compare(lua_State *L, int idx1, int idx2, int op) {
+  int r;
+  /* THE __le FIX. -----------------------------------------------------
+   * The obvious 5.1 spelling for LUA_OPLE is `!lua_lessthan(L, idx2, idx1)`,
+   * because 5.1 itself implements `a <= b` as `not (b < a)` when there is no
+   * __le. That is wrong on 5.2 in three distinct ways, all measured against
+   * this LuaJIT build with a differential harness (see AUDIT/le_test.c):
+   *   - on a metatable defining ONLY __le, the fallback looks up a __lt that
+   *     is not there and RAISES "attempt to compare two table values", both
+   *     when __le would return true and when it would return false;
+   *   - with __le and __lt both present and both returning true, the fallback
+   *     returns FALSE where 5.2 returns TRUE;
+   *   - it fires the WRONG metamethod: __lt once, __le never.
+   * A third spelling seen in sibling variants, `lua_lessthan(a,b) ||
+   * lua_equal(a,b)`, is wrong the same way and additionally fires __eq.
+   * Routing through the VM's own `<=` gets all of it right for free, because
+   * LUAJIT_ENABLE_LUA52COMPAT already makes the VM use 5.2's __le rules.
+   * (Nothing in OC or ocelot-brain calls LuaState.compare today, so this was
+   * latent rather than a live regression -- but it is a wrong 5.2 surface and
+   * costs nothing to get right.) */
+  idx1 = lua_absindex(L, idx1);
+  idx2 = lua_absindex(L, idx2);
+  lj52_gethelper(L, "cmp");
+  lua_pushinteger(L, op);
+  lua_pushvalue(L, idx1);
+  lua_pushvalue(L, idx2);
+  lua_call(L, 3, 1);
+  r = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  return r;
+}
+
+void lua_arith(lua_State *L, int op) {
+  /* 5.2: pops the operands (2, or 1 for LUA_OPUNM) and pushes the result,
+   * honouring the arithmetic metamethods. Routed through the VM for the same
+   * reason as lua_compare. */
+  int nargs = (op == LUA_OPUNM) ? 1 : 2;
+  int base  = lua_gettop(L) - nargs + 1;   /* index of the first operand */
+  lj52_gethelper(L, "arith");              /* a [b] f  */
+  lua_insert(L, base);                     /* f a [b]  */
+  lua_pushinteger(L, op);                  /* f a [b] op */
+  lua_insert(L, base + 1);                 /* f op a [b] */
+  lua_call(L, nargs + 1, 1);
+}
+
+void lua_len(lua_State *L, int idx) {
+  /* 5.2's lua_len honours __len on tables as well as strings; 5.1's
+   * lua_objlen does not. `#x` in a LUA52COMPAT VM does. */
+  idx = lua_absindex(L, idx);
+  lj52_gethelper(L, "len");
+  lua_pushvalue(L, idx);
+  lua_call(L, 1, 1);
+}
+
+/* ================================================================== *
+ * unsigned accessors
+ * ================================================================== */
+
+/* LuaJIT has no integer subtype: every number is a double. 5.2's
+ * lua_pushunsigned/lua_tounsigned are exact for the whole 32-bit range a
+ * double can represent, which is the entire domain of lua_Unsigned, so these
+ * are exact rather than merely practical. */
+void lua_pushunsigned(lua_State *L, lua_Unsigned n) {
+  lua_pushnumber(L, (lua_Number)n);
+}
+
+lua_Unsigned lua_tounsigned(lua_State *L, int idx) {
+  /* 5.2 converts modulo 2^32 (luaconf.h's lua_number2unsigned). Doing the
+   * reduction in floating point first avoids the undefined behaviour of
+   * casting an out-of-range double straight to an integer type. */
+  double d = (double)lua_tonumber(L, idx);
+  if (!(d > -9.0e18 && d < 9.0e18)) return 0;   /* NaN / inf / absurd */
+  d = d - floor(d / 4294967296.0) * 4294967296.0;
+  return (lua_Unsigned)(unsigned long long)d;
+}
+
+/* ================================================================== *
+ * luaL_getsubtable / luaL_requiref / luaL_tolstring
+ * ================================================================== */
+
+int luaL_getsubtable(lua_State *L, int idx, const char *fname) {
+  idx = lua_absindex(L, idx);
+  lua_getfield(L, idx, fname);
+  if (lua_istable(L, -1)) return 1;             /* already there */
+  lua_pop(L, 1);
+  lua_newtable(L);
+  lua_pushvalue(L, -1);
+  lua_setfield(L, idx, fname);
+  return 0;
+}
+
+void luaL_requiref(lua_State *L, const char *modname, lua_CFunction openf, int glb) {
+  /* 5.2's luaL_requiref consults package.loaded first and only calls openf if
+   * the module is not already there; several sibling variants always called
+   * openf, which re-runs a library opener and discards the previous module
+   * table (so anything that had already been stored into it is lost). */
+  luaL_getsubtable(L, LUA_REGISTRYINDEX, "_LOADED");
+  lua_getfield(L, -1, modname);
+  if (!lua_toboolean(L, -1)) {
+    lua_pop(L, 1);
+    lua_pushcclosure(L, openf, 0);
+    lua_pushstring(L, modname);
+    lua_call(L, 1, 1);
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -3, modname);
+  }
+  if (glb) {
+    lua_pushvalue(L, -1);
+    lua_setglobal(L, modname);
+  }
+  lua_replace(L, -2);   /* drop _LOADED, leave the module on top */
+}
+
+const char *luaL_tolstring(lua_State *L, int idx, size_t *len) {
+  idx = lua_absindex(L, idx);
+  if (luaL_callmeta(L, idx, "__tostring")) {
+    if (!lua_isstring(L, -1)) luaL_error(L, "'__tostring' must return a string");
+  } else {
+    switch (lua_type(L, idx)) {
+      case LUA_TNUMBER:
+      case LUA_TSTRING:
+        lua_pushvalue(L, idx);
+        break;
+      case LUA_TBOOLEAN:
+        lua_pushstring(L, lua_toboolean(L, idx) ? "true" : "false");
+        break;
+      case LUA_TNIL:
+        lua_pushliteral(L, "nil");
+        break;
+      default:
+        lua_pushfstring(L, "%s: %p", luaL_typename(L, idx), lua_topointer(L, idx));
+        break;
+    }
+  }
+  return lua_tolstring(L, -1, len);
+}
+
+/* ================================================================== *
+ * resume
+ * ================================================================== */
+
+int lj52_resume(lua_State *L, lua_State *from, int nargs) {
+  (void)from;
+  return lua_resume(L, nargs);
+}
+
+/* ================================================================== *
+ * coroutine
+ * ================================================================== */
+
+int luaopen_coroutine(lua_State *L) {
+  /* 5.2 splits the coroutine library out of the base library and gives it its
+   * own opener. LuaJIT's luaopen_base already registers the global
+   * `coroutine` table, and OC always opens BASE before COROUTINE
+   * (LuaStateFactory.openLibs), so the right answer is to hand back the table
+   * that already exists rather than build a second one. */
+  lua_getglobal(L, LUA_COLIBNAME);
+  if (!lua_istable(L, -1)) {
+    lua_pop(L, 1);
+    lua_newtable(L);
+  }
+  return 1;
+}
+
+/* ================================================================== *
+ * bit32 -- Lua 5.2 semantics
+ * ================================================================== */
+
+/* This is a real 5.2 bit32, NOT an alias for LuaJIT's luaopen_bit. Two
+ * sibling variants defined luaopen_bit32 as luaopen_bit; that is wrong
+ * because BitOp returns SIGNED 32-bit results (bit.bnot(0) == -1) whereas
+ * 5.2's bit32 returns unsigned ones (bit32.bnot(0) == 4294967295), and OpenOS
+ * arithmetic on the result then differs. */
+
+#define B32MASK 0xFFFFFFFFu
+
+static unsigned int b32arg(lua_State *L, int i) {
+  /* 5.2: "the given argument is converted to an integer modulo 2^32". The
+   * base variant of this shim did `(unsigned)((long long)d & 0xFFFFFFFF)`,
+   * which TRUNCATES toward zero before masking -- so it disagrees with 5.2
+   * for any argument with a fractional part (-3.5 becomes -3, not -4) and is
+   * undefined for |d| >= 2^63. The floating-point floor-modulo below is
+   * 5.2's actual definition and has neither problem. */
+  double d = (double)luaL_checknumber(L, i);
+  if (!(d > -9.0e18 && d < 9.0e18)) return 0;   /* NaN / inf */
+  d = d - floor(d / 4294967296.0) * 4294967296.0;
+  return (unsigned int)(unsigned long long)d;
+}
+
+static int b32_band(lua_State *L) {
+  int n = lua_gettop(L), i;
+  unsigned int r = B32MASK;
+  for (i = 1; i <= n; i++) r &= b32arg(L, i);
+  lua_pushnumber(L, (lua_Number)r);
+  return 1;
+}
+static int b32_bor(lua_State *L) {
+  int n = lua_gettop(L), i;
+  unsigned int r = 0;
+  for (i = 1; i <= n; i++) r |= b32arg(L, i);
+  lua_pushnumber(L, (lua_Number)r);
+  return 1;
+}
+static int b32_bxor(lua_State *L) {
+  int n = lua_gettop(L), i;
+  unsigned int r = 0;
+  for (i = 1; i <= n; i++) r ^= b32arg(L, i);
+  lua_pushnumber(L, (lua_Number)r);
+  return 1;
+}
+static int b32_btest(lua_State *L) {
+  int n = lua_gettop(L), i;
+  unsigned int r = B32MASK;
+  for (i = 1; i <= n; i++) r &= b32arg(L, i);
+  lua_pushboolean(L, r != 0);
+  return 1;
+}
+static int b32_bnot(lua_State *L) {
+  lua_pushnumber(L, (lua_Number)(~b32arg(L, 1) & B32MASK));
+  return 1;
+}
+
+/* 5.2's shifts are logical, saturate to 0 past 32 bits, and treat a negative
+ * displacement as a shift in the other direction. */
+static int b32_lshift(lua_State *L) {
+  unsigned int r = b32arg(L, 1);
+  int i = (int)luaL_checknumber(L, 2);
+  unsigned int res;
+  if (i < 0) { i = -i; res = (i >= 32) ? 0 : ((r >> i) & B32MASK); }
+  else       { res = (i >= 32) ? 0 : ((r << i) & B32MASK); }
+  lua_pushnumber(L, (lua_Number)res);
+  return 1;
+}
+static int b32_rshift(lua_State *L) {
+  unsigned int r = b32arg(L, 1);
+  int i = (int)luaL_checknumber(L, 2);
+  unsigned int res;
+  if (i < 0) { i = -i; res = (i >= 32) ? 0 : ((r << i) & B32MASK); }
+  else       { res = (i >= 32) ? 0 : ((r >> i) & B32MASK); }
+  lua_pushnumber(L, (lua_Number)res);
+  return 1;
+}
+static int b32_arshift(lua_State *L) {
+  unsigned int r = b32arg(L, 1);
+  int i = (int)luaL_checknumber(L, 2);
+  unsigned int res;
+  if (i < 0) {                       /* negative displacement: shift left */
+    i = -i;
+    res = (i >= 32) ? 0 : ((r << i) & B32MASK);
+  } else {
+    int neg = (r & 0x80000000u) != 0;
+    if (i >= 32) res = neg ? B32MASK : 0;
+    else if (i == 0) res = r;
+    else {
+      res = r >> i;
+      if (neg) res |= (B32MASK << (32 - i)) & B32MASK;
+    }
+  }
+  lua_pushnumber(L, (lua_Number)res);
+  return 1;
+}
+static int b32_lrotate(lua_State *L) {
+  unsigned int r = b32arg(L, 1);
+  int i = (int)luaL_checknumber(L, 2) & 31;
+  lua_pushnumber(L, (lua_Number)(((r << i) | (r >> ((32 - i) & 31))) & B32MASK));
+  return 1;
+}
+static int b32_rrotate(lua_State *L) {
+  unsigned int r = b32arg(L, 1);
+  int i = (int)luaL_checknumber(L, 2) & 31;
+  lua_pushnumber(L, (lua_Number)(((r >> i) | (r << ((32 - i) & 31))) & B32MASK));
+  return 1;
+}
+
+/* 5.2's exact argument-error messages for the field accessors, so a Lua-side
+ * pcall that matches on them behaves the same as on PUC 5.2. */
+static int b32field(lua_State *L, int i, int *width) {
+  int f = (int)luaL_checknumber(L, i);
+  int w = (int)luaL_optnumber(L, i + 1, 1);
+  luaL_argcheck(L, 0 <= f, i, "field cannot be negative");
+  luaL_argcheck(L, 0 < w, i + 1, "width must be positive");
+  if (f + w > 32) luaL_error(L, "trying to access non-existent bits");
+  *width = w;
+  return f;
+}
+static int b32_extract(lua_State *L) {
+  int w;
+  unsigned int v = b32arg(L, 1);
+  int f = b32field(L, 2, &w);
+  lua_pushnumber(L, (lua_Number)((v >> f) & (B32MASK >> (32 - w))));
+  return 1;
+}
+static int b32_replace(lua_State *L) {
+  int w;
+  unsigned int v = b32arg(L, 1);
+  unsigned int r = b32arg(L, 2);
+  int f = b32field(L, 3, &w);
+  unsigned int m = B32MASK >> (32 - w);
+  lua_pushnumber(L, (lua_Number)(((v & ~(m << f)) | ((r & m) << f)) & B32MASK));
+  return 1;
+}
+
+static const luaL_Reg bit32lib[] = {
+  {"arshift", b32_arshift}, {"band",    b32_band},    {"bnot",    b32_bnot},
+  {"bor",     b32_bor},     {"bxor",    b32_bxor},    {"btest",   b32_btest},
+  {"extract", b32_extract}, {"lrotate", b32_lrotate}, {"lshift",  b32_lshift},
+  {"replace", b32_replace}, {"rrotate", b32_rrotate}, {"rshift",  b32_rshift},
+  {NULL, NULL}
+};
+
+int luaopen_bit32(lua_State *L) {
+  /* lua_newtable + luaL_register(L, NULL, ...) and NOT
+   * luaL_register(L, LUA_BITLIBNAME, ...): the latter also creates a global
+   * named "bit32" as a side effect. jnlua reaches this through
+   * luaL_requiref(L, LUA_BITLIBNAME, luaopen_bit32, glb), which is the code
+   * that gets to decide whether a global is created. */
+  lua_newtable(L);
+  luaL_register(L, NULL, bit32lib);
+  return 1;
+}
+
+/* ================================================================== *
+ * eris
+ * ================================================================== */
+
+int luaopen_eris(lua_State *L) {
+  /* jnlua.c's openlib case for ERIS is
+   *     luaL_requiref(L, LUA_ERISLIBNAME, luaopen_eris, 1)
+   * -- one name, one opener, no other eris-specific constant anywhere in
+   * jnlua.c. Our serializer's luaopen_eris_lj leaves the module table on the
+   * stack exactly as requiref needs. */
+  int n = luaopen_eris_lj(L);
+
+  /* _VERSION. OC's platform is 5.2 source and the harness fingerprint reads
+   * this out of the live state. It has to be set HERE rather than in
+   * lj52_newstate for an ordering reason that is easy to get wrong:
+   * LuaStateFactory.openLibs opens BASE first, and LuaJIT's luaopen_base
+   * assigns _VERSION = "Lua 5.1", clobbering anything set at state creation.
+   * ERIS is opened after BASE (BASE, BIT32, COROUTINE, DEBUG, ERIS, ...), so
+   * this is the last opener that can win.
+   * The string must not contain "5.3" or "5.4": machine.lua:65-66 pattern-
+   * matches _VERSION to decide which Lua dialect it is running on, and
+   * machine.lua:812 derives the sandbox's own _VERSION from it. */
+  lua_pushliteral(L, "Lua+Eris 5.2");
+  lua_setglobal(L, "_VERSION");
+  return n;
+}

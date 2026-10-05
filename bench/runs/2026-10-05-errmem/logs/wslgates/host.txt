@@ -1,0 +1,3 @@
+Linux x86_64
+fae4f694d2b224ff163b44c375238923  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src/libluajit.a
+21156504eb37a48f7f44836ce821812c  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/dist/libjnluajit52-linux-x86_64.so

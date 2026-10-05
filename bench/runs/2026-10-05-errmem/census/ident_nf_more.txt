@@ -1,0 +1,49 @@
+== verdict_unpnf_string_seed2 vs verdict_fixnf_string_seed2
+caps_in_both=1024  both_rc0=914  identical=914  differ=0  A_crash_B_ok=110  A_ok_B_crash=0  both_crash=0
+  B outcome where A crashed: status=0 term=1 events=3,1,6 x26
+  B outcome where A crashed: status=0 term=1 events=1,6 x84
+== verdict_unpnf_string_seed3 vs verdict_fixnf_string_seed3
+caps_in_both=1024  both_rc0=832  identical=832  differ=0  A_crash_B_ok=192  A_ok_B_crash=0  both_crash=0
+  B outcome where A crashed: status=0 term=1 events=3,1,6 x44
+  B outcome where A crashed: status=0 term=1 events=1,6 x148
+== verdict_unpnf_string vs window_unpnf_string
+  DIFF off 0
+    A: string	0	52444	445660	32768	0	1	4618	1,6	463240	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	77	77	0	17988	-1	-1	462	-1
+    B: string	0	52444	445660	32768	0	1	4621	1,6	462664	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	127	127	0	17060	-1	-1	463	-1
+  DIFF off 16
+    A: string	16	52444	445676	32768	0	1	4618	1,6	463240	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	81	81	0	17972	-1	-1	462	-1
+    B: string	16	52444	445676	32768	0	1	4621	1,6	462664	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	130	130	0	17044	-1	-1	463	-1
+  DIFF off 32
+    A: string	32	52444	445692	32768	0	1	4618	1,6	463240	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	83	83	0	17956	-1	-1	462	-1
+    B: string	32	52444	445692	32768	0	1	4621	1,6	462664	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	131	131	0	17028	-1	-1	463	-1
+caps_in_both=2048  both_rc0=1737  identical=0  differ=1737  A_crash_B_ok=311  A_ok_B_crash=0  both_crash=0
+  B outcome where A crashed: status=0 term=2 events=2,20 x1
+  B outcome where A crashed: status=0 term=1 events=3,1,6 x19
+  B outcome where A crashed: status=0 term=1 events=3,3,1,6 x1
+  B outcome where A crashed: status=0 term=1 events=1,6 x290
+== window_unpnf_string_512_r1 vs window_unpnf_string_512_seed2
+  DIFF off 0
+    A: string	0	52444	445660	32768	0	1	4621	1,6	462664	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	127	127	0	17060	-1	-1	463	-1
+    B: string	0	52444	445660	32768	0	1	4885	3,1,6	479220	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	151	151	0	33612	-1	-1	489	-1
+  DIFF off 32
+    A: string	32	52444	445692	32768	0	1	4621	1,6	462664	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	131	131	0	17028	-1	-1	463	-1
+    B: string	32	52444	445692	32768	0	1	4885	3,1,6	479220	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	149	149	0	33580	-1	-1	489	-1
+  DIFF off 16
+    A: string	16	52444	445676	32768	0	1	4621	1,6	462664	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	130	130	0	17044	-1	-1	463	-1
+    B: string	16	52444	445676	32768	0	1	4885	3,1,6	479220	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	2	149	149	0	33596	-1	-1	489	-1
+caps_in_both=512  both_rc0=512  identical=2  differ=510  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== verdict_unpnf_string_512_r1 vs verdict_unpnf_string_seed2
+  DIFF off 0
+    A: string	0	52444	445660	32768	0	1	4618	1,6	463240	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	77	77	0	17988	-1	-1	462	-1
+    B: string	0	52444	445660	32768	0	1	4639	1,6	463084	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	88	88	0	17660	-1	-1	464	-1
+  DIFF off 16
+    A: string	16	52444	445676	32768	0	1	4618	1,6	463240	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	81	81	0	17972	-1	-1	462	-1
+    B: string	16	52444	445676	32768	0	1	4639	1,6	463128	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	88	88	0	17644	-1	-1	464	-1
+  DIFF off 32
+    A: string	32	52444	445692	32768	0	1	4618	1,6	463240	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	83	83	0	17956	-1	-1	462	-1
+    B: string	32	52444	445692	32768	0	1	4639	1,6	463128	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	-1	1	88	88	0	17628	-1	-1	464	-1
+caps_in_both=512  both_rc0=391  identical=2  differ=389  A_crash_B_ok=66  A_ok_B_crash=37  both_crash=18
+  B outcome where A crashed: status=0 term=1 events=3,1,6 x8
+  B outcome where A crashed: status=0 term=1 events=1,6 x58
+== verdict_fixnf_string vs verdict_shipnf_string
+caps_in_both=2048  both_rc0=2048  identical=2048  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0

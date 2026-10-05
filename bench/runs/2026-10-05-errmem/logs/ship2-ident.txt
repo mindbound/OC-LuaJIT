@@ -1,0 +1,1 @@
+caps_in_both=2048  both_rc0=2048  identical=2048  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0

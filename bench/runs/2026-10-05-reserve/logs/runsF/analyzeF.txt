@@ -1,0 +1,180 @@
+
+######## gate: 60 runs
+
+== (1) THE BOUND: od_peak per run (F must be <= G/2 + R + 2L = 32768 unless the kernel exception; E teeth >= 10 over)
+  F: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
+  E: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
+
+== (2) THE CREEP: used at the last refusal - used at the first (F <= R + 2L + delta = 16384 + delta); the sizing's rsv in [24576, 28672]
+  F: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
+  E: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
+
+== (3) BAD OUTCOMES per build (F's STALL+DOWN <= E's + 3), second-chance incidence, refusals per run
+  E: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
+  F: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
+
+== (4) CAPACITY: held per cell, F against E and stock; second-chance runs' held
+  E amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
+  F amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
+
+== (6) COST: t_last5 F/E per cell (<= 1.10); idle arms per window; idle refusals
+
+== (7) THE RECOVERY CELLS: class, rr, the catch and the held peak after it
+
+== (8) THE INSTRUMENT'S OWN QUESTIONS: first-refusal absorbers per build; kernel=1; power-of-two requests >= 8 KiB
+  E: first {}
+     later {}
+     kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
+  F: first {}
+     later {}
+     kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
+
+######## recover: 25 runs
+
+== (1) THE BOUND: od_peak per run (F must be <= G/2 + R + 2L = 32768 unless the kernel exception; E teeth >= 10 over)
+  F: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
+  E: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
+
+== (2) THE CREEP: used at the last refusal - used at the first (F <= R + 2L + delta = 16384 + delta); the sizing's rsv in [24576, 28672]
+  F: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
+  E: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
+
+== (3) BAD OUTCOMES per build (F's STALL+DOWN <= E's + 3), second-chance incidence, refusals per run
+  E: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
+  F: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
+
+== (4) CAPACITY: held per cell, F against E and stock; second-chance runs' held
+  rc3-record-S                 S med 256 (n 3, 256-257)
+  rc3-string-S                 S med 901 (n 3, 901-1024)
+  E amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
+  F amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
+
+== (6) COST: t_last5 F/E per cell (<= 1.10); idle arms per window; idle refusals
+
+== (7) THE RECOVERY CELLS: class, rr, the catch and the held peak after it
+  rc1-record-r1-F-D        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:117 catch==/mnt/e8f/autorun.lua:30 heldpeak=0
+  rc1-record-r2-F-D        class=RECOVERY-REFUSED rr=1 pf=1 refs=3 opener==machine:1261 catch==/mnt/510/autorun.lua:30 heldpeak=-128
+  rc1-record-r3-F-D        class=RECOVERY-REFUSED rr=1 pf=1 refs=3 opener==machine:117 catch==/mnt/f50/autorun.lua:30 heldpeak=0
+  rc3-record-r1-E-D        class=RECOVERY-REFUSED rr=1 pf=0 refs=2 opener==/mnt/b31/autorun.lua:30 catch==/mnt/b31/autorun.lua:30 heldpeak=16312
+  rc3-record-r1-F-D        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:1261 catch==/mnt/6dd/autorun.lua:32 heldpeak=-68
+  rc3-record-r1-S-stock    class=RECOVERY-REFUSED rr=1 pf=0 refs=0 opener=- catch=- heldpeak=-
+  rc3-record-r2-E-D        class=RECOVERY-REFUSED rr=1 pf=0 refs=2 opener==/mnt/38b/autorun.lua:30 catch==/mnt/38b/autorun.lua:30 heldpeak=16212
+  rc3-record-r2-F-D        class=RECOVERY-REFUSED rr=1 pf=0 refs=2 opener==/mnt/b64/autorun.lua:32 catch==/mnt/b64/autorun.lua:32 heldpeak=8768
+  rc3-record-r2-S-stock    class=RECOVERY-REFUSED rr=1 pf=0 refs=0 opener=- catch=- heldpeak=-
+  rc3-record-r3-E-D        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:1280 catch==/mnt/006c/autorun.lua:32 heldpeak=-64
+  rc3-record-r3-F-D        class=RECOVERY-REFUSED rr=1 pf=0 refs=2 opener==/mnt/56c/autorun.lua:30 catch==/mnt/56c/autorun.lua:30 heldpeak=11088
+  rc3-record-r3-S-stock    class=RECOVERY-REFUSED rr=1 pf=0 refs=0 opener=- catch=- heldpeak=-
+  rc3-record-r4-F-D        class=RECOVERY-REFUSED rr=1 pf=2 refs=5 opener==machine:1261 catch==/mnt/950/autorun.lua:-1 heldpeak=56
+  rc3-record-r5-F-D        class=RECOVERY-REFUSED rr=1 pf=3 refs=5 opener==machine:1261 catch==/mnt/e8d/autorun.lua:30 heldpeak=-28
+  rc3-string-r1-E-O        class=CLEAN            rr=0 pf=0 refs=2 opener==/mnt/3ab/autorun.lua:47 catch==/mnt/3ab/autorun.lua:47 heldpeak=11896
+  rc3-string-r1-F-O        class=CLEAN            rr=0 pf=0 refs=3 opener==/mnt/6b6/autorun.lua:47 catch==/mnt/6b6/autorun.lua:47 heldpeak=8520
+  rc3-string-r1-S-stock    class=RECOVERY-REFUSED rr=1 pf=3 refs=0 opener=- catch=- heldpeak=-
+  rc3-string-r2-E-O        class=CLEAN            rr=0 pf=0 refs=2 opener==/mnt/74e/autorun.lua:47 catch==/mnt/74e/autorun.lua:47 heldpeak=11972
+  rc3-string-r2-F-O        class=CLEAN            rr=0 pf=0 refs=3 opener==/mnt/03b/autorun.lua:47 catch==/mnt/03b/autorun.lua:47 heldpeak=8520
+  rc3-string-r2-S-stock    class=RECOVERY-REFUSED rr=1 pf=0 refs=0 opener=- catch=- heldpeak=-
+  rc3-string-r3-E-O        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:117 catch==/mnt/b01/autorun.lua:47 heldpeak=-12
+  rc3-string-r3-F-O        class=CLEAN            rr=0 pf=0 refs=3 opener==/mnt/f6e/autorun.lua:47 catch==/mnt/f6e/autorun.lua:47 heldpeak=8520
+  rc3-string-r3-S-stock    class=RECOVERY-REFUSED rr=1 pf=3 refs=0 opener=- catch=- heldpeak=-
+  rc3-string-r4-F-O        class=RECOVERY-REFUSED rr=1 pf=3 refs=5 opener==machine:117 catch==/mnt/7ec/autorun.lua:47 heldpeak=-12
+  rc3-string-r5-F-O        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:117 catch==/mnt/966/autorun.lua:47 heldpeak=-12
+
+== (8) THE INSTRUMENT'S OWN QUESTIONS: first-refusal absorbers per build; kernel=1; power-of-two requests >= 8 KiB
+  E: first {}
+     later {}
+     kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
+  F: first {}
+     later {}
+     kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
+
+######## matrix: 76 runs
+
+== the batch-100 matrix: class per build, held per cell
+  S: {'CLEAN': 4}
+  E: {'CLEAN': 24}
+  F: {'CLEAN': 48}
+  one-array-D                    E 789; F 783
+  one-array-L                    F 781
+  one-array-O                    E 868; F 868
+  one-array-S                    S 280
+  one-closure-D                  E 774; F 769
+  one-closure-L                  F 772
+  one-closure-O                  E 834; F 834
+  one-closure-S                  S 496
+  one-record-D                   E 549; F 555
+  one-record-L                   F 550
+  one-record-O                   E 601; F 602
+  one-record-S                   S 256
+  one-string-D                   E 2048; F 2048
+  one-string-L                   F 2048
+  one-string-O                   E 2210; F 2210
+  one-string-S                   S 1024
+  onehalf-array-D                F 1364
+  onehalf-array-O                F 1434
+  onehalf-closure-D              F 1359
+  onehalf-closure-O              F 1378
+  onehalf-record-D               F 922
+  onehalf-record-O               F 966
+  onehalf-string-D               F 3380
+  onehalf-string-O               F 3688
+  threehalf-array-D              F 8192
+  threehalf-array-L              F 8192
+  threehalf-array-O              F 8192
+  threehalf-closure-D            F 8020
+  threehalf-closure-L            F 8048
+  threehalf-closure-O            F 8081
+  threehalf-record-D             F 5672
+  threehalf-record-L             F 5662
+  threehalf-record-O             F 5721
+  threehalf-string-D             F 20782
+  threehalf-string-L             F 20640
+  threehalf-string-O             F 20916
+
+######## the suites
+fullF-additive-on exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1856349  used=196011
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1359 KB live with sandbox free down to 42 KB; trace_flushes 0 -> 21; traces_live 251 before, min 0 over 55 reads while running (0 first seen at poll 120, program still stepp
+    SMOKE| MILESTONE acc-4-constructor-cap-bites: PASS -- new LuaStateLuaJIT(4194304), no setTotalMemory: csync 1, native cap 4194304; unbounded allocation raised LuaMemoryAllocationException: not enough memory at native used 4340346 (credit 278528); JNI crossings
+    SMOKE| CHECKS: 66   FAILURES: 0   WALL: 93.8s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullF-dropin-on exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164247  totalMemory=2051684  freeMemory=1856349  used=195335
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164247
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1347 KB live with sandbox free down to 45 KB; trace_flushes 0 -> 22; traces_live 284 before, min 0 over 55 reads while running (0 first seen at poll 120, program still stepp
+    SMOKE| MILESTONE acc-4/5/7: SKIP -- native=luajit: they test LuaStateLuaJIT, which the dropin arm does not use (not counted)
+    SMOKE| CHECKS: 63   FAILURES: 0   WALL: 92.8s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullF-additive-off exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1882378  used=169982
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=off -> jit.status()=false
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: SKIP -- jit=off: no trace is ever resident, so there is nothing to flush (not counted)
+    SMOKE| MILESTONE acc-4-constructor-cap-bites: PASS -- new LuaStateLuaJIT(4194304), no setTotalMemory: csync 1, native cap 4194304; unbounded allocation raised LuaMemoryAllocationException: not enough memory at native used 4340346 (credit 278528); JNI crossings
+    SMOKE| CHECKS: 64   FAILURES: 0   WALL: 96.8s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullF-additive-sieve exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=2052360  freeMemory=1856349  used=196011
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+    SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1433 KB live with sandbox free down to 46 KB; trace_flushes 0 -> 19; traces_live 237 before, min 0 over 58 reads while running (0 first seen at poll 132, program still stepp
+    SMOKE| MILESTONE acc-4-constructor-cap-bites: PASS -- new LuaStateLuaJIT(4194304), no setTotalMemory: csync 1, native cap 4194304; unbounded allocation raised LuaMemoryAllocationException: not enough memory at native used 4340346 (credit 278528); JNI crossings
+    SMOKE| CHECKS: 60   FAILURES: 0   WALL: 83.9s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.
+fullF-stock exit=0
+    SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=174605  totalMemory=2062042  freeMemory=1845286  used=216756
+    SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: SKIP -- kernel=stock: OpenComputers' own kernel has no site 13 (not counted)
+    SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| MILESTONE acc-1-machine-handover: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)
+    SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=<error: smoke:1: attempt to index global 'jit' (a nil value)>
+    SMOKE| MILESTONE acc-1r-restored-machine-handover: SKIP -- native=stock (not counted)
+    SMOKE| MILESTONE acc-3..7: SKIP -- native=stock: PUC's accounting is jnlua's own (not counted)
+    SMOKE| CHECKS: 47   FAILURES: 0   WALL: 83.3s
+    SMOKE| VERDICT: PASS
+    SMOKE PASS (BASELINE) -- OpenOS booted on ocelot-brain's stock PUC-Lua 5.2,
+

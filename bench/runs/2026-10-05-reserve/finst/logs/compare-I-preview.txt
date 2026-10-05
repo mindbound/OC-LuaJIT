@@ -1,0 +1,28 @@
+======================================================================================================================================================
+variant I  (RSV 8192, window 4096; the design's sandbox bound od_peak <= G/2 + RSV + 2*window; the old one G + window)
+-- seed 1, against the forensics' baselines (sc/forensics/out)
+cell                caps   ident_b ident_sc  out b->v   sc b->v  sc_out  held all b->v (ratio)      held sc-caps b->v     coll b->v     arms b->v       odx b->v  >old  >new   fired
+string_j1           1024  934/934    0/90      1->1      90->90     0->0      4770->4758   (0.997)    5033->4896     118.8->117.4   118.8->117.4    1112->-6804   0->0  90->0    1024  
+      out: off  2864 term 2 nref 1 [dispatcher] opener dispatcher; last: delta=64 tier0=0 win0=2 at==probe:80 over=228 rsv=24740 tier=24740   (baseline: term 2 [dispatcher])
+record_j1           1024 1004/1004   0/20      0->0      20->20     0->0      1329->1329   (1.000)    1378->1353      40.5->40.5     40.5->40.5      292->-7320   0->0  20->0    1024  
+string_j0          (not run)
+record_j0          (not run)
+oe_string_j1       (not run)
+oe_record_j1       (not run)
+k2048_string_j1    (not run)
+k2048_record_j1    (not run)
+-- seeds [2, 3], against out/B_<cell>_s<seed> (the forensics' lref_ref.exe, run by census-M1.sh)
+cell                caps   ident_b ident_sc  out b->v   sc b->v  sc_out  held all b->v (ratio)      held sc-caps b->v     coll b->v     arms b->v       odx b->v  >old  >new   fired
+oe_string_j1 s2    (not run)
+string_j1 s2       (not run)
+string_j0 s2       (not run)
+oe_string_j1 s3    (not run)
+string_j1 s3       (not run)
+string_j0 s3       (not run)
+  reserves sized by a refusal: 2048; gc_rsv (credit past the cap, unclamped) min 24624 max 26468; past the refused heap min 8192 max 8192; top past cap (clamped) min 24624 max 26468
+
+-- M1 per cell and seed (b = baseline, v = I); outside counts in both directions, never pooled
+cell               seed  caps  nonsc ident    out b / v     sc b / v sc_out b / v   >old b / v >new b / v
+string_j1             1  1024   934/934        1 / 1        90 / 90        0 / 0         0 / 0       90 / 0   
+record_j1             1  1024  1004/1004       0 / 0        20 / 20        0 / 0         0 / 0       20 / 0   
+M1 must hold (over the 2 rows above): non-second-chance caps byte-identical in every cell and seed: HOLDS; 0 variant runs past either bound: HOLDS

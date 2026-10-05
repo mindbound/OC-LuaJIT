@@ -19,8 +19,8 @@
 #              checkout itself stays pristine and is asserted so below.
 #   lj52shim.o the compatibility layer (5.2 surface on the 5.1 ABI)
 #   eris_lj.o  our Eris-API-compatible serializer (serializer/eris_lj.c)
-#   libluajit.a  LuaJIT 2.1 static, LUA52COMPAT + CHECKHOOK, plus ONE
-#              function patched on the build copy: lj_func_freeproto scrubs
+#   libluajit.a  LuaJIT 2.1 static, LUA52COMPAT + CHECKHOOK, plus TWO
+#              functions patched on the build copy.  lj_func_freeproto scrubs
 #              the trace-abort penalty cache of the dying prototype's loop
 #              heads (native/luajit/patch-penalty-scrub.sh).  The cache is
 #              keyed by bytecode ADDRESS and upstream never clears it when a
@@ -36,6 +36,16 @@
 #              -- and the copy's lj_func.c is re-taken from the pristine
 #              checkout every build first, so the patched file is always a
 #              fresh patch of upstream, never a verified-and-kept old one.
+#              And lj_err_mem and lj_err_err never push their message below
+#              the current frame (native/luajit/patch-fastfunc-errmem-top.sh):
+#              a fast function that stores L->base but not L->top before an
+#              allocating C call (tostring of a number, string.char/sub/
+#              reverse/lower/upper) left L->top below its frame, and a
+#              refusal there overwrote the frame link that LuaJIT's unwinder
+#              then dereferenced -- the process died (2026-10-05;
+#              bench/runs/2026-10-05-errmem/).  Inside an xpcall message
+#              handler lj_err_mem hands to lj_err_err, which pushes with no
+#              refresh at all.  Same steps as the scrub.
 #
 # WHY THOSE TWO LUAJIT FLAGS (both are mandatory, not tuning):
 #   LUAJIT_ENABLE_LUA52COMPAT -- OC's platform (machine.lua, OpenOS, the
@@ -413,7 +423,8 @@ if [ ! -d "$LJ_WORK" ]; then
   rm -rf "$LJ_WORK/.git"
 fi
 LJ=$LJ_WORK/src
-# THE ONE FUNCTION OF LUAJIT WE CHANGE, on the copy, every build.  The copy
+# THE FIRST OF THE TWO FUNCTIONS OF LUAJIT WE CHANGE, on the copy, every
+# build.  The copy
 # persists between builds, and the patch script's "already patched" path
 # verifies only four marker lines -- so a stale or hand-edited block on the
 # copy (say `pc < bcend` turned into `pc < bc`) would be ACCEPTED and ship
@@ -450,6 +461,36 @@ sh "$OCLJ_REPO/native/luajit/patch-penalty-scrub.sh" "$LJ/lj_func.c" "$LJ/lj_fun
   || fail "$LJ/lj_func.c does not carry the penalty scrub exactly once -- the
          copy make is about to compile is not the patched one"
 say "    lj_func.c: penalty scrub present in the freshly re-derived build copy (asserted by content before make)"
+# THE SECOND: lj_err_mem and lj_err_err must never push their message below
+# the current frame (native/luajit/patch-fastfunc-errmem-top.sh;
+# bench/runs/2026-10-05-errmem/).  A fast function that stores L->base but not
+# L->top before an allocating C call -- tostring of a number,
+# string.char/sub/reverse/lower/upper -- leaves L->top stale below its frame;
+# when that allocation is refused, the message overwrote the frame link and
+# LuaJIT's unwinder dereferenced it: the process died, in a game the JVM.
+# Inside an xpcall message handler lj_err_mem hands to lj_err_err, which pushes
+# with no refresh at all.  Same steps as the scrub, for the same reasons:
+# pristine checkout asserted, re-copied, the clamp ABSENT after the copy,
+# patched, present exactly twice (once per push) before make, lj_err.o newer
+# after.  The absence checks match any form of the guard, so a checkout that a
+# different version of the patch dirtied is refused for that reason.
+ERRMEM_ANY='L->top < L->base'
+ERRMEM_LINE='  if (LJ_UNLIKELY(L->top < L->base))'
+grep -q -F -- "$ERRMEM_ANY" "$OCLJ_LUAJIT/src/lj_err.c" \
+  && fail "$OCLJ_LUAJIT/src/lj_err.c carries the ERRMEM top clamp: the pinned
+         checkout must stay pristine.  The patch belongs on the build copy only."
+cp -f "$OCLJ_LUAJIT/src/lj_err.c" "$LJ/lj_err.c" \
+  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_err.c over $LJ/lj_err.c"
+grep -q -F -- "$ERRMEM_ANY" "$LJ/lj_err.c" \
+  && fail "$LJ/lj_err.c still carries the ERRMEM top clamp right after the
+         pristine re-copy -- the copy did not take"
+say "    lj_err.c: pristine copy re-taken from $OCLJ_LUAJIT/src"
+sh "$OCLJ_REPO/native/luajit/patch-fastfunc-errmem-top.sh" "$LJ/lj_err.c" "$LJ/lj_err.c" \
+  || fail "the ERRMEM top-clamp patch refused (see above)"
+[ "$(grep -c -F -- "$ERRMEM_LINE" "$LJ/lj_err.c")" = "2" ] \
+  || fail "$LJ/lj_err.c does not carry the ERRMEM top clamp exactly twice -- the
+         copy make is about to compile is not the patched one"
+say "    lj_err.c: ERRMEM top clamp present twice in the freshly re-derived build copy (asserted by content before make)"
 make -C "$LJ" clean >/dev/null 2>&1
 # Q= makes the Makefile echo full compiler command lines, so the flags can be
 # asserted rather than assumed.
@@ -468,6 +509,12 @@ stamp "libluajit.a built ($(wc -c < "$LJ/libluajit.a") bytes)"
 grep -q 'lj_func\.c' "$OCLJ_BUILD/luajit_build.log" \
   || fail "lj_func.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
 say "    lj_func.o recompiled from the patched lj_func.c ($(date -r "$LJ/lj_func.o" +%H:%M:%S) > $(date -r "$LJ/lj_func.c" +%H:%M:%S))"
+[ -f "$LJ/lj_err.o" ] || fail "no $LJ/lj_err.o after make"
+[ "$LJ/lj_err.o" -nt "$LJ/lj_err.c" ] \
+  || fail "lj_err.o is not newer than the patched lj_err.c -- make did not recompile it"
+grep -q 'lj_err\.c' "$OCLJ_BUILD/luajit_build.log" \
+  || fail "lj_err.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
+say "    lj_err.o recompiled from the patched lj_err.c ($(date -r "$LJ/lj_err.o" +%H:%M:%S) > $(date -r "$LJ/lj_err.c" +%H:%M:%S))"
 
 # The two flags must be OBSERVABLE, not merely passed.
 grep -q -- "-DLUAJIT_ENABLE_LUA52COMPAT" "$OCLJ_BUILD/luajit_build.log" \

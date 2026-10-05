@@ -1,0 +1,161 @@
+--- src-plain/lj52shim.c	2026-10-05 13:50:45.641146000 +0300
++++ src-plain-R4K/lj52shim.c	2026-10-05 13:55:20.525470500 +0300
+@@ -279,6 +279,8 @@
+   long long     gc_odpeak;     /* the largest excursion past the cap, bytes   */
+   int           gc_win;        /* THE WINDOW: 0 shut, 1 open, 2 the verdict   */
+   long long     gc_grown;      /* bytes granted since the last proof          */
++  long long     gc_rsv;        /* the reserve tier's credit past the cap, set  */
++                               /* when it opens; see THE RESERVE'S SIZE       */
+   volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+   long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
+   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+@@ -957,10 +959,25 @@
+  *     the heap stops at total + G/2 (+ THE WINDOW below, for the sandbox),
+  *     so when the refusal comes at least G/2 (G/2 - LJ52_GC_LEND) is left
+  *     for what the program does next;
+- *   - RESERVE, after a refusal: up to G.  The refusal opens it; a proof that
+- *     finds the heap back under the cap closes it.  A proof that does not --
+- *     the cycle ran before the program dropped its data -- leaves it open,
+- *     which is what lets "catch, format the message, drop, carry on" work;
++ *   - RESERVE, after a refusal: LJ52_GC_RSV past the heap the refusal
++ *     found -- never under the burst tier's top, never past total + G.
++ *     The refusal opens it; a proof that finds the heap back under the
++ *     cap closes it.  A proof that does not -- the cycle ran before the
++ *     program dropped its data -- leaves it open, which is what lets
++ *     "catch, format the message, drop, carry on" work.  THE RESERVE'S
++ *     SIZE (2026-10-05): it was G/2 more past the cap, whoever caught the
++ *     refusal.  Caught by code that is not the program's -- the capacity
++ *     probe's pcall(paint), the JIT recorder (trace_abort drops the
++ *     error), OpenOS's error path -- it opened all of that for a fill
++ *     that never saw it, which then held 16-256 KB more than its own
++ *     refusal allowed and met the reserve top's verdict wherever it fell
++ *     (3 of 30 amplified JIT-on record runs down; results-wall-window-
++ *     2026-10-05).  The allocator cannot tell that catcher from the
++ *     program's, so the reserve is sized for what the recovery needs:
++ *     tens of bytes (W8) to a few KB (a message printed through the
++ *     tty).  One window is that, and a quarter of the old floor.  Sized
++ *     ONCE, at the refusal that opens the tier: later refusals in it
++ *     shut the window and arm, as before, and cannot creep it (W20);
+  *   - a record that has proven no cycle yet and finds the live data
+  *     already past total + G/2 (a state eris loaded, with its cap restored
+  *     under what the machine held when it was saved: the record is fresh,
+@@ -983,7 +1000,9 @@
+  * PUC's cap is hard there too) and under a host GCSTOP.  The bound is
+  * absolute, not incremental: used + delta <= total + G + the slice for
+  * every growth outside the norefuse window -- the sandbox's own, total + G
+- * + LJ52_GC_LEND, inside it -- so caught refusals cannot ratchet it
++ * + LJ52_GC_LEND, inside it, and after a refusal the refused heap +
++ * LJ52_GC_RSV + LJ52_GC_LEND, i.e. total + G/2 + LJ52_GC_RSV + 2 *
++ * LJ52_GC_LEND (W20) -- so caught refusals cannot ratchet it
+  * (mem_test W7, W7k), and the excursion is charged -- getFreeMemory reads
+  * 0, both Java sides clamp it there.  What it does not fix: a single
+  * request larger than headroom + credit (+ the window), retried with no
+@@ -1126,6 +1145,7 @@
+ #if LJ52_GC_KSLICE - LJ52_GC_LEND < 12 * 1024
+ #error "the kernel must keep 12 KiB past the sandbox's ceiling (mem_test W19)"
+ #endif
++#define LJ52_GC_RSV    (4 * 1024)      /* THE RESERVE'S SIZE: past a refusal  */
+ #define LJ52_GC_HYSTSHIFT 1             /* re-arm after half the headroom    */
+ #define LJ52_GC_FLUSHSHIFT 1            /* flush inside half the watermark   */
+ #define LJ52_OD_BURST   0               /* credit tiers                      */
+@@ -1181,11 +1201,20 @@
+   if (M->gc_odstate == LJ52_OD_RESERVE) return 1;
+   if (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1)) {
+     M->gc_odstate = LJ52_OD_RESERVE;
++    M->gc_rsv = lj52_gc_odmax(total);   /* the whole tier: the bytes are history */
+     return 1;
+   }
+   return 0;
+ }
+ 
++/* THE RESERVE'S SIZE: the reserve tier's credit -- what the refusal that
++ * opened it set, never under the burst tier's, never over G.  G is passed
++ * in so a cap changed since then re-clamps it.  See THE CREDIT. */
++static long long lj52_gc_rsvcredit(lj52_mem *M, long long g)
++{
++  return M->gc_rsv < (g >> 1) ? g >> 1 : M->gc_rsv > g ? g : M->gc_rsv;
++}
++
+ /* THE KERNEL'S SLICE: is the thread running the kernel's?  See THE CREDIT. */
+ static int lj52_gc_kernel(lj52_mem *M, global_State *g)
+ {
+@@ -1202,7 +1231,8 @@
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return 0;
+   c = lj52_gc_odmax(total);
+-  if (!lj52_gc_reserve(M, total, used)) c >>= 1;
++  if (lj52_gc_reserve(M, total, used)) c = lj52_gc_rsvcredit(M, c);
++  else c >>= 1;
+   if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;
+   return c;
+ }
+@@ -1256,6 +1286,11 @@
+   if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
++  if (M->gc_odstate != LJ52_OD_RESERVE) {   /* THE RESERVE'S SIZE: once, past this heap */
++    long long g = lj52_gc_odmax(total), over = used - total;
++    if (over < (g >> 1)) over = g >> 1;     /* never under the burst tier's top */
++    M->gc_rsv = over + LJ52_GC_RSV;         /* clamped to G where it is read */
++  }
+   M->gc_odstate = LJ52_OD_RESERVE;
+   M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
+   if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
+@@ -1303,8 +1338,9 @@
+       M->gc_low = used;
+       if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
+       if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+-        top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+-                                                        : lj52_gc_odmax(total) >> 1);
++        top = total + (M->gc_odstate == LJ52_OD_RESERVE
++                       ? lj52_gc_rsvcredit(M, lj52_gc_odmax(total))
++                       : lj52_gc_odmax(total) >> 1);
+         M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;
+       }
+       M->gc_grown = 0;
+@@ -1351,8 +1387,9 @@
+     if (gate > w) gate = w;
+     arm = used > total || total - used < gate;
+   } else {
+-    top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+-                                                    : lj52_gc_odmax(total) >> 1);
++    top = total + (M->gc_odstate == LJ52_OD_RESERVE
++                   ? lj52_gc_rsvcredit(M, lj52_gc_odmax(total))
++                   : lj52_gc_odmax(total) >> 1);
+     if (lj52_gc_kernel(M, g)) top += LJ52_GC_KSLICE;   /* where the kernel is refused */
+     arm = top - used < (top - M->gc_low) >> 1;
+   }
+@@ -2033,7 +2070,7 @@
+ 
+ /* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets,
+  *                      od_limit, kernel_slice, gc_low, armby, hyst,
+- *                      window, lends, win, refused
++ *                      window, lends, win, refused, tier
+  *
+  * The collector at the wall (docs/roadmap.md; THE CREDIT, THE CADENCE and
+  * THE PARK RESET in the collector section).  overdrafts counts growths lent
+@@ -2050,7 +2087,10 @@
+  * state (0 shut, 1 open, 2 the verdict), refused the size of the last
+  * refused request (what a landing outside a handler was asking for: the
+  * hermetic W16 cases judge "covered" by it, and a capacity run's stall is
+- * attributed by it).  A separate global, not more
++ * attributed by it); tier the sandbox's credit in its tier as it stands --
++ * G/2, or what the refusal that opened the reserve set (THE RESERVE'S
++ * SIZE; the sandbox's ceiling is then cap + tier + window: W19, W7k, W20
++ * read it).  A separate global, not more
+  * _OCLJ_GCSTATS positions: twenty values is LUA_MINSTACK, which is what
+  * lets that one push without a checkstack.  Read-only,
+  * allocates nothing, raw global -- the sandbox never sees it. */
+@@ -2069,7 +2109,11 @@
+   lua_pushinteger(L, M ? M->gc_lends : -1);
+   lua_pushinteger(L, M ? M->gc_win : -1);
+   lua_pushnumber(L, M ? (lua_Number)M->gc_refdelta : -1);
+-  return 13;
++  lua_pushnumber(L, M == NULL || M->gc_seentotal <= 0 ? -1
++                    : (lua_Number)(M->gc_odstate == LJ52_OD_RESERVE
++                                   ? lj52_gc_rsvcredit(M, lj52_gc_odmax(M->gc_seentotal))
++                                   : lj52_gc_odmax(M->gc_seentotal) >> 1));
++  return 14;
+ }
+ 
+ /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */

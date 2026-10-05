@@ -1,0 +1,81 @@
+OK   pristine -> b.c (exit 0)
+patch-fastfunc-errmem-top.sh: b.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+CR in b.c: 0
+CR in pristine: 1164
+807a808,811
+>   /* OC-LuaJIT (native/luajit/patch-fastfunc-errmem-top.sh): the same clamp
+>   ** as in lj_err_mem, for a refusal inside an error handler (no refresh). */
+>   if (LJ_UNLIKELY(L->top < L->base))
+>     L->top = L->base;
+830a835,845
+>   /* OC-LuaJIT (native/luajit/patch-fastfunc-errmem-top.sh): never push the
+>   ** message below the current frame.  A fast function is neither a Lua nor a
+>   ** C function: tostring's inline number path, string.char, sub, reverse,
+>   ** lower and upper store L->base but not L->top before a C call that
+>   ** allocates, so when that allocation is refused the refresh above is
+>   ** skipped and L->top can be stale below the frame.  The push would write
+>   ** the message over the frame link at L->base-1, which err_unwind then
+>   ** dereferences as a saved PC.  A no-op for Lua and C functions.
+>   */
+>   if (LJ_UNLIKELY(L->top < L->base))
+>     L->top = L->base;
+OK   in place (exit 0)
+patch-fastfunc-errmem-top.sh: c.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+OK   in place == out of place
+OK   idempotent (exit 0)
+patch-fastfunc-errmem-top.sh: d.c  already carries both top clamps (verified: markers, clamps and pushes counted, in order) -- unchanged
+OK   idempotent output unchanged
+OK   both assignments altered refused (exit 1)
+patch-fastfunc-errmem-top.sh: m1.c: the clamps are not directly ahead of the two pushes (order seen: EGQRSGPT, want EGAQRSGAPT)
+OK   ERRMEM push not under the brace refused (exit 1)
+patch-fastfunc-errmem-top.sh: the line above the ERRMEM push is not the brace closing curr_funcisL: [  (void)0;]
+patch-fastfunc-errmem-top.sh: refusing -- have lj_err_err or lj_err_mem in lj_err.c changed shape?
+OK   no output written
+OK   duplicated ERRMEM anchor refused (exit 1)
+patch-fastfunc-errmem-top.sh: m3o.c.tmp.420675: the ERRMEM push present 2 times, expected 1
+OK   ERRMEM throw replaced refused (exit 1)
+patch-fastfunc-errmem-top.sh: the line after the ERRMEM push is not the throw: [  lj_err_throw(L, LUA_ERRRUN);]
+patch-fastfunc-errmem-top.sh: refusing -- have lj_err_err or lj_err_mem in lj_err.c changed shape?
+OK   ERRERR push not first refused (exit 1)
+patch-fastfunc-errmem-top.sh: lj_err_err: its first statement is not the ERRERR push: [  (void)0;]
+patch-fastfunc-errmem-top.sh: refusing -- have lj_err_err or lj_err_mem in lj_err.c changed shape?
+OK   ERRERR throw replaced refused (exit 1)
+patch-fastfunc-errmem-top.sh: lj_err_err: the line after the ERRERR push is not the throw: [  lj_err_throw(L, LUA_ERRRUN);]
+patch-fastfunc-errmem-top.sh: refusing -- have lj_err_err or lj_err_mem in lj_err.c changed shape?
+1
+OK   patched file missing the lj_err_err clamp refused (exit 1)
+patch-fastfunc-errmem-top.sh: m7.c: clamp present 1 times, expected 2
+844:  setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRMEM));
+845-  if (LJ_UNLIKELY(L->top < L->base))
+846-    L->top = L->base;
+847-  lj_err_throw(L, LUA_ERRMEM);
+OK   lj_err_mem clamp after the push refused (exit 1)
+patch-fastfunc-errmem-top.sh: m8.c: the clamps are not directly ahead of the two pushes (order seen: EGAQRSGA, want EGAQRSGAPT)
+OK   the investigator's else-if output refused (exit 1)
+patch-fastfunc-errmem-top.sh: m9.c: marker present 1 times, expected 2
+a.c
+b.c
+c.c
+d.c
+m1.c
+m2.c
+m3.c
+m4.c
+m5.c
+m6.c
+m7.c
+m8.c
+m9.c
+o1.txt
+o10.txt
+o11.txt
+o12.txt
+o2.txt
+o3.txt
+o4.txt
+o5.txt
+o6.txt
+o7.txt
+o8.txt
+o9.txt
+old.sh

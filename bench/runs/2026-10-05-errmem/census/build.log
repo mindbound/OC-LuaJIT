@@ -1,0 +1,17 @@
+patch-fastfunc-errmem-top.sh: patched /c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/src/lj_err_unp.c -> /c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/src/lj_err_fix.c
+e387460aaf23bc88de5a84e1d47a3dcd */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/j2s/obj/verdict.o
+082ff0685fc4075cc134559541d0815a */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/W2/lj52shim-additive.o
+4745eeb2b63271768b88b03ff70baa4b */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/libluajit.a
+b40b98d32fc5892b8486bcf2ebc2b5b8 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/repro/lj_repro.c
+3e20fbed81e8f683d29468f6b5aefe4e */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/probe2.lua
+127ebf1ad37cc2986a841c8340e9ede9 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/obj/lj_err_arc.o
+c3e5dbcecd44681d47fdf2328aa32dec */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/obj/lj_err_fix.o
+2820caa2fe8c68dba85f56932b7f3f77 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/obj/lj_err_unp.o
+cdc64a6d93fcf24a7fc07d18d5cf5035 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/verdict_fix.exe
+8f0f3f60c4324f11933b1f49f11bbfab */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/verdict_fixf.exe
+fa1950125d97abf86d0727012273c33b */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/verdict_unp.exe
+ada3aec5bfb5976eae59ee0418712fab */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/verdict_unpf.exe
+dfecfe4464b751140be7b31f09717bbd */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/window_fix.exe
+db91ad4e9db654b73560082edbad6e98 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/window_fixf.exe
+b228f724b8bfc369e8bb7fe18329e83e */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/window_unp.exe
+11b6950df1375f6368f5ccc0183677c1 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/errmem/census/bin/window_unpf.exe

@@ -1,0 +1,17 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] cc      = gcc.exe (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r1) 16.2.0
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+[build] luajit  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajit @ unknown (CHECKHOOK patch present)
+[build] jnlua   = /c/Users/astro/Downloads/OC-JNLua @ da3d4d45
+[build] shim    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/repo/native
+[build] out     = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/buildB/libdir/libjnlua52-windows-x86_64.dll
+[build] =============== 1. LuaJIT 2.1 (static) ===============
+[build]     XCFLAGS=-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK    BUILDMODE=static
+[build] copying C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajit -> C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/buildB/luajit-windows-x86_64 (the source tree is built in place; we never dirty the checkout)
+[build]     lj_func.c: pristine copy re-taken from C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajit/src (the build copy is never the patch's input)
+patch-penalty-scrub.sh: lj_func.c  22 lines inserted into lj_func_freeproto (of 213), 0 removed; scrub verified by content
+[build]     lj_func.c: penalty scrub present in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_err.c: pristine copy re-taken from C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajit/src
+BUILD FAIL: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/buildB/luajit-windows-x86_64/src/lj_err.c does not carry the ERRMEM top clamp exactly twice -- the
+         copy make is about to compile is not the patched one

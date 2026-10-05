@@ -1,0 +1,357 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/refnative2/libdir-additive/libjnluajit52-windows-x86_64.dll (844284 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +1s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +2s  LuaStateLuaJIT compiled
+[smoke] +6s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/R/rec-Ei-L2/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/R/rec-Ei-L2/work/libdir-additive
+patch-machine-lua: ok  46451 -> 54527 bytes, 13 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/R/rec-Ei-L2/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+[smoke]     OCLJ_PROBE=capacity -- boot (heartbeat-only autorun), then ONLY the capacity probe (cap-1): shape=record jitearly=-
+[smoke]     OCLJ_RAM_TIER=one -- a smaller RAM stick than the 3.5 the reference numbers were taken at
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+SMOKE| ========================================================================
+SMOKE| OC-LuaJIT smoke test -- OpenOS on LuaJIT, persist, resume
+SMOKE| java=1.8.0_504 amd64  os=Windows 11
+SMOKE| conf=C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/R/rec-Ei-L2/work/ocljit.conf
+2026-10-05T13:56:55.839Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-05T13:56:55.885Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-05T13:56:55.914Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+SMOKE| LuaStateFactory.isAvailable  = true
+SMOKE| LuaStateFactory.include52    = true
+SMOKE| LuaStateFactory.includeLuaJ  = false
+SMOKE| forceNativeLibPathFirst      = 'C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/R/rec-Ei-L2/work/libdir-additive'
+SMOKE| computer.lua.allowBytecode   = false
+SMOKE| !! OCLJ_PROBE=capacity: boot with the heartbeat-only autorun, then ONLY the capacity probe
+SMOKE| !! (shape=record; boot caps 3000/2000 ticks for EVERY kernel, so arms are scored alike).
+SMOKE| RAM tier = one (192 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+SMOKE| quarantined, not in the default suite: sieve,strings   (run one with OCLJ_BENCH_ONLY=<name>)
+SMOKE| planted 10 more .lua from bench\oc; suite = mandelbrot,binarytrees,trampoline,matmul,strings2,nqueens,sha256 x3 reps; encore = mandelbrot every 5 s
+SMOKE| planted mandelbrot.lua (1972 B) and a 120-deep directory tree
+SMOKE| hdd real path = C:\Users\astro\AppData\Local\Temp\ocljit-smoke-hdd8795722904868921885 (autorun.lua planted, 3911 bytes)
+SMOKE| architecture pinned to ocljit.arch.OCLuaJITArchitecture   (ocljit.native=additive)
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+OCLJREFINIT| st=000001db7e4a1090 level=2 ring=256 gcring=1024
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+OCLJREFINIT| st=000001db7e4a1090 level=2 ring=256 gcring=1024
+SMOKE| MILESTONE a-lua-state-opens: PASS -- LuaState created after 1 ticks
+SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164923 after 2 ticks; running=true; lastError=null
+SMOKE| quiesced after 3 spins, before the VM fingerprint
+SMOKE| GUARD OK. arch=ocljit.arch.OCLuaJITArchitecture
+SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164923  totalMemory=518818  freeMemory=322807  used=196011
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE k0-kernel-observed: PASS -- asked for watchdog, raw _G._OCLJ_KERNEL=watchdog
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164923
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: PASS -- _OCLJ_GCSTATS count:heap = 20:1 (want >=14:1, the state's own lj_alloc arena)
+SMOKE| MILESTONE acc-1-machine-handover: PASS -- _OCLJ_GCSTATS count=20 csync=1 native cap=518818 Java getTotalMemory=518818  (want csync 1 and the caps equal: LuaStateLuaJIT handed over)
+SMOKE| quiesced after 0 spins, before the JIT probe read-out
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| JIT PROBE: mode=on  attach -> ok
+SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+OCLJPRF| gseq=2 st=000001db7e4a1090 proof=1 used=253983 total=518818 low=253983 grown=1177838 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=15188
+OCLJPRF| gseq=4 st=000001db7e4a1090 proof=2 used=287319 total=518818 low=287319 grown=394406 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=24375
+OCLJPRF| gseq=6 st=000001db7e4a1090 proof=3 used=315218 total=518818 low=315218 grown=261393 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=29433
+OCLJPRF| gseq=8 st=000001db7e4a1090 proof=4 used=341168 total=518818 low=341168 grown=248691 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=34995
+OCLJPRF| gseq=10 st=000001db7e4a1090 proof=5 used=347492 total=518818 low=347492 grown=97664 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=38216
+OCLJPRF| gseq=12 st=000001db7e4a1090 proof=6 used=351144 total=518818 low=351144 grown=86918 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=41359
+OCLJPRF| gseq=14 st=000001db7e4a1090 proof=7 used=357552 total=518818 low=357552 grown=84068 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=44302
+OCLJPRF| gseq=16 st=000001db7e4a1090 proof=8 used=366655 total=518818 low=366655 grown=102241 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=46705
+OCLJPRF| gseq=18 st=000001db7e4a1090 proof=9 used=364436 total=518818 low=364436 grown=84631 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=49103
+OCLJPRF| gseq=20 st=000001db7e4a1090 proof=10 used=379197 total=518818 low=379197 grown=99401 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=51727
+OCLJPRF| gseq=22 st=000001db7e4a1090 proof=11 used=388099 total=518818 low=388099 grown=120972 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=54923
+OCLJPRF| gseq=24 st=000001db7e4a1090 proof=12 used=395023 total=518818 low=395023 grown=81782 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=56322
+OCLJPRF| gseq=26 st=000001db7e4a1090 proof=13 used=400159 total=518818 low=400159 grown=62244 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=58444
+OCLJPRF| gseq=28 st=000001db7e4a1090 proof=14 used=404581 total=518818 low=404581 grown=72230 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=60229
+OCLJPRF| gseq=30 st=000001db7e4a1090 proof=15 used=409761 total=518818 low=409761 grown=60732 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=62085
+OCLJPRF| gseq=32 st=000001db7e4a1090 proof=16 used=393336 total=518818 low=393336 grown=66271 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=63725
+OCLJPRF| gseq=34 st=000001db7e4a1090 proof=17 used=400998 total=518818 low=400998 grown=118402 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=67217
+OCLJPRF| gseq=36 st=000001db7e4a1090 proof=18 used=402847 total=518818 low=402847 grown=69285 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=69054
+OCLJPRF| gseq=38 st=000001db7e4a1090 proof=19 used=426455 total=518818 low=426455 grown=64708 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=70398
+OCLJPRF| gseq=40 st=000001db7e4a1090 proof=20 used=432967 total=518818 low=432967 grown=46392 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=71812
+OCLJPRF| gseq=42 st=000001db7e4a1090 proof=21 used=433007 total=518818 low=433007 grown=43024 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=73342
+OCLJPRF| gseq=44 st=000001db7e4a1090 proof=22 used=433155 total=518818 low=433155 grown=43188 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=74811
+OCLJPRF| gseq=46 st=000001db7e4a1090 proof=23 used=432659 total=518818 low=432659 grown=43016 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=76293
+OCLJPRF| gseq=48 st=000001db7e4a1090 proof=24 used=433127 total=518818 low=433127 grown=43328 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=77770
+OCLJPRF| gseq=50 st=000001db7e4a1090 proof=25 used=432851 total=518818 low=432851 grown=43072 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=79256
+OCLJPRF| gseq=52 st=000001db7e4a1090 proof=26 used=434079 total=518818 low=434079 grown=43400 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=80714
+OCLJPRF| gseq=54 st=000001db7e4a1090 proof=27 used=434107 total=518818 low=434107 grown=42672 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=82187
+OCLJPRF| gseq=56 st=000001db7e4a1090 proof=28 used=433883 total=518818 low=433883 grown=42532 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=83717
+OCLJPRF| gseq=58 st=000001db7e4a1090 proof=29 used=434159 total=518818 low=434159 grown=42788 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=85191
+OCLJPRF| gseq=60 st=000001db7e4a1090 proof=30 used=434219 total=518818 low=434219 grown=42492 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=86660
+OCLJPRF| gseq=62 st=000001db7e4a1090 proof=31 used=437819 total=518818 low=437819 grown=42604 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=88013
+OCLJPRF| gseq=64 st=000001db7e4a1090 proof=32 used=439683 total=518818 low=439683 grown=40652 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=89356
+OCLJPRF| gseq=66 st=000001db7e4a1090 proof=33 used=439495 total=518818 low=439495 grown=39684 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=90780
+OCLJPRF| gseq=68 st=000001db7e4a1090 proof=34 used=439519 total=518818 low=439519 grown=39844 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=92165
+OCLJPRF| gseq=70 st=000001db7e4a1090 proof=35 used=439659 total=518818 low=439659 grown=39908 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=93556
+OCLJPRF| gseq=72 st=000001db7e4a1090 proof=36 used=439795 total=518818 low=439795 grown=39760 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=94943
+OCLJPRF| gseq=74 st=000001db7e4a1090 proof=37 used=440075 total=518818 low=440075 grown=39776 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=RECORD jst=RECORD calls=96329
+OCLJPRF| gseq=76 st=000001db7e4a1090 proof=38 used=444667 total=518818 low=444667 grown=39600 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=97552
+OCLJPRF| gseq=78 st=000001db7e4a1090 proof=39 used=443819 total=518818 low=443819 grown=37220 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=98875
+OCLJPRF| gseq=80 st=000001db7e4a1090 proof=40 used=444819 total=518818 low=444819 grown=37756 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=100208
+OCLJPRF| gseq=82 st=000001db7e4a1090 proof=41 used=444843 total=518818 low=444843 grown=37168 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=TRACE jst=IDLE calls=101517
+OCLJPRF| gseq=84 st=000001db7e4a1090 proof=42 used=444731 total=518818 low=444731 grown=37072 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=102851
+OCLJPRF| gseq=86 st=000001db7e4a1090 proof=43 used=439687 total=518818 low=439687 grown=37268 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=104113
+OCLJPRF| gseq=88 st=000001db7e4a1090 proof=44 used=440015 total=518818 low=440015 grown=39724 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=105517
+OCLJPRF| gseq=90 st=000001db7e4a1090 proof=45 used=441051 total=518818 low=441051 grown=39636 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=106886
+OCLJPRF| gseq=92 st=000001db7e4a1090 proof=46 used=440947 total=518818 low=440947 grown=40608 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=108316
+OCLJPRF| gseq=94 st=000001db7e4a1090 proof=47 used=438580 total=518818 low=438580 grown=39496 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=109735
+OCLJPRF| gseq=96 st=000001db7e4a1090 proof=48 used=439324 total=518818 low=439324 grown=40388 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=111215
+OCLJPRF| gseq=98 st=000001db7e4a1090 proof=49 used=440585 total=518818 low=440585 grown=42689 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=112543
+OCLJPRF| gseq=100 st=000001db7e4a1090 proof=50 used=438838 total=518818 low=438838 grown=54692 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=114552
+OCLJPRF| gseq=102 st=000001db7e4a1090 proof=51 used=439210 total=518818 low=439210 grown=40076 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=116068
+OCLJPRF| gseq=104 st=000001db7e4a1090 proof=52 used=440518 total=518818 low=440518 grown=40268 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=117481
+OCLJPRF| gseq=106 st=000001db7e4a1090 proof=53 used=458360 total=518818 low=458360 grown=61850 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=C jst=IDLE calls=118402
+OCLJPRF| gseq=108 st=000001db7e4a1090 proof=54 used=452802 total=518818 low=452802 grown=46949 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=119125
+OCLJPRF| gseq=110 st=000001db7e4a1090 proof=55 used=452970 total=518818 low=452970 grown=37420 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=120267
+OCLJPRF| gseq=112 st=000001db7e4a1090 proof=56 used=369845 total=518818 low=369845 grown=24252 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=121306
+OCLJPRF| gseq=114 st=000001db7e4a1090 proof=57 used=374489 total=518818 low=374489 grown=74620 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=123852
+OCLJPRF| gseq=116 st=000001db7e4a1090 proof=58 used=385413 total=518818 low=385413 grown=72276 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=126082
+OCLJPRF| gseq=118 st=000001db7e4a1090 proof=59 used=390369 total=518818 low=390369 grown=66792 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=128356
+OCLJPRF| gseq=120 st=000001db7e4a1090 proof=60 used=392953 total=518818 low=392953 grown=65316 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=130611
+OCLJPRF| gseq=122 st=000001db7e4a1090 proof=61 used=393281 total=518818 low=393281 grown=63100 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=132881
+OCLJPRF| gseq=124 st=000001db7e4a1090 proof=62 used=393173 total=518818 low=393173 grown=62912 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=135154
+OCLJPRF| gseq=126 st=000001db7e4a1090 proof=63 used=396585 total=518818 low=396585 grown=63052 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=137313
+OCLJPRF| gseq=128 st=000001db7e4a1090 proof=64 used=406113 total=518818 low=406113 grown=114352 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=141093
+SMOKE| SCREEN AFTER BOOT (240 ticks, 8.5s, running=true):
+?????????????????????????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (192k RAM)                                                       ?
+? You can get a list of all attached components using the `components` program. ?
+?????????????????????????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+OCLJNONCE=10.2500-957070 OCLJCTR=26
+OCLJCAP=armed
+OCLJCAPT=0.0000/0.0000/0
+OCLJCAPF=-1/-1
+OCLJCAPX=0/0/0/0/0
+SMOKE| lastError = null
+SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (11 non-empty lines)
+OCLJPRF| gseq=130 st=000001db7e4a1090 proof=65 used=408873 total=518818 low=408873 grown=72880 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=143538
+OCLJPRF| gseq=132 st=000001db7e4a1090 proof=66 used=409665 total=518818 low=409665 grown=75800 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=146164
+SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=10.2500-957070 counter 26 -> 46 in 10 of 2000 ticks
+SMOKE| --- capacity probe: shape=record native=additive kernel=watchdog jit=on jitearly=- tier=one(192 KB) ramScale(arch)=1.8 ---
+OCLJPRF| gseq=134 st=000001db7e4a1090 proof=67 used=409597 total=518818 low=409597 grown=68938 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=148545
+OCLJPRF| gseq=136 st=000001db7e4a1090 proof=68 used=409925 total=518818 low=409925 grown=54820 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=150542
+OCLJPRF| gseq=138 st=000001db7e4a1090 proof=69 used=411177 total=518818 low=411177 grown=175436 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=156710
+OCLJPRF| gseq=140 st=000001db7e4a1090 proof=70 used=414221 total=518818 low=414221 grown=198400 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=163616
+OCLJPRF| gseq=142 st=000001db7e4a1090 proof=71 used=415757 total=518818 low=415757 grown=200072 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=170650
+OCLJPRF| gseq=144 st=000001db7e4a1090 proof=72 used=416049 total=518818 low=416049 grown=199216 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=177688
+OCLJPRF| gseq=146 st=000001db7e4a1090 proof=73 used=416049 total=518818 low=416049 grown=198996 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=184730
+OCLJPRF| gseq=148 st=000001db7e4a1090 proof=74 used=416253 total=518818 low=416253 grown=198720 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=191749
+OCLJPRF| gseq=150 st=000001db7e4a1090 proof=75 used=416469 total=518818 low=416469 grown=198604 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=198773
+OCLJPRF| gseq=152 st=000001db7e4a1090 proof=76 used=416253 total=518818 low=416253 grown=198604 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=205803
+OCLJPRF| gseq=154 st=000001db7e4a1090 proof=77 used=416469 total=518818 low=416469 grown=198604 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=212827
+OCLJPRF| gseq=156 st=000001db7e4a1090 proof=78 used=416469 total=518818 low=416469 grown=198580 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=219853
+OCLJPRF| gseq=158 st=000001db7e4a1090 proof=79 used=416469 total=518818 low=416469 grown=198580 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=226879
+OCLJPRF| gseq=160 st=000001db7e4a1090 proof=80 used=416469 total=518818 low=416469 grown=198692 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=233909
+OCLJPRF| gseq=162 st=000001db7e4a1090 proof=81 used=416461 total=518818 low=416461 grown=198636 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=240934
+OCLJPRF| gseq=164 st=000001db7e4a1090 proof=82 used=417373 total=518818 low=417373 grown=199084 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=247950
+OCLJPRF| gseq=166 st=000001db7e4a1090 proof=83 used=417373 total=518818 low=417373 grown=198628 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=254978
+OCLJPRF| gseq=168 st=000001db7e4a1090 proof=84 used=417969 total=518818 low=417969 grown=198640 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=261989
+OCLJPRF| gseq=170 st=000001db7e4a1090 proof=85 used=417593 total=518818 low=417593 grown=198788 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=269030
+OCLJPRF| gseq=172 st=000001db7e4a1090 proof=86 used=417593 total=518818 low=417593 grown=198628 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=276058
+OCLJPRF| gseq=174 st=000001db7e4a1090 proof=87 used=417593 total=518818 low=417593 grown=198628 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=283086
+SMOKE| CAP-IDLE| ticks=400 arms=+21 collects=+21 bailouts=+0 refusals=+0 trace_flushes=+0 trace_flush_bytes=+0 park_resets=+0 traces_live 47 -> 60 armed=0 state=0 stepmul=200 threshold=831800 gctotal=438097 ccap=518818 cused=438097 parked=false wallstats=present running=true
+SMOKE| CAP-LIVE| used=416383 kernelMemory=164923 user=251460 count(3 collects)=416399/416335/416335 total=518818 traces_live=60
+OCLJPRF| gseq=176 st=000001db7e4a1090 proof=88 used=418183 total=518818 low=418183 grown=225718 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=290920
+OCLJPRF| gseq=178 st=000001db7e4a1090 proof=89 used=422467 total=518818 low=422467 grown=50696 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=292656
+OCLJPRF| gseq=180 st=000001db7e4a1090 proof=90 used=433999 total=518818 low=433999 grown=48536 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=294117
+OCLJPRF| gseq=182 st=000001db7e4a1090 proof=91 used=443359 total=518818 low=443359 grown=42924 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=C jst=IDLE calls=295444
+OCLJPRF| gseq=184 st=000001db7e4a1090 proof=92 used=452971 total=518818 low=452971 grown=38080 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=296588
+OCLJPRF| gseq=186 st=000001db7e4a1090 proof=93 used=462411 total=518818 low=462411 grown=55480 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=C jst=IDLE calls=298331
+OCLJPRF| gseq=188 st=000001db7e4a1090 proof=94 used=410659 total=518818 low=410659 grown=560 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=298418
+OCLJPRF| gseq=190 st=000001db7e4a1090 proof=95 used=429595 total=518818 low=429595 grown=56208 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=299888
+OCLJPRF| gseq=192 st=000001db7e4a1090 proof=96 used=438811 total=518818 low=438811 grown=44916 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=301242
+OCLJPRF| gseq=194 st=000001db7e4a1090 proof=97 used=454695 total=518818 low=454695 grown=72484 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=303417
+OCLJPRF| gseq=196 st=000001db7e4a1090 proof=98 used=442403 total=518818 low=442403 grown=17964 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=304012
+OCLJPRF| gseq=198 st=000001db7e4a1090 proof=99 used=454483 total=518818 low=454483 grown=39084 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=305126
+OCLJPRF| gseq=200 st=000001db7e4a1090 proof=100 used=453091 total=518818 low=453091 grown=11086 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=305354
+OCLJPRF| gseq=202 st=000001db7e4a1090 proof=101 used=463535 total=518818 low=463535 grown=33266 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=306277
+OCLJPRF| gseq=204 st=000001db7e4a1090 proof=102 used=458787 total=518818 low=458787 grown=940 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=306327
+OCLJPRF| gseq=206 st=000001db7e4a1090 proof=103 used=468743 total=518818 low=468743 grown=30676 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=307162
+OCLJPRF| gseq=208 st=000001db7e4a1090 proof=104 used=464547 total=518818 low=464547 grown=5564 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=307275
+OCLJPRF| gseq=210 st=000001db7e4a1090 proof=105 used=474795 total=518818 low=474795 grown=27698 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=308000
+OCLJPRF| gseq=212 st=000001db7e4a1090 proof=106 used=470371 total=518818 low=470371 grown=8262 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=308238
+OCLJPRF| gseq=214 st=000001db7e4a1090 proof=107 used=478927 total=518818 low=478927 grown=24476 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=RECORD jst=RECORD calls=308876
+OCLJPRF| gseq=216 st=000001db7e4a1090 proof=108 used=476131 total=518818 low=476131 grown=17354 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=309204
+OCLJPRF| gseq=218 st=000001db7e4a1090 proof=109 used=481667 total=518818 low=481667 grown=21594 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=309853
+OCLJPRF| gseq=220 st=000001db7e4a1090 proof=110 used=481891 total=518818 low=481891 grown=13640 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=310178
+OCLJPRF| gseq=222 st=000001db7e4a1090 proof=111 used=488463 total=518818 low=488463 grown=19058 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=310683
+OCLJPRF| gseq=224 st=000001db7e4a1090 proof=112 used=489371 total=518818 low=489371 grown=15240 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=311206
+OCLJPRF| gseq=226 st=000001db7e4a1090 proof=113 used=489475 total=518818 low=489475 grown=14872 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=311769
+OCLJPRF| gseq=228 st=000001db7e4a1090 proof=114 used=491115 total=518818 low=491115 grown=14832 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=312237
+OCLJPRF| gseq=230 st=000001db7e4a1090 proof=115 used=484707 total=518818 low=484707 grown=4060 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=312382
+OCLJPRF| gseq=232 st=000001db7e4a1090 proof=116 used=492075 total=518818 low=492075 grown=18272 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=312809
+OCLJPRF| gseq=234 st=000001db7e4a1090 proof=117 used=497355 total=518818 low=497355 grown=13760 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=313156
+OCLJPRF| gseq=236 st=000001db7e4a1090 proof=118 used=490531 total=518818 low=490531 grown=8628 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=313387
+OCLJPRF| gseq=238 st=000001db7e4a1090 proof=119 used=499547 total=518818 low=499547 grown=24134 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=314025
+OCLJPRF| gseq=240 st=000001db7e4a1090 proof=120 used=501555 total=518818 low=501555 grown=9858 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=314298
+OCLJPRF| gseq=242 st=000001db7e4a1090 proof=121 used=496227 total=518818 low=496227 grown=876 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=314343
+OCLJPRF| gseq=244 st=000001db7e4a1090 proof=122 used=500451 total=518818 low=500451 grown=11540 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=C jst=IDLE calls=314666
+OCLJPRF| gseq=246 st=000001db7e4a1090 proof=123 used=499107 total=518818 low=499107 grown=3888 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=314730
+OCLJPRF| gseq=248 st=000001db7e4a1090 proof=124 used=504239 total=518818 low=504239 grown=10168 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=314976
+OCLJPRF| gseq=250 st=000001db7e4a1090 proof=125 used=506451 total=518818 low=506451 grown=7510 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=315164
+OCLJPRF| gseq=252 st=000001db7e4a1090 proof=126 used=508379 total=518818 low=508379 grown=7810 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=C jst=IDLE calls=315324
+OCLJPRF| gseq=254 st=000001db7e4a1090 proof=127 used=501987 total=518818 low=501987 grown=560 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=315353
+OCLJPRF| gseq=256 st=000001db7e4a1090 proof=128 used=506571 total=518818 low=506571 grown=8624 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=315564
+OCLJPRF| gseq=258 st=000001db7e4a1090 proof=129 used=504931 total=518818 low=504931 grown=5728 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=315743
+OCLJPRF| gseq=260 st=000001db7e4a1090 proof=130 used=509219 total=518818 low=509219 grown=7154 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=315913
+OCLJPRF| gseq=262 st=000001db7e4a1090 proof=131 used=510767 total=518818 low=510767 grown=5358 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316047
+OCLJPRF| gseq=264 st=000001db7e4a1090 proof=132 used=511875 total=518818 low=511875 grown=4844 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316176
+OCLJPRF| gseq=266 st=000001db7e4a1090 proof=133 used=512399 total=518818 low=512399 grown=3712 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316281
+OCLJPRF| gseq=268 st=000001db7e4a1090 proof=134 used=507747 total=518818 low=507747 grown=1820 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=316356
+OCLJPRF| gseq=270 st=000001db7e4a1090 proof=135 used=511299 total=518818 low=511299 grown=5800 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316501
+OCLJPRF| gseq=272 st=000001db7e4a1090 proof=136 used=511331 total=518818 low=511331 grown=3908 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=C jst=IDLE calls=316637
+OCLJPRF| gseq=274 st=000001db7e4a1090 proof=137 used=513267 total=518818 low=513267 grown=3990 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316707
+OCLJPRF| gseq=276 st=000001db7e4a1090 proof=138 used=510627 total=518818 low=510627 grown=876 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=316750
+OCLJPRF| gseq=278 st=000001db7e4a1090 proof=139 used=513615 total=518818 low=513615 grown=4192 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316849
+OCLJPRF| gseq=280 st=000001db7e4a1090 proof=140 used=514159 total=518818 low=514159 grown=2840 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=316939
+OCLJPRF| gseq=282 st=000001db7e4a1090 proof=141 used=514155 total=518818 low=514155 grown=2504 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317027
+OCLJPRF| gseq=284 st=000001db7e4a1090 proof=142 used=515107 total=518818 low=515107 grown=3472 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317112
+OCLJPRF| gseq=286 st=000001db7e4a1090 proof=143 used=516287 total=518818 low=516287 grown=2070 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317145
+OCLJPRF| gseq=288 st=000001db7e4a1090 proof=144 used=516055 total=518818 low=516055 grown=1444 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317200
+OCLJPRF| gseq=290 st=000001db7e4a1090 proof=145 used=517411 total=518818 low=517411 grown=1976 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317229
+OCLJPRF| gseq=292 st=000001db7e4a1090 proof=146 used=517263 total=518818 low=517263 grown=848 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317261
+OCLJPRF| gseq=294 st=000001db7e4a1090 proof=147 used=517167 total=518818 low=517167 grown=920 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317291
+OCLJPRF| gseq=296 st=000001db7e4a1090 proof=148 used=517311 total=518818 low=517311 grown=944 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317321
+OCLJPRF| gseq=298 st=000001db7e4a1090 proof=149 used=517467 total=518818 low=517467 grown=2114 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=C jst=IDLE calls=317346
+OCLJPRF| gseq=300 st=000001db7e4a1090 proof=150 used=513507 total=518818 low=513507 grown=560 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=317371
+OCLJPRF| gseq=302 st=000001db7e4a1090 proof=151 used=515351 total=518818 low=515351 grown=2700 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317437
+OCLJPRF| gseq=304 st=000001db7e4a1090 proof=152 used=516503 total=518818 low=516503 grown=1764 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317481
+OCLJPRF| gseq=306 st=000001db7e4a1090 proof=153 used=517059 total=518818 low=517059 grown=1352 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317518
+OCLJPRF| gseq=308 st=000001db7e4a1090 proof=154 used=516887 total=518818 low=516887 grown=1196 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317563
+OCLJPRF| gseq=310 st=000001db7e4a1090 proof=155 used=516883 total=518818 low=516883 grown=1192 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317605
+OCLJPRF| gseq=312 st=000001db7e4a1090 proof=156 used=517743 total=518818 low=517743 grown=2236 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317654
+OCLJPRF| gseq=314 st=000001db7e4a1090 proof=157 used=519531 total=518818 low=519531 grown=2450 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317684
+OCLJPRF| gseq=316 st=000001db7e4a1090 proof=158 used=516451 total=518818 low=516451 grown=2396 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=317774
+OCLJPRF| gseq=318 st=000001db7e4a1090 proof=159 used=517515 total=518818 low=517515 grown=1282 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317792
+OCLJPRF| gseq=320 st=000001db7e4a1090 proof=160 used=517943 total=518818 low=517943 grown=724 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317811
+OCLJPRF| gseq=322 st=000001db7e4a1090 proof=161 used=518231 total=518818 low=518231 grown=504 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317825
+OCLJPRF| gseq=324 st=000001db7e4a1090 proof=162 used=518531 total=518818 low=518531 grown=388 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317834
+OCLJPRF| gseq=326 st=000001db7e4a1090 proof=163 used=518591 total=518818 low=518591 grown=240 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317842
+OCLJPRF| gseq=328 st=000001db7e4a1090 proof=164 used=518719 total=518818 low=518719 grown=192 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=1 inref=0 vm=INTERP jst=IDLE calls=317848
+OCLJPRF| gseq=330 st=000001db7e4a1090 proof=165 used=518819 total=518818 low=518819 grown=100 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=317851
+OCLJPRF| gseq=332 st=000001db7e4a1090 proof=166 used=520579 total=518818 low=520579 grown=8436 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=318116
+OCLJPRF| gseq=334 st=000001db7e4a1090 proof=167 used=521655 total=518818 low=521655 grown=7438 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=318337
+OCLJPRF| gseq=336 st=000001db7e4a1090 proof=168 used=519203 total=518818 low=519203 grown=2324 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=318396
+OCLJPRF| gseq=338 st=000001db7e4a1090 proof=169 used=526043 total=518818 low=526043 grown=8092 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=318493
+OCLJPRF| gseq=340 st=000001db7e4a1090 proof=170 used=527571 total=518818 low=527571 grown=5084 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=318630
+OCLJPRF| gseq=342 st=000001db7e4a1090 proof=171 used=528947 total=518818 low=528947 grown=4606 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=318748
+OCLJPRF| gseq=344 st=000001db7e4a1090 proof=172 used=526179 total=518818 low=526179 grown=940 win0=0 win1=0 tier0=0 tier1=0 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=318794
+OCLJPRF| gseq=346 st=000001db7e4a1090 proof=173 used=529339 total=518818 low=529339 grown=4572 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=318904
+OCLJPRF| gseq=348 st=000001db7e4a1090 proof=174 used=530243 total=518818 low=530243 grown=3032 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=318986
+OCLJPRF| gseq=350 st=000001db7e4a1090 proof=175 used=530239 total=518818 low=530239 grown=2504 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319074
+OCLJPRF| gseq=352 st=000001db7e4a1090 proof=176 used=530999 total=518818 low=530999 grown=2656 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319142
+OCLJPRF| gseq=354 st=000001db7e4a1090 proof=177 used=533955 total=518818 low=533955 grown=4220 win0=1 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319188
+OCLJPRF| gseq=356 st=000001db7e4a1090 proof=178 used=533791 total=518818 low=533791 grown=628 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=319213
+OCLJPRF| gseq=358 st=000001db7e4a1090 proof=179 used=534971 total=518818 low=534971 grown=1694 win0=1 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319233
+OCLJPRF| gseq=360 st=000001db7e4a1090 proof=180 used=534667 total=518818 low=534667 grown=316 win0=1 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319249
+OCLJPRF| gseq=362 st=000001db7e4a1090 proof=181 used=534835 total=518818 low=534835 grown=364 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=319260
+OCLJPRF| gseq=364 st=000001db7e4a1090 proof=182 used=534907 total=518818 low=534907 grown=224 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319266
+OCLJPRF| gseq=366 st=000001db7e4a1090 proof=183 used=534979 total=518818 low=534979 grown=344 win0=1 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319277
+OCLJPRF| gseq=368 st=000001db7e4a1090 proof=184 used=534671 total=518818 low=534671 grown=384 win0=1 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319295
+OCLJPRF| gseq=370 st=000001db7e4a1090 proof=185 used=534823 total=518818 low=534823 grown=304 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=319304
+OCLJPRF| gseq=372 st=000001db7e4a1090 proof=186 used=534895 total=518818 low=534895 grown=224 win0=0 win1=0 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319310
+OCLJPRF| gseq=374 st=000001db7e4a1090 proof=187 used=536007 total=518818 low=536007 grown=1384 win0=1 win1=1 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319322
+OCLJPRF| gseq=376 st=000001db7e4a1090 proof=188 used=535911 total=518818 low=535911 grown=64 win0=1 win1=2 tier0=0 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319325
+OCLJREF| gseq=377 st=000001db7e4a1090 seq=1 mode=c delta=64 used=535911 total=518818 G=32768 credit=16384 top=535202 ceil=539298 over=773 tier0=0 tier1=1 opened=1 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=535911 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=000001db5e530ff8 mainL=000001db5e510380 kby=000001db5e53d3b0 vm=INTERP vmstate=-1 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=535911 gcthr=1071800 fk=lua ffid=0 at==machine:1261 pcsrc=1 ctx=- cat=?:-1 calls=319325 arms=145/21/2/0/21 proofs=188 lends=16 collects=188
+OCLJPRF| gseq=379 st=000001db7e4a1090 proof=189 used=536103 total=518818 low=536103 grown=1934 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=319343
+OCLJPRF| gseq=381 st=000001db7e4a1090 proof=190 used=529059 total=518818 low=529059 grown=532 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=319371
+OCLJPRF| gseq=383 st=000001db7e4a1090 proof=191 used=533855 total=518818 low=533855 grown=12626 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=319713
+OCLJPRF| gseq=385 st=000001db7e4a1090 proof=192 used=531939 total=518818 low=531939 grown=940 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=319758
+OCLJPRF| gseq=387 st=000001db7e4a1090 proof=193 used=538151 total=518818 low=538151 grown=9982 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=319960
+OCLJPRF| gseq=389 st=000001db7e4a1090 proof=194 used=539395 total=518818 low=539395 grown=7886 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=320193
+OCLJPRF| gseq=391 st=000001db7e4a1090 proof=195 used=534883 total=518818 low=534883 grown=6704 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=320376
+OCLJPRF| gseq=393 st=000001db7e4a1090 proof=196 used=538375 total=518818 low=538375 grown=8500 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=320617
+OCLJPRF| gseq=395 st=000001db7e4a1090 proof=197 used=537763 total=518818 low=537763 grown=6302 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=320767
+OCLJPRF| gseq=397 st=000001db7e4a1090 proof=198 used=541239 total=518818 low=541239 grown=7092 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=320959
+OCLJPRF| gseq=399 st=000001db7e4a1090 proof=199 used=542187 total=518818 low=542187 grown=5760 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321125
+OCLJPRF| gseq=401 st=000001db7e4a1090 proof=200 used=542171 total=518818 low=542171 grown=4964 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321297
+OCLJPRF| gseq=403 st=000001db7e4a1090 proof=201 used=540579 total=518818 low=540579 grown=3610 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=321375
+OCLJPRF| gseq=405 st=000001db7e4a1090 proof=202 used=545511 total=518818 low=545511 grown=6472 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321481
+OCLJPRF| gseq=407 st=000001db7e4a1090 proof=203 used=546135 total=518818 low=546135 grown=3144 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321580
+OCLJPRF| gseq=409 st=000001db7e4a1090 proof=204 used=546267 total=518818 low=546267 grown=2912 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321680
+OCLJPRF| gseq=411 st=000001db7e4a1090 proof=205 used=547103 total=518818 low=547103 grown=2844 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321746
+OCLJPRF| gseq=413 st=000001db7e4a1090 proof=206 used=546919 total=518818 low=546919 grown=2292 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321829
+OCLJPRF| gseq=415 st=000001db7e4a1090 proof=207 used=548163 total=518818 low=548163 grown=3218 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321903
+OCLJPRF| gseq=417 st=000001db7e4a1090 proof=208 used=546779 total=518818 low=546779 grown=2456 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=321972
+OCLJPRF| gseq=419 st=000001db7e4a1090 proof=209 used=546867 total=518818 low=546867 grown=2464 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=322058
+OCLJPRF| gseq=421 st=000001db7e4a1090 proof=210 used=546907 total=518818 low=546907 grown=2376 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322141
+OCLJPRF| gseq=423 st=000001db7e4a1090 proof=211 used=542131 total=518818 low=542131 grown=1900 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=322217
+OCLJPRF| gseq=425 st=000001db7e4a1090 proof=212 used=545651 total=518818 low=545651 grown=4842 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322320
+OCLJPRF| gseq=427 st=000001db7e4a1090 proof=213 used=546319 total=518818 low=546319 grown=3116 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=322419
+OCLJPRF| gseq=429 st=000001db7e4a1090 proof=214 used=546323 total=518818 low=546323 grown=2664 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322512
+OCLJPRF| gseq=431 st=000001db7e4a1090 proof=215 used=547575 total=518818 low=547575 grown=2934 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322571
+OCLJPRF| gseq=433 st=000001db7e4a1090 proof=216 used=545011 total=518818 low=545011 grown=1688 win0=0 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=322619
+OCLJPRF| gseq=435 st=000001db7e4a1090 proof=217 used=547307 total=518818 low=547307 grown=3312 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322699
+OCLJPRF| gseq=437 st=000001db7e4a1090 proof=218 used=549023 total=518818 low=549023 grown=2936 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322767
+OCLJPRF| gseq=439 st=000001db7e4a1090 proof=219 used=549003 total=518818 low=549003 grown=1348 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322815
+OCLJPRF| gseq=441 st=000001db7e4a1090 proof=220 used=549595 total=518818 low=549595 grown=1328 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322842
+OCLJPRF| gseq=443 st=000001db7e4a1090 proof=221 used=549699 total=518818 low=549699 grown=1184 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322883
+OCLJPRF| gseq=445 st=000001db7e4a1090 proof=222 used=549687 total=518818 low=549687 grown=1256 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322927
+OCLJPRF| gseq=447 st=000001db7e4a1090 proof=223 used=549623 total=518818 low=549623 grown=984 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322959
+OCLJPRF| gseq=449 st=000001db7e4a1090 proof=224 used=552427 total=518818 low=552427 grown=3140 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322973
+OCLJPRF| gseq=451 st=000001db7e4a1090 proof=225 used=552331 total=518818 low=552331 grown=64 win0=1 win1=2 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322976
+OCLJREF| gseq=452 st=000001db7e4a1090 seq=2 mode=c delta=64 used=552331 total=518818 G=32768 credit=32768 top=551586 ceil=555682 over=809 tier0=1 tier1=1 opened=0 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=552331 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=000001db5e530ff8 mainL=000001db5e510380 kby=000001db5e53d3b0 vm=INTERP vmstate=-1 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=552331 gcthr=1104600 fk=lua ffid=0 at==machine:1261 pcsrc=1 ctx=- cat=?:-1 calls=322976 arms=145/49/4/0/28 proofs=225 lends=20 collects=225
+OCLJPRF| gseq=454 st=000001db7e4a1090 proof=226 used=552403 total=518818 low=552403 grown=136 win0=1 win1=2 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=322980
+OCLJREF| gseq=455 st=000001db7e4a1090 seq=3 mode=c delta=56 used=552403 total=518818 G=32768 credit=32768 top=551586 ceil=555682 over=873 tier0=1 tier1=1 opened=0 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=552403 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=000001db5e530ff8 mainL=000001db5e510380 kby=000001db5e53d3b0 vm=INTERP vmstate=-1 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=552403 gcthr=1104800 fk=lua ffid=0 at==machine:117 pcsrc=1 ctx=- cat=?:-1 calls=322980 arms=145/50/4/0/28 proofs=226 lends=22 collects=226
+OCLJPRF| gseq=457 st=000001db7e4a1090 proof=227 used=551643 total=518818 low=551643 grown=136 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=322994
+OCLJPRF| gseq=459 st=000001db7e4a1090 proof=228 used=547891 total=518818 low=547891 grown=532 win0=1 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=323017
+OCLJPRF| gseq=461 st=000001db7e4a1090 proof=229 used=549195 total=518818 low=549195 grown=1896 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323063
+OCLJPRF| gseq=463 st=000001db7e4a1090 proof=230 used=550059 total=518818 low=550059 grown=1344 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323097
+OCLJPRF| gseq=465 st=000001db7e4a1090 proof=231 used=550635 total=518818 low=550635 grown=924 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323121
+OCLJPRF| gseq=467 st=000001db7e4a1090 proof=232 used=550923 total=518818 low=550923 grown=504 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323135
+OCLJPRF| gseq=469 st=000001db7e4a1090 proof=233 used=551103 total=518818 low=551103 grown=344 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323146
+OCLJPRF| gseq=471 st=000001db7e4a1090 proof=234 used=551123 total=518818 low=551123 grown=340 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323159
+OCLJPRF| gseq=473 st=000001db7e4a1090 proof=235 used=551451 total=518818 low=551451 grown=640 win0=1 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323172
+OCLJPRF| gseq=475 st=000001db7e4a1090 proof=236 used=551451 total=518818 low=551451 grown=152 win0=1 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323178
+OCLJPRF| gseq=477 st=000001db7e4a1090 proof=237 used=551451 total=518818 low=551451 grown=152 win0=1 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=323184
+OCLJPRF| gseq=479 st=000001db7e4a1090 proof=238 used=551459 total=518818 low=551459 grown=160 win0=1 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323189
+OCLJPRF| gseq=481 st=000001db7e4a1090 proof=239 used=551595 total=518818 low=551595 grown=408 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323201
+OCLJPRF| gseq=483 st=000001db7e4a1090 proof=240 used=551499 total=518818 low=551499 grown=64 win0=1 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323204
+OCLJPRF| gseq=485 st=000001db7e4a1090 proof=241 used=552139 total=518818 low=552139 grown=1184 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323220
+OCLJPRF| gseq=487 st=000001db7e4a1090 proof=242 used=552291 total=518818 low=552291 grown=152 win0=1 win1=2 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323223
+OCLJREF| gseq=488 st=000001db7e4a1090 seq=4 mode=c delta=56 used=552291 total=518818 G=32768 credit=32768 top=551586 ceil=555682 over=761 tier0=1 tier1=1 opened=0 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=552291 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=000001db5e530ff8 mainL=000001db5e510380 kby=000001db5e53d3b0 vm=INTERP vmstate=-1 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=552291 gcthr=1104400 fk=lua ffid=0 at==machine:117 pcsrc=1 ctx=- cat=?:-1 calls=323223 arms=145/62/7/0/29 proofs=242 lends=46 collects=242
+OCLJPRF| gseq=490 st=000001db7e4a1090 proof=243 used=553543 total=518818 low=553543 grown=2950 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=323243
+OCLJPRF| gseq=492 st=000001db7e4a1090 proof=244 used=550771 total=518818 low=550771 grown=532 win0=1 win1=0 tier0=1 tier1=1 armby=2 flush=0 inref=0 vm=C jst=IDLE calls=323267
+OCLJPRF| gseq=494 st=000001db7e4a1090 proof=245 used=551211 total=518818 low=551211 grown=552 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323279
+OCLJPRF| gseq=496 st=000001db7e4a1090 proof=246 used=551339 total=518818 low=551339 grown=192 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323285
+OCLJPRF| gseq=498 st=000001db7e4a1090 proof=247 used=551467 total=518818 low=551467 grown=128 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323288
+OCLJPRF| gseq=500 st=000001db7e4a1090 proof=248 used=551499 total=518818 low=551499 grown=212 win0=1 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323295
+OCLJPRF| gseq=502 st=000001db7e4a1090 proof=249 used=551563 total=518818 low=551563 grown=64 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323297
+OCLJPRF| gseq=504 st=000001db7e4a1090 proof=250 used=551603 total=518818 low=551603 grown=40 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323298
+OCLJPRF| gseq=506 st=000001db7e4a1090 proof=251 used=551627 total=518818 low=551627 grown=88 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323301
+OCLJPRF| gseq=508 st=000001db7e4a1090 proof=252 used=551703 total=518818 low=551703 grown=76 win0=1 win1=2 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323303
+OCLJREF| gseq=509 st=000001db7e4a1090 seq=5 mode=c delta=52 used=551703 total=518818 G=32768 credit=32768 top=551586 ceil=555682 over=169 tier0=1 tier1=1 opened=0 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=551703 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=000001db5e530ff8 mainL=000001db5e510380 kby=000001db5e53d3b0 vm=INTERP vmstate=-1 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=551703 gcthr=1103400 fk=lua ffid=0 at==/mnt/cc4/autorun.lua:30 pcsrc=1 ctx=- cat=?:-1 calls=323303 arms=145/68/10/0/30 proofs=252 lends=58 collects=252
+OCLJPRF| gseq=511 st=000001db7e4a1090 proof=253 used=551547 total=518818 low=551547 grown=0 win0=0 win1=0 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=323307
+OCLJPRF| gseq=513 st=000001db7e4a1090 proof=254 used=551659 total=518818 low=551659 grown=112 win0=1 win1=1 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=323309
+OCLJPRF| gseq=515 st=000001db7e4a1090 proof=255 used=551703 total=518818 low=551703 grown=44 win0=1 win1=2 tier0=1 tier1=1 armby=1 flush=1 inref=0 vm=C jst=IDLE calls=323310
+OCLJREF| gseq=516 st=000001db7e4a1090 seq=6 mode=c delta=44 used=551703 total=518818 G=32768 credit=32768 top=551586 ceil=555682 over=161 tier0=1 tier1=1 opened=0 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=551703 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=000001db5e530ff8 mainL=000001db5e510380 kby=000001db5e53d3b0 vm=C vmstate=-2 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=551703 gcthr=1103400 fk=ff ffid=146 at==/mnt/cc4/autorun.lua:69 pcsrc=2 ctx=- cat=?:-1 calls=323310 arms=145/69/12/0/30 proofs=255 lends=61 collects=255
+OCLJPRF| gseq=518 st=000001db7e4a1090 proof=256 used=367083 total=518818 low=367083 grown=56 win0=0 win1=0 tier0=1 tier1=0 armby=1 flush=1 inref=0 vm=INTERP jst=IDLE calls=325764
+OCLJPRF| gseq=520 st=000001db7e4a1090 proof=257 used=379762 total=518818 low=379762 grown=123798 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=329619
+OCLJPRF| gseq=522 st=000001db7e4a1090 proof=258 used=392898 total=518818 low=392898 grown=213000 win0=0 win1=0 tier0=0 tier1=0 armby=0 flush=0 inref=0 vm=INTERP jst=IDLE calls=336703
+SMOKE| CAP-MID| snaps=32 stopped=0 stepmul0=0 parked=0 last: armed=0 state=0 stepmul=200 threshold=734000 gctotal=374163 ccap=518818 cused=374163
+SMOKE| CAPACITY| shape=record native=additive jit=on jitearly=- tier=192KB scale=1.8 kernelMemory=164923 held=612 why=not_enough_memory t_first5=0.0001 t_last5=0.0014 batches=62 last/first=14.00 freeKB_at_end/totalKB=0/192 arms=+171 refusals=+6 trace_flushes=+29 fill_ms=2227 queued=true running=true lastError=<null>
+SMOKE| CAP-GC| collects=+171 bailouts=+0 overdrafts=+3002 od_peak=35497 od_state=0 park_resets=+0 od_limit=32768 kslice=16384 gc_low=392898 armby=0 window=4096 lends=+61 win=0 refused=44 tier=n/a end: armed=0 state=0 stepmul=200 threshold=786600 gctotal=430318 ccap=518818 cused=430318 parked=false
+SMOKE| CAP-X| batch=10 junk=24 recover=2 OCLJCAPX=62/610/4/0/1 traces(start/abort) 367/219 -> 600/259 class=RECOVERY-REFUSED site=-
+SMOKE| MILESTONE cap-1-refusal-caught-machine-survives: PASS -- shape=record OCLJCAP=done/612/not_enough_memory running=true lastError=<null>
+SMOKE| FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaStateLuaJIT | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| CHECKS: 10   FAILURES: 0   WALL: 23.5s
+SMOKE| VERDICT: PASS
+SMOKE| ========================================================================
+[smoke] =============== 5. verdict ===============
+[smoke] +30s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/R/rec-Ei-L2/work/smoke.log
+SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.

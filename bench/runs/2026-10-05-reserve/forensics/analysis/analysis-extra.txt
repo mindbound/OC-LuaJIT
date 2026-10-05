@@ -1,0 +1,183 @@
+==============================================================================
+X_oe_record_j1: 2048 runs, rc!=0 0, NOLINE 0
+  term: 1=2048
+  refusals per run: 1:1976, 2:72
+  absorbers, all 2120 refusals: batch=2048 (96.6%), paint=72 (3.4%)
+  absorbers, the 72 refusals after a run's first: batch=72 (100.0%)
+  the refusal that opened the reserve tier, its absorber: batch=1976, paint=72  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 72; their term: 1=72
+    ... ending outside the handler (term 2/4/5/7): 0 of 72
+  other runs' term: 1=1976
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=2120
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+X_oe_string_j1: 2048 runs, rc!=0 0, NOLINE 0
+  term: 1=2027, 2=21
+  refusals per run: 1:1820, 2:213, 3:15
+  absorbers, all 2291 refusals: batch=2027 (88.5%), paint=236 (10.3%), dispatcher=21 (0.9%), recorder=7 (0.3%)
+  absorbers, the 243 refusals after a run's first: batch=207 (85.2%), dispatcher=21 (8.6%), paint=15 (6.2%)
+  the refusal that opened the reserve tier, its absorber: batch=1820, paint=221, recorder=7  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 228; their term: 1=207, 2=21
+    ... ending outside the handler (term 2/4/5/7): 21 of 228
+  other runs' term: 1=1820
+  outside-handler landings: 21
+    off 12032 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=348
+    off 12048 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=332
+    off 12624 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=356
+    off 12640 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=340
+    off 12656 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=324
+    off 15008 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=440
+    off 15024 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=424
+    off 15040 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=408
+    off 21792 term 2 second-chance 1 absorbers [recorder,dispatcher] opener recorder; last refusal: delta=48 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:81 over=500
+    off 22096 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=484
+    off 22112 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=468
+    off 22128 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=452
+    off 22144 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=436
+    off 22160 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=420
+    off 22176 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=404
+    off 22288 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=360
+    off 22304 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=344
+    off 22320 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=328
+    off 22336 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=312
+    off 22352 term 2 second-chance 1 absorbers [paint,dispatcher] opener paint; last refusal: delta=64 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:86 over=296
+    off 24192 term 2 second-chance 1 absorbers [recorder,dispatcher] opener recorder; last refusal: delta=48 tier0=1 win0=2 vm=INTERP jst=IDLE fk=lua ffid=0 at==probe:81 over=224
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=2284, (True, True)=7
+  recorder-absorbed refusals by (vm, J->state, tier0, opened): ('ASM', 'ASM', '0', '1')=7
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+X_k2048_record_j1: 2048 runs, rc!=0 0, NOLINE 0
+  term: 1=1886, 4=162
+  refusals per run: 1:2010, 2:38
+  absorbers, all 2086 refusals: batch=1886 (90.4%), resume=162 (7.8%), paint=33 (1.6%), recorder=5 (0.2%)
+  absorbers, the 38 refusals after a run's first: batch=38 (100.0%)
+  the refusal that opened the reserve tier, its absorber: batch=1848, resume=162, paint=33, recorder=5  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 38; their term: 1=38
+    ... ending outside the handler (term 2/4/5/7): 0 of 38
+  other runs' term: 1=1848, 4=162
+  outside-handler landings: 162
+    off    16 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4300
+    off    32 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4284
+    off    48 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4268
+    off    64 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4252
+    off    80 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4236
+    off    96 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4220
+    off   112 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4204
+    off   128 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4188
+    off   144 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4172
+    off   160 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4156
+    off   176 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4140
+    off   192 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4124
+    off   208 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4168
+    off   224 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4152
+    off   240 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4136
+    off   256 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4120
+    off   272 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4104
+    off   288 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4136
+    off   304 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4120
+    off   320 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4104
+    off  2224 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4304
+    off  2240 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4288
+    off  2256 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4272
+    off  2272 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4256
+    off  2288 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4240
+    off  2304 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4224
+    off  2320 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4208
+    off  2336 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4192
+    off  2352 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4176
+    off  2368 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4160
+    off  2384 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4144
+    off  2400 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4128
+    off  2416 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4112
+    off  2432 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4144
+    off  2448 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4140
+    off  2464 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4124
+    off  2480 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4108
+    off  2496 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4140
+    off  2512 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4124
+    off  5104 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4304
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=2081, (True, True)=5
+  recorder-absorbed refusals by (vm, J->state, tier0, opened): ('ASM', 'ASM', '0', '1')=5
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+X_k2048_string_j1: 2048 runs, rc!=0 0, NOLINE 0
+  term: 1=1220, 4=828
+  refusals per run: 1:1819, 2:199, 3:30
+  absorbers, all 2307 refusals: batch=1220 (52.9%), resume=828 (35.9%), paint=253 (11.0%), recorder=6 (0.3%)
+  absorbers, the 259 refusals after a run's first: batch=126 (48.6%), resume=103 (39.8%), paint=28 (10.8%), recorder=2 (0.8%)
+  the refusal that opened the reserve tier, its absorber: batch=1094, resume=725, paint=225, recorder=4  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 229; their term: 1=126, 4=103
+    ... ending outside the handler (term 2/4/5/7): 103 of 229
+  other runs' term: 1=1094, 4=725
+  outside-handler landings: 828
+    off     0 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4296
+    off    16 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4280
+    off    32 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4264
+    off    48 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4248
+    off    64 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4232
+    off    80 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4216
+    off    96 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4200
+    off   112 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4184
+    off   128 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4168
+    off   144 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4152
+    off   160 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4136
+    off   176 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4120
+    off   192 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4164
+    off   208 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4148
+    off   224 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4132
+    off   240 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4116
+    off   256 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4100
+    off   288 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4116
+    off   304 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=48 tier0=0 win0=1 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4100
+    off   528 term 4 second-chance 1 absorbers [paint,resume] opener paint; last refusal: delta=80 tier0=1 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4284
+    off   592 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4304
+    off   608 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4288
+    off   624 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4272
+    off   640 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4256
+    off   656 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4240
+    off   672 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4224
+    off   688 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4208
+    off   704 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4192
+    off   720 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4176
+    off   736 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4160
+    off   752 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4144
+    off   768 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4128
+    off   784 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4172
+    off   800 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4156
+    off   816 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4140
+    off   832 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4124
+    off  1200 term 4 second-chance 1 absorbers [paint,resume] opener paint; last refusal: delta=80 tier0=1 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4212
+    off  1216 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4280
+    off  1232 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4264
+    off  1248 term 4 second-chance 0 absorbers [resume] opener resume; last refusal: delta=80 tier0=0 win0=0 vm=C jst=IDLE fk=ff ffid=95 at==probe:133 over=4248
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=2301, (True, True)=6
+  recorder-absorbed refusals by (vm, J->state, tier0, opened): ('ASM', 'ASM', '0', '1')=4, ('ASM', 'ASM', '1', '0')=2
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+X_hb3_record_j1: 2048 runs, rc!=0 0, NOLINE 0
+  term: 1=2048
+  refusals per run: 1:2005, 2:43
+  absorbers, all 2091 refusals: batch=2048 (97.9%), paint=43 (2.1%)
+  absorbers, the 43 refusals after a run's first: batch=43 (100.0%)
+  the refusal that opened the reserve tier, its absorber: batch=2005, paint=43  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 43; their term: 1=43
+    ... ending outside the handler (term 2/4/5/7): 0 of 43
+  other runs' term: 1=2005
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=2091
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}
+==============================================================================
+X_hb3_string_j1: 2048 runs, rc!=0 0, NOLINE 0
+  term: 1=2048
+  refusals per run: 1:1867, 2:176, 3:5
+  absorbers, all 2234 refusals: batch=2048 (91.7%), paint=183 (8.2%), recorder=3 (0.1%)
+  absorbers, the 186 refusals after a run's first: batch=181 (97.3%), paint=5 (2.7%)
+  the refusal that opened the reserve tier, its absorber: batch=1867, paint=178, recorder=3  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 181; their term: 1=181
+    ... ending outside the handler (term 2/4/5/7): 0 of 181
+  other runs' term: 1=1867
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=2231, (True, True)=3
+  recorder-absorbed refusals by (vm, J->state, tier0, opened): ('ASM', 'ASM', '0', '1')=3
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}

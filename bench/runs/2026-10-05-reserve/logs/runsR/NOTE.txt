@@ -1,0 +1,50 @@
+IN-MACHINE FORENSICS OF THE SECOND-CHANCE PATH (chainR, 2026-10-05)
+====================================================================
+The forensics' instrumented shim (sc/forensics/src, logic unchanged; OCLJ_REFLOG=1) built into both
+OC natives in scratch (sc/refnative2: additive b425a809, dropin d52b5aae), run in the machine with
+the amplified capacity probe (192 KB, batch 10, junk 24) on the cells where THE WINDOW went down
+3 in 30 (JIT-on record: D x10, the dropin L x5), plus JIT-off record (O x5) and JIT-on string (D x5).
+25 runs, all CLEAN (no down this time).  Per-run table: an/per-run.txt; every refusal: an/refusals.tsv.
+
+THE EXTRA REFUSALS, PLACED.
+- 50 refusals in 25 runs.  JIT-on record: 1-5 per run (D: 3 1 2 5 3 2 3 4 3 4; L: 1 3 1 2 3);
+  JIT-off record and JIT-on string: exactly 1 each.
+- In EVERY multi-refusal run, the probe's paint failures (CAP-X pf) equal the refusals minus one:
+  pf 2/n 3, pf 4/n 5, pf 3/n 4, pf 1/n 2 ... (15 of 15).  So every refusal but the last was
+  absorbed by the probe's pcall(paint), and the last is the fill's own (at autorun.lua:29/31/46,
+  the batch's handler: "done").  The earlier downs' "5/4/3 against pf = 1" were the same
+  sequence ending outside a handler instead; pf there was the LAST SUCCESSFUL paint's figure.
+- WHERE the absorbed ones land: all on the sandbox thread (kernel=0, wd=1), all in the KERNEL's
+  machine.lua code that a component call runs through on the sandbox's behalf:
+    =machine:1261  17   wrapUserdata's inner closure  (local function wrapRecursively ... end; the
+                        FNEW at its `end` line): a 64 B GCfunc, made on every component.invoke
+    =machine:1280   5   unwrapUserdata's inner closure, 64 B, likewise
+    =machine:117    3   checkArg's inner closure `check`, 56 B
+  (line numbers of the run's patched kernel copy, work/classes/assets/ocluajit/lua/machine.lua;
+  the repo's build/native/kernel/machine.lua is off by a few lines.)  That is the paint's gpu.set
+  going through the kernel's invoke wrapper: K2 in the absorber map, "checkArg closure, table.pack
+  OUTSIDE protection" -- here caught only because the probe wraps the whole paint in a pcall.
+- ALL 50 refusals: vm=INTERP, jst=IDLE, recorder=0, hook=0.  The JIT recorder absorbed nothing in
+  the machine either (it needs the JIT on only because the JIT-on fill reaches its tops with
+  different garbage; the absorbed requests are the interpreter's closures).
+- 46 of 50 are VERDICT refusals (win0=2); the 4 others are the string cells' 16 KiB holder
+  doubling at the burst top with the window shut (win0=0), the known string-cell signature.
+- 25 of 50 opened the reserve tier (one per run, the first refusal); the later ones are verdict
+  refusals AT THE RESERVE TOP (tier0=1), each absorbed by the paint again, each shutting the
+  window and letting the next crossing be lent again: at the reserve top the fill gets a second,
+  third and fourth chance for as long as the verdict keeps landing on the paint's closure.
+
+WHAT IT MEANS FOR THE DESIGN.
+- The absorber in the machine is sandbox-thread Lua code of the kernel's (invoke wrapper, checkArg)
+  under the PROGRAM-ADJACENT pcall (the paint's; in OpenOS it would be the dispatcher's or none).
+  The shim cannot tell it from the program except by the nearest Lua frame's chunkname ("=machine"
+  vs the program's) -- the map's L8, fragile and a policy choice; not recommended.
+- The recorder lever (L1) is irrelevant in the machine (0 of 50).
+- The string-table lever (L7) did not fire: no refusal's request equals a table doubling.
+- What bounds this is the reserve's SIZE and LIFETIME (L3/L4) or the verdict's DELIVERY: the
+  verdict decided at a proof is executed by the first crossing after it, which after a yield is
+  the paint's 64 B closure (the kernel's wrapper), not the fill's next record.
+- Note the geometry: the first proof after a resume happens at the paint (the first allocations of
+  the step), so "deliver the verdict only after the next resume" would land it on the paint still.
+  A rule of the kind "a verdict refusal opens no reserve" would break W8 (W8's own first refusal is
+  a verdict under THE WINDOW), unless the reserve a verdict opens is small (a few KiB, L3).

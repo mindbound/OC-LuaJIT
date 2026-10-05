@@ -1,0 +1,14 @@
+verdict_fix.exe lj_err_mem_defs=1 clamp_cmp=1
+verdict_fixf.exe lj_err_mem_defs=1 clamp_cmp=1
+verdict_unp.exe lj_err_mem_defs=1 clamp_cmp=0
+verdict_unpf.exe lj_err_mem_defs=1 clamp_cmp=0
+window_fix.exe lj_err_mem_defs=1 clamp_cmp=1
+window_fixf.exe lj_err_mem_defs=1 clamp_cmp=1
+window_unp.exe lj_err_mem_defs=1 clamp_cmp=0
+window_unpf.exe lj_err_mem_defs=1 clamp_cmp=0
+verdict_ctlnf.exe clamp_cmp=0 DllChar=00000100
+verdict_fixnf.exe clamp_cmp=1 DllChar=00000100
+verdict_unpnf.exe clamp_cmp=0 DllChar=00000100
+window_ctlnf.exe clamp_cmp=0 DllChar=00000100
+window_fixnf.exe clamp_cmp=1 DllChar=00000100
+window_unpnf.exe clamp_cmp=0 DllChar=00000100

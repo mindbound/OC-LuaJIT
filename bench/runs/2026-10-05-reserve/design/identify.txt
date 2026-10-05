@@ -1,0 +1,584 @@
+identify -- THE RECIPIENT: name the absorbers the allocator can see, and bound the one it cannot
+=====================================================================================================
+2026-10-05.  Design for the roadmap row "A refusal the program never saw opens the reserve tier for
+it".  Work directory (everything below is relative to it unless absolute):
+  C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/identify/
+Nothing under C:/Users/astro/Downloads/OC-LuaJIT was modified.  Every measured executable ran pinned
+(affrun.exe 3FC3FC default).  The baseline everywhere is the forensics' instrumented copy of the shipped
+shim (wall2/sc/forensics, md5 33edc64b, = 3186e87's logic), compared on the same cap offsets.
+
+-----------------------------------------------------------------------------------------------------
+0. IN BRIEF
+-----------------------------------------------------------------------------------------------------
+Three rules, 123 lines added and 7 removed in lj52shim.c, zero LuaJIT lines, no new tunable the player
+sees:
+  1. a refusal raised inside the trace recorder's protected call opens no reserve, shuts no window,
+     consumes no verdict (the cframe test; proven both ways);
+  2. HOOK_VMEVENT is handled like HOOK_GC: no credit, no window, no reserve;
+  3. the reserve a refusal opens reaches LJ52_GC_RESERVE = 4 KiB past the heap it was refused at,
+     clamped to [G/2, G] -- not G/2 further whatever the cap.  A fresh record's reserve keeps G.
+Plus identification without a rule: the intern table's doubling (S1) is recognised and counted; the
+kernel thread gets no rule (0 kernel-thread refusals in 20 480 hermetic runs; its only non-fatal
+absorber is the recorder, which rule 1 covers).
+Hermetically (variant id against the baseline, same offsets): the OpenOS-shaped string cell's 21
+outside landings in 2 048 caps -> 0; the kernel-garbage string cell's 828 -> 785 (its second-chance
+outside landings 103 -> 60, the rest is THE WINDOW's overrun residual); every census cell 0 outside
+as before; second chances still happen (the paint still absorbs the first refusal) but buy 4 KiB +
+the window instead of G/2 + the window; held capacity -0.06 % to -0.68 % per cell (-200 strings or
+-42 records per second-chance run = the 12 KiB no longer lent); collections -0.1 % to -1.7 %; the
+largest excursion past cap + G went from +1.1..+5.6 KiB to -7.7..-12.1 KiB.  mem_test: the repo's 81
+pass except W19's precondition, which re-scopes (the sandbox's ceiling is now the shim's reserve
+credit + the window); with that and W16R's tier read from the shim, 81/81; plus four new cases, each
+failing on the shipped object or under its own sabotage.
+
+-----------------------------------------------------------------------------------------------------
+(a) THE MECHANISM TARGETED, AND THE EVIDENCE
+-----------------------------------------------------------------------------------------------------
+A refusal is the shim's message to the program that its data does not fit; lj52_gc_refused opens the
+reserve tier (G/2 more past the cap) so that the catch, the message and the drop can be paid for, and
+it does so whoever catches the error (map REPORT 1.0: "It does all three whoever ends up catching the
+error.  That is the defect's mechanism").  The forensics say exactly who that is: every paint- and
+recorder-absorbed refusal was a VERDICT refusal (F3: 2 303 + 25, win0 = 2) -- the verdict decided at
+a proof is executed by the next crossing, whoever makes it -- and the opener of the second chance was
+the probe's pcall(paint) in 2 169 of 2 192 cases and the JIT recorder in 23; the second chance ended
+outside a handler only in the OpenOS-shaped timer probe, 21 of 228, every one the RESERVE-top verdict
+at the timer's record or a checkArg closure, against 0 of 1 820 runs without a second chance (F4).
+So the harm is not the absorbed refusal -- it is the G/2 (16 KiB at the floor, 256 KiB at 8 MB) that
+it hands to a fill that never heard, and the reserve top's verdict landing wherever the next crossing
+is.  The allocator can name two of the recipients exactly and cheaply: the recorder (map 1.1.4: the
+innermost C frame is an lj_vm_cpcall frame, J->state not idle, vmstate not C/GC/EXIT; the instrument's
+flag agreed with the --wrap=lj_vm_cpcall ground truth on all 31 000 refusals, F7) and a VM event
+handler (HOOK_VMEVENT, map A4).  It cannot name the paint (map L8: sandbox code on the sandbox's
+thread), so the paint-shaped recipient is bounded instead, by the smallest lever in the map's lifetime/
+size family that leaves W8's recovery intact: the reserve is R past the refusal point (map L3), with
+R = 4 KiB, once per episode.  L4 (close at the next resume) was rejected by analysis before
+prototyping: after the paint's refusal the sandbox yields; closing the tier at the resume puts the
+deciding proof at the dispatcher's own pack and the step's pcall closure -- the first crossings after
+the resume, outside every handler -- so it would turn second chances into stalls at the burst top
+(the shipped forensics' deterministic case F1 is exactly that shape: a verdict delivered to the
+first growth after its proof, at event.timer's record).  L6 is rejected by evidence (d2-final 4.12).
+
+-----------------------------------------------------------------------------------------------------
+(b) THE RULE CHANGES: THE DIFF, AND THE BOUND
+-----------------------------------------------------------------------------------------------------
+Generated by tools/mkid.py from the repo's lj52shim.c (anchored splices, each asserted to match once;
+newline="" throughout; 0 CRs).  Both variants compile warning-clean on build-native.sh's stage-2 line
+(additive 4feea605, dropin 99dd43bb) and pass its three source gates.  The comment block is written in
+THE CREDIT's voice and sits before THE CADENCE.  Every existing negative-control anchor still matches
+exactly once (checked: 22 sabotage_mem anchors + stopgap/nopending/nopark/freescount), so the shipped
+sabotages keep applying.
+
+THE BOUND tightens and stays absolute:
+    sandbox:       used + delta <= total + min(G, max(G/2, r + 4 KiB - total)) + 4 KiB,
+                   r = the heap at the refusal that opened the reserve tier (G when the fresh-record
+                   rule opened it); hence still <= total + G + 4 KiB, and in every hermetic cell the
+                   excursion past cap + G was at most -7.7 KiB (table in (d), odx)
+    every thread:  used + delta <= total + G + 16 KiB                              (unchanged)
+The kernel keeps LJ52_GC_KSLICE - LJ52_GC_LEND = 12 KiB past the sandbox's ceiling as before (the
+compile-time #error guards are untouched).  Rule 1 and rule 2 refuse only; neither grants a byte, so
+neither moves a bound.
+
+The diff (identify.diff; the same text is in this directory):
+
+--- src-plain/lj52shim.c	2026-10-05 13:51:23.963957200 +0300
++++ src-id/lj52shim.c	2026-10-05 15:06:58.150848100 +0300
+@@ -281,6 +281,11 @@
+   long long     gc_grown;      /* bytes granted since the last proof          */
+   volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+   long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
++  /* -- THE RECIPIENT; see THE CREDIT -- */
++  long long     gc_odcredit;   /* the reserve tier's credit, set as it opens  */
++  volatile long gc_refabsorbed;/* refusals inside the recorder: not the program's */
++  volatile long gc_refstrtab;  /* ... of all refusals, intern-table doublings  */
++  volatile long gc_refrecording;/* ... raised while recording, yet the program's */
+   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+   int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
+                                   /* flush at the next safe point (wd_arm)    */
+@@ -753,6 +758,7 @@
+ #include "lj_obj.h"
+ #include "lj_dispatch.h"
+ #include "lj_jit.h"
++#include "lj_frame.h"                  /* THE RECIPIENT: cframe_nres/pc  */
+ #include "lj_alloc.h"
+ #include "lj_prng.h"
+ 
+@@ -991,6 +997,62 @@
+  * refused where PUC would collect and succeed; any checkpoint between the
+  * tries cures it.
+  *
++ * THE RECIPIENT (2026-10-05).  A refusal is a message to the program that
++ * made the request -- your data does not fit -- and it opens the reserve
++ * tier so that the catch, the message and the drop can be paid for.  But
++ * the allocator hands it to whoever made the crossing, and some recipients
++ * are not the program and tell it nothing: the trace recorder, whose
++ * protected call it unwinds and whose error trace_abort drops (lj_trace.c);
++ * a VM event handler, run under lj_vm_pcall and reported to stderr; and,
++ * on the sandbox's own thread, code with a handler of its own -- the
++ * capacity probe's pcall(paint), OpenOS's event dispatcher -- which the
++ * allocator cannot tell from the program.  Each left the reserve tier open
++ * for a fill that never heard, and the reserve top's refusal then landed
++ * wherever the next crossing was: 21 of 228 such second chances in the
++ * OpenOS-shaped hermetic probe ended outside every handler, 0 of 1 820 runs
++ * without one (bench/results-wall-window-2026-10-05.md, "What is left").
++ *   - A refusal raised INSIDE THE RECORDER'S PROTECTED CALL opens no
++ *     reserve, shuts no window and consumes no verdict: the verdict stands
++ *     for the next crossing, which is the program's.  Known without a
++ *     LuaJIT line: the running thread's innermost C frame is an
++ *     lj_vm_cpcall frame (saved PC == L, negative nres: vm_x64.dasc), the
++ *     recorder is not idle, and the VM is not in a C function, the
++ *     collector or a trace exit -- the recorder's cpcalls are the only ones
++ *     reached with vmstate RECORD, OPT or ASM.  J->state alone is NOT it:
++ *     it stays RECORD while the interpreter executes the instruction just
++ *     recorded, and a refusal there reaches the program (1 092 did, in the
++ *     forensics' sweeps; counted here as gc_refrecording).  The flag agreed
++ *     with a --wrap=lj_vm_cpcall ground truth on all 31 000 refusals of
++ *     those sweeps.  Counted apart (gc_refabsorbed); the cycle still armed,
++ *     as every refusal arms it.
++ *   - Under HOOK_VMEVENT, as under HOOK_GC: no credit, no window, no
++ *     reserve.  A handler exists only once something calls jit.attach (the
++ *     harness's trace counter; the sandbox has no `jit`), and its refusal
++ *     is dropped with "VM handler failed".
++ *   - The reserve a refusal opens reaches LJ52_GC_RESERVE past the heap it
++ *     was refused at -- never under the burst tier's top, never past
++ *     total + G -- not G/2 further whatever the cap.  The recovery it
++ *     exists for (mem_test W8) is tens of bytes, a message through the tty
++ *     a few KB; G/2 is 16 KB at the floor and 256 KB at caps of 8 MB.  So a
++ *     refusal the program never saw buys its fill LJ52_GC_RESERVE plus THE
++ *     WINDOW, in every cap, instead of up to a quarter of a megabyte.  A
++ *     fresh record's reserve (above) keeps G: that is history, not a
++ *     refusal.
++ *   - The intern table's doubling (lj_str.c: the string is linked, THEN the
++ *     table grown, and the growth's refusal thrown in whoever made the
++ *     string -- again at every new string until a sweep) is recognised,
++ *     str.num > str.mask with a request of 2 (mask + 1) GCRefs, and only
++ *     COUNTED (gc_refstrtab): in 28 672 hermetic runs it never fired, and
++ *     the reserve is what lets its retry succeed when the doubling is under
++ *     G/2.  If the machine's count says it fires, the fix is in
++ *     lj_str_resize (a failed growth keeps the old table), not a tier rule.
++ * The bound tightens and stays absolute: the sandbox's used + delta <=
++ * total + min(G, max(G/2, r + LJ52_GC_RESERVE - total)) + LJ52_GC_LEND,
++ * r the heap at the refusal that opened the tier; every thread's <= total
++ * + G + LJ52_GC_KSLICE, as before.  Not identified, and bounded only by the
++ * third rule: the kernel's own refusals (pcall(main): the machine is down
++ * whatever the tier) and the sandbox-thread handlers no test can name.
++ *
+  * THE CADENCE (2026-10-04).  Until this change, once a proven cycle left the
+  * heap inside the watermark, the very next allocator call armed again, so
+  * every GC checkpoint paid a whole O(heap) cycle: 20-120x stock's time over
+@@ -1120,6 +1182,7 @@
+ #define LJ52_GC_ODMAX  (512 * 1024)
+ #define LJ52_GC_KSLICE (16 * 1024)      /* the kernel's own, past the credit */
+ #define LJ52_GC_LEND   (4 * 1024)       /* THE WINDOW; <= KSLICE: the bound  */
++#define LJ52_GC_RESERVE (4 * 1024)      /* THE RECIPIENT: a refusal's reserve */
+ #if LJ52_GC_LEND > LJ52_GC_KSLICE
+ #error "THE WINDOW must sit inside the kernel's slice, or the bound over every thread moves"
+ #endif
+@@ -1181,11 +1244,43 @@
+   if (M->gc_odstate == LJ52_OD_RESERVE) return 1;
+   if (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1)) {
+     M->gc_odstate = LJ52_OD_RESERVE;
++    M->gc_odcredit = lj52_gc_odmax(total);   /* THE RECIPIENT: history keeps G */
+     return 1;
+   }
+   return 0;
+ }
+ 
++/* THE RECIPIENT: the credit the current tier gives past the cap. */
++static long long lj52_gc_tiercredit(lj52_mem *M, long long total)
++{
++  return M->gc_odstate == LJ52_OD_RESERVE ? M->gc_odcredit : lj52_gc_odmax(total) >> 1;
++}
++
++/* THE RECIPIENT: the reserve a refusal at heap `used` opens -- LJ52_GC_RESERVE
++ * past it, never under the burst tier's top, never past G. */
++static long long lj52_gc_odfor(long long total, long long used)
++{
++  long long G = lj52_gc_odmax(total), c = used + LJ52_GC_RESERVE - total;
++  return c < (G >> 1) ? (G >> 1) : c > G ? G : c;
++}
++
++/* THE RECIPIENT: was this refusal raised inside the trace recorder's
++ * protected call?  Read-only, two loads on the running thread's own stack;
++ * only on the refusal path. */
++static int lj52_gc_absorbed(lj52_mem *M, global_State *g)
++{
++  lua_State *L;
++  void *cf;
++  (void)M;
++  if (G2J(g)->state == LJ_TRACE_IDLE) return 0;
++  if (g->vmstate >= 0 || g->vmstate == ~LJ_VMST_C || g->vmstate == ~LJ_VMST_GC
++      || g->vmstate == ~LJ_VMST_EXIT) return 0;
++  L = gco2th(gcref(g->cur_L));
++  if (L == NULL) return 0;
++  cf = cframe_raw(L->cframe);
++  return cf != NULL && cframe_nres(cf) < 0 && (char *)cframe_pc(cf) == (char *)cframe_L(cf);
++}
++
+ /* THE KERNEL'S SLICE: is the thread running the kernel's?  See THE CREDIT. */
+ static int lj52_gc_kernel(lj52_mem *M, global_State *g)
+ {
+@@ -1201,8 +1296,10 @@
+   if (M->L == NULL || total <= 0) return 0;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return 0;
++  if (g->hookmask & HOOK_VMEVENT) return 0;   /* THE RECIPIENT: as a finalizer */
+   c = lj52_gc_odmax(total);
+-  if (!lj52_gc_reserve(M, total, used)) c >>= 1;
++  if (lj52_gc_reserve(M, total, used)) c = M->gc_odcredit;   /* THE RECIPIENT */
++  else c >>= 1;
+   if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;
+   return c;
+ }
+@@ -1234,6 +1331,7 @@
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM || lj52_gc_kernel(M, g))
+     return 0;
++  if (g->hookmask & HOOK_VMEVENT) return 0;   /* THE RECIPIENT: as a finalizer */
+   top = total + lj52_gc_credit(M, total, used);
+   if (used + delta > top + LJ52_GC_LEND) return 0;      /* the ceiling */
+   if (M->gc_win == 2 && M->gc_low > top) return 0;      /* the verdict */
+@@ -1251,11 +1349,25 @@
+ static void lj52_gc_refused(lj52_mem *M, long long total, long long used)
+ {
+   global_State *g;
++  int absorbed;
+   M->gc_refusals++;
+   lj52_gc_pressure(M, total, used, LJ52_GP_TRY);
+   if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
++  if (g->hookmask & HOOK_VMEVENT) return;   /* THE RECIPIENT: as a finalizer */
++  /* THE RECIPIENT: the intern table's doubling, recognised and counted. */
++  if (g->str.num > g->str.mask
++      && M->gc_refdelta == (long long)(g->str.mask + 1) * 2 * (long long)sizeof(GCRef))
++    M->gc_refstrtab++;
++  absorbed = lj52_gc_absorbed(M, g);
++  if (G2J(g)->state != LJ_TRACE_IDLE && !absorbed) M->gc_refrecording++;
++  if (absorbed) {                       /* THE RECIPIENT: not the program's */
++    M->gc_refabsorbed++;
++    if (!M->gc_armed) lj52_gc_arm(M, g, LJ52_ARM_WALL);
++    return;
++  }
++  if (M->gc_odstate != LJ52_OD_RESERVE) M->gc_odcredit = lj52_gc_odfor(total, used);
+   M->gc_odstate = LJ52_OD_RESERVE;
+   M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
+   if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
+@@ -1303,8 +1415,7 @@
+       M->gc_low = used;
+       if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
+       if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+-        top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+-                                                        : lj52_gc_odmax(total) >> 1);
++        top = total + lj52_gc_tiercredit(M, total);
+         M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;
+       }
+       M->gc_grown = 0;
+@@ -1351,8 +1462,7 @@
+     if (gate > w) gate = w;
+     arm = used > total || total - used < gate;
+   } else {
+-    top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+-                                                    : lj52_gc_odmax(total) >> 1);
++    top = total + lj52_gc_tiercredit(M, total);
+     if (lj52_gc_kernel(M, g)) top += LJ52_GC_KSLICE;   /* where the kernel is refused */
+     arm = top - used < (top - M->gc_low) >> 1;
+   }
+@@ -2033,7 +2143,8 @@
+ 
+ /* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets,
+  *                      od_limit, kernel_slice, gc_low, armby, hyst,
+- *                      window, lends, win, refused
++ *                      window, lends, win, refused, absorbed, strtab,
++ *                      recording, od_credit
+  *
+  * The collector at the wall (docs/roadmap.md; THE CREDIT, THE CADENCE and
+  * THE PARK RESET in the collector section).  overdrafts counts growths lent
+@@ -2069,7 +2180,15 @@
+   lua_pushinteger(L, M ? M->gc_lends : -1);
+   lua_pushinteger(L, M ? M->gc_win : -1);
+   lua_pushnumber(L, M ? (lua_Number)M->gc_refdelta : -1);
+-  return 13;
++  /* 14-17, THE RECIPIENT (2026-10-05): refusals raised inside the trace
++   * recorder (not the program's: no reserve), the intern table's doublings
++   * among all refusals, refusals raised while recording that WERE the
++   * program's, and the reserve tier's credit as it stands. */
++  lua_pushinteger(L, M ? M->gc_refabsorbed : -1);
++  lua_pushinteger(L, M ? M->gc_refstrtab : -1);
++  lua_pushinteger(L, M ? M->gc_refrecording : -1);
++  lua_pushnumber(L, M ? (lua_Number)M->gc_odcredit : -1);
++  return 17;
+ }
+ 
+ /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
+
+Reading the diff:
+  - lj52_gc_absorbed is the map's 1.1.4 test, as the forensics' instrument spells it: cframe_raw(
+    L->cframe) of the running thread g->cur_L, nres < 0 and saved PC == L (lj_vm_cpcall's marker,
+    vm_x64.dasc), J->state not idle, vmstate not >= 0 (a trace), C, GC or EXIT.  Two loads, read only,
+    only on the refusal path (never on the hot path).  trace_exit_cp's sentinel never reaches it: a
+    trace exit runs with vmstate EXIT and J->state idle.
+  - An absorbed refusal still arms (W2b's principle; S1's retry needs the sweep), is counted in
+    gc_refusals as before and apart in gc_refabsorbed, and leaves gc_odstate, gc_win untouched: a
+    standing verdict is delivered to the next crossing, which is the program's.
+  - lj52_gc_odfor: the reserve credit for a refusal at heap `used` -- used + 4 KiB - total, clamped to
+    [G/2, G].  Set once, when the tier opens (gc_odstate != RESERVE); a later refusal in the same
+    episode does not move it (no creep).  The fresh-record branch of lj52_gc_reserve sets G.
+  - lj52_gc_tiercredit replaces the two inline "RESERVE ? G : G/2" tops (the proof's window
+    judgement and the cadence's halving), so every reader agrees with lj52_gc_credit.
+  - HOOK_VMEVENT: one added line after each HOOK_GC guard in credit, lend and refused, so the three
+    existing anchors ('kernelwindow' among them) are untouched.  lj52_gc_pressure's guard is not
+    changed: a vmevent handler does not own gc.threshold, and an arm under it is harmless.
+  - S1: g->str.num > g->str.mask with gc_refdelta == 2 (mask + 1) sizeof(GCRef) (16 (mask + 1) on
+    GC64), counted in gc_refstrtab.  No behaviour change: see (g).
+  - _OCLJ_WALLSTATS gains positions 14-17 (absorbed, strtab, recording, od_credit); the thirteen
+    before them keep their meaning, so the harness's CAP-GC line and mem_test's macros read as before.
+
+-----------------------------------------------------------------------------------------------------
+(c) WHY W8, W2b/W2c AND W11 HOLD (and what re-scopes)
+-----------------------------------------------------------------------------------------------------
+W8 (catch, format, drop, carry on, a proof in between).  W8's refusal is the program's own (JIT off,
+no recorder, no vmevent): it opens the reserve with credit max(G/2, r + 4 KiB - total) where r is the
+heap at the refusal (just past S, by less than the window) -- so at least 4 KiB above the data, plus
+THE WINDOW past that top.  The 'err: ' .. tostring(err) concat is tens of bytes; the proof that runs
+inside it finds used > total and leaves the tier open exactly as today (the closing test, used <=
+total at a proof, is unchanged); the drop, string.rep(256) and {1,2,3} follow under the cap.  Measured:
+passes on the additive and the dropin.  W1 (drop first) likewise.
+W2b/W2c (a refusal arms from any headroom; the retry succeeds after the collection).  The arm in
+lj52_gc_refused is unchanged for the program's refusals and kept for absorbed ones.  The one request
+larger than the headroom is the program's (J->state idle): the same path as today.  Passes.
+W11 (a fresh eris-loaded record whose live data is past total + G/2 takes RESERVE with no refusal).
+Untouched: lj52_gc_reserve's fresh-record branch opens the tier and now sets gc_odcredit = G, so the
+loaded machine keeps the whole G, as before.  W11w/W11wL (the window's own bytes open no reserve on a
+fresh record) unchanged: the !gc_win clause is the same line.  Pass.
+W7, W7k, W10, W16, W17, W18, C6b, the legacy twins: pass unchanged.  W7's bound reads tighter than
+its assertion; W7k's kernel refusal at cap + G/2 + 16 KiB opens a reserve whose credit clamps to G, so
+the kernel's bound and W7k's "peak > G + window" precondition hold.
+RE-SCOPED, with the reason:
+  W19 "the kernel keeps 11 KB past the sandbox's ceiling": its precondition asserted the sandbox had
+    reached cap + G + window - 1 KiB.  The sandbox's ceiling is now the shim's reserve credit + the
+    window (8 KiB past S after a ceiling refusal: "reached G + -8064" on the unmodified test), so the
+    precondition reads od_credit (WALLSTATS 17; G on a shim before it).  The kernel's part -- its one
+    11 KiB table granted armed and at depth 0 -- was never in doubt and still passes.  This is the ONE
+    failure of the unmodified 81-check suite on the prototype (80/81, additive and dropin alike).
+  W16R/W16Rj/W16RL/W16RjL: judged the tier from the shim's refusal COUNT ("two or more since the run
+    began").  Under rule 1 a counted refusal can open no reserve, so the tier is read from od_state
+    (WALLSTATS 3) at the landing and the reserve top from od_credit, with G as the fallback on an
+    older shim.  Same verdicts: all four pass, on both objects, and on the shipped object too.
+Not re-scoped but noted: the shipped W16Rj and W16RjL are what catch the LITERAL recorder predicate
+(J->state != IDLE): under that sabotage both stall (section (e)).
+
+-----------------------------------------------------------------------------------------------------
+(d) THE HERMETIC MEASUREMENT
+-----------------------------------------------------------------------------------------------------
+Setup: the forensics' drivers and probes, frozen copies (drv/); the instrumented copy of the shim with
+each rule spliced by tools/mkid.py (src-ref-*), compiled as build-shim.sh compiles (both variants,
+0 warnings), linked by build.sh on the census link line (no ASLR, fixed seed 1, the cpcall wrap);
+census2.sh/job2.sh = the forensics' (one process per cap, offsets 0, 16, ...; capk 384, batch 10,
+junk 24, arm, paint, OCLJ_REFLOG=1); tools/cmp.py = the forensics' compare.py restricted to the
+offsets run, with held, collects and the shim's own flags added.  Baseline cells: L4_* (census,
+first 1 024 of 4 096 caps) and X_* (probe2oe, probe2k_2048, 2 048 caps) under wall2/sc/forensics/out.
+
+THE CONTROL (variant cnt: counters and the OCLJID line only, no rule): driver lines byte-identical to
+the baseline on 1 024 + 2 048 caps (string JIT on, probe2oe string); its absorbed flag fired on
+exactly the 7 refusals the wrap attributed to the recorder.  So the splices change nothing until a
+rule is switched on, and the shim-side recorder test is the wrap's truth here as in the forensics.
+
+VARIANT id (all three rules), against the baseline, same offsets.  same = byte-identical driver
+lines; out = outside-handler landings (term 2/4/5/7); sc = second-chance runs (the reserve's opener
+absorbed by paint/recorder); sc_out = those ending outside; recop = runs whose reserve the recorder
+opened; held = sum of objects held at the end; coll = sum of collections; odx = max over runs of
+od_peak - G (bytes past cap + G):
+
+ cell                    runs same   out b->v   sc b->v  sc_out b->v recop  held ratio  coll b->v        odx b->v
+ census string JIT on    1024  934   1 -> 1     90 -> 90    0 -> 0    0->0   0.9963     121664->121411   +1112 -> -11016
+ census record JIT on    1024 1004   0 -> 0     20 -> 20    0 -> 0    0->0   0.9994      41424->41365     +292 -> -12064
+ census string JIT off   1024  858   0 -> 0    166 -> 166   0 -> 0    0->0   0.9932     132409->130615    +212 -> -11912
+ census record JIT off   1024  988   0 -> 0     36 -> 36    0 -> 0    0->0   0.9989      45696->45540     +144 -> -12068
+ probe2oe string JIT on  2048 1820  21 -> 0    228 -> 221  21 -> 0    7->0   0.9953     281727->276797   +1432 -> -11548
+ probe2oe record JIT on  2048 1976   0 -> 0     72 -> 72    0 -> 0    0->0   0.9989     105649->105273    +144 -> -12068
+ probe2k_2048 string     2048 1819 828 -> 785  229 -> 225 103 -> 60   4->0   0.9955     279946->277183   +5564 ->  -7660
+ probe2k_2048 record     2048 2010 162 -> 163   38 -> 33    0 -> 1    5->0   0.9994     100516->100193   +3984 ->  -7704
+
+Identity on untouched caps: in every cell the caps whose driver line differs are EXACTLY the
+second-chance runs (90/90, 20/20, 166/166, 36/36, 228/228, 72/72, 229/229, 38/38): the rules change a
+run only where someone kept allocating past an absorbed refusal.  Per such run the held count is
+lower by 176-270 strings (mean -198 to -206) or 36-57 records (mean -40 to -43): the 12 KiB (G/2 -
+4 KiB at G = 32 KiB) the reserve no longer lends to a fill that never heard.  The one-cap census
+stall (string off 2864, F1: a burst-top verdict at event.timer's record, no second chance) is
+unchanged, as it must be.
+
+EACH PIECE SEPARATELY:
+  rule 1 alone (variant rec; JIT-on cells): changes exactly the recorder-opened runs and nothing
+    else -- probe2oe string 21 -> 19 outside, second chances 228 -> 221, recop 7 -> 0; probe2k string
+    828 -> 828, second chances 229 -> 225, recop 4 -> 0; the two census JIT-on cells identical (no
+    recorder-opened run in their first 1 024 caps); held -0.02 % / -0.01 %.  That is XA-rec's result
+    (forensics F6) reproduced with the verdict kept standing instead of re-decided.
+  rule 3 alone (variant res; all cells): identical to id in every cell except where the recorder
+    opened the tier: probe2oe string 21 -> 0 with the 228 second chances all kept (they end inside
+    now); probe2k string 828 -> 785, second-chance outside 103 -> 60.  So rule 3 is what removes the
+    OpenOS-shaped stalls; rule 1 is what stops the recorder from opening the tier at all.
+  rule 2 (vmevent): nothing to fire hermetically (no jit.attach in any probe: 0 refusals with
+    HOOK_VMEVENT set in 20 480 runs); its evidence is mem_test R2 and its sabotage, below.
+  the kernel: 0 refusals with kernel = 1 in 20 480 runs (the kernel's 12 KiB past the sandbox's
+    ceiling held everywhere); no rule, for the reasons in (g).
+  S1: strtab = 1 in 0 of 25 157 hermetic refusals and 0 of 13 659 in mem_test; mem_test R3 forces
+    one and the shim counts it (+1), so the recogniser is live.  It did not contribute to any
+    second chance or landing here.
+Collections: fewer in every cell (-0.1 % to -1.7 %): a shorter second chance is fewer window cycles.
+Near-wall time was not measured here (the driver's tb column is the batch count).
+
+The recorder predicate, both ways, on this prototype:
+  - fires: the positive control drv/ctl_rec2.lua (ctl_rec.lua with a chained holder) -- 7 recorder
+    refusals (jst ASM, vm ASM, 588 B GCtrace), each OCLJID absorbed=1 and each followed by the wrap's
+    OCLJCP st=4 recorder=1; the 4 program refusals absorbed=0.  In the sweeps absorbed = 7, 4, 5 = the
+    wrap's attribution in those cells.
+  - does not fire on a program allocation while recording: in drv/dbg_r1b2.lua the holder's 256 KiB
+    array doubling was refused with J->state RECORD and vmstate RECORD and read absorbed=0 (and, as
+    the kernel, a 1 KiB IR-buffer growth of the recorder just before the top read absorbed=1, jst
+    RECORD vm RECORD).  The forensics' 1 092 program-visible refusals with J->state RECORD read 0
+    under the identical expression (F6/F7).  The literal predicate fails W16Rj/W16RjL under its
+    sabotage ((e) below).
+  (The original ctl_rec.lua does not reproduce on this prototype for an instructive reason: its
+  holder's 32 KiB array doubling at cap + 2 KiB was granted by the shipped shim on retry through the
+  G/2 reserve its first refusal opened; under rule 3 a refusal below the burst top opens no room for a
+  32 KiB retry, so that fill stays at 4 096 objects.  See (g).)
+
+-----------------------------------------------------------------------------------------------------
+(e) mem_test, THE NEW CASES AND THE SABOTAGES
+-----------------------------------------------------------------------------------------------------
+The repo's mem_test.c on the prototype: 80/81, additive and dropin, failing only W19's precondition
+(re-scope above).  tools/mkmt.py makes mem_test_id.c from the repo's file (memtest_id.diff: +287/-3):
+the two re-scopes and four new cases; the sandbox in each is a coroutine resumed from C under the
+watchdog's arm (W11's shape), the holder pre-sized from C, a C table maker (__mkarr) for one-piece
+crossings (string.rep builds in g->tmpbuf first, two allocations of the length).  Results, 85 checks:
+
+  object / sabotage                        result     fails
+  id additive (4feea605)                   85/85      -
+  id dropin   (99dd43bb)                   85/85      -
+  the shipped shim (plain-additive)        82/85      R1, R2, R4   (R3 not judged: no counter)
+  norecorder  lj52_gc_absorbed -> 0        84/85      R1
+  literal     absorbed = J->state != IDLE  83/85      W16Rj, W16RjL  (a stall each: the program's
+                                                      refusal while recording opened no reserve)
+  novmevent   the three HOOK_VMEVENT lines 84/85      R2
+  reserveG    lj52_gc_odfor -> G           84/85      R4
+  nostrtab    gc_refstrtab++ removed       84/85      R3
+
+The cases, each as "what must fail without the rule":
+  R1  a refusal inside the trace recorder opens no reserve.  Live tables to S - 1 KiB, one C-made
+      table to 100 B under THE WINDOW's ceiling (one crossing, lent, no checkpoint after it), then a
+      hot allocation-free loop: the recorder's IR buffer and trace are refused at the ceiling, inside
+      its protected call.  Asserts: the shim counted >= 1 absorbed refusal (+7 here), the tier reads
+      BURST, and the program's own 2 KiB after it is refused.  Without rule 1 the tier reads RESERVE
+      and the 2 KiB is granted (the shipped object, the norecorder sabotage).
+  R2  a refusal under HOOK_VMEVENT opens no reserve.  JIT off (no recorder in play); a "bc" handler
+      attached while there is room; the fill stops 1.5 KiB under S so the parser never crosses;
+      load('return 1') fires the handler, whose own 16 KiB is refused under HOOK_VMEVENT.  Asserts:
+      the handler fired, its request was refused, the tier reads BURST, the program's 8 KiB after it
+      is refused.  Without rule 2: RESERVE, and the 8 KiB granted (shipped, novmevent).
+  R3  the intern table's doubling is recognised and counted.  As the kernel (hard top): 700 live
+      distinct strings put the table at 1 024 slots; live tables to 12 KiB under the top; then new
+      distinct strings until the 1 025th asks the 2 048-slot table (16 KiB), refused in the pcall that
+      made a 32-byte string.  Asserts: the pcall failed and gc_refstrtab rose by >= 1 (after 52
+      strings here).  Without the recogniser: 0 (nostrtab).  Not judged on a shim without the counter.
+  R4  the reserve is 4 KiB past the refusal, once per episode.  The second-chance shape with the
+      absorber inside the program: fill until refused (u1), keep the data, fill again (u2), and again
+      (u3).  Asserts: u2 - u1 within [512 B, 4 KiB + window + 1 KiB] and u3 - u2 <= window + 1 KiB
+      (here +4 224 then +88).  Without rule 3: +17 776 (shipped, reserveG).
+  Dropped: R1b, "a program refusal raised while J->state is RECORD opens the reserve", cannot be
+      arranged at the wall: the recorder's own 1 KiB IR growth is refused first and aborts the
+      recording, so the program's refusal that follows is raised idle (dbg_r1b2.lua, ten fill depths).
+      The literal predicate is already caught by W16Rj/W16RjL, and that sabotage is the control.
+New negative-control sabotages for test/native/negative-control.sh (sed lines in sabotage.sh, each
+leaving a marker; expected failure sets as measured above): norecorder {R1}; literal {W16Rj, W16RjL};
+novmevent {R2}; reserveG {R4}; nostrtab {R3}.  Existing sabotages whose expected sets may gain R4
+(not run here: the full control is ~35 mem_test runs): unbounded (c = total; the first refusal then
+lies past cap + G, the credit clamps to G and the second fill gets nothing) and closereserve.  The
+noarm sabotage's first pattern still matches only THE WINDOW's arm (the absorbed branch's arm is on
+its own line, without the comment).  Everything else matches once, as before.
+
+-----------------------------------------------------------------------------------------------------
+(f) THE IN-MACHINE GATE, PRE-REGISTERED
+-----------------------------------------------------------------------------------------------------
+The instrument first.  CAP-GC gains the four WALLSTATS values (absorbed=, strtab=, recording=,
+od_credit=); the main session's instrumented native, if it lands first, already separates the
+recorder, the kernel thread and the vmevent handler per refusal and should carry str.num/str.mask.
+The gate: the amplified capacity probe of d2-final 8.2 (192 KB, scale 1.8, OCLJ_CAP_BATCH=10,
+OCLJ_CAP_JUNK=24), THIS build (additive) in the JIT-on RECORD cell, 60 runs, interleaved with 20 runs
+of the final-build V in the same cell (the same-chain control), plus the standard matrix at batch 100
+(chain T's layout, V and this build, 48 runs each).  The pooled history for the cell is W + V: 21 of
+30 runs with a paint-absorbed first refusal, 3 of them down.
+Pass iff ALL hold:
+  (1) teeth: >= 20 of the 60 runs show a second chance (OCLJCAPX pf >= 1 and CAP-GC refused >= 2),
+      else the gate is VOID (the amplification did not transfer), not passed;
+  (2) 0 DOWN + STALL + PROC-DEATH in the 60; against the pooled 3 of 30 this is one-sided Fisher
+      p = 0.035, and against the same-chain V control it must not be worse;
+  (3) every run's od_peak <= od_credit + window (the new bound, read from CAP-GC), and in every run
+      with refused = 1, od_peak <= G/2 + window as before;
+  (4) absorbed = 0 in every JIT-off run (the predicate cannot fire without a recorder) and
+      recording = 0 in every run where no refusal was the program's -- the instrument's own sanity;
+  (5) batch 100: 48 of 48 clean; capacity >= V's like for like in every cell within 1 % except the
+      single-refusal cells, which must be equal (the burst tier is untouched); the known 1024 KB
+      closure cell is judged against stock as before (0.98-0.99x stands);
+  (6) last-five time within 1.10x of V's in every cell (fewer cycles are expected, not more).
+A down at the reserve top in (2) with CAP-GC od_credit set fails the gate; a down with absorbed > 0
+and the tier still BURST would mean rule 1 misfired and fails it too.  What the gate reports but
+does not judge: strtab (expected 0; a nonzero count is the S1 finding and triggers the lj_str_resize
+follow-up in (g)).
+
+-----------------------------------------------------------------------------------------------------
+(g) COSTS AND RESIDUALS, HONESTLY
+-----------------------------------------------------------------------------------------------------
+  - The second chance is not removed, it is bounded.  The paint (and in the machine OpenOS's
+    dispatcher) still absorbs the first verdict refusal in 4-11 % of runs; those fills now go on for
+    4 KiB + the window instead of G/2 + the window, and their end lands where the next crossing is:
+    inside the batch in every one of the 1 030 hermetic second chances of this sweep (the 21 oe
+    stalls gone), but the landing itself is THE WINDOW's mechanism, not this design's.  At larger G
+    the saving is larger (256 KiB -> 8 KiB at 8 MB caps); the stall probability per second chance is
+    what the machine gate measures.
+  - Capacity: -0.06 % to -0.68 % per cell, all of it in second-chance runs (-12 KiB each at the G
+    floor).  The one shape that loses more: a program whose single request is refused BELOW the burst
+    top and retried unchanged (W9's class) -- the shipped shim's G/2 reserve let a 32 KiB holder
+    doubling at cap + 2 KiB succeed on retry (ctl_rec.lua); rule 3 gives a sub-S refusal the burst top
+    plus the window, so that retry is refused.  Stock refuses it too.  In the machine's JIT-on string
+    cells at 192 KB this is the 16 KiB doubling at 2 048 objects: 5 of 15 W/V runs got it through
+    the reserve and held 2 049; they will hold 2 048.
+  - The recovery room after a SECOND refusal in the same episode (a program that caught one, kept
+    filling, caught another) is the window only; after the first it is >= 4 KiB + the window.  A tty
+    recovery of 1-3 KiB fits either; a traceback of more than ~4 KiB after a second refusal may not.
+    Stock gives such a program nothing past the cap.
+  - THE WINDOW's overrun residual stays: probe2k's 785 string / 163 record landings are the kernel's
+    2 KiB slice taking the heap past the window between resumes, now at a lower reserve top (one
+    record run that ended inside at baseline ends down under id for that reason, off 23824: a paint-
+    opened second chance, then the dispatcher's pack refused 100 B past the new ceiling).  F1's
+    burst-top landing stays.
+  - S1 is counted, not treated.  "No reserve for a doubling" was considered and dropped: the shipped
+    reserve is what lets the next new string's retry of a doubling <= G/2 succeed; without it the
+    refusal is sticky until a sweep or a drop.  If the machine's strtab count is nonzero, the fix is
+    in lj_str_resize (a failed growth keeps the old table; the retry per new string is then one
+    refused allocator call and the shim's recogniser keeps it off the program's account) -- a LuaJIT
+    patch in the anchored style, deferred until the count says it is needed.
+  - The kernel thread: no rule.  Its refusals are pcall(main) -> the machine down whatever the tier
+    (K1/J3/J4), and its only non-fatal absorber is the recorder, which rule 1 covers on any thread.
+    A kernel-thread rule would also break mem_test's unarmed cases (W8 and most others run on the main
+    thread with wd_depth 0, where the predicate reads "kernel").
+  - The in-machine extra refusals (5/4/3 against pf = 1) are not explained by this design; nothing
+    here depends on them.  The instrument's recorder, kernel and strtab flags are what will.
+  - Not measured: near-wall time (expected no worse: fewer cycles), the Linux build (compiled nowhere
+    here; the diff touches no platform code), the full negative control (five new sabotages run by
+    hand; the 35 existing ones re-anchored by inspection only).
+  - The instrumented copy's OCLJREF credit/top/over fields re-compute the OLD arithmetic; under rule
+    3 they overstate the top by G - od_credit.  The OCLJID line carries od_credit; the absorber
+    classification (stream order) is unaffected.
+
+-----------------------------------------------------------------------------------------------------
+FILES
+-----------------------------------------------------------------------------------------------------
+  tools/mkid.py           the design as splices; flags rec res vmevent instr
+  src-id/lj52shim.c       THE SHIPPABLE SOURCE (src-plain + rec,res,vmevent); identify.diff its diff
+  src-ref-{id,rec,res,vme,cnt}/   the instrumented variants; obj/, bin/lref_*.exe
+  build.sh, sabotage.sh, mt.sh, census2.sh, job2.sh, tools/cmp.py
+  mem_test_id.c, memtest_id.diff, tools/mkmt.py
+  out/<variant>_<cell>.tsv + .err/   every census (cnt, rec, res, id); out/summary-cmp.txt
+  out/ctl/                ctl_rec (does not reproduce under rule 3) and ctl_rec2 (the control)
+  mtout/                  every mem_test run (R5-* are the final test's)
+  drv/ctl_rec2.lua, drv/dbg_r1b.lua, drv/dbg_r1b2.lua

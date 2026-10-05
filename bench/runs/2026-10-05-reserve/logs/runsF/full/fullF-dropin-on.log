@@ -1,0 +1,284 @@
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/F/libdir-dropin/libjnlua52-windows-x86_64.dll (833369 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +1s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +2s  LuaStateLuaJIT compiled
+[smoke] +5s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/runsF/full/fullF-dropin-on/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/runsF/full/fullF-dropin-on/work/libdir-luajit
+patch-machine-lua: ok  46451 -> 54527 bytes, 13 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/runsF/full/fullF-dropin-on/work/classes/assets/opencomputers/lua/machine.lua
+[smoke]               shadows OC's on the classpath (this arm drives OC's own architecture)
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+SMOKE| ========================================================================
+SMOKE| OC-LuaJIT smoke test -- OpenOS on LuaJIT, persist, resume
+SMOKE| java=1.8.0_504 amd64  os=Windows 11
+SMOKE| conf=C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/runsF/full/fullF-dropin-on/work/ocljit.conf
+2026-10-05T15:44:20.261Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-05T15:44:20.300Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+SMOKE| LuaStateFactory.isAvailable  = true
+SMOKE| LuaStateFactory.include52    = true
+SMOKE| LuaStateFactory.includeLuaJ  = false
+SMOKE| forceNativeLibPathFirst      = 'C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/runsF/full/fullF-dropin-on/work/libdir-luajit'
+SMOKE| computer.lua.allowBytecode   = false
+SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+SMOKE| quarantined, not in the default suite: sieve,strings   (run one with OCLJ_BENCH_ONLY=<name>)
+SMOKE| planted 10 more .lua from bench\oc; suite = mandelbrot,binarytrees,trampoline,matmul,strings2,nqueens,sha256 x5 reps; encore = mandelbrot every 5 s
+SMOKE| planted mandelbrot.lua (1972 B) and a 120-deep directory tree
+SMOKE| hdd real path = C:\Users\astro\AppData\Local\Temp\ocljit-smoke-hdd5299343248653891496 (autorun.lua planted, 40312 bytes)
+SMOKE| architecture pinned to totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture   (ocljit.native=luajit)
+SMOKE| MILESTONE a-lua-state-opens: PASS -- LuaState created after 1 ticks
+SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=164247 after 2 ticks; running=true; lastError=null
+SMOKE| quiesced after 2 spins, before the VM fingerprint
+SMOKE| GUARD OK. arch=totoro.ocelot.brain.entity.machine.luac.NativeLua52Architecture
+SMOKE| GUARD VM FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaState | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| MILESTONE b2-machine-memory-accounted: PASS -- kernelMemory=164247  totalMemory=2051684  freeMemory=1856349  used=195335
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE k0-kernel-observed: PASS -- asked for watchdog, raw _G._OCLJ_KERNEL=watchdog
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE km-1-kernel-init-compiles-nothing: PASS -- traces live at the kernelMemory baseline = 0; kernelMemory=164247
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| MILESTONE al-1-machine-heap-is-lj-alloc: PASS -- _OCLJ_GCSTATS count:heap = 20:1 (want >=14:1, the state's own lj_alloc arena)
+SMOKE| MILESTONE acc-1-machine-handover: PASS -- _OCLJ_GCSTATS count=20 csync=0 native cap=0 Java getTotalMemory=2051684  (want csync 0: OpenComputers' own LuaState stays in legacy mode)
+SMOKE| quiesced after 0 spins, before the JIT probe read-out
+SMOKE| !! raw-state read on a dirty stack: getTop=2 [1]=THREAD [2]=FUNCTION (expected 1) -- a synchronized call between its two halves, OC's own shape, left as found
+SMOKE| JIT PROBE: mode=on  attach -> ok
+SMOKE| GC PACE: stepmul=default(200)  pause=default(200)
+SMOKE| SCREEN AFTER BOOT (180 ticks, 6.4s, running=true):
+????????????????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (1024k RAM)                                             ?
+? Keyboards have to be attached to or placed next to a screen to work. ?
+????????????????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+pending
+OCLJDEADLINE=pending
+OCLJBENCH=0.0072/12000000/3/135000011250000
+OCLJNONCE=7.5500-984536 OCLJCTR=29
+OCLJGATE=refused/refused/textok/51
+OCLJUD=table/userdata/true/8/3
+OCLJSTK=idle/0/0/none
+OCLJTICK=29 OCLJPERR=0:none
+OCLJENV=1024/820
+OCLJB01=pending
+OCLJW01=pending
+OCLJPDONE=pending OCLJPNOW=- OCLJPCOMPAT=unknown
+OCLJENCORE=pending
+OCLJDG=idle/0/0/0/none
+OCLJFI=idle/0/0/0/0/0/-/none
+OCLJFIL=
+OCLJFIP1=
+OCLJMP=idle/0/0/-1/none
+SMOKE| lastError = null
+SMOKE| MILESTONE c-openos-shell: PASS -- OpenOS shell prompt on screen (24 non-empty lines)
+SMOKE| MILESTONE d-autorun-counter-live: PASS -- nonce=7.5500-984536 counter 29 -> 37 in 10 of 300 ticks
+SMOKE| quiesced after 1 spins, before the k-milestone read-out
+SMOKE| JIT PROBE: kernel=watchdog  mode=on  jit.status()=true  traces start/stop/abort/flush=320/164/156/0  ticks-to-shell=180  boot-ms=5268  sandbox-bench(min-s/iters/reps/sum)=0.0072/12000000/3/135000011250000  raw-interpreted-ref(min-s/iters/reps/sum)=0.0640/12000000/3/135000011250000
+SMOKE| MILESTONE k2-jit-not-thrashing: PASS -- traces completed during boot = 164 (standing hook: ~2500; want < 300)
+SMOKE| MILESTONE k3-sandbox-loop-is-compiled: PASS -- sandbox loop best-of-3 = 0.0072 s = 0.11x the raw interpreted reference 0.0640 s (compiled-fast means < 1/3)
+SMOKE| MILESTONE j0-jit-switch-honoured: PASS -- mode=on -> jit.status()=true
+SMOKE| quiesced after 0 spins, before the mem-1 after-boot read (diagnostic; the read proceeds under the monitor)
+SMOKE| MEM-1 after-boot: tier=threehalf  sandbox total/free KB=1024/783..817 (3 samples; phase0=mandelbrot/ok)  raw total/free KB=2003/1455 (used 547)  traces_live=140 traces=140 mcode=128 KB  quiesced=true running=true
+SMOKE| MEM-1 after-boot after a full GC (PERTURBING, on the raw state): raw free KB=1495 (used 508; collectgarbage('count')=520769 B)  traces_live=140 traces=140 mcode=128 KB   <- garbage reclaimed 39 KB; traces_live 140 -> 140
+SMOKE| MILESTONE d2-sandbox-bytecode-gate: PASS -- allowBytecode=false so want refused;  load(string.dump(f))=refused  load(dump, name, "bt")=refused  load(text)=textok  dump bytes=51
+SMOKE| WDTIMELINE-K1: kernel=watchdog jit=on native=luajit k1_start_ms=7341 k1_ms=10930 k1_ticks=350 k1=too_long_without_yielding k1_resolved_ms=18271 row_seen_ms=6440 nonce_up=7.55 due_up=13.55 up_k1_start=10.25 up_k1_end=27.75 ctr=51->88 hb_per_s=3.39 freeze_ms=9686 freeze_start_ms=8272 freeze_up=11.75 freeze_open=false exec_run_ms=4704 exec_run_start_ms=13254 exec_run_up=19.75 exec_run_open=false exec_pct=48 exec_at_exit=false walk=133/7.900 running=true lastError=null
+SMOKE| MILESTONE k1-deadline-still-fires: PASS -- kernel=watchdog  pcall(while true do end) -> too_long_without_yielding after 350 ticks   (and the machine survived it: running=true)
+SMOKE| quiesced after 0 spins, before the watchdog stats read-out
+SMOKE| WATCHDOG STATS: fires/refires/filtered/depth/hooked = 1/0/5/0/false
+SMOKE| WDTIMELINE: kernel=watchdog jit=on native=luajit k1=too_long_without_yielding k1_ticks=350 k1_ms=10930 freeze_ms=9686 freeze_open=false exec_run_ms=4704 ctr=51->88 quiesced=true quiesce_ms=0 read_ms=0 exec_at_read=false stats(fires/refires/filtered/depth/hooked)=1/0/5/0/false k2_stops=164 running=true lastError=null wall_s=18.3
+SMOKE| MILESTONE k5-watchdog-fired: PASS -- fires=1 after the timeout probe
+SMOKE| --- (jn-1) LuaState.resume on a coroutine that dies: does the LuaRuntimeException carry the error object? ---
+SMOKE| JNLUA RESUME: hook(set/mask/count)=false//0  stack top after the four resumes=1
+SMOKE| JNLUA RESUME (a) error('jn1-string-error')                      -> li.cil.repack.com.naef.jnlua.LuaRuntimeException: jn1-string-error
+SMOKE| JNLUA RESUME (b) error(table with __tostring -> 'jn1-tostring-error') -> li.cil.repack.com.naef.jnlua.LuaRuntimeException: jn1-tostring-error
+SMOKE| JNLUA RESUME (c) RECORDED, not asserted: __tostring raises a string -> java.lang.Error: jn1-tostring-raises
+SMOKE| JNLUA RESUME (c) RECORDED, not asserted: __tostring raises a table  -> java.lang.Error: error throwing Lua exception
+SMOKE| MILESTONE jn-1-resume-error-carries-message: PASS -- (a) li.cil.repack.com.naef.jnlua.LuaRuntimeException: jn1-string-error;  (b) li.cil.repack.com.naef.jnlua.LuaRuntimeException: jn1-tostring-error   (jnlua reports the coroutine's error object; hook=false//0)
+SMOKE| MILESTONE k4-still-compiled-after-timeout: PASS -- sandbox loop on the resume after the timeout = 0.0072 s (before: 0.0072) = 0.11x the raw interpreted reference 0.0640 s (want < 1/3), reported after 20 ticks
+SMOKE| PHASE0 env=1024/673 (totalKB/freeKB)
+SMOKE| PHASE0 compute=mandelbrot/ok/37904620/0.0728/752
+SMOKE| PHASE0 component=133/7.900
+SMOKE| MILESTONE p0-compute-checksum: PASS -- mandelbrot CHECK=37904620 (published reference 37904620), 0.0728 s
+SMOKE| MILESTONE p0-component-walk-ran: PASS -- walked 133 entries via indirect fs.list calls in 7.9 s of uptime
+SMOKE| PHASE0 ROW: native=luajit kernel=watchdog jit=on  compute=0.0728s  component=7.9s  env=1024/673
+SMOKE| PHASE1 .. mandelbrot#4
+SMOKE| PHASE1 .. binarytrees#1
+SMOKE| PHASE1 .. binarytrees#2
+SMOKE| PHASE1 .. binarytrees#3
+SMOKE| PHASE1 .. binarytrees#4
+SMOKE| PHASE1 .. binarytrees#5
+SMOKE| PHASE1 .. trampoline#1
+SMOKE| PHASE1 .. trampoline#2
+SMOKE| PHASE1 .. trampoline#3
+SMOKE| PHASE1 .. trampoline#4
+SMOKE| PHASE1 .. trampoline#5
+SMOKE| PHASE1 .. matmul#2
+SMOKE| PHASE1 .. matmul#4
+SMOKE| PHASE1 .. strings2#1
+SMOKE| PHASE1 .. strings2#2
+SMOKE| PHASE1 .. strings2#3
+SMOKE| PHASE1 .. strings2#4
+SMOKE| PHASE1 .. strings2#5
+SMOKE| PHASE1 .. nqueens#1
+SMOKE| PHASE1 .. nqueens#2
+SMOKE| PHASE1 .. nqueens#3
+SMOKE| PHASE1 .. nqueens#4
+SMOKE| PHASE1 .. nqueens#5
+SMOKE| PHASE1 .. sha256#1
+SMOKE| PHASE1 .. sha256#4
+SMOKE| PHASE1 .. -
+SMOKE| MILESTONE p1-suite-complete: PASS -- driver reported OCLJPDONE=7 for 7 benchmarks
+SMOKE| PHASE1 compat path in-sandbox: operators
+SMOKE| MILESTONE p1-compat-path-known: PASS -- sandbox bit-ops implementation = operators
+SMOKE| PHASE1 rows: name/status/CHECK/min/max/freeKB/reps
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  mandelbrot/ok/37904620/0.0657/0.0703/606/5
+SMOKE| MILESTONE p1-mandelbrot: PASS -- mandelbrot CHECK=37904620 (reference 37904620), min 0.0657 s / max 0.0703 s over 5 reps, 606 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  binarytrees/ok/7038400/0.4398/0.4631/601/5
+SMOKE| MILESTONE p1-binarytrees: PASS -- binarytrees CHECK=7038400 (reference 7038400), min 0.4398 s / max 0.4631 s over 5 reps, 601 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  trampoline/ok/247388/0.2412/0.2690/407/5
+SMOKE| MILESTONE p1-trampoline: PASS -- trampoline CHECK=247388 (reference 247388), min 0.2412 s / max 0.2690 s over 5 reps, 407 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  matmul/ok/481.0000/0.0982/0.1023/446/5
+SMOKE| MILESTONE p1-matmul: PASS -- matmul CHECK=481.0000 (reference 481.0000), min 0.0982 s / max 0.1023 s over 5 reps, 446 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  strings2/ok/12582912-3852468224/0.2240/0.2319/590/5
+SMOKE| MILESTONE p1-strings2: PASS -- strings2 CHECK=12582912-3852468224 (reference 12582912-3852468224), min 0.2240 s / max 0.2319 s over 5 reps, 590 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  nqueens/ok/85200/0.5593/0.5929/569/5
+SMOKE| MILESTONE p1-nqueens: PASS -- nqueens CHECK=85200 (reference 85200), min 0.5593 s / max 0.5929 s over 5 reps, 569 KB free after
+SMOKE| PHASE1 ROW: native=luajit kernel=watchdog jit=on  sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.0495/0.0570/570/5
+SMOKE| MILESTONE p1-sha256: PASS -- sha256 CHECK=4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d (reference 4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d), min 0.0495 s / max 0.0570 s over 5 reps, 570 KB free after
+SMOKE| quiesced after 0 spins, before the mcode read-out
+SMOKE| JIT MEMORY: mcode=655360 B of a 2097152 B cap, traces=83, traces_live=265, jit=true  (the RAM cap cannot see any of this)
+SMOKE| quiesced after 0 spins, before the GC pressure read-out
+SMOKE| GC PRESSURE: arms=1514 collects=1514 bailouts=0 refusals=0 armed=false gcstate=0 trace_flushes=0 flush_bytes=0
+SMOKE| MILESTONE gc-emergency-collects-resolve: PASS -- arms=1514 collects=1514 bailouts=0
+SMOKE| MILESTONE gc-emergency-not-stuck-armed: PASS -- armed=false at rest
+SMOKE| MILESTONE m1-mcode-is-real: PASS -- kernel=watchdog: 655360 B of machine code the RAM cap does not charge for, 83 traces, cap 2097152 B
+SMOKE| ENCORE warm: mandelbrot, best of 3 samples = 0.0674 s
+SMOKE| --- persisting the workspace (eris.persist through OC's PersistenceAPI) ---
+SMOKE| JIT MEMORY after persist: mcode=655360 B, traces=83, traces_live=265   (traces survived the save)
+SMOKE| MILESTONE m2-persist-flush-observed: PASS -- mcode 655360 -> 655360 B, traces 83 -> 83  (traces survived the save: the machine stays warm)
+SMOKE| quiesced after 0 spins, before the mem-1 after-first-save read (diagnostic; the read proceeds under the monitor)
+SMOKE| MEM-1 after-first-save: tier=threehalf  sandbox total/free KB=1024/651..741 (10 samples; phase0=mandelbrot/ok)  raw total/free KB=2003/1268 (used 735)  traces_live=265 traces=83 mcode=640 KB  quiesced=true running=true
+SMOKE| MEM-1 after-first-save after a full GC (PERTURBING, on the raw state): raw free KB=1336 (used 667; collectgarbage('count')=683448 B)  traces_live=265 traces=83 mcode=640 KB   <- garbage reclaimed 67 KB; traces_live 265 -> 265
+SMOKE| MILESTONE f1-persist-blob: PASS -- persist ok=true err= key=86d9aa85-c6a5-4a23-aff5-29f8df3d81bb_kernel blobBytes=235467 in 20ms
+SMOKE| MILESTONE f1b-blob-carries-userdata: PASS -- persisted blob CONTAINS the userdata class name HandleValue; blobBytes=235467
+SMOKE| --- (m4) 5 in-place saves on the RUNNING machine; encore mandelbrot sampled cold and re-warmed after each (warm best = 0.0674 s) ---
+SMOKE| m4 save 1: before mcode=720896 B traces=255 traces_live=266; persist 4 ms; right after: mcode=720896 B traces=256 traces_live=267 (traces survived); cold=0.0664 s, re-warmed=0.0722 s; after re-warm: mcode=720896 B traces=305 traces_live=308
+SMOKE| m4 save 2: before mcode=720896 B traces=305 traces_live=308; persist 4 ms; right after: mcode=720896 B traces=257 traces_live=267 (traces survived); cold=0.0688 s, re-warmed=0.0736 s; after re-warm: mcode=720896 B traces=284 traces_live=289
+SMOKE| m4 save 3: before mcode=720896 B traces=284 traces_live=289; persist 3 ms; right after: mcode=720896 B traces=257 traces_live=267 (traces survived); cold=0.0703 s, re-warmed=0.0768 s; after re-warm: mcode=720896 B traces=292 traces_live=297
+SMOKE| m4 save 4: before mcode=720896 B traces=292 traces_live=297; persist 6 ms; right after: mcode=720896 B traces=260 traces_live=269 (traces survived); cold=0.0715 s, re-warmed=0.0748 s; after re-warm: mcode=720896 B traces=307 traces_live=310
+SMOKE| m4 save 5: before mcode=720896 B traces=307 traces_live=310; persist 3 ms; right after: mcode=720896 B traces=260 traces_live=269 (traces survived); cold=0.0713 s, re-warmed=0.0726 s; after re-warm: mcode=720896 B traces=260 traces_live=269
+SMOKE| m4 summary: warm best 0.0674 s; cold mean 0.0697 s (1.03x), cold max 0.0715 s (1.06x); re-warmed mean 0.0740 s (1.10x); persist mean 4.0 ms; traces survived every save=true; traces back after the re-warm run every time=true; cost per save on this encore ~2.3 ms beyond a warm run (jit=on)
+SMOKE| MILESTONE m4-persist-and-continue-under-load: PASS -- jit=on: 5/5 saves, 10/10 samples; traces survived every save=true; warm 0.0674 s -> cold mean 0.0697 s (1.03x), re-warmed mean 0.0740 s (1.10x)   (ratios REPORTED, not asserted)
+SMOKE| !! NOT QUIESCED after 1 spins: SKIPPING the mem-1 after-m4-saves read (diagnostic; the read proceeds under the monitor) -- reading the Lua state while the machine thread runs corrupts it
+SMOKE| MEM-1 after-m4-saves: tier=threehalf  sandbox total/free KB=1024/688..740 (10 samples; phase0=mandelbrot/ok)  raw total/free KB=2003/1332 (used 670)  traces_live=269 traces=260 mcode=704 KB  quiesced=false running=true
+SMOKE| MEM-1 after-m4-saves after a full GC (PERTURBING, on the raw state): raw free KB=1333 (used 670; collectgarbage('count')=686224 B)  traces_live=269 traces=260 mcode=704 KB   <- garbage reclaimed 0 KB; traces_live 269 -> 269
+SMOKE| MILESTONE mem-1-resident-traces-at-tier: PASS -- tier=threehalf (1024 KB): every read above produced a number at all three points -- the figures are REPORTED on the MEM-1 lines, never asserted
+SMOKE| --- restoring into a fresh workspace ---
+SMOKE| restored machine running=true lastError=null
+SMOKE| SCREEN AFTER RESTORE (160 ticks, 79.1s, running=true):
+????????????????????????????????????????????????????????????????????????
+? OpenOS 1.8.9 (1024k RAM)                                             ?
+? Keyboards have to be attached to or placed next to a screen to work. ?
+????????????????????????????????????????????????????????????????????????
+Note: Your home directory is readonly. Run `install` and reboot.
+/home #
+OCLJBENCH2=0.0072/12000000/3/135000011250000
+OCLJDEADLINE=too_long_without_yielding
+OCLJBENCH=0.0072/12000000/3/135000011250000
+OCLJNONCE=7.5500-984536 OCLJCTR=1061
+OCLJGATE=refused/refused/textok/51
+OCLJUD=table/userdata/true/8/107
+OCLJSTK=idle/0/0/none
+OCLJTICK=1061 OCLJPERR=0:none
+OCLJENV=1024/716
+OCLJB01=mandelbrot/ok/37904620/0.0728/752
+OCLJW01=133/7.900
+OCLJPDONE=7 OCLJPNOW=- OCLJPCOMPAT=operators
+OCLJP01=mandelbrot/ok/37904620/0.0657/0.0703/606/5
+OCLJP02=binarytrees/ok/7038400/0.4398/0.4631/601/5
+OCLJP03=trampoline/ok/247388/0.2412/0.2690/407/5
+OCLJP04=matmul/ok/481.0000/0.0982/0.1023/446/5
+OCLJP05=strings2/ok/12582912-3852468224/0.2240/0.2319/590/5
+OCLJP06=nqueens/ok/85200/0.5593/0.5929/569/5
+OCLJP07=sha256/ok/4044b97490ea337483cb563ee4336c024272c962e86475de24c58abaade25a5d/0.0495/0.0570/570/5
+OCLJENCORE=mandelbrot/ok/37904620/0.0686/4
+OCLJDG=idle/0/0/0/none
+OCLJFI=idle/0/0/0/0/0/-/none
+OCLJFIL=
+OCLJFIP1=
+OCLJMP=idle/0/0/-1/none
+SMOKE| restored lastError = null
+SMOKE| ENCORE cold: mandelbrot, first post-restore sample (seq 3 -> 4) = 0.0686 s
+SMOKE| POST-SAVE RECOVERY: warm 0.0674 s -> cold 0.0686 s = 1.02x   (a world save flushes every compiled trace)
+SMOKE| MILESTONE m3-post-save-workload-resumes: PASS -- the encore closure survived the persist and ran again on the other side: mandelbrot cold 0.0686 s against warm 0.0674 s, ratio 1.02x   (ratio REPORTED, not asserted)
+SMOKE| MILESTONE f7-restored-userdata-proxy-live: PASS -- OCLJUD before=table/userdata/true/8/84 after=table/userdata/true/8/107
+SMOKE| MILESTONE f2-restore-same-vm: PASS -- boot nonce before=7.5500-984536 after=7.5500-984536 (identical=true) 
+SMOKE| MILESTONE f3-restore-counter-continues: PASS -- counter at persist=835, after restore=1061 (advanced=true); running=true
+SMOKE| MILESTONE f5-restore-memory-still-accounted: PASS -- kernelMemory after restore = 164248
+SMOKE| MILESTONE acc-1r-restored-machine-handover: PASS -- _OCLJ_GCSTATS count=20 csync=0 native cap=0 Java getTotalMemory=2051685  (want csync 0: OpenComputers' own LuaState stays in legacy mode)
+SMOKE| MILESTONE f4-restore-no-error: PASS -- restored lastError=null
+SMOKE| --- (fi) saving WHILE two for-in loops over the kernel's own component iterators are suspended mid-walk (kernel=watchdog, expecting EXACT sequences after the restore: sites 10/11) ---
+SMOKE| fi: signal queued=true; 32 polls in 1242 ms; row at save = held/0/3/7/16/33/9a38bfd9/none  (state/seq/posL/nL/posP/nP/gpu/err)
+SMOKE| fi: recorded before the save: list b41ac09f,9a38bfd9,86d9aa85  pairs maxResolution,freeAllBuffers,getScreen,maxDepth,setActiveBuffer,getResolution,getForeground,getViewport,getActiveBuffer,type,buffers,setPaletteColor,getBackground,getBufferSize,set,setResolution
+SMOKE| MILESTONE fi-1-save-landed-mid-loop: PASS -- save ok=true in 2 ms; both loops parked: list at 3/7, pairs at 16/33 (strictly inside=true); screen rows carry 3/16 recorded tokens (=true); _kernel=236029 B
+SMOKE| --- (fi) restoring the mid-loop save into a fresh workspace, then completing both walks on BOTH machines ---
+SMOKE| fi: go queued A=true B=true; after 44 ticks: never-saved row=done/1/7/7/33/33/9a38bfd9/none (running=true)  restored row=done/1/7/7/33/33/9a38bfd9/none (running=true lastError=null)
+SMOKE| fi: list  never-saved (7): b41ac09f,9a38bfd9,86d9aa85,c4ba911c,7f14cc2e,6ad55040,b049b53e
+SMOKE| fi: list  restored    (7): b41ac09f,9a38bfd9,86d9aa85,c4ba911c,7f14cc2e,6ad55040,b049b53e
+SMOKE| fi: pairs never-saved (33): maxResolution,freeAllBuffers,getScreen,maxDepth,setActiveBuffer,getResolution,getForeground,getViewport,getActiveBuffer,type,buffers,setPaletteColor,getBackground,getBufferSize,set,setResolution,freeBuffer,bitblt,slot,setViewport,address,freeMemory,totalMemory,bind,get,copy,setForeground,fill,allocateBuffer,getDepth,setBackground,setDepth,getPaletteColor
+SMOKE| fi: pairs restored    (33): maxResolution,freeAllBuffers,getScreen,maxDepth,setActiveBuffer,getResolution,getForeground,getViewport,getActiveBuffer,type,buffers,setPaletteColor,getBackground,getBufferSize,set,setResolution,freeBuffer,bitblt,slot,setViewport,address,freeMemory,totalMemory,bind,get,copy,setForeground,fill,allocateBuffer,getDepth,setBackground,setDepth,getPaletteColor
+SMOKE| MILESTONE fi-2-component-list-walk-exact: PASS -- saved at 3/7; never-saved walk 7 keys, restored walk 7 keys, element-wise equal=true; missing=[] duplicated/alien=[]
+SMOKE| MILESTONE fi-3-proxy-pairs-walk-exact: PASS -- saved at 16/33 over the gpu proxy 9a38bfd9; never-saved walk 33 keys, restored walk 33 keys, element-wise equal=true; missing=[] duplicated/alien=[]
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+SMOKE| --- (dg) saving WHILE an OpenOS-authored next-wrapper loop is parked mid-walk: for k in pairs(component), boot/04_component.lua's __pairs (-Docluajit.forin=ignore) ---
+SMOKE| dg: dropin arm -- the harness set eris.settings("forin", "ignore") itself
+SMOKE| dg: signal queued=true; 18 polls in 811 ms; row at save = held/0/9/18/none  (state/seq/pos/n/err)
+SMOKE| dg: go queued=true; after 24 ticks the row is done/1/18/18/none (released=true, running=true lastError=null)
+SMOKE| MILESTONE dg-1-forin-diagnostic-names-the-os-wrapper: PASS -- mode=ignore: 0 diagnostics, as configured; save ok=true in 4 ms; loop parked at 9/18 (strictly inside=true); _kernel=233016 B; drained by the harness: 0 diagnostic(s), 0 naming 04_component.lua; residual after the drain: 0; released=true   (the NEGATIVE: the harness did not look, and eris.diagnostics() read directly after the save is empty)
+SMOKE| --- (stk) saving WHILE the machine is in SynchronizedCall (expecting OC's two-call save over our serializer: the second universe, U1's shape) ---
+SMOKE| stk: signal queued=true; 3 polls in 46 ms, SynchronizedCall seen 1 times, last pending call = open(manifest.lua)   <- caught on an fs.open
+SMOKE| stk: before the save: registries kreg=7 creg=7 same=true values=7 pending=open(manifest.lua); OCLJSTK=run/0/0/none; OCLJUD=table/userdata/true/8/232
+SMOKE| stk: blobs: _kernel=234454 B carrying 7 userdata recipes (HandleValue NBT payloads), _stack=233991 B carrying 7 userdata recipes; class-name string occurrences 1/1 (interned: once per blob, not a count)
+SMOKE| MILESTONE stk-1-save-landed-in-synccall: PASS -- save ok=true in 4 ms; persisted state stack = Paused/SynchronizedCall; pending call = open(manifest.lua); _kernel=234454 B
+SMOKE| MILESTONE stk-2-dropin-control-second-blob-carries-kernel: PASS -- _kernel=234454 B, _stack=233991 B, ratio 1.00   (OC's own save, our serializer: the index-2 root chased its open upvalues and wrote the kernel again -- the documented defect)
+SMOKE| --- (stk) restoring the sync-call save into a fresh workspace ---
+SMOKE| stk: restored: running=true state=Paused lastError=null; registries kreg=7 creg=0 same=false values=7 pending=open(manifest.lua)
+SMOKE| MILESTONE stk-3-dropin-control-two-universes: PASS -- proxies persisted (kernel registry after a full GC) = 7; userdata recipes across the blobs written (= host Values the restore mints) = 14 (7 in _kernel, 7 in _stack); after the restore: kernel registry = 7, closure's registry = 0 entries, same table = false, distinct host userdata across both = 7; pending = open(manifest.lua)   (OC's save over our serializer: every proxy restores twice and the closure holds a second registry -- U1 on a real machine)
+SMOKE| stk: restored machine after 16 ticks: running=true lastError=null OCLJSTK=run/3/2/close:bad_file_descriptor OCLJUD=table/userdata/true/8/233 (was table/userdata/true/8/232)
+SMOKE| MILESTONE stk-4-dropin-control-silent-mode: PASS -- OCLJSTK before=run/0/0/none after=run/3/2/close:bad_file_descriptor (bursts completed after the restore: 3; read/close failures 0 -> 2)   (the result proxy lives in the second registry, so the kernel hands the host a plain table: the silent mode, as documented)
+SMOKE| MILESTONE acc-2-fast-path-live: PASS -- since boot: allocator calls +92394262, of them through JNI +92394262; native cap 0 vs Java 2051684; csync 0; one getFreeMemory() -> native reads +0  (want: every call through JNI, reads +0)
+SMOKE| --- (mem-2) a sandbox program holds LIVE data inside half the watermark at tier=threehalf (1024 KB): a proven cycle must raise the flag and the next resume must flush the traces ---
+SMOKE| MEM-2 cadence before: used=700339/low=674016/armby=0/hyst=1/armed=0/arms=1514 (cap: raw total 2051684)
+SMOKE| MEM-2 before: traces_live=284 traces=279 mcode=786432 B  arms=1514 collects=1514 trace_flushes=0 flush_bytes=0  raw total/free KB=2003/1319  sandbox OCLJENV=1024/714  GCSTATS=20:1514/1514/0/0/false/699347/1389600/200/0/0/false/0/0/1/0/699347/0/0/92398646/92398438
+SMOKE| MEM-2 run: signal queued=true; 228 polls / 7143 ms; final row=done/70/1347/76/none (state/seq/heldKB/freeKB/err); max held=1347 KB, min sandbox free=45 KB, steps=70; 55 reads under the monitor (0 produced no number), of them 20 in hold
+SMOKE| MEM-2 reads: traces_live distribution 0x3 1x1 2x2 3x1 7x1 10x1 12x2 13x1 14x3 15x3 16x1 17x1 18x1 21x2 27x1 34x1 37x1 39x1 284x3 285x10 287x4 289x4 290x6 295x1; min=0 at row grow/35/1093/113/none; first 0 at poll 120 row grow/35/1093/113/none (program stepped on to seq 70 after it); first trace_flushes advance at poll 120 row grow/35/1093/113/none
+SMOKE| MEM-2 cadence during: [8 used=822773/low=674016/armby=0/hyst=1/armed=0/arms=1514] [12 used=978801/low=674016/armby=0/hyst=1/armed=0/arms=1514] [16 used=1107181/low=674016/armby=0/hyst=1/armed=0/arms=1514] [20 used=903621/low=674016/armby=0/hyst=1/armed=0/arms=1514] [24 used=1040433/low=674016/armby=0/hyst=1/armed=0/arms=1514] [28 used=987105/low=674016/armby=0/hyst=1/armed=0/arms=1514] [32 used=1162249/low=674016/armby=0/hyst=1/armed=0/arms=1514] [36 used=982821/low=674016/armby=0/hyst=1/armed=0/arms=1514] [40 used=1204981/low=674016/armby=0/hyst=1/armed=0/arms=1514] [44 used=1084889/low=674016/armby=0/hyst=1/armed=0/arms=1514] [48 used=1224545/low=674016/armby=0/hyst=1/armed=0/arms=1514] [52 used=1223809/low=674016/armby=0/hyst=1/armed=0/arms=1514] [56 used=1399041/low=674016/armby=0/hyst=1/armed=0/arms=1514] [60 used=1232033/low=674016/armby=0/hyst=1/armed=0/arms=1514] [64 used=1450797/low=674016/armby=0/hyst=1/armed=0/arms=1514] [68 used=1335573/low=1317845/armby=0/hyst=1/armed=0/arms=1515] [72 used=1423401/low=1317025/armby=0/hyst=1/armed=0/arms=1515] [76 used=1542809/low=1317025/armby=0/hyst=1/armed=0/arms=1515] [80 used=1507745/low=1317025/armby=0/hyst=1/armed=0/arms=1515] [84 used=1606781/low=1317025/armby=0/hyst=1/armed=0/arms=1515] [88 used=1536357/low=1317025/armby=0/hyst=1/armed=0/arms=1515] [92 used=1594965/low=1577977/armby=0/hyst=1/armed=0/arms=1516] [96 used=1620849/low=1577977/armby=0/hyst=1/armed=0/arms=1516] [100 used=1727565/low=1577977/armby=0/hyst=1/armed=0/arms=1516] [104 used=1777117/low=1673977/armby=0/hyst=1/armed=0/arms=1517] [108 used=1810633/low=1673977/armby=0/hyst=1/armed=0/arms=1517] [112 used=1817913/low=1753917/armby=0/hyst=1/armed=0/arms=1518] [116 used=1860625/low=1753917/armby=0/hyst=1/armed=0/arms=1518] [120 used=1635701/low=1622377/armby=2/hyst=1/armed=0/arms=1520] [124 used=1676763/low=1676641/armby=0/hyst=1/armed=0/arms=1521] [128 used=1778945/low=1741465/armby=0/hyst=1/armed=0/arms=1522] [132 used=1796533/low=1779041/armby=0/hyst=1/armed=0/arms=1523] [136 used=1910557/low=1779041/armby=0/hyst=1/armed=0/arms=1523] [140 used=1891021/low=1817205/armby=2/hyst=1/armed=0/arms=1525] [144 used=1883181/low=1878953/armby=2/hyst=1/armed=0/arms=1529] [148 used=1909193/low=1897861/armby=0/hyst=1/armed=0/arms=1530] [152 used=1907549/low=1884777/armby=2/hyst=1/armed=0/arms=1531] [156 used=1887313/low=1882537/armby=2/hyst=1/armed=0/arms=1533] [160 used=1905729/low=1900837/armby=0/hyst=1/armed=0/arms=1534] [164 used=1965961/low=1883369/armby=2/hyst=1/armed=0/arms=1535] [168 used=1942941/low=1882537/armby=2/hyst=1/armed=0/arms=1537] [172 used=1949273/low=1881193/armby=2/hyst=1/armed=0/arms=1539] [176 used=1936269/low=1884021/armby=2/hyst=1/armed=0/arms=1541] [180 used=1911733/low=1881577/armby=2/hyst=1/armed=0/arms=1543] [184 used=1942197/low=1883817/armby=2/hyst=1/armed=0/arms=1545] [188 used=1904069/low=1884021/armby=2/hyst=1/armed=0/arms=1547] [192 used=1898865/low=1883985/armby=2/hyst=1/armed=0/arms=1549] [196 used=1894277/low=1882025/armby=2/hyst=1/armed=0/arms=1551] [200 used=1896325/low=1882217/armby=2/hyst=1/armed=0/arms=1553] [204 used=1902209/low=1896629/armby=0/hyst=1/armed=0/arms=1554] [208 used=1955641/low=1883817/armby=2/hyst=1/armed=0/arms=1555] [212 used=1899677/low=1895333/armby=0/hyst=1/armed=0/arms=1558] [216 used=1898409/low=1882025/armby=2/hyst=1/armed=0/arms=1561] [220 used=1897041/low=1883985/armby=2/hyst=1/armed=0/arms=1563] [224 used=1935441/low=1883985/armby=2/hyst=1/armed=0/arms=1563]  after: used=708535/low=487469/armby=2/hyst=1/armed=0/arms=1565
+SMOKE| MEM-2 after: traces_live=34 traces=34 mcode=65536 B  arms=1565 collects=1565 bailouts=0 refusals=0 armed=false  trace_flushes=22 (+22 over the program) flush_bytes=532976 (+532976)  raw free KB=1311  GCSTATS=20:1565/1565/0/0/false/707539/1004400/200/0/22/false/0/532976/1/0/707539/0/0/92576509/92576301  running=true lastError=null
+SMOKE| MILESTONE mem-2-pressure-flushes-traces: PASS -- tier=threehalf (1024 KB): held 1347 KB live with sandbox free down to 45 KB; trace_flushes 0 -> 22; traces_live 284 before, min 0 over 55 reads while running (0 first seen at poll 120, program still stepping afterwards=true); near-empty (<= 14) first at poll 120, program still stepping afterwards=true; program done err=none running=true lastError=null
+SMOKE| --- allowBytecode gate (on a private LuaState) ---
+SMOKE| MILESTONE g1-bytecode-refused-with-mode-t: PASS -- mode="t" on a chunk starting 0x1B -> rejected: attempt to load chunk with wrong mode
+SMOKE| MILESTONE g1b-rejected-load-leaks-no-stack: PASS -- stack top before=0 after=0
+SMOKE| MILESTONE g2-text-still-loads-with-mode-t: PASS -- mode="t" on Lua source -> loaded and returned 2
+SMOKE| MILESTONE g3-eris-internal-bytecode-path-open: PASS -- eris.persist+unpersist of a cyclic table and a closure -> 153/true/42
+SMOKE| MILESTONE acc-3-freemem-exact-mid-call: PASS -- inside one call, total-free vs LuaJIT's count: after 20000 tables 2066684 vs 2066684; after a 100000-byte string 2297784 vs 2297784; after dropping both and collecting 177264 vs 177264
+SMOKE| MILESTONE acc-4/5/7: SKIP -- native=luajit: they test LuaStateLuaJIT, which the dropin arm does not use (not counted)
+SMOKE| MILESTONE acc-6-closed-state: PASS -- after close(): free 2147483647 total 2147483647; setTotalMemory(1073741823) -> free 1073741823 total 1073741823
+SMOKE| e-group state: li.cil.repack.com.naef.jnlua.LuaState (factory Lua52$)
+SMOKE| MILESTONE e1-accounting-live: PASS -- fresh private state: total=2147483647 free=2147440411 used=43236
+SMOKE| MILESTONE e2-freemem-falls: PASS -- after 20000 tables: used 43236 -> 2064330 (+2021094 bytes)
+SMOKE| MILESTONE e3-gc-credits-frees: PASS -- after dropping the reference and a full GC: used 2064330 -> 41054 (-2023276 of 2021094 reclaimed)
+SMOKE| MILESTONE e4-oom-at-the-cap: PASS -- cap 41054 -> 303198; unbounded allocation ended at used=303198; threw=LuaMemoryAllocationException: not enough memory   (process alive: the bare-frame ERRMEM did not escape)
+SMOKE| FINGERPRINT: native=luajit/LuaJIT 2.1.ROLLING | class=LuaState | _VERSION=Lua+Eris 5.2 | jit=LuaJIT 2.1.ROLLING (ok) | eris=[diagnostics,persist,settings,unpersist,version] | eris.version=eris-lj 0.3 (M3) / 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 / fmt=3
+SMOKE| CHECKS: 63   FAILURES: 0   WALL: 92.8s
+SMOKE| VERDICT: PASS
+SMOKE| ========================================================================
+[smoke] =============== 5. verdict ===============
+[smoke] +98s  log: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/runsF/full/fullF-dropin-on/work/smoke.log
+SMOKE PASS -- OpenOS booted on LuaJIT, persisted, and resumed.

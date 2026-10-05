@@ -1,0 +1,49 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] cc      = gcc.exe (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r1) 16.2.0
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+[build] luajit  = /c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit @ 1ee778a4 (CHECKHOOK patch present)
+[build] jnlua   = /c/Users/astro/Downloads/OC-JNLua @ da3d4d45
+[build] shim    = /c/Users/astro/Downloads/OC-LuaJIT/native
+[build] out     = /c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-windows-x86_64.dll
+[build] =============== 1. LuaJIT 2.1 (static) ===============
+[build]     XCFLAGS=-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK    BUILDMODE=static
+[build]     lj_func.c: pristine copy re-taken from /c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit/src (the build copy is never the patch's input)
+patch-penalty-scrub.sh: lj_func.c  22 lines inserted into lj_func_freeproto (of 213), 0 removed; scrub verified by content
+[build]     lj_func.c: penalty scrub present in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_err.c: pristine copy re-taken from /c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit/src
+patch-fastfunc-errmem-top.sh: lj_err.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+[build]     lj_err.c: ERRMEM top clamp present twice in the freshly re-derived build copy (asserted by content before make)
+[build] +11s  libluajit.a built (835854 bytes)
+[build]     lj_func.o recompiled from the patched lj_func.c (16:42:01 > 16:41:59)
+[build]     lj_err.o recompiled from the patched lj_err.c (16:42:07 > 16:42:00)
+[build]     luajit says: true|Lua 5.1|LuaJIT 2.1.ROLLING|x64
+[build]     count-hook ticks over a hot loop: 80000|ok
+[build] =============== 1b. GC64 / foreign-allocator gate ===============
+[build]     FOREIGN-ALLOC-OK
+[build] =============== 2. lj52shim.c ===============
+[build]     -Wall -Wextra warnings = 0
+[build]     lj_alloc arena symbols referenced: lj_alloc_create, lj_alloc_f, lj_alloc_destroy, lj_alloc_setprng, lj_prng_seed_secure
+[build]     accounting boundary: lj52_mem_used, lj52_mem_settotal defined; LuaStateLuaJIT oclj* natives = 2 (variant=additive)
+[build] =============== 3. OC-JNLua jnlua.c (checkout unmodified; one diagnostic line patched on a copy; shim force-included) ===============
+repack.sh: jnlua-luajit.repack.c  suffix=LuaJIT  class=li/cil/repack/com/naef/jnlua/LuaStateLuaJIT
+repack.sh: exports will be Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_*
+repack.sh: 2 lines changed, jnlua.c logic untouched
+[build]     LuaStateLuaJIT.java == the generator's output (python3)
+patch-resume-error.sh: jnlua-luajit.c  1 line changed (of 2420), 4 throw(L, status) sites as before
+[build]     errors=0  warnings=2   (-Wall; the checkout's jnlua.c is byte-identical to upstream, the copy differs by the lines named above)
+[build]     shim-attributable warnings = 0  (2 pre-existing jnlua.c warnings allowlisted)
+[build] =============== 4. eris_lj.c ===============
+[build]     serializer hash = 8c5a1168  (blobs are pinned to this)
+[build] =============== 5. link ===============
+[build] =============== 6. postflight ===============
+[build]     reader = windows   total exports = 91   Java_* = 89   JNI_OnLoad = 1
+[build]     e.g. Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_00024LuaDebug_lua_1debugfree
+[build]     symbol family: LuaStateLuaJIT_*=89  LuaState_*=0   (variant=additive)
+[build]     ABI surface: Java_* = 89 (want 89), accounting natives = 2, total = 91
+[build] +17s  OK  /c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-windows-x86_64.dll  835293 bytes  sha256:bac496451a5ed983...
+[build] collected for packaging: /c/Users/astro/Downloads/OC-LuaJIT/build/native/dist/libjnluajit52-windows-x86_64.dll
+[build]     dist now holds: libjnluajit52-linux-x86_64.so libjnluajit52-windows-x86_64.dll 
+
+NEXT: point ocelot-brain at it and boot OpenOS:
+  OCLJ_LIBDIR=/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive sh /c/Users/astro/Downloads/OC-LuaJIT/test/native/smoke-test.sh

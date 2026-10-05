@@ -1,0 +1,230 @@
+--- src-plain/lj52shim.c	2026-10-05 13:51:23.963957200 +0300
++++ src-id/lj52shim.c	2026-10-05 15:06:58.150848100 +0300
+@@ -281,6 +281,11 @@
+   long long     gc_grown;      /* bytes granted since the last proof          */
+   volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+   long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
++  /* -- THE RECIPIENT; see THE CREDIT -- */
++  long long     gc_odcredit;   /* the reserve tier's credit, set as it opens  */
++  volatile long gc_refabsorbed;/* refusals inside the recorder: not the program's */
++  volatile long gc_refstrtab;  /* ... of all refusals, intern-table doublings  */
++  volatile long gc_refrecording;/* ... raised while recording, yet the program's */
+   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+   int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
+                                   /* flush at the next safe point (wd_arm)    */
+@@ -753,6 +758,7 @@
+ #include "lj_obj.h"
+ #include "lj_dispatch.h"
+ #include "lj_jit.h"
++#include "lj_frame.h"                  /* THE RECIPIENT: cframe_nres/pc  */
+ #include "lj_alloc.h"
+ #include "lj_prng.h"
+ 
+@@ -991,6 +997,62 @@
+  * refused where PUC would collect and succeed; any checkpoint between the
+  * tries cures it.
+  *
++ * THE RECIPIENT (2026-10-05).  A refusal is a message to the program that
++ * made the request -- your data does not fit -- and it opens the reserve
++ * tier so that the catch, the message and the drop can be paid for.  But
++ * the allocator hands it to whoever made the crossing, and some recipients
++ * are not the program and tell it nothing: the trace recorder, whose
++ * protected call it unwinds and whose error trace_abort drops (lj_trace.c);
++ * a VM event handler, run under lj_vm_pcall and reported to stderr; and,
++ * on the sandbox's own thread, code with a handler of its own -- the
++ * capacity probe's pcall(paint), OpenOS's event dispatcher -- which the
++ * allocator cannot tell from the program.  Each left the reserve tier open
++ * for a fill that never heard, and the reserve top's refusal then landed
++ * wherever the next crossing was: 21 of 228 such second chances in the
++ * OpenOS-shaped hermetic probe ended outside every handler, 0 of 1 820 runs
++ * without one (bench/results-wall-window-2026-10-05.md, "What is left").
++ *   - A refusal raised INSIDE THE RECORDER'S PROTECTED CALL opens no
++ *     reserve, shuts no window and consumes no verdict: the verdict stands
++ *     for the next crossing, which is the program's.  Known without a
++ *     LuaJIT line: the running thread's innermost C frame is an
++ *     lj_vm_cpcall frame (saved PC == L, negative nres: vm_x64.dasc), the
++ *     recorder is not idle, and the VM is not in a C function, the
++ *     collector or a trace exit -- the recorder's cpcalls are the only ones
++ *     reached with vmstate RECORD, OPT or ASM.  J->state alone is NOT it:
++ *     it stays RECORD while the interpreter executes the instruction just
++ *     recorded, and a refusal there reaches the program (1 092 did, in the
++ *     forensics' sweeps; counted here as gc_refrecording).  The flag agreed
++ *     with a --wrap=lj_vm_cpcall ground truth on all 31 000 refusals of
++ *     those sweeps.  Counted apart (gc_refabsorbed); the cycle still armed,
++ *     as every refusal arms it.
++ *   - Under HOOK_VMEVENT, as under HOOK_GC: no credit, no window, no
++ *     reserve.  A handler exists only once something calls jit.attach (the
++ *     harness's trace counter; the sandbox has no `jit`), and its refusal
++ *     is dropped with "VM handler failed".
++ *   - The reserve a refusal opens reaches LJ52_GC_RESERVE past the heap it
++ *     was refused at -- never under the burst tier's top, never past
++ *     total + G -- not G/2 further whatever the cap.  The recovery it
++ *     exists for (mem_test W8) is tens of bytes, a message through the tty
++ *     a few KB; G/2 is 16 KB at the floor and 256 KB at caps of 8 MB.  So a
++ *     refusal the program never saw buys its fill LJ52_GC_RESERVE plus THE
++ *     WINDOW, in every cap, instead of up to a quarter of a megabyte.  A
++ *     fresh record's reserve (above) keeps G: that is history, not a
++ *     refusal.
++ *   - The intern table's doubling (lj_str.c: the string is linked, THEN the
++ *     table grown, and the growth's refusal thrown in whoever made the
++ *     string -- again at every new string until a sweep) is recognised,
++ *     str.num > str.mask with a request of 2 (mask + 1) GCRefs, and only
++ *     COUNTED (gc_refstrtab): in 28 672 hermetic runs it never fired, and
++ *     the reserve is what lets its retry succeed when the doubling is under
++ *     G/2.  If the machine's count says it fires, the fix is in
++ *     lj_str_resize (a failed growth keeps the old table), not a tier rule.
++ * The bound tightens and stays absolute: the sandbox's used + delta <=
++ * total + min(G, max(G/2, r + LJ52_GC_RESERVE - total)) + LJ52_GC_LEND,
++ * r the heap at the refusal that opened the tier; every thread's <= total
++ * + G + LJ52_GC_KSLICE, as before.  Not identified, and bounded only by the
++ * third rule: the kernel's own refusals (pcall(main): the machine is down
++ * whatever the tier) and the sandbox-thread handlers no test can name.
++ *
+  * THE CADENCE (2026-10-04).  Until this change, once a proven cycle left the
+  * heap inside the watermark, the very next allocator call armed again, so
+  * every GC checkpoint paid a whole O(heap) cycle: 20-120x stock's time over
+@@ -1120,6 +1182,7 @@
+ #define LJ52_GC_ODMAX  (512 * 1024)
+ #define LJ52_GC_KSLICE (16 * 1024)      /* the kernel's own, past the credit */
+ #define LJ52_GC_LEND   (4 * 1024)       /* THE WINDOW; <= KSLICE: the bound  */
++#define LJ52_GC_RESERVE (4 * 1024)      /* THE RECIPIENT: a refusal's reserve */
+ #if LJ52_GC_LEND > LJ52_GC_KSLICE
+ #error "THE WINDOW must sit inside the kernel's slice, or the bound over every thread moves"
+ #endif
+@@ -1181,11 +1244,43 @@
+   if (M->gc_odstate == LJ52_OD_RESERVE) return 1;
+   if (!M->gc_hyst && !M->gc_win && used > total + (lj52_gc_odmax(total) >> 1)) {
+     M->gc_odstate = LJ52_OD_RESERVE;
++    M->gc_odcredit = lj52_gc_odmax(total);   /* THE RECIPIENT: history keeps G */
+     return 1;
+   }
+   return 0;
+ }
+ 
++/* THE RECIPIENT: the credit the current tier gives past the cap. */
++static long long lj52_gc_tiercredit(lj52_mem *M, long long total)
++{
++  return M->gc_odstate == LJ52_OD_RESERVE ? M->gc_odcredit : lj52_gc_odmax(total) >> 1;
++}
++
++/* THE RECIPIENT: the reserve a refusal at heap `used` opens -- LJ52_GC_RESERVE
++ * past it, never under the burst tier's top, never past G. */
++static long long lj52_gc_odfor(long long total, long long used)
++{
++  long long G = lj52_gc_odmax(total), c = used + LJ52_GC_RESERVE - total;
++  return c < (G >> 1) ? (G >> 1) : c > G ? G : c;
++}
++
++/* THE RECIPIENT: was this refusal raised inside the trace recorder's
++ * protected call?  Read-only, two loads on the running thread's own stack;
++ * only on the refusal path. */
++static int lj52_gc_absorbed(lj52_mem *M, global_State *g)
++{
++  lua_State *L;
++  void *cf;
++  (void)M;
++  if (G2J(g)->state == LJ_TRACE_IDLE) return 0;
++  if (g->vmstate >= 0 || g->vmstate == ~LJ_VMST_C || g->vmstate == ~LJ_VMST_GC
++      || g->vmstate == ~LJ_VMST_EXIT) return 0;
++  L = gco2th(gcref(g->cur_L));
++  if (L == NULL) return 0;
++  cf = cframe_raw(L->cframe);
++  return cf != NULL && cframe_nres(cf) < 0 && (char *)cframe_pc(cf) == (char *)cframe_L(cf);
++}
++
+ /* THE KERNEL'S SLICE: is the thread running the kernel's?  See THE CREDIT. */
+ static int lj52_gc_kernel(lj52_mem *M, global_State *g)
+ {
+@@ -1201,8 +1296,10 @@
+   if (M->L == NULL || total <= 0) return 0;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return 0;
++  if (g->hookmask & HOOK_VMEVENT) return 0;   /* THE RECIPIENT: as a finalizer */
+   c = lj52_gc_odmax(total);
+-  if (!lj52_gc_reserve(M, total, used)) c >>= 1;
++  if (lj52_gc_reserve(M, total, used)) c = M->gc_odcredit;   /* THE RECIPIENT */
++  else c >>= 1;
+   if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;
+   return c;
+ }
+@@ -1234,6 +1331,7 @@
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM || lj52_gc_kernel(M, g))
+     return 0;
++  if (g->hookmask & HOOK_VMEVENT) return 0;   /* THE RECIPIENT: as a finalizer */
+   top = total + lj52_gc_credit(M, total, used);
+   if (used + delta > top + LJ52_GC_LEND) return 0;      /* the ceiling */
+   if (M->gc_win == 2 && M->gc_low > top) return 0;      /* the verdict */
+@@ -1251,11 +1349,25 @@
+ static void lj52_gc_refused(lj52_mem *M, long long total, long long used)
+ {
+   global_State *g;
++  int absorbed;
+   M->gc_refusals++;
+   lj52_gc_pressure(M, total, used, LJ52_GP_TRY);
+   if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
++  if (g->hookmask & HOOK_VMEVENT) return;   /* THE RECIPIENT: as a finalizer */
++  /* THE RECIPIENT: the intern table's doubling, recognised and counted. */
++  if (g->str.num > g->str.mask
++      && M->gc_refdelta == (long long)(g->str.mask + 1) * 2 * (long long)sizeof(GCRef))
++    M->gc_refstrtab++;
++  absorbed = lj52_gc_absorbed(M, g);
++  if (G2J(g)->state != LJ_TRACE_IDLE && !absorbed) M->gc_refrecording++;
++  if (absorbed) {                       /* THE RECIPIENT: not the program's */
++    M->gc_refabsorbed++;
++    if (!M->gc_armed) lj52_gc_arm(M, g, LJ52_ARM_WALL);
++    return;
++  }
++  if (M->gc_odstate != LJ52_OD_RESERVE) M->gc_odcredit = lj52_gc_odfor(total, used);
+   M->gc_odstate = LJ52_OD_RESERVE;
+   M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
+   if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
+@@ -1303,8 +1415,7 @@
+       M->gc_low = used;
+       if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
+       if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+-        top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+-                                                        : lj52_gc_odmax(total) >> 1);
++        top = total + lj52_gc_tiercredit(M, total);
+         M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;
+       }
+       M->gc_grown = 0;
+@@ -1351,8 +1462,7 @@
+     if (gate > w) gate = w;
+     arm = used > total || total - used < gate;
+   } else {
+-    top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+-                                                    : lj52_gc_odmax(total) >> 1);
++    top = total + lj52_gc_tiercredit(M, total);
+     if (lj52_gc_kernel(M, g)) top += LJ52_GC_KSLICE;   /* where the kernel is refused */
+     arm = top - used < (top - M->gc_low) >> 1;
+   }
+@@ -2033,7 +2143,8 @@
+ 
+ /* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets,
+  *                      od_limit, kernel_slice, gc_low, armby, hyst,
+- *                      window, lends, win, refused
++ *                      window, lends, win, refused, absorbed, strtab,
++ *                      recording, od_credit
+  *
+  * The collector at the wall (docs/roadmap.md; THE CREDIT, THE CADENCE and
+  * THE PARK RESET in the collector section).  overdrafts counts growths lent
+@@ -2069,7 +2180,15 @@
+   lua_pushinteger(L, M ? M->gc_lends : -1);
+   lua_pushinteger(L, M ? M->gc_win : -1);
+   lua_pushnumber(L, M ? (lua_Number)M->gc_refdelta : -1);
+-  return 13;
++  /* 14-17, THE RECIPIENT (2026-10-05): refusals raised inside the trace
++   * recorder (not the program's: no reserve), the intern table's doublings
++   * among all refusals, refusals raised while recording that WERE the
++   * program's, and the reserve tier's credit as it stands. */
++  lua_pushinteger(L, M ? M->gc_refabsorbed : -1);
++  lua_pushinteger(L, M ? M->gc_refstrtab : -1);
++  lua_pushinteger(L, M ? M->gc_refrecording : -1);
++  lua_pushnumber(L, M ? (lua_Number)M->gc_odcredit : -1);
++  return 17;
+ }
+ 
+ /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */

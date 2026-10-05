@@ -3160,14 +3160,15 @@ object Smoke {
       |-- are numbers, but with row 19's paint and the onError wrapper they add ~1.1 KB
       |-- of live data and a fifth gpu.set per paint at every BATCH: compare a run
       |-- only with a baseline taken under this same probe.
-      |local entered, timed, pf, oe = 0, 0, 0, 0
+      |local entered, timed, pf, oe, rr = 0, 0, 0, 0, 0
+      |local RECOVER = %%RECOVER%%
       |local function paint()
       |  local tlast = ring[1] + ring[2] + ring[3] + ring[4] + ring[5]
       |  gpu.set(1, 15, "OCLJNONCE=" .. nonce .. " OCLJCTR=" .. n .. "        ")
       |  gpu.set(1, 16, "OCLJCAP=" .. stage .. "        ")
       |  gpu.set(1, 17, "OCLJCAPT=" .. string.format("%.4f/%.4f/%d", tfirst, tlast, batches) .. "        ")
       |  gpu.set(1, 18, "OCLJCAPF=" .. freeAt .. "/" .. totalKB .. "        ")
-      |  gpu.set(1, 19, "OCLJCAPX=" .. entered .. "/" .. timed .. "/" .. pf .. "/" .. oe .. "        ")
+      |  gpu.set(1, 19, "OCLJCAPX=" .. entered .. "/" .. timed .. "/" .. pf .. "/" .. oe .. "/" .. rr .. "        ")
       |end
       |local function uniq(len, i) local s = tostring(i) return string.rep("x", len - #s) .. s end
       |local makers = {
@@ -3200,6 +3201,21 @@ object Smoke {
       |  else
       |    freeAt = math.floor(computer.freeMemory() / 1024)
       |    totalKB = math.floor(computer.totalMemory() / 1024)
+      |    -- OCLJ_CAP_RECOVER (THE RESERVE'S SIZE's gate, 2026-10-05): before dropping, and
+      |    -- under its own pcall, what a real catch handler does while it still holds its
+      |    -- data, in three steps so each one's footprint can be read: 1 a traceback (~1 KB,
+      |    -- held until the handler returns); 2 and the tty (io.stderr: gpu.set through the
+      |    -- kernel's invoke); 3 and OpenOS's own event.onError (io.open, write, close).
+      |    -- A refusal inside it is counted in rr: the reserve was too small for a recovery.
+      |    if RECOVER >= 1 and not ok then
+      |      local rok = pcall(function()
+      |        local tb = debug.traceback(tostring(err))
+      |        if RECOVER >= 2 then io.stderr:write(tb, "\n") end
+      |        if RECOVER >= 3 then pcall(event.onError, err) end
+      |        return #tb
+      |      end)
+      |      if not rok then rr = rr + 1 end
+      |    end
       |    held = nil
       |    stage = "done/" .. count .. "/" .. (ok and "cap" or tostring(err):gsub("[ /]", "_"))
       |  end
@@ -3344,6 +3360,14 @@ object Smoke {
     .map(v => scala.util.Try(v.toInt).getOrElse(-1)).getOrElse(100)
   val capJunk: Int = Option(System.getenv("OCLJ_CAP_JUNK")).map(_.trim).filter(_.nonEmpty)
     .map(v => scala.util.Try(v.toInt).getOrElse(-1)).getOrElse(24)
+  /** OCLJ_CAP_RECOVER: 1-3 make the fill's catch branch do what a real handler does
+    * while still holding its data before it drops -- 1 a traceback, 2 and the tty,
+    * 3 and OpenOS's event.onError; a refusal inside that is counted (OCLJCAPX's
+    * fifth field, rr) and the run is RECOVERY-REFUSED.  THE RESERVE'S SIZE's gate
+    * (2026-10-05).  Default 0: the probe is byte-identical to the window round's.
+    * -1: unparseable. */
+  val capRecover: Int = Option(System.getenv("OCLJ_CAP_RECOVER")).map(_.trim).filter(_.nonEmpty)
+    .map(v => scala.util.Try(v.toInt).getOrElse(-1)).getOrElse(0)
 
   /**
     * The capacity probe's driver, after (d).  Three readings, in this order,
@@ -3381,7 +3405,7 @@ object Smoke {
     var hasWall = false
     // 10-13 (THE WINDOW, 2026-10-05): window (LJ52_GC_LEND), lends, win (0 shut,
     // 1 open, 2 the verdict), refused (the last refused request, bytes).
-    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(14)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 13) }
+    def ws0(): Array[Double] = if (!ours || !hasWall) Array.fill(15)(-1.0) else m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 14) }
     def tlive(): Int = if (!ours) -1 else jitStatsLocked(m, mLua)._5
     def d(a: Array[Double], b: Array[Double], i: Int): String =
       if (a(0) < i || b(0) < i) "n/a" else (b(i) - a(i)).toLong.toString
@@ -3395,7 +3419,7 @@ object Smoke {
     def parked(a: Array[Double]): Boolean =
       a(0) >= 9 && a(5) == 1 && a(9) == 0 && a(8) == 0 && a(7) > a(6)
     // 1. idle window: 400 ticks, ~10 s
-    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 13) }(0) > 0
+    if (ours) hasWall = m.synchronized { rawstats(mLua, "_OCLJ_WALLSTATS", 14) }(0) > 0
     val g0 = gs(); val w0 = ws0(); val tl0 = tlive()
     var k = 0
     while (k < 400 && m.isRunning) { ws.update(); Thread.sleep(25); k += 1 }
@@ -3485,7 +3509,7 @@ object Smoke {
       " overdrafts=+" + d(w2, w3, 1) + " od_peak=" + v(w3, 2) + " od_state=" + v(w3, 3) +
       " park_resets=+" + d(w2, w3, 4) + " od_limit=" + v(w3, 5) + " kslice=" + v(w3, 6) +
       " gc_low=" + v(w3, 7) + " armby=" + v(w3, 8) +
-      " window=" + v(w3, 10) + " lends=+" + d(w2, w3, 11) + " win=" + v(w3, 12) + " refused=" + v(w3, 13) +
+      " window=" + v(w3, 10) + " lends=+" + d(w2, w3, 11) + " win=" + v(w3, 12) + " refused=" + v(w3, 13) + " tier=" + v(w3, 14) +
       " end: " + gcState(g3) + " parked=" + parked(g3))
     // CAP-X (THE WINDOW's gate, 2026-10-05): the amplification, the probe's own
     // counters, the trace aborts across the fill, and the run's class.  A STALL's
@@ -3497,7 +3521,8 @@ object Smoke {
     val cnt0 = if (row.startsWith("filling/")) (try row.stripPrefix("filling/").toLong catch { case _: Throwable => -1L }) else -1L
     val nb = try rowT(2).toLong catch { case _: Throwable => -1L }
     val cls =
-      if (row.startsWith("done") && why.contains("not_enough_memory") && running) "CLEAN"
+      if (running && row.startsWith("done") && why.contains("not_enough_memory") && xn(4) > 0) "RECOVERY-REFUSED"
+      else if (row.startsWith("done") && why.contains("not_enough_memory") && running) "CLEAN"
       else if (running && row.startsWith("filling") && !rowF.matches("\\d+/\\d+")) "STALL"
       else if (running && row.startsWith("filling")) "RECOVERY-REFUSED"
       else if (!running && err.contains("not enough memory")) "DOWN"
@@ -3508,7 +3533,7 @@ object Smoke {
     // regrowth in that window; event.timer: after the batch, before the timer.
     val site = if (cls != "STALL") "-" else if (xn(0) == nb + 1) "step-entry"
                else if (xn(0) == nb && xn(1) >= 0 && xn(1) < cnt0) "event.timer" else "?"
-    p("CAP-X| batch=" + capBatch + " junk=" + capJunk + " OCLJCAPX=" + parse(txt, "OCLJCAPX") +
+    p("CAP-X| batch=" + capBatch + " junk=" + capJunk + " recover=" + capRecover + " OCLJCAPX=" + parse(txt, "OCLJCAPX") +
       " traces(start/abort) " + tr0 + " -> " + (if (running) trc() else "n/a") +
       " class=" + cls + " site=" + site)
     milestone("cap-1-refusal-caught-machine-survives",
@@ -3688,6 +3713,7 @@ object Smoke {
         die("OCLJ_CAP_SHAPE must be record, array, string or closure, not '" + capShape + "'")
       if (capBatch < 1 || capBatch > 1000) die("OCLJ_CAP_BATCH must be 1..1000, not '" + System.getenv("OCLJ_CAP_BATCH") + "'")
       if (capJunk < 8 || capJunk > 200) die("OCLJ_CAP_JUNK must be 8..200, not '" + System.getenv("OCLJ_CAP_JUNK") + "'")
+      if (capRecover < 0 || capRecover > 3) die("OCLJ_CAP_RECOVER must be 0..3, not '" + System.getenv("OCLJ_CAP_RECOVER") + "'")
       p("!! OCLJ_PROBE=capacity: boot with the heartbeat-only autorun, then ONLY the capacity probe")
       p("!! (shape=" + capShape + "; boot caps 3000/2000 ticks for EVERY kernel, so arms are scored alike).")
     }
@@ -3748,7 +3774,7 @@ object Smoke {
       if (probeMode == "grace") GraceAutorunLua
       else if (probeMode == "capacity" || probeMode == "rawrace")
         CapacityAutorunLua.replace("%%SHAPE%%", capShape).replace("%%BATCH%%", capBatch.toString)
-          .replace("%%JUNK%%", capJunk.toString)
+          .replace("%%JUNK%%", capJunk.toString).replace("%%RECOVER%%", capRecover.toString)
       else AutorunLua
     Files.write(diskDir.resolve("autorun.lua"), autorunSrc.getBytes(StandardCharsets.UTF_8))
     // The Phase-0 compute pole, planted next to autorun.lua so the sandbox can

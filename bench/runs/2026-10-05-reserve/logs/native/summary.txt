@@ -1,0 +1,50 @@
+F 1241325b run 1: checks=86 failures=0
+F run 2: checks=86 failures=0
+F run 3: checks=86 failures=0
+F run 4: checks=86 failures=0
+F run 5: checks=86 failures=0
+F run 6: checks=86 failures=0
+F run 7: checks=86 failures=0
+F run 8: checks=86 failures=0
+F run 9: checks=86 failures=0
+F run 10: checks=86 failures=0
+F run 11: checks=86 failures=0
+F run 12: checks=86 failures=0
+F run 13: checks=86 failures=0
+F run 14: checks=86 failures=0
+F run 15: checks=86 failures=0
+F run 16: checks=86 failures=0
+F run 17: checks=86 failures=0
+F run 18: checks=86 failures=0
+F run 19: checks=86 failures=0
+F run 20: checks=86 failures=0
+F run 21: checks=86 failures=0
+F run 22: checks=86 failures=0
+F run 23: checks=86 failures=0
+F run 24: checks=86 failures=0
+F run 25: checks=86 failures=0
+F run 26: checks=86 failures=0
+F run 27: checks=86 failures=0
+F run 28: checks=86 failures=0
+F run 29: checks=86 failures=0
+F run 30: checks=86 failures=0
+F failing sets:
+     30 
+FL 79f19c63 run 1: checks=86 failures=0
+FL run 2: checks=86 failures=0
+FL run 3: checks=86 failures=0
+FL run 4: checks=86 failures=0
+FL run 5: checks=86 failures=0
+FL run 6: checks=86 failures=0
+FL run 7: checks=86 failures=0
+FL run 8: checks=86 failures=0
+FL run 9: checks=86 failures=0
+FL run 10: checks=86 failures=0
+FL failing sets:
+     10 
+E 332dc85c run 1: checks=86 failures=4
+E run 2: checks=86 failures=4
+E run 3: checks=86 failures=4
+E failing sets:
+      3 W7 W20 W20L W22 
+DONE

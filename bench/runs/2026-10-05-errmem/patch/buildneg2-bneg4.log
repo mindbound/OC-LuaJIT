@@ -1,0 +1,19 @@
+AFFRUN mask=3FC3FC applied=1 effective=0x3FC3FC throttle=default applied=-1 pid=24964
+patch-fastfunc-errmem-top.sh: lj_err.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+OK   A: patched checkout refused (exit 1)
+15:BUILD FAIL: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajitA/src/lj_err.c carries the ERRMEM top clamp: the pinned
+OK   A: make never ran (archive = the checkout's stale one)
+patch-fastfunc-errmem-top.sh: patched C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajit/src/lj_err.c -> C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajitA2-lj_err.c
+A2 checkout: 1 guard line(s), 1172 lines
+OK   A2: checkout with the else-if form refused (exit 1)
+15:BUILD FAIL: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajitA2/src/lj_err.c carries the ERRMEM top clamp: the pinned
+OK   A2: make never ran (archive = the checkout's stale one)
+OK   B: no-op patch step refused (exit 1)
+16:BUILD FAIL: C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/buildB/luajit-windows-x86_64/src/lj_err.c does not carry the ERRMEM top clamp exactly twice -- the
+OK   B: make never ran (archive = the checkout's stale one)
+C: exit 0
+15:[build]     lj_err.c: pristine copy re-taken from C:/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/E/bneg4/luajit/src
+16:patch-fastfunc-errmem-top.sh: lj_err.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+17:[build]     lj_err.c: ERRMEM top clamp present twice in the freshly re-derived build copy (asserted by content before make)
+20:[build]     lj_err.o recompiled from the patched lj_err.c (12:14:53 > 12:14:44)
+OK   C: the archive was rebuilt (the comparison tells them apart)

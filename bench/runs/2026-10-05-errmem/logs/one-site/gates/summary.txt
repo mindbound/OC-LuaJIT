@@ -1,0 +1,7 @@
+mem        exit=0  checks=81 failures=0 
+wd         exit=0  checks=35 failures=0 
+shim       exit=0  SHIM TESTS: PASS 
+security   exit=0  SECURITY TESTS: PASS 
+race       exit=0  checks=2 failures=0 
+penalty    exit=0  checks=6 failures=0 
+negctl     exit=0    RESULT: PASS  build-native.sh refuses 'sniffer' NEGATIVE CONTROL: PASS -- security_test.c fails on every reintroduced 

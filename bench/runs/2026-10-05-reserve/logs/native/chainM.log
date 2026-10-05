@@ -1,0 +1,5 @@
+== 13:45:17 chainM start
+== 13:51:25 mt done: 
+== 13:51:29 fast form: checks=86 failures=0
+== 14:00:51 negctl exit 1: PASS 29 FAIL 12
+== 14:00:51 chainM done

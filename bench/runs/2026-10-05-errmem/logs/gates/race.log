@@ -1,0 +1,20 @@
+race_test -- cross-thread hookmask injection, 4 trials x 3.0 s, period 0.100 ms, burn 0.0 us
+  --- sethook  (the OLD injection -- must wedge) ---
+    trial 1: dead  after    49.0 ms, refires=488     hookmask=0x18 (ACTIVE=1 COUNT=1) hook calls after=0
+      WEDGED -- after a coroutine dies with an error: hookmask=0x08, hook calls=406
+    trial 2: dead  after   178.2 ms, refires=1773    hookmask=0x18 (ACTIVE=1 COUNT=1) hook calls after=0
+      WEDGED -- after a coroutine dies with an error: hookmask=0x08, hook calls=406
+    trial 3: dead  after    15.8 ms, refires=152     hookmask=0x18 (ACTIVE=1 COUNT=1) hook calls after=0
+      WEDGED -- after a coroutine dies with an error: hookmask=0x08, hook calls=406
+    trial 4: dead  after   227.4 ms, refires=2258    hookmask=0x18 (ACTIVE=1 COUNT=1) hook calls after=0
+      WEDGED -- after a coroutine dies with an error: hookmask=0x08, hook calls=406
+  --- inject   (the CURRENT atomic OR -- must NOT wedge) ---
+    trial 1: alive after  3005.9 ms, refires=29915   hookmask=0x08 (ACTIVE=0 COUNT=1) hook calls after=406
+    trial 2: alive after  3003.8 ms, refires=29798   hookmask=0x08 (ACTIVE=0 COUNT=1) hook calls after=406
+    trial 3: alive after  3000.6 ms, refires=29789   hookmask=0x08 (ACTIVE=0 COUNT=1) hook calls after=406
+    trial 4: alive after  3000.9 ms, refires=29796   hookmask=0x08 (ACTIVE=0 COUNT=1) hook calls after=406
+
+  PASS  R1 the probe has teeth: lua_sethook wedges       4/4 trials over 4671 re-fires
+  PASS  R2 the atomic OR never wedges                    0/4 trials over 119298 re-fires
+
+checks=2 failures=0

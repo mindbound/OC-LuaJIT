@@ -1,0 +1,398 @@
+j3-safety: the judge's verdict on the three designs for the row "A refusal the program never
+saw opens the reserve tier for it", through the lens of safety and correctness
+=====================================================================================
+2026-10-05.  Designs: lifetime.txt (R4K), verdict.txt (THE ADDRESS), identify.txt (THE RECIPIENT).
+Read in full: runsR/an/NOTE.txt (+ per-run.txt, refusals.tsv), forensics/REPORT.txt, map/REPORT.txt
+(0, 7, 9), the three documents, R4K.diff, verdict-shim.diff, identify.diff (and the generated
+sources, line numbers below are theirs), compare-R4K.txt, pair-seeds.txt, compare-v3.txt,
+summary-cmp.txt, w20_cases.c, mem_test_lt.c (W21), mem_test_id.c (R4), the repo's mem_test.c
+(W2b/W2c, W8, W11, W16R), REQUIREMENTS.md, j2-safety.md, j2-practice.md (0-1), d2-final.md 8, and
+the LuaJIT sources the designs lean on (lj_frame.h, lj_err.c, lj_snap.c, lj_record.c, lj_ffrecord.c,
+lj_asm.c, lj_asm_x86.h, lj_trace.c, lj_gc.c, vm_x64.dasc) plus machine.lua and OpenOS event.lua /
+process.lua.  Nothing was built or swept; nothing under the repo was modified.  Where I say
+"measured" it is the designer's measurement, read from its output files, not re-run.
+
+-------------------------------------------------------------------------------------
+0. BOTTOM LINE
+-------------------------------------------------------------------------------------
+                         R4K (lifetime)     THE RECIPIENT (identify)    THE ADDRESS (verdict)
+  FATAL findings         none               none                        none
+  MAJOR findings         1 (M-L1)           2 (M-I1, M-I2)              5 (M-A1..M-A5)
+  bound                  tightened,         tightened, store-side       unchanged; burst
+                         read-side clamp    clamp                       excursion +8 KiB
+  second chance          bounded always     bounded always              removed when the
+                         (4 KiB + window)   (4 KiB + window)            vote is right; G/2 +
+                                                                        8 KiB when it is wrong
+  safety score /10       8                  7                           4
+
+Ranking: 1. R4K  2. THE RECIPIENT  3. THE ADDRESS.
+
+R4K and THE RECIPIENT's rule 3 are the same lever (the reserve a refusal opens reaches 4 KiB past
+the heap it was refused at, clamped to [G/2, G]); they differ in robustness details (section 3)
+and in what else is bundled.  Both make the row's defect bounded UNCONDITIONALLY: whoever absorbs
+the first refusal, the fill gets 4 KiB + the window instead of G/2 + the window (16 KiB at the
+floor, 256 KiB at 8 MB), and the stated sandbox bound tightens from total + G + 4 KiB to
+max(u, total + G/2) + 8 KiB.  THE ADDRESS leaves the reserve's size alone and tries to deliver the
+verdict to the right handler by a frame-walk majority vote; when the vote is right the second
+chance vanishes (hermetically it always was right); when it is wrong the design is TODAY'S DEFECT
+PLUS 8 KiB (M-A4), and I find two mechanisms that make it wrong in a real machine (M-A1, M-A2).
+Under "the player picks the workload" a conditional fix whose failure mode is today-plus cannot be
+the base.
+
+-------------------------------------------------------------------------------------
+1. COMMON GROUND (true of all three, checked against the shipped shim 3186e87)
+-------------------------------------------------------------------------------------
+- Nothing allocates inside the allocator; no back-off; no knob; zero LuaJIT lines (THE ADDRESS
+  and THE RECIPIENT include lj_frame.h for macros only).  build-native.sh's source gates pass per
+  the designers; the collector gate forbids nothing they add.
+- HOOK_GC and a host GCSTOP: all three return before any new write (R4K src-plain-R4K:1289-1293
+  sits after the HOOK_GC guard; identify src-id:1356-1358; verdict src-v:1403-1405 and the
+  existing lend/credit guards).  norefuse: credit is never consulted; the vote returns early.
+- C mode and legacy: each design's two lines sit on both paths (the shipped :409-414 and
+  :476-485 shapes); the dropin objects pass each suite.
+- The fresh-record rule (W11) keeps G in all three (R4K :1204, identify :1247; THE ADDRESS does
+  not touch lj52_gc_reserve).
+- The kernel's slice: R4K/identify leave the arithmetic (kernel top = tier credit + K, the
+  sandbox's ceiling = tier credit + L, margin K - L = 12 KiB in both tiers).  THE ADDRESS adds H =
+  8 KiB to the kernel's BURST top (src-v:1294-1295, THE CADENCE :1535) so the margin survives a
+  held crossing; the every-thread bound holds because H <= G/2 is checked at compile time
+  (src-v:1211-1214).
+- W2b/W2c: every refusal still arms from any headroom in all three (identify's absorbed branch
+  arms at :1367; THE ADDRESS's R3 keeps the arm at :1437-1438).
+- W8: passes on all three.  A finding the lifetime designer made and the other two did not: W8
+  runs on the MAIN thread (kernel slice, wd_depth 0) and passes with a reserve of 0, so W8 does
+  not guard the reserve's size at all.  Only lifetime's W21 does (section 3.1).
+- THE WINDOW's own residuals stay in all three: the reserve-top verdict's landing lottery (fewer
+  draws under R4K/identify; served to the addressee under THE ADDRESS when it is right), the
+  kernel's 2 KiB per resume overrunning the window at the dispatcher's pack (k2048: 725 of 2 048
+  string caps), F1's burst-top landing.  No design claims otherwise.
+- In the machine (NOTE.txt): every absorbed refusal was a 56-64 B closure made by machine.lua's
+  invoke path (wrapUserdata/unwrapUserdata/checkArg: :1261/:1280/:117) under the probe's
+  pcall(paint); the recorder absorbed 0 of 50; the string table 0 of 50.  So the recorder levers
+  (identify rule 1, THE ADDRESS R3) are hermetic hygiene in the machine, and the size lever (R4K =
+  identify rule 3) and the delivery lever (THE ADDRESS) are the two that can matter there.
+
+-------------------------------------------------------------------------------------
+2. THE LENS QUESTIONS, ANSWERED FOR EACH DESIGN
+-------------------------------------------------------------------------------------
+2.1 Is the bound true in every path?
+  R4K:  sandbox used + delta <= max(u, T + G/2) + 4 KiB + 4 KiB, every thread + 16 KiB instead
+        of the sandbox's 4 KiB; through lj52_gc_rsvcredit's clamp also <= T + G (+L / +K).  The
+        clamp is applied where the credit is READ (:1213-1216, called at :1234, :1342, :1391,
+        :2114), so a cap changed after the tier opened re-clamps, and no path can read a credit
+        under G/2 or over G whatever gc_rsv holds.  Sized once per episode (:1289), only after
+        the HOOK_GC/GCSTOP/norefuse/gc_busy guards; the fresh branch sets G (:1204).  Measured:
+        0 of 10 240 runs past either bound (compare-R4K ">old"/">new" columns all 0).
+  RECIPIENT: the same inequality via lj52_gc_odfor (:1261-1266), clamped when STORED.  Read raw
+        at :1256 and :1301.  True today; see M-I1 for the two ways it can stop being true.
+  ADDRESS: unchanged absolute bound.  A HELD crossing may reach T + G/2 + L + H in burst
+        (:1322-1323) and the reserve top + L in reserve; H <= G/2 guarded (:1211-1214); the kernel
+        keeps K - L past either (W22 shows the 11 KiB table granted with the sandbox 2 KiB past
+        its window).  W7 od_peak G + 4 078; W21's Bto reaches the hold ceiling within 400 B.  A
+        verdict standing across a refusal: a non-recorder refusal still sets gc_win = 0
+        (:1433-1435); a recorder refusal leaves it standing (R3), which is consistent -- live >
+        top is still true -- and bounded by the same ceilings.
+
+2.2 Can a program ratchet it (repeated caught refusals)?
+  R4K: no.  Resized only when the tier opens (:1289); rsvcreep (resize at every refusal) is
+       caught only by the re-scoped W7 -- which is why that re-scope is part of the design, and
+       the designer says so.  An episode ends only at a proof under the cap, so catch-hold-catch
+       stays under max(u, S) + 8 KiB.
+  RECIPIENT: no, the same once-per-episode rule (:1370); R4 pins u3 - u2 <= window + 1 KiB.
+  ADDRESS: no.  The hold's ceiling is absolute; two alternating data-keeping handlers flip the
+       candidate and the held one meets the ceiling; W7 and W7k pass unchanged.
+
+2.3 A recovery that is not the probe's: an OpenOS catch handler that prints through the tty
+    (1-3 KB across several pcalls and a yield) before dropping.
+  R4K / RECIPIENT: after the program's OWN refusal at u, the top is max(u, S) + 4 KiB and the
+       window lends 4 KiB past that: at least 8 KiB from u minus whatever the window had already
+       lent before the verdict (typically a few hundred bytes to ~1 KiB).  The recovery's
+       formatting garbage is collected by the cycles the crossings arm; what must stay under
+       ~4 KiB is HELD data across proofs.  W21 pins ~2 KB held + ~8 KB granted (R0 and R1K fail
+       it; R4K passes).  A yield does not close the tier (L4 was built, measured and rejected:
+       39 of 803 stalls, same as shipped).  During the yield other processes' live allocations
+       share the same 4 KiB -- stock gives 0, the shipped shim 16-256 KiB.  OpenOS's
+       event.onError path (io.open + a traceback write + close) was sized by nobody: the map
+       estimates 2-5 KB, mostly transient.  That is the edge of 4 KiB; R8K passes everything
+       but the two cases that pin 4 096.  See M-L1.
+  ADDRESS: the program's own refusal opens the full G/2 reserve as today; the recovery has
+       16-256 KiB.  Generous -- and the reason the design does not bound the second chance.
+
+2.4 What breaks W8 / W2b / W2c / W11, and is each re-scope honest?
+  Nothing breaks in any design.  Re-scopes:
+  R4K: W19's precondition (reads the tier, 14th WALLSTATS value) -- honest, the property the case
+       exists for still holds and is shown passing on both objects; W7 TIGHTENED to a fixed
+       bound that the shipped shim fails (36 846 against 24 702) -- honest and load-bearing.
+       Housekeeping the implementer must do: `unbounded`'s expected set, W7k reading the tier at
+       G > 32 KiB, W16R's topr.
+  RECIPIENT: W19 (same); W16R/W16Rj/W16RL/W16RjL read the tier from od_state instead of the
+       refusal count -- required by rule 1 (a counted refusal can now open nothing) and honest;
+       all four pass on both objects and on the shipped one.
+  ADDRESS: C6b re-scoped because the kernel's burst top really moves (+8 KiB) -- honest, and a
+       real change to the stated kernel arithmetic; negative-control 4.19 refusalkeeps shrinks to
+       W19 (the hold rescues the landing it used to produce); 4.17 rawverdict's expected set
+       EMPTIES: no case fails when the two-cycle rule is removed.  The designer calls this
+       unacceptable and proposes W26 (not built).  I agree it is unacceptable: under THE ADDRESS
+       THE WINDOW's two-cycle rule becomes unobservable by the suite.  See M-A5.
+
+-------------------------------------------------------------------------------------
+3. FINDINGS, PER DESIGN (file:line are the generated prototype sources)
+-------------------------------------------------------------------------------------
+3.1 R4K (lifetime/src-plain-R4K/lj52shim.c; R4K.diff)
+  M-L1 MAJOR (the only one): THE 4 KiB FLOOR IS AT THE EDGE OF A REAL RECOVERY.  W21 shows
+       ~2 KB held survives and R1K does not; nothing measures OpenOS's onError path or a
+       traceback-printing handler in the machine.  A recovery that holds more than ~4 KiB across
+       the proofs its own allocations arm is refused inside its report, where the shipped shim
+       allowed G/2 and stock allows nothing.  The designer states this ((g)) and offers R8K
+       (passes all but W20/W20L and the re-scoped W7, which pin 4 096 by construction).  Fix:
+       measure the onError path with the instrumented native before fixing R, or pin 8 192.
+  m-L2 minor: a program that catches TWO refusals in one episode and keeps its data gets only the
+       window after the second (the once rule).  Identify states it ((g)); lifetime implies it.
+       Stock gives such a program nothing.
+  m-L3 minor: the reserve-top lottery remains: 6 of 803 second chances over three seeds end
+       [paint, dispatcher] at probe2oe:81 (0.7 %, from 5.7 %).  The reduction's mechanism is a
+       stated hypothesis (d.3: phase), not a proof; the gate's (3) is where it is judged.  Honest.
+  m-L4 minor: the instrumented copy's OCLJREF credit/top/over fields compute the old arithmetic
+       (identify notes the same for its copy); the in-machine gate must read the tier value.
+  Strengths that matter for safety: two scalar writes and one 4-line helper; the clamp on the
+       read side (robust to cap change and to any future RESERVE write); byte-identical driver
+       lines on every cap whose program saw its own refusal (10 240 of 10 240); every new check
+       seen failing in the direction it guards (R0 fails W21, R1K fails W16Rj/W16RjL/W21, R8K
+       fails W20/W20L/W7, rsvwhole/rsvzero/rsvfresh/rsvunclamped/rsvcreep each caught by a named
+       case); L4 and L6 rejected by evidence rather than argument.
+
+3.2 THE RECIPIENT (identify/src-id/lj52shim.c; identify.diff)
+  M-I1 MAJOR (robustness, not reachable today): THE RESERVE CREDIT IS CLAMPED WHEN STORED AND
+       READ RAW.  gc_odcredit is set at :1247 (fresh: G) and :1370 (odfor, clamped to [G/2, G]
+       at that moment) and read unclamped at :1256 and :1301.  (a) A cap lowered while the record
+       is in RESERVE leaves a credit above the new G: the stated bound total + G + 4 KiB is then
+       false by (old credit - new G).  OC does not lower a running machine's cap except around
+       persist, where GCSTOP parks everything, so today this needs the test API; (b) any future
+       write of gc_odstate = RESERVE that forgets gc_odcredit yields credit 0: the reserve top AT
+       the cap, i.e. a sandbox refused harder in RESERVE than in BURST.  There are exactly two
+       such writes in the shipped shim (:1183, :1259) and the diff covers both; the trap is for
+       the next editor.  R4K's lj52_gc_rsvcredit prevents both by construction.  Fix: read
+       through a clamp, as R4K does -- one helper.
+  M-I2 MAJOR (evidence): THE STALL CLAIM IS ONE SEED.  "21 -> 0" in the OpenOS-shaped string
+       cell is seed 1 only; the same rule under lifetime's three-seed check reads 6 of 803.  The
+       document claims only what it ran, but a reader will take 0 for the rule's rate.  The
+       4 KiB floor against a HOLDING recovery is not tested here either (R4 pins the size and
+       the once rule; there is no W21-like case), so identify's R1b claim rests on reasoning.
+  Rule 1 (the recorder's refusal opens no reserve, shuts no window, consumes no verdict;
+       lj52_gc_absorbed :1270-1283, used at :1363-1369): CORRECT and proven both ways.  The
+       predicate -- J->state not idle, vmstate not a trace/C/GC/EXIT, the running thread's
+       innermost C frame a cpcall frame (nres < 0 and saved PC == L: vm_x64.dasc vm_cpcall) -- is
+       the recorder's because trace_state is the only cpcall body that allocates with vmstate
+       RECORD/OPT/ASM and runs no Lua under it (so SAVE_PC is never overwritten by BC_FUNCC); a C
+       function called by the interpreter during recording runs with vmstate C and is excluded.
+       Shown to fire: ctl_rec2 7 of 7 against the --wrap=lj_vm_cpcall ground truth.  Shown NOT to
+       fire on a program allocation during recording: dbg_r1b2.lua (a 256 KiB array doubling,
+       J->state RECORD, vmstate RECORD, absorbed = 0) and the forensics' 1 092 program-visible
+       refusals with J->state RECORD, all read 0 by the identical expression and all caught by
+       the program's pcall (F6/F7: (0,1) disagreements 0).  The LITERAL predicate's sabotage
+       stalls W16Rj/W16RjL, so the suite can tell the two apart.  A recorder refusal leaving the
+       verdict standing is consistent: the next program crossing is refused for data that does
+       not fit.  Residual (stated): the recorder's abort still penalises its loop (map L1b).  In
+       the machine the recorder opened nothing (0 of 50), so rule 1 is hygiene there plus the
+       kernel thread, where it is the kernel's only non-fatal absorber.
+  Rule 2 (HOOK_VMEVENT like HOOK_GC: :1299, :1334, :1358): correct.  hook_vmevent/hook_restore
+       set and clear the bit only around lj_vmevent_call's lj_vm_pcall, so nothing but the
+       handler's own allocations are affected; harness only (no `jit` in the sandbox).  A refusal
+       under it does not arm (:1358 returns before the arm) -- the HOOK_GC asymmetry, harmless.
+  The S1 recogniser (:1360-1362): a count; the arithmetic 2 (mask + 1) sizeof(GCRef) matches
+       lj_str_resize's growth; no behaviour.  Fine.
+  Strengths: rule 3 is R4K (sub-S refusals get max(G/2, u + 4 KiB - T) rather than R4K's G/2 +
+       4 KiB; both leave >= 8 KiB from u for the recovery); the three levers were measured
+       separately (rec / res / id) and the control variant (counters only) is byte-identical to
+       the baseline on 3 072 caps; four WALLSTATS values the in-machine gate can read.
+
+3.3 THE ADDRESS (verdict/src-v/lj52shim.c; verdict-shim.diff)
+  No FATAL: the absolute bound holds, the kernel's margin holds, no crash is reproduced, and the
+  hermetic record is the best of the three (every refusal in every cell caught by the batch;
+  14 471 of 14 471 quiet caps identical; the deterministic stall and the 21 OpenOS-shaped stalls
+  gone; k2048 string 828 -> 776).  The findings are about where that record cannot transfer.
+
+  M-A1 MAJOR: THE VOTE HAS NO DECAY; THE HANDLER OF RECORD IS THE MAJORITY SINCE THE LAST PROOF
+       UNDER THE CAP.  gc_handn is reset only at `if (used <= total) M->gc_handn = 0;` (:1481),
+       and every non-matching crossing decrements it by one (:1415).  A machine running near its
+       cap -- the only regime where any of this matters -- rarely proves under the cap.  After
+       one large episode the candidate holds thousands of votes; a later filler (a new process,
+       another thread) is a non-addressee for thousands of crossings, but its hold room (12 KiB
+       burst, 4 KiB reserve: :1322) is spent in ~100-250 small crossings.  It meets the hold's
+       CEILING before it can become the addressee: refused in whatever code made that crossing,
+       the reserve opened at the full G/2 (:1433-1436), today's lottery resumed 8 KiB later.
+       The named limit ("a quiet producer behind a chatty consumer") understates this: the
+       addressee can be a handler that no longer exists, on a thread that has died (and a freed
+       lua_State or GCproto reused at the same address inherits the stale majority, so "at
+       worst one verdict served as today" ((g)) is not right either).  Fix would be a windowed or
+       per-episode count (reset at a refusal, or at the tier closing) -- a different design.
+  M-A2 MAJOR: THE IDENTITY DEPENDS ON EXECUTION MODE.  recff_pcall records pcall as an inlined
+       frame (lj_ffrecord.c:528-539 -> lj_record_call).  In LJ_FR2 the inlined frame's link is a
+       KNUM in the snapshot (lj_snap.c:77-80), written to the stack only at an exit
+       (snap_restoreval) or a tail link (lj_asm_x86.h:2802-2816); slot 1, the entry frame's own
+       link, is SNAP_NORESTORE (lj_snap.c:73-74).  So while a trace runs, the walk from jit_base
+       (:1367-1369) cannot see a pcall the trace inlined.  A loop `for ... do pcall(step) end`
+       compiled as one trace attributes step's allocations to whatever pcall sits BELOW the loop
+       (or to NULL) while the interpreter attributes them to pcall(step): one logical handler,
+       two identities, and the vote oscillates between them.  The hermetic JIT-on cells pass
+       because the probe's loop is INSIDE the pcall'd closure, so its trace starts inside it and
+       the pcall frame is below jit_base.  OpenOS's dispatcher is the opposite shape
+       (event.lua:62-78: `for id,handler in pairs(copy) ... pcall(handler.callback, ...)`).  Not
+       unsafe -- a wrong address is held, then refused at the ceiling -- but it is the design's
+       entire gain that depends on it, and the designer did not consider it.
+  M-A3 MAJOR (verification): A FRAME WALK IN THE ALLOCATOR ON EVERY GROWTH PAST THE CAP
+       (:1364-1389), ON AN INVARIANT LUAJIT DOES NOT ITSELF EXERCISE ON THIS PLATFORM.  I looked
+       for a bad read and found none: in the interpreter and in C, L->base is synced before any
+       allocation (lj_err_mem's own walk needs it); on a trace [jit_base - 1] is the entry frame's
+       interpreter-written link, or the lower frame's after asm_retf (lj_asm_x86.h:790-802), or a
+       link asm_stack_restore just stored at a tail link (lj_asm.c:2167); at an exit
+       vm_exit_handler sets L->base from jit_base before lj_trace_exit (vm_x64.dasc:2480-2489)
+       and lj_snap_restore never rewrites slot 1, so lj_state_growstack (lj_snap.c:966) and
+       snap_unsink (:989) allocate over a valid chain; vmstate EXIT excludes the recorder flag;
+       frames below base are never rewritten by a trace.  BUT the designer's warrant -- "as
+       lj_err_mem reads it", "the refusal path already relies on it" -- is not a proof: on
+       Windows x64 LJ_UNWIND_JIT is 1 (lj_arch.h:723-724) and an on-trace OOM unwinds to the exit
+       stub FIRST (lj_err.c:379-382), restoring the snapshot before any Lua frame is walked; and
+       an OOM inside the exit's restore is caught by trace_exit_cp's cpcall (lj_trace.c:835-842,
+       nres = -2 LUAI_MAXSTACK) without a walk.  So the walk rests on invariants LuaJIT keeps
+       for other reasons, and the suite exercises only probe shapes: no vararg frame, no
+       continuation (metamethod) frame, no coroutine.wrap, no xpcall with a handler, no recursion
+       past 64 links (then "addressed": :1383), no trace-inlined pcall.  PLAUSIBLE-safe, unproven.
+       If this design were taken, a frame-shape census over an OpenOS boot and shell session
+       (the forensics' instrument already carries the walk) must precede it.  The cost itself is
+       not a concern (1-4 links as a rule; 64 at most; a few loads against a GC step).
+  M-A4 MAJOR: WHEN THE ADDRESS IS WRONG THE DESIGN IS TODAY PLUS 8 KiB.  A non-addressee's
+       growth is lent to T + G/2 + 12 KiB in burst, then its ceiling refusal opens the FULL G/2
+       reserve (:1433-1436): the second chance is not bounded, it is removed only when the vote
+       is right.  R4K and THE RECIPIENT are better than today in every case; THE ADDRESS is
+       better in the case it predicts and worse in the cases M-A1/M-A2 produce.  And in the
+       machine's own amplified cell the vote may simply be wrong: NOTE.txt's absorbers are
+       machine.lua's invoke closures (several 56-64 B closures and two table.packs per gpu.set,
+       five gpu.set per paint, all under pcall(paint)) against ten records per batch; the
+       designer's estimate (fill ~100, paint ~45) is unsupported by in-machine data and (f)
+       concedes that if the paint out-allocates the fill, "(b) will not be met".  That is the
+       gate's own configuration.
+  M-A5 MAJOR (observability): THE TWO-CYCLE RULE BECOMES UNTESTABLE.  rawverdict's expected set
+       empties (a one-proof verdict's harm was its landing on the stage string or the timer
+       record, which the hold now rescues); refusalkeeps shrinks to W19.  A regression in THE
+       WINDOW's proof would pass the suite.  The designer flags this as unacceptable and proposes
+       W26 (estimates only, not built).  Until it exists, the design ships with a known blind
+       spot in exactly the mechanism it builds on.
+  m-A6 minor: a standing verdict (:1486) formed on garbage pinned across two cycles stands until
+       a proof under the top; acknowledged ((g): "better, not right").  R1 PARTLY.
+  m-A7 minor: in the RESERVE tier the hold's room is the window only (:1322): in the machine a
+       ~3 KB paint at a reserve-top verdict overruns it (holdfail), and the reserve-top lottery
+       returns for a program that caught its own first refusal and kept filling (W16R's shape).
+       Stated ((g)).
+  m-A8 minor: C6b loosened (the kernel's burst top +8 KiB); six more WALLSTATS values; the
+       largest diff (+205/-11, ~98 code lines) and a new concept in the allocator.
+  Strengths: W20-W25 are fail-first and sharp (the shipped shim fails W20/W21/W22/W25 with a
+       dead sandbox); the recorder rule is exact; three revisions each forced by a measurement
+       that the first six cells could not show, reported honestly; the kernel-garbage cell
+       improves as a side effect (held packs).
+
+-------------------------------------------------------------------------------------
+4. REQUIREMENTS (REQUIREMENTS.md), SCORED
+-------------------------------------------------------------------------------------
+  R1  (live data does not fit; no earlier than stock)
+      R4K PARTLY (as THE WINDOW: unchanged placement; a second refusal in an episode gets only
+      the window); RECIPIENT PARTLY (same); ADDRESS PARTLY (standing verdict on pinned garbage
+      is sticky; otherwise later than today).
+  R1b (recovery stays; kernel never dies)
+      R4K MET with M-L1's caveat (W21 ~2 KB held; onError unmeasured; R8K available); RECIPIENT
+      MET by reasoning (no holding-recovery case of its own); ADDRESS MET (G/2 recovery; W24;
+      kernel +H keeps 12 KiB: W22).
+  R5  (bounded, charged, no ratchet, stated as an inequality)
+      R4K MET, tightened, read-side clamp, 0 of 10 240 past it; RECIPIENT MET, tightened,
+      store-side clamp (M-I1); ADDRESS MET, unchanged bound, burst excursion +8 KiB.
+  R6  (VM safety; on-trace; GCSTOP/HOOK_GC)
+      R4K MET; RECIPIENT MET (two loads on the refusal path); ADDRESS PARTLY (M-A3).
+  R7  (minimal, zero LuaJIT, gate intact)
+      R4K MET (~15 code lines; every existing anchor intact); RECIPIENT MET (~60 code lines; 22
+      anchors checked); ADDRESS PARTLY (~98 code lines; three negative controls moved or emptied).
+  R8  (persistence, host states)
+      all MET: record-local state, a fresh record re-derives; THE ADDRESS's pointers are not
+      persisted and are compared, never followed.
+  R9  (cost)
+      R4K MET (collections -1 %); RECIPIENT MET (-0.1 to -1.7 %); ADDRESS PARTLY (a walk per
+      growth past the cap; hermetically in the noise; the in-machine last-five is the test).
+  R10 (fail-first tests, sabotages, gate)
+      R4K MET; RECIPIENT MET with the one-seed caveat (M-I2); ADDRESS PARTLY (M-A5; gate (b)
+      likely unmet by the designer's own account).
+  R11 all MET.  R12: all PARTLY by design -- second-chance runs lose 12 KiB (R4K/identify) or
+      G/2 (ADDRESS) of held capacity, which is stock's parity; non-second-chance caps identical.
+
+-------------------------------------------------------------------------------------
+5. THE ADDRESS, THE SPECIFIC QUESTIONS
+-------------------------------------------------------------------------------------
+  Cost per slow-path call: a vote on every growth past the cap (:409-412, :476-479 hooks): one
+    cframe read, 1-4 frame links as a rule, 64 at most; negligible against the lj_gc_step the
+    same call may pay.  Not a safety concern.
+  Coroutine stacks: the walk is on cur_L's stack, bounds-checked against L->stack/stacksize
+    (:1370); a dead thread's address reused is a stale identity (see M-A1).
+  Mid-unwind: lj_err_mem allocates nothing after the throw begins; ERRMEM runs no xpcall
+    handler (lj_err_throw directly), so no allocation walks a half-unwound stack.
+  Trace exit: L->base = jit_base, jit_base = 0 before lj_trace_exit; slot 1 is never rewritten
+    by the restore; unsink's allocations walk the entry chain.  Sound (M-A3 for the caveat).
+  No Lua function below: base <= bot + 1 returns 0 -> "addressed" (today's behaviour); a C-API
+    allocation from Java on the main thread is the kernel anyway.
+  cframe chains across resume: only the innermost C frame is read, for the recorder predicate;
+    the Lua frame walk never crosses a resume (frames are per thread).  Correct.
+  Vote failure modes: two interleaved fills -- the candidate flips, the other is held to the
+    ceiling, refused there, the reserve opens (bounded, but G/2); allocations mostly in library
+    code under the program's own pcall -- fine, one identity; the dispatcher owning the growths
+    (a listener accumulating data) -- the verdict lands in pcall(callback), event.onError logs
+    it, the program never learns, as today; a stale majority (M-A1) and a mode-dependent identity
+    (M-A2) are the two the designer did not name.
+  What a WRONG address does: the verdict reaches a bystander's handler; the program is refused
+    up to 12 KiB later at the hold's ceiling, in whatever code made that crossing, and the
+    reserve then opens at G/2 as today.  The verdict reaches the program's handler only if the
+    program becomes the candidate before the ceiling, which M-A1 shows need not happen.
+
+-------------------------------------------------------------------------------------
+6. R4K / THE RECIPIENT, THE SPECIFIC QUESTIONS
+-------------------------------------------------------------------------------------
+  The 4 KiB floor against a recovery that holds data: section 2.3 and M-L1.  The suite found the
+    floor (R1K fails W16Rj with the JIT on: the recorder's allocations share the reserve) and the
+    margin above it is measured only at 4 KiB x 96 caps x 2.  R8K is the conservative choice;
+    the cost is +70 string objects of creep per second chance.
+  The clamp's interaction with the kernel slice: kernel reserve top = credit + K; sandbox
+    ceiling = credit + L; margin K - L = 12 KiB in both tiers (W19 re-scoped passes).  The
+    kernel's OWN refusal at S + K sizes a credit of G/2 + 20 KiB -- clamped to G at the floor,
+    under G from G >= 48 KiB (1 MB caps up) -- so after its own refusal the kernel has +20 KiB
+    rather than +G/2; moot, since a kernel refusal is pcall(main) and the machine is down
+    whatever the tier (K1/J3/J4).  When the kernel's slice took the heap past the sandbox's
+    ceiling before the sandbox was refused, u is what the kernel left and the clamp at G binds
+    (observed max credit 24 704 = G/2 + 8 320): the absolute bound is the one that holds there.
+    Both documents state this.
+  identify's cframe predicate shown to fail on a program allocation during recording: YES --
+    dbg_r1b2.lua (absorbed = 0 on a 256 KiB doubling with J->state RECORD), the forensics'
+    1 092 program-visible RECORD-state refusals (0 by the identical expression, every one caught
+    by the program's pcall per the cpcall-wrap ground truth), and the literal sabotage's two
+    stalls.  The one shape not arranged (a program refusal raised while J->state is RECORD, at
+    the wall) cannot be, for the reason given: the recorder's own IR growth is refused first.
+
+-------------------------------------------------------------------------------------
+7. RECOMMENDATION
+-------------------------------------------------------------------------------------
+  Build the size rule as R4K writes it (the read-side clamp, lj52_gc_rsvcredit), which is THE
+  RECIPIENT's rule 3 made robust.  Graft from THE RECIPIENT: rule 1 (exact, proven both ways;
+  the kernel thread's only non-fatal absorber; it also ends w16r_rec's "refusal count = tier"
+  fiction), rule 2 (free), and the four WALLSTATS values for the in-machine instrument.  Take
+  lifetime's W20/W20L/W21 and the re-scoped W7 (the only cases that guard the reserve's SIZE --
+  W8 does not), identify's R1/R2/R4 and its `literal` sabotage, and THE ADDRESS's two-handler
+  sandbox shapes (W20/W24/W25 bodies) as cross-tests against the merged object.  Decide R after
+  measuring OpenOS's event.onError path in the machine with the instrumented native; if it is
+  not measured, pin 8 192 and re-pin W20/W7 to it.  Do not build the vote: its failure modes
+  (M-A1, M-A2) are reachable by ordinary OpenOS programs, its worst case is today plus 8 KiB
+  (M-A4), it puts an unverified frame walk in the allocator (M-A3), and it blinds the suite to
+  THE WINDOW's proof (M-A5).  Keep the reserve-top lottery (6 of 803) and the k2048 overrun as
+  open rows; neither design claims them.
+
+-------------------------------------------------------------------------------------
+8. WHAT THIS JUDGMENT DID NOT DO
+-------------------------------------------------------------------------------------
+  Nothing was rebuilt or swept; md5s and byte-identity claims are the designers'.  The frame-walk
+  analysis (M-A3) is code reading of the build's LuaJIT sources, not a census.  No in-machine
+  run; the in-machine evidence used is NOTE.txt's 25-run instrumented chain (0 downs, 50
+  refusals, all placed).  The onError-path size is the map's estimate; nobody has measured it.

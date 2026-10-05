@@ -1,0 +1,14 @@
+==============================================================================
+ctlrec_j1: 1 runs, rc!=0 0, NOLINE 0
+  term: 1=1
+  refusals per run: 11:1
+  absorbers, all 11 refusals: recorder=7 (63.6%), batch=4 (36.4%)
+  absorbers, the 10 refusals after a run's first: recorder=7 (70.0%), batch=3 (30.0%)
+  the refusal that opened the reserve tier, its absorber: batch=1  (runs where the tier opened more than once: 0)
+  SECOND-CHANCE runs (the opener absorbed by paint/recorder/unseen): 0; their term: 
+    ... ending outside the handler (term 2/4/5/7): 0 of 0
+  other runs' term: 1=1
+  outside-handler landings: 0
+  shim-side recorder flag vs the wrap's ground truth (pred, truth): (False, False)=4, (True, True)=7
+  recorder-absorbed refusals by (vm, J->state, tier0, opened): ('ASM', 'ASM', '1', '0')=7
+  checks: refusal lines != the driver's refusal count in 0 runs; ring count != lines in 0; anomalies {}

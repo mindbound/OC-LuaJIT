@@ -1,0 +1,701 @@
+THE ABSORBER MAP -- where a refusal (LUA_ERRMEM from lj_err_mem) can be caught by code
+that is not the user program's own pcall, in a running OC machine on OC-LuaJIT
+2026-10-05.  Code reading only.  Nothing was run or modified.
+
+Labels: [code] = read in the source at the cited line; [inference] = follows from code
+read here but not exercised; [estimate] = a size worked out from code, not measured;
+[not checked] = open.
+
+Paths used (all read-only):
+  LJ  = C:/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src
+        (the build copy, which has patch-fastfunc-errmem-top.sh applied: lj_err.c:830-840)
+  SH  = C:/Users/astro/Downloads/OC-LuaJIT/native/lj52shim.c
+  JN  = C:/Users/astro/Downloads/OC-JNLua/native/src/jnlua.c
+  OC  = C:/Users/astro/Downloads/ocelot-brain/src/main/scala/totoro/ocelot/brain/entity/machine
+  K   = C:/Users/astro/Downloads/OC-LuaJIT/build/native/kernel/machine.lua (the patched GTNH
+        kernel.  The harness patches ocelot-brain's copy instead, which differs by one line,
+        so its line numbers are off by a few.)
+  OS  = C:/Users/astro/Downloads/ocelot-brain/src/main/resources/assets/opencomputers/loot/openos
+  HA  = C:/Users/astro/Downloads/OC-LuaJIT/test/native/OcljSmoke.scala (OCLJ_PROBE=capacity)
+  P2  = .../scratchpad/wall2/repro/probe2.lua (the hermetic probe)
+  MT  = C:/Users/astro/Downloads/OC-LuaJIT/test/native/mem_test.c
+  PUC = C:/Users/astro/Downloads/JNLua-Natives/lua/src
+
+======================================================================================
+0. THE ANSWER IN ONE TABLE
+======================================================================================
+
+"Learns?" means the user program's code receives the refusal as an error or a return
+value that it can act on.  "Shim can tell?" means the allocator can know, at the moment
+it refuses, cheaply and without allocating, that this catcher will absorb the error.
+
+ #  absorber                        site                      does with it              learns?          shim can tell?                 absorber allocates
+ -- ------------------------------- ------------------------- ------------------------- ---------------- ------------------------------ ---------------------------
+ A1 JIT trace recorder              LJ lj_trace.c:776-777,    trace_abort drops it,     never            NOT TODAY.  YES with a 2-line  nothing (no vmevent);
+    (trace_state under lj_vm_cpcall) :585-656                 penalises/blacklists                       LuaJIT patch; nearly yes       the REFUSED request is
+                                                                                                         patch-free (sec. 1.1.4)        often KBs (IR/snap/trace)
+ A2 trace exit / snapshot restore   LJ lj_trace.c:835-842,    REthrows into the         YES (an ordinary n/a: not an absorber          --
+                                    :921-923; vm_x64:2529,    program's frame           ERRMEM)
+                                    :2578-2582
+ A3 finalizer (__gc)                LJ lj_gc.c:503-535        swallowed (ERRFIN event   never            YES: HOOK_GC.  The shim       (no Lua __gc reachable on
+                                                              or dropped)                                already opens no reserve      our arch; jnlua's is C)
+ A4 VM event handler (jit.attach)   LJ lj_vmevent.c:38-60     "VM handler failed" to    never            YES: HOOK_VMEVENT, or cur_L == ~0 (harness counters only)
+                                                              stderr, dropped                            vmthread.  NOT excluded today
+ A5 lua_checkstack (cpgrowstack)    LJ lj_api.c:102-121,      returns 0 -> converted:   converted         partly: innermost cframe is   0
+                                    lj_state.c:163-170        "stack overflow (..)",    (other error)    a cpcall (nres<0)
+                                                              unpack error, jnlua
+                                                              IllegalStateException
+ A6 coroutine.resume stack growth   LJ lib_base.c:629-632     error raised IN THE       the RESUMER,     partly (same cpcall test)      0
+                                                              RESUMER, as ERRRUN        converted
+ A7 load / loadstring (parser)      LJ lj_load.c:72           load returns nil, msg     only if checked  partly (same cpcall test)      0
+ A8 string.dump                     LJ lj_bcwrite.c:448,      "unable to dump"          converted        partly                         0
+                                    lib_string.c:144
+ J1 jnlua JNLUA_PCALL -> Java       JN :33-38, :2290-2367     LuaMemoryAllocation-      see J2-J4        NOT TODAY; YES with a macro    throw_protected: a Java
+                                                              Exception                                  counter on jnlua's lua_pcall  exception object
+ J2 OC component.invoke catch-all   OC luac/NativeLuaArchi-   result becomes            only if the 2nd  as J1                          ~0 (pushes the preallocated
+                                    tecture.scala:46-86       (true, nil, "not enough   return is                                       message)
+                                                              memory") - soft return    checked
+ J3 Java signal push / resume       OC ...Architecture.scala  ExecutionResult.Error     n/a: the         lj52_gc_kernel (wd_depth 0)    --
+                                    :231-235, :293-296        -> machine DOWN           machine dies
+ J4 synchronized call (indirect     OC ...Architecture.scala  OutOfMemoryError ->       n/a: DOWN        lj52_gc_kernel                 --
+    component call)                 :170-189; Machine.scala   crash("Error.OutOfMemory")
+                                    :553-555
+ J5 Java callback exception ->      JN :2138-2210 (calljava-  becomes ERRRUN with a     converted        no                             luaL_where + userdata
+    Lua error                       function)                 LuaError userdata                                                         (~100 B) -- itself refusable
+ K1 kernel pcall(main)              K :1656                   kernel returns false,msg  n/a: DOWN        lj52_gc_kernel                 --
+                                                              -> machine Error
+ K2 sandbox pcall / xpcall wrappers K :808-814, :858-884      pass it through; xpcall's visible          no                             checkArg closure, table.pack
+                                                              table.pack and checkArg                                                  OUTSIDE protection
+                                                              sit outside protection
+ K3 sandbox coroutine.resume        K :888-911                packs after the resume    the CHILD never  no                             ~100 B pack per level, per
+    wrapper (sysyield bubbling)                               and after the yield; a    does; the                                       resume (refusable)
+                                                              refusal there lands in    resumer does
+                                                              the RESUMER and orphans
+                                                              the child
+ K4 kernel spcall                   K :731-738                rethrows as ERRRUN        visible as       no                             table.pack (outside pcall)
+                                                              tostring(msg)             ERRRUN
+ O1 OpenOS event dispatcher         OS lib/event.lua:72, :74  the callback dies; the    no (onError      no                             onError: io.open + write +
+                                                              error goes to             log only); its                                  close, ~2-5 KB [estimate]
+                                                              pcall(event.onError)      timer chain may
+                                                                                        break (STALL)
+ O2 dispatcher's OWN allocations    OS lib/event.lua:54-60,   raised out of             no               no                             --
+    -> tty/shell/init path          :149; tty.lua:68-74;      pullSignal into whoever
+                                    init.lua:16-25            pulled: tty's xpcall ->
+                                                              shell dies -> init's
+                                                              xpcall -> "Press any key";
+                                                              init.lua:21-24 is
+                                                              UNPROTECTED (DOWN)
+ O3 process body xpcall             OS lib/process.lua:59-92  process ends with "not    the parent       no                             {..} table, close(), handles
+                                                              enough memory"            process
+ O4 thread / autorun / boot /       OS lib/thread.lua:183;    logged to onError, or     no / converted   no                             onError's as O1
+    require / REPL                  boot/90_filesystem.lua:
+                                    28,47; lib/core/boot.lua:
+                                    76; lib/package.lua:96;
+                                    lib/core/lua_shell.lua:110
+ H1 probe's pcall(paint)            HA :3206, :3219; P2 :118, absorbed, pf+1            the probe        no                             ~3 KB per in-machine paint
+                                    :124                                                counts it but                                   (5 gpu.set through the
+                                                                                        keeps filling                                   kernel's invoke) [estimate];
+                                                                                                                                        ~0.3 KB hermetic
+ H2 harness onError wrapper         HA :3208-3209             oe+1, then O1             no               no                             as O1
+ H3 hermetic dispatcher / hb pcall  P2 :135, :140             rec(7)/rec(2): stall      no               no                             0
+
+Not absorbers, but refusal sources no program owns, which matter for the count:
+ S1 string-table growth             LJ lj_str.c:308-309,      throws AFTER the string   whoever made a   YES, cheaply: g->str.num >     its own request is 2x the
+    (intern-table doubling)         :129-139                  is linked; num stays >    string           g->str.mask at refusal         table: 16-128 KB at 1K-8K
+                                                              mask, so EVERY later new                                                  slots (8 B/slot, GC64)
+                                                              string retries until a
+                                                              sweep (sec. 1.6)
+ S2 sweep-time string-table shrink  LJ lj_gc.c:695-696        a fresh allocation        whoever ran the  as S1                          half the table
+    inside lj_gc_step                                         inside a GC step; throws  GC check
+                                                              out of the step
+
+======================================================================================
+1. LUAJIT INTERNALS
+======================================================================================
+
+1.0 How every refusal travels [code]
+  - The shim returns NULL (SH :415 C mode, :486 legacy).  lj_mem_realloc or
+    lj_mem_newgco then calls lj_err_mem (LJ lj_gc.c:873-875, :887-889).
+  - lj_err_mem (LJ lj_err.c:813-844) pushes the PREALLOCATED, fixed "not enough memory"
+    string (LJ lj_state.c:202).  It does not allocate.  It then calls lj_err_throw(L,
+    LUA_ERRMEM).
+  - lj_err_throw (LJ lj_err.c:768-771) first does lj_trace_abort(g), i.e.
+    J->state &= ~LJ_TRACE_ACTIVE (LJ lj_trace.h:45).  An ERRMEM anywhere therefore aborts
+    any recording in progress, asynchronously (LJ lj_trace.c:751-753).
+  - An ERRMEM never calls an xpcall message handler.  Only lj_err_run does, for runtime
+    errors (LJ lj_err.c:898-919).  So OpenOS's and OC's handlers (traceback, process.lua's
+    {msg, traceback}, init.lua's msgh) see the bare string and add no traceback.  PUC 5.2
+    is the same: luaD_throw(LUA_ERRMEM) bypasses the handler.  An ERRMEM raised INSIDE a
+    message handler that is running for a runtime error becomes LUA_ERRERR "error in
+    error handling" (LJ lj_err.c:815-816).
+  - Every refusal is counted by lj52_gc_refused (SH :1251-1263) BEFORE anyone catches it.
+    Unless HOOK_GC, a host GCSTOP, norefuse or gc_busy is in force, it then:
+      * sets gc_odstate = RESERVE;
+      * sets gc_win = 0 (the window shuts, and a standing verdict is consumed);
+      * arms a cycle.
+    It does all three whoever ends up catching the error.  That is the defect's mechanism.
+
+1.1 A1 -- THE TRACE RECORDER: the one absorber that is silent and of the VM's own making
+
+ 1.1.1 What happens to an ERRMEM during recording [code]
+  - Recording is driven by lj_trace_ins (LJ lj_trace.c:770-778):
+        while (lj_vm_cpcall(J->L, NULL, (void *)J, trace_state) != 0)
+          J->state = LJ_TRACE_ERR;
+  - Entry points:
+      * lj_dispatch_ins, once per instruction while recording (LJ lj_dispatch.c:425-432);
+      * lj_dispatch_call (:494-503);
+      * lj_trace_hot, for hot loops and calls (lj_trace.c:781-796);
+      * trace_hotside, after a trace exit (:799-811);
+      * lj_trace_stitch (:814-823).
+    Every one of them goes through this loop.
+  - A refusal inside trace_state unwinds to that cpcall, which returns LUA_ERRMEM.  The
+    loop sets LJ_TRACE_ERR and calls trace_state again.  Case LJ_TRACE_ERR (:754-760) runs
+    trace_abort (:585-656):
+      * e stays LJ_TRERR_RECERR, because the error object is a string, not a number (:596-597);
+      * a root trace's start pc is penalised (penalty_pc :392-417).  Past PENALTY_MAX
+        blacklist_pc rewrites the loop to ILOOP/IFORL, and it stays interpreted for the
+        prototype's life;
+      * a stitched trace's link is blacklisted on the FIRST abort (:612-613);
+      * the vmevent "abort" fires (:618-647; only with a handler attached);
+      * the trace number is dropped;
+      * L->top-- REMOVES THE ERROR OBJECT (:653);
+      * the state returns to IDLE (:757-759).
+    lj_trace_ins then returns normally, and the interpreter executes the instruction it
+    was about to execute.  Nobody retries the refused request.  The program cannot
+    observe any of this.
+  - The recorder's nested protected calls all re-throw to that outer cpcall:
+      * rec_mm_concat_cp (LJ lj_record.c:2182-2190);
+      * rec_stop_stitch_cp (lj_ffrecord.c:144-157);
+      * recff_metacall_cp (:467-471);
+      * recff_xpcall_cp (:566-571);
+      * cploop_opt (lj_opt_loop.c:425-445, which rethrows anything that is not a numeric
+        trace error);
+      * cpsplit (lj_opt_split.c:831-837; 32-bit only).
+    So a refusal anywhere in recording, optimisation or assembly ends in trace_abort.
+  - trace_abort allocates nothing itself, except through the vmevent with a handler
+    attached (1.4).
+  - An ERRMEM from the PROGRAM's own instruction while recording is active also goes
+    through lj_err_throw -> lj_trace_abort.  The program's pcall gets it as usual, and the
+    next lj_trace_ins hits "Trace aborted asynchronously" (:751-753).  Not an absorber.
+
+ 1.1.2 What the recorder allocates: (e) [code; sizes are estimates]
+  All of it goes through the state's allocator, so it is charged and can be refused:
+  - IR buffer, grown only, kept across traces:
+      * lj_ir_growtop reallocs it to 2x (LJ lj_ir.c:73-86), delta = current size;
+      * lj_ir_growbot allocates a NEW 2x block and then frees the old one (:89-115), so
+        the request is the whole new size;
+      * 8 B per IRIns, starting at 32 entries: requests of 256 B up to tens of KB.
+  - Snapshot buffers, grown only:
+      * lj_snap_grow_buf_ (lj_snap.c:38-46): growvec of SnapShot;
+      * lj_snap_grow_map_ (:48-58): realloc to 2x, minimum 64 entries of 4 B.
+  - The trace vector: trace_findfree -> lj_mem_growvec (lj_trace.c:65-80), up to
+    maxtrace x 8 B.
+  - One GCtrace copy per completed trace: lj_trace_alloc, called from the assembler
+    (lj_trace.c:122-140).
+      * Size: GCtrace + IR + snapshots + snapmap;
+      * d2-verdict measured 568-668 B in the probe; larger traces take KBs.
+  - Loop optimisation scratch: lps.subst, nins x 2 B, freed straight after
+    (lj_opt_loop.c:281, :426).
+  - Constant strings made at record time:
+      * argv2str (lj_ffrecord.c:85);
+      * :489 and :1085;
+      * folding (lj_opt_fold.c:506, :694-758, :916), which also grows g->tmpbuf.
+      * Tens of bytes each.
+  - Machine code is VirtualAlloc'd (lj_mcode.c), and neither the allocator nor the shim
+    charges it.
+  Could A1 be the one refused at a top?  Yes, and it is more exposed than the program
+  [inference]:
+  - it runs on the sandbox's thread (cur_L = J->L), so it gets the sandbox's credit AND
+    THE WINDOW's lend (SH :1229-1244);
+  - near a top its requests (KB-scale IR doublings, trace copies) are refused by
+    used + delta > S + 4 KiB where the program's 50-300 B objects still fit;
+  - the verdict refuses "the next crossing", whoever makes it.  A verdict delivered to
+    the recorder is wasted: trace_abort drops it, while lj52_gc_refused has already shut
+    the window (gc_win = 0) and opened RESERVE.
+  - On the kernel thread (kernel loops are recorded after site 13 turns the JIT back on,
+    K :1619) a recorder refusal past the kernel's slice is ALSO absorbed, and also opens
+    the sandbox's reserve tier.
+
+ 1.1.3 What the program learns: (c)
+  Nothing.  The only traces are the shim's refusal counter, the tier change, the
+  penalty/blacklist, and harness-only vmevents.
+
+ 1.1.4 (d) Can the shim tell?  Not with what it reads today; yes with one more read, or
+       exactly with a 2-line patch
+  - J->state != LJ_TRACE_IDLE is NOT enough [code].  After lj_record_ins returns, the state
+    stays LJ_TRACE_RECORD while the interpreter executes the recorded instruction,
+    INCLUDING the program's own allocations (TNEW, CAT, FNEW...).
+  - g->vmstate is not enough either: it stays ~LJ_VMST_RECORD over that instruction.
+    d2-verdict.md:568, :831 said so, and it is correct: vm_record / vm_inshook reset
+    nothing (LJ vm_x64.dasc, the ->vm_record path).
+  - What does separate them [code]: THE INNERMOST C FRAME of the running thread.
+      * lj_vm_cpcall writes SAVE_NRES = -savestack(L, L->top), always negative
+        (LJ vm_x64.dasc:656-670): "Neg. delta means cframe w/o frame".
+      * The frames Lua code normally runs on are positive or zero:
+          - vm_resume sets nres 0 (:575-589); every coroutine, including the kernel's
+            resumes, enters there;
+          - vm_pcall / vm_call set nres1 >= 0 (:610-623).
+      * lj_vm_cpcall also sets cur_L = L (:670), so
+            cf = cframe_raw(gco2th(gcref(g->cur_L))->cframe);  cframe_nres(cf) < 0
+        (LJ lj_frame.h:280, :294) means: "this allocation is made by C code running
+        directly inside an lj_vm_cpcall".  It is two loads with no allocation, on the
+        running thread's own stack.
+  - Who runs inside an lj_vm_cpcall in a live machine:
+      * the recorder (absorbs);
+      * trace_exit_cp (re-throws to the program, sec. 1.2).  It overwrites nres with the
+        sentinel -2*LUAI_MAXSTACK*sizeof(TValue) = -1 048 000 (lj_trace.c:840), which no
+        savestack offset can equal, so it can be excluded exactly;
+      * cpgrowstack (A5/A6);
+      * cpparser (A7);
+      * cpwriter (A8).
+  - A recorder test without a patch would be [inference, not checked]:
+        J->state != LJ_TRACE_IDLE  &&  cframe_nres(cf) < 0  &&  cframe_nres(cf) != the
+        exit sentinel  &&  g->vmstate != ~LJ_VMST_C
+    The parser, checkstack and dump cpcalls are reached only through C functions, which
+    run with vmstate C (vm_x64.dasc:4908/4918).  A non-recordable function is aborted, or
+    stitched (state back to IDLE), BEFORE the interpreter executes it.
+    This has to be shown to FAIL on a program allocation inside an active recording
+    before it can be trusted.
+  - EXACT, with a patch in the native/luajit/patch-*.sh style: a field in jit_State (or a
+    shim-visible per-state counter), incremented before and decremented after the while
+    loop in lj_trace_ins.  The loop always returns normally, because the cpcall catches
+    everything, so the pair is exception-safe.  It costs two instructions per recorded
+    bytecode.
+
+1.2 A2 -- TRACE EXIT AND SNAPSHOT RESTORE: not an absorber [code]
+  - lj_snap_restore can allocate:
+      * stack growth (LJ lj_snap.c:968);
+      * sunk allocations rebuilt with lj_tab_new / lj_tab_set / lj_cdata_newx
+        (:846, :894, :927).
+  - It runs under trace_exit_cp (lj_trace.c:835-842), which forces errfunc = 0.
+  - On error lj_trace_exit returns -errcode (:921-923).  vm_exit_interp checks it
+    (vm_x64.dasc:2529) and calls lj_err_trace (:2578-2582; lj_err.c:932-939), which
+    RE-THROWS the ERRMEM from the right C frame into the program.
+  - The program's handler receives an ordinary "not enough memory".  mem_test W3 tests
+    this.
+  - After the exit:
+      * the vmevent TEXIT (harness only);
+      * an unprotected lj_gc_step when the GC is in atomic or finalize (:942-945).  That
+        step can throw only through S2;
+      * trace_hotside, which is the recorder (A1).
+
+1.3 lj_trace_flushall: allocates nothing [code]
+  - lj_trace_flushall (lj_trace.c:276-302):
+      * returns 1 under HOOK_GC;
+      * unlinks the traces;
+      * frees machine code through lj_mcode_free (VirtualFree);
+      * sends the vmevent "flush" (only with a handler).
+  - It cannot be refused outside a handler.  The shim's flush at the safe point
+    (SH :1370-1412) "raises nothing".  Recorder buffers survive a flush.
+
+1.4 A3/A4 -- FINALIZERS AND VM EVENTS [code]
+  - Finalizer: gc_call_finalizer (LJ lj_gc.c:503-535):
+      * lj_trace_abort, then hook_entergc (HOOK_GC);
+      * threshold = LJ_MAX_MEM;
+      * lj_vm_pcall on vmthread(g);
+      * an error goes to the ERRFIN vmevent and is otherwise dropped (:527-534).
+    The shim gives no credit under HOOK_GC and lj52_gc_refused returns before opening the
+    reserve (SH :1258).  ALREADY HANDLED, except that the refusal counter still counts it
+    (SH :1254).
+    Reachability on our architecture:
+      * LuaJIT never runs __gc on tables;
+      * the sandbox has no newproxy;
+      * the kernel's sgc wrapper (K :740-770) is therefore inert;
+      * jnlua's gcjavaobject (JN :2121-2135) is C and does not allocate.
+    So in practice NO finalizer can refuse.
+  - VM events: lj_vmevent_call (LJ lj_vmevent.c:38-60):
+      * sets hook_vmevent (HOOK_VMEVENT);
+      * runs the handler on vmthread(g) under lj_vm_pcall;
+      * on error prints "VM handler failed: ..." to stderr and drops it.
+    The handler exists only when something calls jit.attach.  The sandbox has no `jit`
+    (the kernel keeps it: K :20-21, :1619); the harness attaches __ocljTrFn for capacity
+    runs (HA :4128-4130).  That handler's own allocations are ~0: it updates existing keys
+    with numbers, and the "start"/"stop"/"abort"/"flush" strings are anchored as its keys.
+    (d): YES, by g->hookmask & HOOK_VMEVENT, or by cur_L == vmthread(g).  The shim does
+    NOT exclude it today, so such a refusal would open the reserve tier.  Harness only.
+
+1.5 A5-A8 -- C-LEVEL PROTECTED CALLS THAT CONVERT THE ERROR [code]
+  - lua_checkstack -> lj_state_cpgrowstack (LJ lj_api.c:102-115, lj_state.c:163-170)
+    swallows the ERRMEM and returns 0.  Its callers then turn that into something else:
+      * luaL_checkstack -> ERRRUN "stack overflow (%s)" (lj_api.c:117-121);
+      * unpack -> "too many results to unpack" (lib_base.c:237-238);
+      * jnlua's checkstack -> Java IllegalStateException("stack overflow") (JN :2009-2011).
+        The only catch for that is Machine.scala:987-989, crash("Error.InternalError").
+  - coroutine.resume grows the child's stack under cpgrowstack and re-raises the message
+    as ERRRUN IN THE RESUMER (lib_base.c:629-632).  For the kernel's own resume that is
+    pcall(main), i.e. down.
+  - load(): lj_load runs the parser under lj_vm_cpcall (lj_load.c:72), so load returns
+    nil, "not enough memory".  This matters for package.delay (OS lib/package.lua:104-110):
+    it clears mt.__index BEFORE dofile, so a refused delay-load leaves the library without
+    its delayed functions for good (event.timer and event.onError live in
+    full_event.lua).
+  - string.dump: cpwriter (lj_bcwrite.c:448) -> "unable to dump given function"
+    (lib_string.c:144).
+  - (d) for all four: partly.  They are the cpcall frames of 1.1.4 with vmstate C.  The
+    program sees them, but converted, not as ERRMEM.
+
+1.6 S1/S2 -- THE STRING TABLE: a refusal no program owns, large and sticky [code + inference]
+  - lj_str_alloc LINKS the new string into the table, increments num, and only THEN grows
+    the table (LJ lj_str.c:300-309):
+        if (g->str.num++ > g->str.mask) lj_str_resize(L, (g->str.mask<<1)+1);
+  - lj_str_resize allocates a fresh vector of (newmask+1) x 8 B on GC64 (:129-140) through
+    lj_mem_newvec, which throws.
+  - A refused growth therefore:
+      (i) raises ERRMEM in whatever code made the string: the fill, paint, OpenOS or the
+          kernel;
+     (ii) leaves num > mask, so EVERY later new string, from anyone, retries the same
+          doubling and is refused again.  This continues until a sweep (lj_str.c:360
+          decrements num) brings num <= mask, or until the request fits.
+  - Sizes: the table grows from 256 slots, and a booted OpenOS plus a string fill is
+    plausibly at 2K-8K slots, so the request is 32-128 KB [estimate].  At the 192 KB stick
+    (cap ~509 KB, G = 32 KB) a 32 KB doubling is past the burst tier (G/2) and can be
+    lent only from RESERVE.
+  - This answers u2-stalls' "[not checked] whether such a refusal leaves num > mask":
+    from the code, it does.
+  - It is a candidate for refusals beyond the paint's in the downs (5/4/3 against pf = 1):
+    one doubling refused, then a refusal per new string anywhere until the next sweep
+    [inference, not checked].
+  - S2: the sweep shrinks the table (lj_gc.c:695-696), also as a NEW allocation, inside
+    lj_gc_step.  It can throw out of any GC check, including the unprotected step after a
+    trace exit.  Rare: it runs only after 3/4 of the table's strings died, i.e. after a
+    sweep that freed a lot.
+  - (d): YES, cheaply.  At refusal time g->str.num > g->str.mask, plus a request equal to
+    2*(mask+1)*sizeof(GCRef), identifies S1.
+  - PUC 5.2 grows the table BEFORE creating the string (PUC lstring.c:116-127), behind a
+    full emergency GC.  It is just as sticky, but only on live data.
+
+1.7 Other unprotected internal allocations [code]
+  These are refused where they happen, and the error goes to whoever is running.  None of
+  them is an absorber:
+  - stack growth (lj_state.c growstack, lj_dispatch.c call_init);
+  - g->tmpbuf growth for concatenation and format.  The buffer is halved in every atomic
+    phase (lj_gc.c:651), so the next long concatenation after a cycle regrows it;
+  - lj_buf_shrink is a shrink and never refused.
+
+======================================================================================
+2. THE SHIM'S OWN PROTECTED CALLS AND BYPASSES [code]
+======================================================================================
+  - norefuse (SH :2121-2181): lj52_pushcfunction charges but never refuses.  It covers
+    jnlua's 38 bare-JNI-frame pushes.  No ERRMEM can arise inside it.
+  - Not covered by norefuse: jnlua's own lua_pushlightuserdata right after the push
+    (JN :719, :635).  On GC64 that can grow the light-ud segment map
+    (LJ lj_udata.c:37-60), in a bare JNI frame.  It is rare, bytes-sized, and a CRASH
+    hazard, not an absorber.  [inference]
+  - lua_pcall at lj52_newstate around luaopen_jit (SH :2289-2316): runs before the cap.
+    Irrelevant.
+  - lj52_gc_flushtraces (SH :1370-1412): raises nothing.  luaJIT_setmode's HOOK_GC case is
+    checked first.
+  - The watchdog hook (SH ~:1508-1519) lua_calls checkDeadline on the running thread.  Its
+    errors go to the program.  SH :1488-1507 already names one absorber: "LUA_ERRMEM at the
+    table.pack" in the sandbox resume wrapper, which "the parent's pcall swallows" (K3).
+  - What lj52_gc_refused already excludes from opening the reserve: HOOK_GC, a host
+    GCSTOP, norefuse>0, gc_busy (SH :1256-1258).  It does NOT exclude: the recorder, vmevents,
+    the kernel thread, cpcall conversions, JNI-initiated pcalls.
+
+======================================================================================
+3. OC-JNLUA AND OC'S JAVA [code]
+======================================================================================
+  - JNLUA_PCALL (JN :33-38) wraps 38 entry points (pushstring/pushbytearray :704-730,
+    :619-646, ...).  On failure throw() (:2353-2367) -> throw_protected (:2290-2350) maps
+    LUA_ERRMEM to LuaMemoryAllocationException (:2313-2315).
+  - LuaState.call is lua_1pcall (OC-JNLua LuaState.java:710-713; JN :549-565).  Its
+    messagehandler is not called for ERRMEM.
+  - Where the Java exception goes:
+      J2 a component call's result push inside NativeLuaArchitecture.invoke (OC :46-86):
+         `case e: Throwable if e.getMessage != null` -> pushBoolean(true), pushNil,
+         pushString("not enough memory").  The message is the preallocated string, so this
+         allocates ~0.  The kernel's processResult (K :1117-1124) then RETURNS nil, "not
+         enough memory" to the caller as a soft failure.  The operation happened, and
+         gpu.set-style callers ignore the result.  Silent, unless
+         logLuaCallbackErrors is set ("Exception in Lua callback.").
+      J3 signal pushes in runThreaded (OC :227-233) and lua.resume -> the catch at
+         :293-296 -> ExecutionResult.Error("not enough memory"): DOWN.  These run at
+         wd_depth 0 (the kernel's slice).
+      J4 runSynchronized (OC :170-189) -> OutOfMemoryError -> Machine.scala:553-555
+         crash("Error.OutOfMemory"): DOWN.  It runs the kernel's indirect-call closure
+         (K :1138-1147: table.pack, wrapUserdata) on the server thread at wd_depth 0.
+         When the direct-call budget runs out, gpu.set takes this path, so an
+         over-budget paint near the ceiling is a down path.
+      J5 Java exceptions escaping a callback: calljavafunction (JN :2138-2210) turns
+         them into an ERRRUN whose error object is a LuaError userdata (pushjavaobject,
+         JN :2066-2079), plus luaL_where.  Those allocations can themselves be refused,
+         and then a real ERRMEM leaves calljavafunction instead.
+  - (d) for J1-J2: the shim cannot tell today.  The JNI pcall's cframe is a vm_pcall
+    (nres >= 0), indistinguishable by sign from a lua_call made from a C library.  The
+    exact way is the established one: lj52shim.h already macro-redirects
+    lua_pushcfunction in jnlua (lj52shim.h:325), and redirecting lua_pcall the same way
+    to a wrapper that bumps M->jni would make "this refusal goes to Java" a one-load test.
+    J3/J4 are wd_depth 0 and are fatal anyway.
+  - In the capacity probe, J2 is unlikely: gpu.set returns a boolean, and
+    computer.uptime/freeMemory return numbers, so their pushes allocate nothing apart from
+    checkstack.
+
+======================================================================================
+4. THE OC KERNEL (machine.lua, patched) [code]
+======================================================================================
+  K1 pcall(main) (K :1656).  Every kernel-thread refusal ends here, and runThreaded maps
+     the false return to ExecutionResult.Error (OC :262-282): DOWN.  It covers:
+       - the main loop's table.pack after the resume (K :1640);
+       - error(tostring(result[2])) when the sandbox root dies (:1643-1644);
+       - the per-signal args = table.pack(coroutine.yield ...) and wrapUserdata (:1648-1649);
+       - collectgarbage every 10 resumes (:1630-1636, the collect at :1634).
+     The shim's kernel slice (KSLICE) exists to keep these refusals away.
+  K2 The sandbox pcall wrapper (K :808-814) calls pcall(checkDeadline) first.  An error
+     there returns false, err as if the user's function had failed, which is visible.
+     The xpcall wrapper (K :858-884):
+       - runs checkArg, which allocates a closure per call, BEFORE protection;
+       - runs table.pack(errorCapture(...)) AFTER it.
+     A refusal at either point raises out of xpcall itself into the caller.  That is
+     visible, but not where the program expects it.
+  K3 The sandbox coroutine.resume wrapper (K :888-911) packs the args (:890), arms the
+     watchdog, resumes and packs the result (:893-894).  On a sysyield it packs the
+     resumed args (:901).
+     - OpenOS processes are resumed through it (OS boot/01_process.lua:9-15 ->
+       coroutine_handler.resume).
+     - A refusal at :893 or :901 lands in the RESUMER's thread.  The child's result or
+       signal is lost and the child stays suspended forever (orphaned).  It also leaks a
+       watchdog entry (SH :1488-1507).
+     - Each nesting level pays one pack per resume, about 100 B [estimate].
+  K4 spcall (K :731-738) rethrows a pcall failure as error(tostring(msg), 0): an ERRRUN
+     with the same text.  Its table.pack sits outside the pcall.
+  The kernel's direct component path, invoke (K :1126-1149): table.pack(args),
+     unwrapUserdata (a `processed` table, a closure and its upvalues), table.pack(result),
+     wrapUserdata (the same again) -- roughly 0.6 KB of transient garbage per component
+     call [estimate].  All of it runs on the CALLER's thread with no protection, so
+     refusals go to the caller (e.g. pcall(paint)).
+
+======================================================================================
+5. OPENOS [code]
+======================================================================================
+  O1 The dispatcher (OS lib/event.lua:33-84):
+     - every timer and listener callback runs under pcall(handler.callback, ...) (:72);
+     - a failure goes to pcall(event.onError, message) (:74).  onError (lib/core/
+       full_event.lua:62-68) does io.open("/tmp/event.log", "a"), a protected write, then
+       close.  That is a filesystem component call, buffer objects and handle tracking,
+       ~2-5 KB [estimate].  Its own refusals are swallowed by the :74 pcall.
+     - The callback's timer chain breaks if the refusal came before its event.timer
+       re-registration: the STALL.
+     The program learns only through the log on the tmpfs.
+  O2 The dispatcher's OWN allocations (:54 table.pack of the pulled signal, :56-59 the
+     handler copy, :81 unpack), and event.pull's pack (:149), raise out of
+     computer.pullSignal into whoever pulled.  During the capacity probe, the shell's
+     prompt pulls:
+       tty.stream.read's xpcall(core.read, debug.traceback, cursor) (OS lib/tty.lua:68)
+       -> pcall(cursor.update) (:71)
+       -> assert(ok, result) re-raises the message as ERRRUN (:74)
+       -> up through the shell
+       -> init.lua's xpcall(shell, msgh) (OS init.lua:17-19).  Its msgh now runs, since
+          this is ERRRUN: tostring .. debug.traceback, ~0.5-2 KB.
+       -> init.lua:21-24, which is UNPROTECTED: io.stderr:write, io.write("Press any key
+          to continue."), os.sleep(0.5), event.pull("key").
+     - Any refusal at :21-24 kills the root coroutine.  The kernel then does error() and
+       the machine goes DOWN (u2-stalls §1.4's third path).
+     - Otherwise the timers keep firing inside os.sleep and event.pull, so THE FILL GOES
+       ON with its data held.  This is the "OpenOS error path" second chance.
+  O3 process.load (OS lib/process.lua:59-92):
+     - the body runs under xpcall.  For ERRMEM the msgh is not called, so result[2] is a
+       string, the exception handler is skipped, process.internal.close runs, and the
+       process returns its error;
+     - the `{ xpcall(...) }` constructor (:61-73) allocates AFTER the program returned.
+       A refusal there kills the process coroutine WITHOUT process.internal.close: the
+       entry in process.list and its open handles are never cleaned up;
+     - process.internal.continue packs after each resume and yield (:154, :156).  As in K3,
+       a refusal there lands in the resumer.
+  O4 Other places where someone else's handler wraps a program's code:
+     - thread.lua:183 pcall(event.onError, "[thread] ...");
+     - autoruns: xpcall(shell.execute, event.onError, ...) (boot/90_filesystem.lua:28, :47);
+     - boot: pcall(program) (lib/core/boot.lua:76);
+     - require: pcall(library) (lib/package.lua:96);
+     - the Lua REPL: xpcall(code, debug.traceback) (lib/core/lua_shell.lua:110);
+     - cursor.lua:95: pcall(gpu.get).
+
+======================================================================================
+6. THE PROBES [code]
+======================================================================================
+  In-machine (HA):
+  - The step is an OpenOS timer callback, so O1 wraps it.  Inside it:
+      * the fill runs under its own pcall (:3184-3191): the program's handler;
+      * after the fill, outside any handler of the program: os.clock; the ring;
+        stage = "filling/" .. count; event.timer(0, step) (:3198), which makes a handler
+        record and may rehash `handlers`; timed = count; or, in the done branch,
+        freeMemory and the "done/..." string (:3201-3204);
+      * then if not pcall(paint) then pf = pf + 1 end (:3206).
+  - paint (:3164-3171): five gpu.set calls through the kernel's invoke, plus concatenation
+    and a string.format, ~3 KB per paint [estimate].
+  - The heartbeat timer (0.05 s) also does pcall(paint) (:3217-3220).
+  - The harness wraps event.onError to count oe (:3208-3209).
+  - With pf painted only by a SUCCESSFUL paint, refusals in failing paints after the last
+    good one never reach the screen.  So pf = 1 on a down run is a lower bound.
+  Hermetic (P2):
+  - no OpenOS and no Java;
+  - the dispatcher is pcall(h.callback) (:140) -> rec 2, the stall;
+  - the heartbeat is pcall(heartbeat) (:135);
+  - paint only builds four strings into a table, ~0.3 KB (:41-47, :118, :124);
+  - the "kernel" packs after each resume (:158), and a sandbox death is rec 4, the down.
+  - The only absorbers here are H1, H3 and, with the JIT on, A1.  The hermetic
+    "second chances" with no paint record are therefore the recorder (j2-practice.md:236:
+    35 of lend's 204).
+
+======================================================================================
+7. WHAT THE RESERVE TIER MUST KEEP DOING
+======================================================================================
+  - Its purpose (SH :945-963) is "catch, format the message, drop, carry on".  The program
+    that caught its OWN refusal at the burst top must be able to allocate between the
+    catch and the drop.
+  - MT W8 (W8_CHUNK :555-562, case :1866-1894):
+      * the program builds 'err: ' .. tostring(err) while the data is still held, and a
+        cycle (a proof) runs IN BETWEEN and finds the heap still past the cap;
+      * then it drops, then string.rep(256) and {1,2,3};
+      * "err: not enough memory|256|3" must come back.
+    So the reserve must SURVIVE a proof that precedes the drop.  This is why "close at the
+    next proof regardless" is ruled out: d2-final.md's sabotage 4.12 closereserve fails W8,
+    W11, W16Rj, W19 and W7k.
+  - MT W2b/W2c (:1600-1623): a refusal arms the collector from ANY headroom, and the
+    retry succeeds once the garbage is collected.  That is the arm in lj52_gc_refused.
+    It is independent of the tier and should stay on every lever.
+  - MT W11 (:2124-2156): a fresh record (an eris load) whose live data is already past
+    total + G/2 takes RESERVE with no refusal (SH :1182-1185).  That is a separate rule;
+    keep it.
+  - W7/W7k/W19 (no ratchet, the kernel's room past the window) and W16R/W16Rj (the
+    probe's program after an absorbed first refusal, MT :750-795) check the reserve tier's
+    ceiling and landings.  Any lever that changes the reserve re-scopes them.
+    w16r_rec judges the tier from the shim's refusal COUNT (MT :798-806) and says a
+    recorder-absorbed refusal opens the reserve; that changes under L1.
+  - The bytes it actually needs: W8 ~50 B; the probe's done branch ~40 B plus a paint
+    that is already in a pcall; a typical recovery that prints its error through the tty
+    ~1-3 KB [estimate].  Today's reserve gives G/2 more: 16 KB at the 192 KB stick, up to
+    256 KB at caps of 8 MB and above.
+
+======================================================================================
+8. STOCK PUC 5.2 IN EACH CASE [code]
+======================================================================================
+  - luaM_realloc_ (PUC lmem.c:73-94): a NULL from the allocator, while the GC is running,
+    triggers luaC_fullgc(L, 1) (emergency, no finalizers) and one retry.  Only then
+    luaD_throw(LUA_ERRMEM).  A refusal means live data + request > cap.
+  - There is no tier.  A refusal absorbed by anything (paint, the dispatcher, OpenOS,
+    the Java catch) leaves the fill exactly where it was.  Its next comparable request is
+    refused at the same live level, usually inside its own pcall.
+  - Stock's stalls are refusals that land between batches at that level (2 of 10 at
+    batch 10, results-wall-window).
+  - Per absorber:
+      A1 recorder           no JIT.
+      A2 trace exit         n/a.
+      A3 finalizer          a __gc error propagates as LUA_ERRGCMM.  OC disables __gc by
+                            default.
+      A4 vmevent            n/a.
+      A5-A8 conversions     the same shapes: lua_checkstack is protected, load uses the
+                            protected parser.
+      S1 string table       grown BEFORE creation (lstring.c:121-122), behind the full GC;
+                            refused only on live strings.
+      J*, K*, O*, H*        the same Lua and Java code.
+  - The difference between the builds is entirely the reserve tier and the lack of an
+    emergency collection.
+
+======================================================================================
+9. CANDIDATE LEVERS (not designed in depth)
+======================================================================================
+  L0  INSTRUMENT FIRST.  Settle where the 5/4/3 refusals of the downs went.  Keep a
+      fixed-size per-state ring in the shim, written in lj52_gc_refused with no
+      allocation:
+        - delta;
+        - tier;
+        - lj52_gc_kernel;
+        - J->state;
+        - g->vmstate;
+        - cframe_nres(innermost) < 0, and whether it equals the exit sentinel;
+        - hookmask & (HOOK_GC|HOOK_VMEVENT);
+        - str.num > str.mask;
+        - wd_depth;
+        - and, with L5's redirect, the JNI depth.
+      Covers: attribution of A1, A4, A5-A8, S1, J1.  Risk: none, since nothing is
+      decided by it.  It extends u2-stalls §5.3's three fields.
+  L1  A RECORDER REFUSAL OPENS NO RESERVE, SHUTS NO WINDOW, CONSUMES NO VERDICT.  Count
+      it separately.  Arm or not: arming is harmless but costs a cycle.
+      Identify it by the 2-line lj_trace_ins patch (exact), or by 1.1.4's cframe test.
+      Covers: A1, on the sandbox and the kernel thread.  Hermetically A1 was 35 of 204
+      second chances under THE WINDOW and 563 of 796 under "prevent" (j2-practice.md:
+      236-238).  In-machine it is unmeasured; the JIT-on/JIT-off contrast (u2-stalls
+      §4: 18/76 against 3/40) points to it.
+      W8/W2b/W2c: unaffected.  W8 runs jit.off(), and its refusals are the program's.
+      Risk: W16Rj re-scoped (sec. 7); stage C's ~2% JIT-on "surplus" goes, which
+      d2-prevent §7.5 already showed was this artifact.
+  L1b The recorder gets NO credit and NO window: refused at the cap.  The window's
+      4 KiB is then never spent on JIT metadata, and no verdict is ever delivered to the
+      recorder.
+      Risk:
+        - no trace completes past the cap, because every one needs a GCtrace copy;
+        - each refusal penalises its loop (penalty_pc), so hot loops near the wall get
+          BLACKLISTED for their prototype's life.  patch-penalty-scrub clears entries
+          only on prototype death, and lj_trace_flushall clears the cache but not the
+          ILOOP rewrites;
+        - pair it with a patch that does not penalise an ERRMEM abort.  Not LJ_TRERR_RETRY
+          (an immediate retry would loop); a normal hotcount reset.
+  L1c Alternatively the recorder gets its OWN budget past the cap, a fixed slice outside
+      the sandbox's tiers, like KSLICE.  The JIT keeps working at the wall, and only the
+      flush reclaims what it holds.
+      Risk: the absolute bound grows by that budget, and W7/W7k/W19's arithmetic moves.
+  L2  HOOK_VMEVENT handled like HOOK_GC: no credit, no reserve.  Covers: A4, harness
+      only.  Risk: none.
+  L3  THE RESERVE'S SIZE: a fixed R past the refusal point, not total + G.
+      - After a refusal at used u, the program may reach min(u + R, total + G) until a
+        proof finds the heap under the cap.  R is granted once per reserve episode, so
+        repeated absorbed refusals cannot creep up to total + G.
+      - R should be a few KiB: above what catch-format-drop needs (sec. 7), far below
+        today's G/2 of 16-256 KB.
+      Covers: EVERY absorber, including the ones no test can identify (H1, O1, O2, K3,
+      J2).  A second chance buys R bytes instead of up to 256 KB, so the fill's next
+      refusal lands within R of the first, most likely inside its next batch.
+      Risk:
+        - W8 OK (~50 B);
+        - W2b/W2c unaffected;
+        - W11 must keep its separate rule;
+        - W7/W7k/W19/W16R/W16Rj re-scoped;
+        - a program whose recovery allocates more than R before dropping is refused
+          mid-recovery.  Stock would refuse it too unless garbage covered it.
+  L4  THE RESERVE'S LIFETIME, BY RESUME: close a refusal-opened reserve at the first
+      proof after the sandbox's next resume.  The shim sees resumes: lj52_wd_arm, with
+      wd_depth going 0 -> 1.
+      Covers: H1, O1 and O2 in the probe's shape.  The absorbed refusal is followed by a
+      yield, and the next batch then starts with the reserve closed.
+      Risk:
+        - W8 unaffected (no yield between catch and drop);
+        - a recovery that yields before it drops is refused after the yield, as on stock.
+          Yields include os.sleep, an indirect (synchronized) component call, and a
+          print that hits the direct-call budget;
+        - W16R/W16Rj's "carried into the reserve" case becomes "carried back to the burst
+          tier".
+  L5  THE RESERVE'S LIFETIME, BY PCALL ENTRY: close it at the next SANDBOX pcall or xpcall
+      entry after the refusal.  That needs a kernel patch: K :808-814 and :858-884 call a
+      shim C function.  It costs one C call per pcall, against the wrapper's existing
+      Java call to computer.realTime.
+      Covers: O1, since the dispatcher's next pcall(callback) closes it before the next
+      step, and the fill is then refused inside its own pcall.
+      Risk:
+        - recoveries that use pcall, or the kernel's spcall wrappers (unicode.*,
+          computer.pushSignal), close their own reserve;
+        - this is the most invasive lever.
+      The same redirect gives L0 its JNI depth, and could stop J2's soft-returned
+      refusals from opening the reserve.  Their value is small: in the probe gpu.set's
+      results allocate nothing.
+  L6  CLOSE AT THE NEXT PROOF REGARDLESS: REJECTED by evidence.  The 4.12 closereserve
+      sabotage fails W8, W11, W16Rj, W19 and W7k (d2-final.md).
+  L7  DO NOT REFUSE THE INTERN TABLE'S GROWTH (S1).  Either charge it under a
+      norefuse-style window, or patch LuaJIT so that a failed growth keeps the old table
+      (the load factor just rises past 100%) instead of throwing after the string is
+      already linked.
+      Covers: a large, sticky refusal source no program owns, a candidate for the extra
+      refusals.  Verify with L0 first.
+      Risk:
+        - charging it moves the excursion bound by the table's size, at most
+          16 B x live strings;
+        - the non-throwing patch costs nothing but chain length;
+        - S2 (the sweep's shrink) can simply skip the shrink on failure.
+  L8  "OPENED ONLY BY REFUSALS THE PROGRAM CAN SEE".  This is L1 + L2 + (L5's JNI part),
+      plus leaving the HOOK_GC exclusion as it is.  Every identifiable case is covered.
+      It CANNOT reach the Lua-level absorbers (H1, O1, O2, K2-K4, O3-O4).  Those are
+      sandbox code on the sandbox's thread, and only L3, L4 or L5 bound them.
+      Identifying them by walking the Lua stack to the nearest FRAME_PCALL and reading
+      its caller's chunk name is possible without allocating.  It is fragile: every
+      sandbox pcall goes through the kernel's wrapper, and errors cross coroutines as
+      return values, not by unwinding.  It is also a policy choice about who "the
+      program" is.  Not recommended.

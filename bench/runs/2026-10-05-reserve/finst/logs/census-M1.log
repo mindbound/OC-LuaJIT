@@ -1,0 +1,94 @@
+== 14:18:36 census-M1 start: lref_F 8908d926, lref_ref 83a4f083, SEEDCAPS=2048
+== 14:18:36 F_string_j1: start (lref_F.exe string jit=1 caps=4096 probe2.lua seed=1)
+F_string_j1: 4096 lines
+== 14:21:11 F_string_j1: rc!=0 0, NOLINE 0
+== 14:21:11 F_record_j1: start (lref_F.exe record jit=1 caps=4096 probe2.lua seed=1)
+F_record_j1: 4096 lines
+== 14:23:44 F_record_j1: rc!=0 0, NOLINE 0
+== 14:23:44 F_string_j0: start (lref_F.exe string jit=0 caps=4096 probe2.lua seed=1)
+F_string_j0: 4096 lines
+== 14:25:59 F_string_j0: rc!=0 0, NOLINE 0
+== 14:25:59 F_record_j0: start (lref_F.exe record jit=0 caps=4096 probe2.lua seed=1)
+F_record_j0: 4096 lines
+== 14:29:02 F_record_j0: rc!=0 0, NOLINE 0
+== 14:29:02 F_oe_string_j1: start (lref_F.exe string jit=1 caps=2048 probe2oe.lua seed=1)
+F_oe_string_j1: 2048 lines
+== 14:30:31 F_oe_string_j1: rc!=0 0, NOLINE 0
+== 14:30:31 F_oe_record_j1: start (lref_F.exe record jit=1 caps=2048 probe2oe.lua seed=1)
+F_oe_record_j1: 2048 lines
+== 14:31:52 F_oe_record_j1: rc!=0 0, NOLINE 0
+== 14:31:52 F_k2048_string_j1: start (lref_F.exe string jit=1 caps=2048 probe2k_2048.lua seed=1)
+F_k2048_string_j1: 2048 lines
+== 14:33:09 F_k2048_string_j1: rc!=0 0, NOLINE 0
+== 14:33:09 F_k2048_record_j1: start (lref_F.exe record jit=1 caps=2048 probe2k_2048.lua seed=1)
+F_k2048_record_j1: 2048 lines
+== 14:34:37 F_k2048_record_j1: rc!=0 0, NOLINE 0
+== 14:34:37 F_oe_string_j1_s2: start (lref_F.exe string jit=1 caps=2048 probe2oe.lua seed=2)
+F_oe_string_j1_s2: 2048 lines
+== 14:35:49 F_oe_string_j1_s2: rc!=0 0, NOLINE 0
+== 14:35:49 B_oe_string_j1_s2: start (lref_ref.exe string jit=1 caps=2048 probe2oe.lua seed=2)
+B_oe_string_j1_s2: 2048 lines
+== 14:36:59 B_oe_string_j1_s2: rc!=0 0, NOLINE 0
+== 14:36:59 F_string_j1_s2: start (lref_F.exe string jit=1 caps=2048 probe2.lua seed=2)
+F_string_j1_s2: 2048 lines
+== 14:38:22 F_string_j1_s2: rc!=0 0, NOLINE 0
+== 14:38:22 B_string_j1_s2: start (lref_ref.exe string jit=1 caps=2048 probe2.lua seed=2)
+B_string_j1_s2: 2048 lines
+== 14:39:49 B_string_j1_s2: rc!=0 0, NOLINE 0
+== 14:39:49 F_string_j0_s2: start (lref_F.exe string jit=0 caps=2048 probe2.lua seed=2)
+F_string_j0_s2: 2048 lines
+== 14:40:58 F_string_j0_s2: rc!=0 0, NOLINE 0
+== 14:40:58 B_string_j0_s2: start (lref_ref.exe string jit=0 caps=2048 probe2.lua seed=2)
+B_string_j0_s2: 2048 lines
+== 14:42:07 B_string_j0_s2: rc!=0 0, NOLINE 0
+== 14:42:07 F_oe_string_j1_s3: start (lref_F.exe string jit=1 caps=2048 probe2oe.lua seed=3)
+F_oe_string_j1_s3: 2048 lines
+== 14:43:26 F_oe_string_j1_s3: rc!=0 0, NOLINE 0
+== 14:43:27 B_oe_string_j1_s3: start (lref_ref.exe string jit=1 caps=2048 probe2oe.lua seed=3)
+B_oe_string_j1_s3: 2048 lines
+== 14:44:39 B_oe_string_j1_s3: rc!=0 0, NOLINE 0
+== 14:44:39 F_string_j1_s3: start (lref_F.exe string jit=1 caps=2048 probe2.lua seed=3)
+F_string_j1_s3: 2048 lines
+== 14:46:06 F_string_j1_s3: rc!=0 0, NOLINE 0
+== 14:46:06 B_string_j1_s3: start (lref_ref.exe string jit=1 caps=2048 probe2.lua seed=3)
+B_string_j1_s3: 2048 lines
+== 14:47:25 B_string_j1_s3: rc!=0 0, NOLINE 0
+== 14:47:25 F_string_j0_s3: start (lref_F.exe string jit=0 caps=2048 probe2.lua seed=3)
+F_string_j0_s3: 2048 lines
+== 14:48:35 F_string_j0_s3: rc!=0 0, NOLINE 0
+== 14:48:35 B_string_j0_s3: start (lref_ref.exe string jit=0 caps=2048 probe2.lua seed=3)
+B_string_j0_s3: 2048 lines
+== 14:49:45 B_string_j0_s3: rc!=0 0, NOLINE 0
+== 14:49:45 determinism: B_oe_string_j1_s2/s3 (lref_ref.exe here) against lifetime's BASEs2/BASEs3 (the same binary there):
+caps_in_both=2048 both_rc0=2048 identical=2048 differ=0 rc_nonzero=0 onlyB=0
+caps_in_both=2048 both_rc0=2048 identical=2048 differ=0 rc_nonzero=0 onlyB=0
+== 14:49:45 determinism: F_string_j1 (4 096) against identity.sh's I_string_j1 / I_record_j1 (the same binary, 1 024):
+caps_in_both=1024 both_rc0=1024 identical=1024 differ=0 rc_nonzero=0 onlyB=3072
+caps_in_both=1024 both_rc0=1024 identical=1024 differ=0 rc_nonzero=0 onlyB=3072
+== 14:49:45 compare_F.py F -> out/compare-F.txt
+      out: off 16464 term 2 nref 1 [dispatcher] opener dispatcher; last: delta=48 tier0=0 win0=2 at==probe:81 over=184 rsv=24712 tier=24712   (baseline: term 2 [dispatcher])
+string_j1 s3        2048 1883/1883   0/165     3->3     165->165    0->0      4905->4894   (0.998)    5139->5002     121.2->119.7   121.2->119.7    1364->-6512   0->0  165->0    2048  
+      out: off  8272 term 2 nref 1 [dispatcher] opener dispatcher; last: delta=64 tier0=0 win0=2 at==probe:80 over=220 rsv=24732 tier=24732   (baseline: term 2 [dispatcher])
+      out: off  8864 term 2 nref 1 [dispatcher] opener dispatcher; last: delta=64 tier0=0 win0=2 at==probe:80 over=228 rsv=24740 tier=24740   (baseline: term 2 [dispatcher])
+      out: off 17872 term 2 nref 1 [dispatcher] opener dispatcher; last: delta=64 tier0=0 win0=2 at==probe:80 over=220 rsv=24732 tier=24732   (baseline: term 2 [dispatcher])
+string_j0 s3        2048 1718/1718   0/330     0->0     330->330    0->0      5016->4994   (0.996)    5244->5109     130.7->129.3   130.7->129.3     212->-7988   0->0  330->0    2048  
+  reserves sized by a refusal: 36864; gc_rsv (credit past the cap, unclamped) min 24624 max 28800; past the refused heap min 8192 max 8192; top past cap (clamped) min 24624 max 28800
+
+-- M1 per cell and seed (b = baseline, v = F); outside counts in both directions, never pooled
+cell               seed  caps  nonsc ident    out b / v     sc b / v sc_out b / v   >old b / v >new b / v
+string_j1             1  4096  3655/3655       1 / 1       441 / 441       0 / 0         0 / 0      441 / 0   
+record_j1             1  4096  3935/3935       0 / 0       161 / 161       0 / 0         0 / 0      161 / 0   
+string_j0             1  4096  3441/3441       0 / 0       655 / 655       0 / 0         0 / 0      655 / 0   
+record_j0             1  4096  3952/3952       0 / 0       144 / 144       0 / 0         0 / 0      144 / 0   
+oe_string_j1          1  2048  1820/1820      21 / 0       228 / 228      21 / 0         0 / 0      228 / 0   
+oe_record_j1          1  2048  1976/1976       0 / 0        72 / 72        0 / 0         0 / 0       72 / 0   
+k2048_string_j1       1  2048  1819/1819     828 / 763     229 / 229     103 / 38      103 / 0      229 / 0   
+k2048_record_j1       1  2048  2010/2010     162 / 163      38 / 38        0 / 1         0 / 0       38 / 0   
+oe_string_j1          2  2048  1773/1773       7 / 7       275 / 275       0 / 0         0 / 0      275 / 0   
+string_j1             2  2048  1871/1871       1 / 1       177 / 177       0 / 0         0 / 0      177 / 0   
+string_j0             2  2048  1718/1718       0 / 0       330 / 330       0 / 0         0 / 0      330 / 0   
+oe_string_j1          3  2048  1748/1748      28 / 3       300 / 300      25 / 0         0 / 0      300 / 0   
+string_j1             3  2048  1883/1883       3 / 3       165 / 165       0 / 0         0 / 0      165 / 0   
+string_j0             3  2048  1718/1718       0 / 0       330 / 330       0 / 0         0 / 0      330 / 0   
+M1 must hold (over the 14 rows above): non-second-chance caps byte-identical in every cell and seed: HOLDS; 0 variant runs past either bound: HOLDS
+== 14:51:03 census-M1 done

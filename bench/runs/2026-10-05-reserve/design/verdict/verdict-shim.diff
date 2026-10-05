@@ -1,0 +1,347 @@
+--- /c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/verdict/src-plain/lj52shim.c	2026-10-05 13:57:03.835564000 +0300
++++ /c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall2/sc/verdict/src-v/lj52shim.c	2026-10-05 14:53:59.932189400 +0300
+@@ -281,6 +281,15 @@
+   long long     gc_grown;      /* bytes granted since the last proof          */
+   volatile long gc_lends;      /* growths lent past a tier's top: diagnostics */
+   long long     gc_refdelta;   /* the last refused request, bytes: diagnostics */
++  /* -- THE ADDRESS: the verdict's addressee; see THE WINDOW -- */
++  const void   *gc_hand;       /* the handler of record: the function the  */
++  const void   *gc_handL;      /* innermost pcall called, and its thread --  */
++  long          gc_handn;      /* compared, never followed -- and its vote  */
++  int           gc_addr;       /* this call's request is addressed to it     */
++  int           gc_rec;        /* ... is the trace recorder's own            */
++  volatile long gc_holds;      /* verdicts held: lent on past another        */
++  volatile long gc_holdfail;   /* holds that met their ceiling: diagnostics  */
++  volatile long gc_recref;     /* the recorder's refusals: they opened nothing */
+   /* -- the trace flush under pressure; see FLUSHING TRACES below -- */
+   int           gc_flush_wanted;  /* a PROVEN cycle left headroom short:      */
+                                   /* flush at the next safe point (wd_arm)    */
+@@ -305,6 +314,7 @@
+ static void lj52_gc_refused(lj52_mem *M, long long total, long long used);
+ static void lj52_gc_look(lj52_mem *M, long long total, long long used);
+ static int lj52_gc_lend(lj52_mem *M, long long total, long long used, long long delta);
++static void lj52_gc_vote(lj52_mem *M);
+ 
+ /* The record for L, or NULL for a state this shim did not create. */
+ static lj52_mem *lj52_memof(lua_State *L) {
+@@ -405,8 +415,10 @@
+       M->used += delta;
+       return NULL;
+     }
+-    if (acct && delta > 0 && M->total - M->used < delta)
++    if (acct && delta > 0 && M->total - M->used < delta) {
+       lj52_gc_look(M, M->total, M->used);   /* THE WINDOW: a finished cycle first */
++      lj52_gc_vote(M);                      /* THE ADDRESS: whose growth is this  */
++    }
+     if (acct && delta > 0 && !M->norefuse && M->total - M->used < delta
+         && M->total + lj52_gc_credit(M, M->total, M->used) - M->used < delta
+         && !lj52_gc_lend(M, M->total, M->used, delta)) {
+@@ -472,8 +484,10 @@
+     M->used += delta;
+     return NULL;
+   }
+-  if (delta > 0 && total - used < delta)
++  if (delta > 0 && total - used < delta) {
+     lj52_gc_look(M, total, used);           /* THE WINDOW: a finished cycle first */
++    lj52_gc_vote(M);                        /* THE ADDRESS: whose growth is this  */
++  }
+   if (!(total <= 0 || delta <= 0 || total - used >= delta || M->norefuse
+         || total + lj52_gc_credit(M, total, used) - used >= delta
+         || lj52_gc_lend(M, total, used, delta))) {
+@@ -753,6 +767,7 @@
+ #include "lj_obj.h"
+ #include "lj_dispatch.h"
+ #include "lj_jit.h"
++#include "lj_frame.h"                  /* THE ADDRESS reads frame links */
+ #include "lj_alloc.h"
+ #include "lj_prng.h"
+ 
+@@ -1072,7 +1087,8 @@
+  * batch had returned -- event.timer's record, outside the handler (W16,
+  * W16R; in the hermetic W16 sweeps, 30 and 29 landings outside the handler
+  * without it, 0 with it).
+- * A refusal shuts the window, so the cycle it arms decides the next
++ * A refusal shuts the window (the recorder's excepted: THE ADDRESS, below),
++ * so the cycle it arms decides the next
+  * crossing: a caught refusal in the reserve tier opens no room, and without
+  * this the program's next allocation -- its "done/..." string, allocate-
+  * first -- was refused before any checkpoint could run (W16Rj).  The
+@@ -1100,6 +1116,72 @@
+  * resumes), and garbage pinned across two consecutive cycles, are still
+  * refused wherever they land.
+  *
++ * THE ADDRESS (2026-10-05; docs/roadmap.md, "A refusal the program never
++ * saw opens the reserve tier for it").  THE WINDOW's verdict is a finding
++ * about the heap -- live data past the tier's top, twice proven -- but it
++ * was executed by whichever growth came next: the fill's (good), the
++ * capacity probe's pcall(paint), the trace recorder's GCtrace, event.timer's
++ * record.  Hermetically every refusal the paint or the recorder absorbed
++ * was a verdict (2 328 of 2 328 in 28 672 runs; the paint opened the second
++ * chance in 2 169 of 2 192, the recorder in 23), and such a refusal opened
++ * the reserve tier for a program that never saw it, so its data went on to
++ * the reserve top, where the next verdict could land outside any handler
++ * (21 of 228 in the OpenOS-shaped probe; the machine's 3 downs in 30).
++ * Stock has no tier: an absorbed refusal there changes nothing, and the
++ * program meets its own at the same live set.  So the verdict is ADDRESSED.
++ * The handler of record is the protected call under which most of this
++ * episode's growths past the cap were made -- its callee's prototype and
++ * its thread, one candidate and one count (a majority vote, reset by a
++ * proof that finds the heap under the cap) -- read from the frame links the
++ * VM keeps and lj_err.c's unwinder walks, from jit_base on a trace as
++ * lj_err_mem reads it, LJ52_GC_WALK links at most, nothing followed and
++ * nothing allocated.  A request is addressed when it comes from under that
++ * handler and not from inside the trace recorder's protected call
++ * (lj_vm_cpcall's frame, J->state not idle, vmstate not C, GC or EXIT:
++ * trace_abort drops that error, lj_trace.c:585-656).  Then:
++ *   - a verdict refuses only an addressed crossing.  Any other is HELD: lent
++ *     on with the verdict standing, so the program's own next crossing
++ *     meets it, in its handler.  A standing verdict STANDS through the
++ *     proofs the held lends arm, until one finds the heap under the top:
++ *     THE WINDOW's two-cycle rule, read again at such a proof, would demote
++ *     it, because the held lends it has since collected and whatever the
++ *     kernel holds live between resumes both sit in the bytes granted since
++ *     the previous proof -- and a verdict demoted to "open" lets the next
++ *     crossing meet the plain ceiling (the dispatcher's pack after the
++ *     kernel's garbage: the sandbox down, measured, section (d)).  Two
++ *     consecutive cycles proved the data; a third past the top does not
++ *     unprove it.  A held crossing may go LJ52_GC_HOLD past the window in
++ *     the burst tier -- the code between a machine's steps (a paint of five
++ *     component calls, event.timer, the dispatcher) is a few KB, and a hold
++ *     that ended at the window's ceiling would end in that code -- and no
++ *     further than the window in the reserve tier, whose window is the
++ *     sandbox's bound.  The kernel's slice lies past the hold's room as it
++ *     lies past the window: its burst top gains LJ52_GC_HOLD, so it keeps
++ *     LJ52_GC_KSLICE - LJ52_GC_LEND past whatever the sandbox was lent;
++ *   - the recorder's own refusal -- past the hold's room, or on the kernel's
++ *     thread, where nothing is lent -- counts and arms as every refusal
++ *     does (W2b/W2c) but opens no reserve tier and shuts no window: nobody
++ *     recovers from it, and the program sees the next one at the same top,
++ *     as stock would.  Every other refusal, the hold's ceiling included,
++ *     opens the reserve tier as before: a program whose growth moved to
++ *     another of its own handlers is refused there, later by the hold's
++ *     room, and must still be able to format and drop.
++ * The kernel's own requests are addressed as before.  No pointer kept here
++ * is followed after it is read, so a prototype freed and reused costs at
++ * worst one verdict delivered as today; nothing crosses eris (a fresh
++ * record votes anew).  The bounds are unchanged: LJ52_GC_LEND + LJ52_GC_HOLD
++ * <= G/2 at the smallest G (checked at compile time), so a held crossing
++ * stays under total + G + LJ52_GC_LEND and the kernel under total + G +
++ * LJ52_GC_KSLICE.  What it costs: one frame walk per growth past the cap,
++ * one to four links as a rule; a program that holds its data under a
++ * handler that makes few of the growths -- a quiet producer behind a chatty
++ * consumer -- gets today's delivery, by sequence; and the kernel's burst
++ * top, which was total + G/2 + the slice, is that plus the hold's room
++ * (C6b).  What it does not fix: another's growth that overruns the hold's
++ * room is refused at its ceiling and opens the reserve tier, as today; and
++ * nothing here reaches a refusal no window was open for (W9's class, the
++ * kernel's garbage between resumes).
++ *
+  * THE VALVE COUNTS ATTEMPTS.  LJ52_GC_ARMCAP counts allocator calls that
+  * try to GROW (granted or refused), never frees or shrinks.  An armed cycle
+  * that sweeps more than 65 536 dead blocks -- one sweep of a machine full of
+@@ -1126,6 +1208,11 @@
+ #if LJ52_GC_KSLICE - LJ52_GC_LEND < 12 * 1024
+ #error "the kernel must keep 12 KiB past the sandbox's ceiling (mem_test W19)"
+ #endif
++#define LJ52_GC_HOLD   (8 * 1024)       /* THE ADDRESS: a held verdict's room past */
++                                        /* the window, in the burst tier            */
++#if LJ52_GC_LEND + LJ52_GC_HOLD > LJ52_GC_ODMIN / 2
++#error "a held verdict must stay under the reserve top at the smallest G, or the sandbox's bound moves"
++#endif
+ #define LJ52_GC_HYSTSHIFT 1             /* re-arm after half the headroom    */
+ #define LJ52_GC_FLUSHSHIFT 1            /* flush inside half the watermark   */
+ #define LJ52_OD_BURST   0               /* credit tiers                      */
+@@ -1204,6 +1291,8 @@
+   c = lj52_gc_odmax(total);
+   if (!lj52_gc_reserve(M, total, used)) c >>= 1;
+   if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;
++  if (lj52_gc_kernel(M, g) && M->gc_odstate != LJ52_OD_RESERVE)
++    c += LJ52_GC_HOLD;                  /* THE ADDRESS: the slice past the hold */
+   return c;
+ }
+ 
+@@ -1222,6 +1311,22 @@
+   if (M->gc_armed) lj52_gc_pressure(M, total, used, LJ52_GP_FREE);
+ }
+ 
++/* THE ADDRESS: a verdict stands and this sandbox crossing is not the
++ * program's own.  Lend on, the verdict standing, within the window and --
++ * in the burst tier -- LJ52_GC_HOLD past it; arm as the window arms, so
++ * the next proof decides again.  Past that room: refused, counted, and
++ * the refusal opens the reserve tier as any does (lj52_gc_refused),
++ * unless it is the recorder's. */
++static int lj52_gc_hold(lj52_mem *M, global_State *g, long long used, long long delta, long long top)
++{
++  long long room = LJ52_GC_LEND + (M->gc_odstate == LJ52_OD_RESERVE ? 0 : LJ52_GC_HOLD);
++  if (used + delta > top + room) { M->gc_holdfail++; return 0; }   /* the hold's ceiling */
++  M->gc_holds++;
++  M->gc_lends++;
++  if (!M->gc_armed) lj52_gc_arm(M, g, LJ52_ARM_WALL);   /* the window's cycle */
++  return 1;
++}
++
+ /* THE WINDOW: lend a sandbox growth the credit refused?  Up to LJ52_GC_LEND
+  * past the top it was refused at, unless the verdict stands, and arm the
+  * cycle that will decide it.  Never the kernel's, never under HOOK_GC or a
+@@ -1235,6 +1340,8 @@
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM || lj52_gc_kernel(M, g))
+     return 0;
+   top = total + lj52_gc_credit(M, total, used);
++  if (M->gc_win == 2 && M->gc_low > top && !M->gc_addr)  /* THE ADDRESS: another's crossing */
++    return lj52_gc_hold(M, g, used, delta, top);         /* under a standing verdict: held */
+   if (used + delta > top + LJ52_GC_LEND) return 0;      /* the ceiling */
+   if (M->gc_win == 2 && M->gc_low > top) return 0;      /* the verdict */
+   M->gc_win = 1;
+@@ -1243,6 +1350,73 @@
+   return 1;
+ }
+ 
++#define LJ52_GC_WALK 64                 /* frame links THE ADDRESS follows   */
++
++/* THE ADDRESS: the handler of record's identity for the running thread --
++ * the function the innermost pcall or xpcall called (the frame pcall gave
++ * it carries FRAME_PCALL: vm_x64.dasc ff_pcall, lj_err.c err_unwind), its
++ * prototype when it is a Lua function so that a fresh closure per step is
++ * the same handler; NULL when nothing in this coroutine protects the
++ * request.  0 when the frames cannot be read -- a slot that holds no
++ * function, a walk past LJ52_GC_WALK links -- and the caller then treats the
++ * request as addressed, which is today's behaviour.  Reads only; the base is
++ * lj_err_mem's own (jit_base on a trace). */
++static int lj52_gc_handler(lua_State *L, global_State *g, const void **id)
++{
++  TValue *stk = tvref(L->stack), *bot = stk + LJ_FR2;
++  TValue *base = tvref(g->jit_base), *frame;
++  int n;
++  if (base == NULL) base = L->base;
++  if (base <= bot + 1 || base > stk + L->stacksize) return 0;
++  frame = base - 1;
++  for (n = 0; n < LJ52_GC_WALK && frame > bot; n++) {
++#if LJ_FR2
++    if (!tvisfunc(frame - 1)) return 0;
++#endif
++    if (frame_ispcall(frame)) {
++      GCfunc *fn = frame_func(frame);
++      *id = isluafunc(fn) ? (const void *)funcproto(fn) : (const void *)fn;
++      return 1;
++    }
++    frame = frame_prev(frame);
++  }
++  if (n >= LJ52_GC_WALK) return 0;
++  *id = NULL;                           /* nothing protects this coroutine */
++  return 1;
++}
++
++/* THE ADDRESS: whose growth is this?  On the slow path, once per request
++ * that would pass the cap: the vote (one candidate, one count), and whether
++ * this request is addressed -- from under the handler of record, on its
++ * thread, and not the trace recorder's own (the forensics' predicate: a
++ * cpcall frame, J->state not idle, vmstate not C, GC or EXIT; 31 000 of
++ * 31 000 refusals against the recorder's protected call itself).  The
++ * kernel is addressed; so is any request whose frames cannot be read.  Not
++ * under norefuse, HOOK_GC or a host GCSTOP: nothing is decided there. */
++static void lj52_gc_vote(lj52_mem *M)
++{
++  global_State *g;
++  lua_State *L;
++  const void *id = NULL;
++  void *cf;
++  M->gc_addr = 1;
++  M->gc_rec = 0;
++  if (M->L == NULL || M->norefuse > 0) return;
++  g = G(M->L);
++  if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
++  L = gco2th(gcref(g->cur_L));
++  if (L == NULL) return;
++  cf = cframe_raw(L->cframe);
++  M->gc_rec = G2J(g)->state != LJ_TRACE_IDLE && g->vmstate < 0 && g->vmstate != ~LJ_VMST_C
++              && g->vmstate != ~LJ_VMST_GC && g->vmstate != ~LJ_VMST_EXIT
++              && cf != NULL && cframe_nres(cf) < 0 && (char *)cframe_pc(cf) == (char *)cframe_L(cf);
++  if (lj52_gc_kernel(M, g) || !lj52_gc_handler(L, g, &id)) { M->gc_addr = !M->gc_rec; return; }
++  if (M->gc_handn > 0 && M->gc_handL == (const void *)L && M->gc_hand == id) M->gc_handn++;
++  else if (M->gc_handn > 0) M->gc_handn--;
++  else { M->gc_handL = (const void *)L; M->gc_hand = id; M->gc_handn = 1; }
++  M->gc_addr = !M->gc_rec && M->gc_handL == (const void *)L && M->gc_hand == id;
++}
++
+ /* A refusal: counted, the valve and the proof seen to first, then the
+  * reserve tier opened and the collector armed -- from ANY headroom, so the
+  * garbage that would have covered the request is collected at the next
+@@ -1256,8 +1430,10 @@
+   if (M->gc_busy || M->norefuse > 0 || M->L == NULL || total <= 0) return;
+   g = G(M->L);
+   if ((g->hookmask & HOOK_GC) || g->gc.threshold == LJ_MAX_MEM) return;
+-  M->gc_odstate = LJ52_OD_RESERVE;
+-  M->gc_win = 0;                        /* THE WINDOW: its cycle decides anew */
++  if (!M->gc_rec) {                     /* THE ADDRESS: not the recorder's own */
++    M->gc_odstate = LJ52_OD_RESERVE;
++    M->gc_win = 0;                      /* THE WINDOW: its cycle decides anew */
++  } else M->gc_recref++;                /* the recorder's: it opens nothing */
+   if (M->gc_armed) M->gc_armby = LJ52_ARM_WALL;
+   else lj52_gc_arm(M, g, LJ52_ARM_WALL);
+ }
+@@ -1302,10 +1478,12 @@
+       M->gc_hyst = 1;
+       M->gc_low = used;
+       if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */
++      if (used <= total) M->gc_handn = 0;                  /* THE ADDRESS: a new episode */
+       if (M->gc_win) {   /* THE WINDOW: shut, open, or the verdict */
+         top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+                                                         : lj52_gc_odmax(total) >> 1);
+-        M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;
++        M->gc_win = used <= top ? 0                       /* THE ADDRESS: a standing */
++                 : (M->gc_win == 2 || used - M->gc_grown > top) ? 2 : 1;   /* verdict stands */
+       }
+       M->gc_grown = 0;
+       /* THE FLUSH PREDICATE -- at the proof, never at the arm.  The cycle
+@@ -1353,7 +1531,8 @@
+   } else {
+     top = total + (M->gc_odstate == LJ52_OD_RESERVE ? lj52_gc_odmax(total)
+                                                     : lj52_gc_odmax(total) >> 1);
+-    if (lj52_gc_kernel(M, g)) top += LJ52_GC_KSLICE;   /* where the kernel is refused */
++    if (lj52_gc_kernel(M, g))                          /* where the kernel is refused */
++      top += LJ52_GC_KSLICE + (M->gc_odstate == LJ52_OD_RESERVE ? 0 : LJ52_GC_HOLD);
+     arm = top - used < (top - M->gc_low) >> 1;
+   }
+   if (arm) lj52_gc_arm(M, g, used > total ? LJ52_ARM_WALL : LJ52_ARM_GATE);
+@@ -2033,7 +2212,9 @@
+ 
+ /* _OCLJ_WALLSTATS() -> overdrafts, od_peak, od_state, park_resets,
+  *                      od_limit, kernel_slice, gc_low, armby, hyst,
+- *                      window, lends, win, refused
++ *                      window, lends, win, refused,
++ *                      holds, recorder_refusals, handvotes, addressed,
++ *                      hold, holdfails
+  *
+  * The collector at the wall (docs/roadmap.md; THE CREDIT, THE CADENCE and
+  * THE PARK RESET in the collector section).  overdrafts counts growths lent
+@@ -2050,7 +2231,14 @@
+  * state (0 shut, 1 open, 2 the verdict), refused the size of the last
+  * refused request (what a landing outside a handler was asking for: the
+  * hermetic W16 cases judge "covered" by it, and a capacity run's stall is
+- * attributed by it).  A separate global, not more
++ * attributed by it).  THE ADDRESS's six: holds, the verdicts held for the
++ * program while another's growth was lent on; recorder_refusals, the
++ * recorder's own, which opened nothing; handvotes, the handler of
++ * record's standing count; addressed, whether the last request past the
++ * cap was the program's own; hold, LJ52_GC_HOLD (the burst tier's kernel
++ * top is then cap + G/2 + kernel_slice + hold: C6b); holdfails, holds
++ * that met their ceiling (a capacity run's down is attributed by it).
++ * Nineteen values: under LUA_MINSTACK still.  A separate global, not more
+  * _OCLJ_GCSTATS positions: twenty values is LUA_MINSTACK, which is what
+  * lets that one push without a checkstack.  Read-only,
+  * allocates nothing, raw global -- the sandbox never sees it. */
+@@ -2069,7 +2257,13 @@
+   lua_pushinteger(L, M ? M->gc_lends : -1);
+   lua_pushinteger(L, M ? M->gc_win : -1);
+   lua_pushnumber(L, M ? (lua_Number)M->gc_refdelta : -1);
+-  return 13;
++  lua_pushinteger(L, M ? M->gc_holds : -1);      /* THE ADDRESS */
++  lua_pushinteger(L, M ? M->gc_recref : -1);
++  lua_pushinteger(L, M ? M->gc_handn : -1);
++  lua_pushinteger(L, M ? M->gc_addr : -1);
++  lua_pushinteger(L, M ? LJ52_GC_HOLD : -1);
++  lua_pushinteger(L, M ? M->gc_holdfail : -1);
++  return 19;
+ }
+ 
+ /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */

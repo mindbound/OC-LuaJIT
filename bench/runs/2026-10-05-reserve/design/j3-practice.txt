@@ -1,0 +1,450 @@
+j3-practice: judge's verdict, round 3 -- lens PRACTICE (what a player and a maintainer get)
+===========================================================================================
+Row: "A refusal the program never saw opens the reserve tier for it" (docs/roadmap.md:166).
+Designs judged: design/lifetime.txt (R4K), design/verdict.txt (THE ADDRESS),
+design/identify.txt (THE RECIPIENT).  Read in full, with their diffs, compare outputs,
+mem_test tallies and sabotage logs; plus the IN-MACHINE NOTE (runsR/an/), the forensics
+REPORT (F1-F7), the map REPORT (0, 7, 9), REQUIREMENTS.md, j2-safety.md, j2-practice.md and
+d2-final.md section 8.  The repo was not modified.  One confirmatory run of existing
+binaries, pinned (section 6).  My own files: design/j3p/.
+
+-------------------------------------------------------------------------------------------
+0. VERDICT IN ONE PAGE
+-------------------------------------------------------------------------------------------
+| design                   | score | ship now?                | one line |
+|--------------------------|-------|--------------------------|----------|
+| R4K (lifetime)           | 8/10  | YES, as the change       | 25 code lines in the hottest function, no new concept, the bound TIGHTENS, the only design that checked more than one string-hash seed, the only two-directional size test set, the best-built gate.  Buys about half the in-machine bad outcomes, not the 8x its headline suggests. |
+| THE RECIPIENT (identify) | 7/10  | no; graft two pieces      | The same reserve rule as R4K (identical arithmetic at the point that matters, identical censuses) plus 28 lines the in-machine forensics value at ZERO: 0 of 50 machine refusals were the recorder's, and the sandbox has no `jit` at all.  One seed, a one-directional size test set, and THE CREDIT left saying "up to G". |
+| THE ADDRESS (verdict)    | 5/10  | no; measure first         | The biggest prize by far -- the second chance goes to 0 in all eight hermetic cells, monotone, no cell worse -- bought with 94 lines and a frame walk inside the allocator, a heuristic about who "the program" is whose in-machine margin is a near-tie by its own estimate, a 4 KiB hold in the reserve tier against an unmeasured OpenOS footprint, and a sabotage (rawverdict) that now catches nothing. |
+
+RANK FOR SHIPPING NOW: 1. R4K   2. THE RECIPIENT   3. THE ADDRESS.
+The reason is not that THE ADDRESS is wrong.  It is that R4K is a 25-line change to a
+tier's size that the player cannot observe except as 200 fewer objects in the runs that had
+a second chance, and THE ADDRESS is a new mechanism in lj52_gc_lend whose value in the
+machine rests on one unmeasured number -- the allocation count per handler per step -- that
+the instrumented native can settle this week for free.  Ship the size now; settle the count;
+build the hold only if the count says the fill wins.
+
+-------------------------------------------------------------------------------------------
+1. THE QUESTION THE LENS ASKS: HOW OFTEN DOES THE SECOND CHANCE STILL END OUTSIDE A
+   HANDLER IN THE MACHINE?
+-------------------------------------------------------------------------------------------
+1.1  THE IN-MACHINE BASE RATE, AND WHAT THE NOTE CHANGED ABOUT IT.
+The pooled history for the amplified JIT-on record cell (results-wall-window, W + V) is:
+21 of 30 runs took the second-chance path (a paint-absorbed first refusal), and 3 of those
+21 went down.  So P(bad | second chance) = 3/21 = 14 %, and P(bad | no second chance) = 0
+of 9 (and 0 of 1 820 hermetically, F4).  That ratio is the whole row.
+
+The NOTE adds the piece the designers' hermetic probes do not have.  In the machine:
+  - every absorbed refusal is a 56-64 B CLOSURE the KERNEL's machine.lua makes on the
+    sandbox thread inside a component call (wrapUserdata's wrapRecursively at machine:1261,
+    unwrapUserdata's at :1280, checkArg's `check` at :117), caught by the probe's
+    pcall(paint).  All 50 refusals: kernel=0, wd=1, vm=INTERP, jst=IDLE, recorder=0.
+  - at the RESERVE top the verdict lands on those same closures again, each absorption
+    shutting the window and letting the next crossing be lent: the fill gets a 2nd, 3rd and
+    4th chance (1-5 refusals per run; the D cell read 3 1 2 5 3 2 3 4 3 4).
+  - the recorder absorbed NOTHING (0 of 50); the string table absorbed nothing (0 of 50).
+This is a different absorber from the hermetic one.  Hermetically the paint's absorbed
+refusals are at probe2.lua:45/:46 -- string.format and a concat in the probe's OWN Lua
+(F4: 1 382 + 905 of 2 303).  In the machine they are the kernel's closures inside a
+component call.  Nothing in any of the three censuses models that.  So every hermetic
+stall count below measures the probe's phase arithmetic, not the machine's absorber.  R4K
+says this itself (d.3: "the machine's paint is 3 KB, its steps are compiled differently,
+and the probe's phase arithmetic is not the machine's").  identify's headline does not.
+
+1.2  R4K AND THE RECIPIENT: THE SAME ARITHMETIC AT THE POINT THAT MATTERS.
+A reserve-opening refusal happens at the window's ceiling, used ~ total + G/2 + 4 KiB.
+  R4K:       gc_rsv = max(used - total, G/2) + 4 KiB           = G/2 + 8 KiB
+  RECIPIENT: clamp(used + 4 KiB - total, G/2, G)               = G/2 + 8 KiB
+Identical.  The censuses confirm it to the byte: R4K's d.1 and identify's "res" variant row
+are the same numbers in all seven shared cells (oe string 21 -> 0, k2048 string 828 -> 785
+with sc_out 103 -> 60, odx +1432 -> -11548, held ratio 0.9953/0.9954).  So their in-machine
+expectation is the same, and everything that separates them is cost, tests and documents
+(sections 3-5).  They differ only for a refusal taken BELOW the burst top: R4K then gives
+G/2 + 4 KiB, the RECIPIENT gives exactly G/2.  That costs the RECIPIENT one real shape --
+see 4.3.
+
+1.3  MY OWN EXTRAPOLATION FOR R4K / THE RECIPIENT, WITH ITS ARITHMETIC.
+The reserve's size does not change WHERE a verdict lands.  It changes (a) the phase of the
+reserve top inside the batch cycle -- R4K's d.3 hypothesis, explicitly flagged as one --
+and (b) how many lottery draws the fill gets before the ceiling, because each absorbed
+reserve-top verdict shuts the window and the next crossing is lent again up to top + 4 KiB,
+so each round burns roughly one window.
+  - room to burn: shipped G/2 = 16 KiB -> ~4 rounds; R4K 4 KiB + a window -> ~1-2 rounds.
+    That matches the NOTE's observed 1-5 refusals per run (mean ~2.9 in the D cell) and
+    predicts ~1.3-1.5 under R4K.
+  - P(outside per draw) in the machine = 3 bad / (21 sc runs x ~2.5 draws) ~ 6 %.
+  - expected bad under R4K = 21 x ~1.3 x 6 % ~ 1.6 of 30, against 3 of 30 today.
+So: ABOUT HALF, not the 46 -> 6 (8x) the hermetic three-seed sweep reads, and the second
+chance itself is not removed -- the paint still absorbs the first refusal at the same rate,
+and the roadmap row's mechanism ("a refusal the program never saw opens the reserve tier")
+is still true, just for 4 KiB instead of 16-256 KB.  R4K's own (g) says this in the first
+bullet.  Judge its gate's (3) against ~1.6, not against 0: with V at 3 of 30, a one-sided
+Fisher at 1 of 30 reads p = 0.30.  THE GATE AS WRITTEN CANNOT REACH SIGNIFICANCE ON (3)
+AT 30 RUNS.  R4K half-anticipates this ("(3) is reported, not judged" if V shows < 2 bad),
+but the arithmetic needs saying in the other direction too: the capacity and bound claims
+((1), (2), (4)) are what this chain can actually establish; (3) will be an observation.
+That is not a reason to reject the design.  It is a reason not to let the row be closed on
+(3) alone.
+
+1.4  THE FINDING NEITHER R4K NOR THE RECIPIENT PUTS IN ITS HEADLINE: THE LEVER RE-ROLLS
+     THE LOTTERY, IT DOES NOT DRAIN IT.
+R4K is the only design that ran more than one string-hash seed, and its own pair-seeds.txt
+shows the shared rule is NOT MONOTONE:
+     seed 1     seed 2     seed 3     total
+     21 -> 0     0 -> 6    25 -> 0    46 -> 6
+At seed 2 the shipped shim had ZERO second-chance stalls and R4K has SIX.  They are not a
+subset of the shipped shim's 46; they are new, at caps (off 9600-9680) where the shipped
+shim ended INSIDE the batch's handler.  I re-ran that cap myself (section 6): baseline
+term 1 (inside, count 5049), R4K term 2 (the dispatcher: a stall, count 4850), both with
+exactly 2 refusals and an identical first refusal.  The second refusal moved from the
+batch to the dispatcher because the top moved.
+Consequences for practice:
+  - The honest claim is "re-rolled, net ~8x better over three seeds hermetically", not
+    "removed".  R4K's own (d.2) text says "the lottery is not abolished"; the headline and
+    (f)(3) should carry the per-seed split, because a gate that counts only improvements
+    will read a worse seed as a design failure, and a row closed on seed 1 will be reopened.
+  - THE RECIPIENT's headline "21 outside landings -> 0" is SEED 1 ONLY, and it inherits
+    R4K's seed-2 result unchanged, because the rule is the same.  That is the single most
+    important thing the RECIPIENT document does not tell its reader.
+  - Any in-machine gate must count landings in BOTH directions and must not be scored on a
+    single probe phase.  R4K's (f)(3) is a <= comparison against V in the same chain, which
+    is the right shape; identify's (2) demands an absolute 0 in 60 runs, which is the wrong
+    shape for a re-rolled lottery (and for a probe where STOCK ITSELF stalled 2 of 20 at
+    batch 10: results-wall-window, "Stock stalls too").
+
+1.5  THE ADDRESS IN THE MACHINE: THE ONE DESIGN THAT TARGETS THE NOTE'S ABSORBER, AND THE
+     TWO WAYS IT CAN FAIL THERE.
+What is refused instead of the paint's closure?  Nothing, for as long as the fill keeps
+allocating.  The mechanism lines up with the NOTE exactly, and I checked the frame geometry
+in the kernel source rather than taking it on faith:
+  the sandbox-thread crossing that gets absorbed today is wrapRecursively's FNEW, reached
+  as paint -> gpu.set (proxy __index) -> libcomponent.invoke -> invoke -> processResult ->
+  wrapUserdata.  The direct path (machine.lua:1126-1148) contains NO pcall, so the nearest
+  FRAME_PCALL walking out is the probe's own pcall(paint), and its callee is `paint`.
+  checkArg's `check` closure resolves the same way.
+So under THE ADDRESS those crossings are read as another handler's, HELD (lent on with the
+verdict standing, within the window and 8 KiB more in the burst tier), and the verdict waits
+for the fill's next record.  If the fill is the handler of record, the in-machine second
+chance goes to ~0 and the 3-of-21 goes with it.  Hermetically that is exactly what happened
+in all eight cells: second chances 441/161/166/36/228/72/229/38 -> 0, every refusal caught
+by the batch, outside landings 21 -> 0 and 828 -> 776, and no cell worse.  No other design
+is monotone across all eight.
+
+FAILURE MODE A: the fill does not win the vote.  The design states this as its limit and
+estimates fill ~100, paint ~45, step ~10, dispatcher ~5 allocations per step.  My own count
+off the kernel and probe source is less comfortable: at batch 10 in the RECORD shape, the
+fill's step is ~8 allocations per object (tostring + rep + concat for uniq(12), two tables,
+three for the junk string) = ~80; the paint is 5 gpu.set, each through invoke ->
+table.pack(args) -> unwrapUserdata (a `processed` table + its closure) -> target.invoke ->
+table.pack(result) -> wrapUserdata (a table + a closure) -> processResult -> table.unpack,
+~8-12 allocations each, plus 2-6 concats per message = ~50-70.  So ~80 against ~50-70:
+a plurality, not a landslide.  Two mitigations I credit the design for without it saying
+so: the vote counts only growths PAST THE CAP (so the ratio near the wall is the ratio that
+matters), and gc_handn resets only at a proof that finds the heap under the cap, which near
+the wall almost never happens -- so a persistent 55:45 split accumulates a lead of ~10 per
+step and the candidate is secure after a few steps.  The hazard is not the margin, it is a
+program where the split runs the other way: a quiet producer behind a chatty consumer.
+Then THE ADDRESS delivers as today (no regression, no gain) and 94 lines bought nothing.
+FAILURE MODE B: the hold overruns its room.  In the BURST tier a non-addressee has
+L + H = 12 KiB, which comfortably covers the design's ~4 KB in-machine between-step
+estimate.  In the RESERVE tier it has THE WINDOW ONLY, 4 KiB.  A real OpenOS program
+reaches the reserve tier whenever it catches one refusal and keeps its data, and OpenOS's
+between-resume code is bigger than the hermetic probe's 0.5 KB: event.lua:54-74 packs the
+signal (table.pack of event_data) AND COPIES THE WHOLE HANDLER TABLE (`local copy = {}`
+plus a slot per handler) on every pullSignal, before pcall(handler.callback); tty and io
+buffering sit on top.  If that exceeds 4 KiB while a verdict stands, the hold fails at its
+ceiling and the refusal lands in the dispatcher -- the down site.  This is not speculation:
+it is revision 1's measured result (probe2k string 828 -> 950, record 162 -> 195, i.e.
++122 and +33 downs) and revision 2 still read 881.  Revision 3 fixed it hermetically
+(776, 162) with the standing verdict, but the fix is tuned to a 2 KiB-per-resume model of
+a machine whose real figure nobody has measured.  The design is honest about this -- "the
+in-machine between-step footprint is the one number this chain still rests on an estimate
+for" -- and its gate fails itself on a single bad run with holdfail > 0, which is the right
+pre-registration.  It is still the reason not to ship it this week.
+
+1.6  "WHEN A REAL PROGRAM HAS NO HANDLER OF RECORD".
+The player's actual OOM is one runaway loop: `for i=1,1e9 do t[i]={} end` at the shell.
+Under OpenOS that runs under process.lua:59-72's xpcall of one anonymous function, and it
+out-allocates every other handler by orders of magnitude -- THE ADDRESS wins that case
+easily, which is worth saying because it is the common case.  The spread case is a program
+whose growth is in several of its own callbacks (the dispatcher's pcall(handler.callback)
+gives one proto per handler, and the shell has several: the key handler, the timers, the
+gpu handler).  Then the Boyer-Moore candidate thrashes, no handler holds the count, and the
+verdict is served by sequence -- today's behaviour.  Graceful.  The genuinely awkward case
+is the one the design names as W24: a program whose growth MOVES from one of its own pcalls
+to another, which is refused up to 12 KiB late, with its recovery intact.  Bounded and
+stated.  I find no case where THE ADDRESS is worse than today EXCEPT failure mode B, and
+B is a real stall-to-down conversion, which is why it dominates the score.
+One instrument hazard in its gate, from this lens: under THE ADDRESS a "second chance" is
+redefined from the control's "refusals >= 2 with pf >= 1" to "holds >= 1 && refusals == 1".
+The Fisher test in (b) then compares two NON-IDENTICAL events across builds.  The design
+states the substitution; it should also state that (b) is therefore a comparison of rates
+of different observables, and keep the control's own definition as a second, reported count.
+
+-------------------------------------------------------------------------------------------
+2. CAPACITY COST PER CELL, AND COLLECTIONS
+-------------------------------------------------------------------------------------------
+All three cost capacity only in runs that HAD a second chance; every cap whose program saw
+its own refusal is byte-identical (R4K: 10 240 of 10 240 such caps; THE ADDRESS: 14 471 of
+14 471 quiet caps; RECIPIENT: the differing caps are exactly the second-chance runs in
+every cell).  That is the right shape: no player who never hit the wall sees anything.
+
+ design      per-cell held      per second-chance run        collections     bound
+ R4K         0.993-0.999x       -200 strings / -42 records   -1.0 %          TIGHTENS to
+                                (the 12 KiB no longer lent)                  total+G/2+12 KiB
+ RECIPIENT   0.9932-0.9994x     -176..-270 strings           -0.1..-1.7 %    same tightening
+ ADDRESS     0.991-0.999x       -246..-295 strings /         -1..-6 %        unchanged
+                                -53..-60 records (the whole  (best)          (T+G+L); kernel
+                                G/2)                                         burst top +8 KiB
+
+Reading it as a player: in the amplified JIT-on record cell 12 of 15 runs took the second
+chance on W, so that cell's MEAN capacity will visibly drop under every one of the three --
+most under THE ADDRESS (the whole G/2), ~2/3 of that under R4K/RECIPIENT.  All three are
+stock's parity, which is what the row asks for, and all three say so; R4K's gate (4) and
+THE ADDRESS's (d) both pre-register the expected fall so the number is not misread.  Only
+THE ADDRESS states it in the costs section in the player's terms.  Collections fall in all
+three, so nothing here costs near-wall time by that route.
+Near-wall TIME is the one place THE ADDRESS pays and the other two do not: it adds a frame
+walk (1-4 links, bounded 64) to EVERY growth past the cap, not just refusals -- the same
+path THE WINDOW already made 1.16x stage C's.  Its evidence is a 24-run hermetic timing
+reading 4.65/5.65 against 5.25/4.92 s, i.e. noise either way.  After j2's open question 1
+(is 1.12-1.34x acceptable?), adding work to that exact path on a 24-run wash is not enough
+to ship on.  R4K and the RECIPIENT add nothing to the hot path (R4K: two scalar writes on
+the refusal path and one 4-line helper read at four sites; the RECIPIENT's recorder test is
+two loads, refusal path only).
+
+-------------------------------------------------------------------------------------------
+3. THE COMMENT BURDEN AND THE MAINTAINABILITY OF 25 vs 53 vs 94 LINES
+-------------------------------------------------------------------------------------------
+Measured from the diffs (added lines that are not pure comment):
+  R4K       R4K.diff          161 lines total,  25 code
+  RECIPIENT identify.diff     230 lines total,  53 code  (its own count: 123 added, 7 removed)
+  ADDRESS   verdict-shim.diff 347 lines total,  94 code  (+205/-11)
+Zero LuaJIT lines in all three.  All three compile warning-clean, both variants, and pass
+build-native.sh's source gates.
+
+"IS IT EXPLAINABLE IN THE SHIM'S THE CREDIT COMMENT IN ONE PARAGRAPH?"
+  R4K: YES, demonstrably -- it rewrote THE CREDIT's RESERVE bullet IN PLACE, one paragraph,
+    and the new text says the whole rule and names the evidence ("3 of 30 amplified JIT-on
+    record runs down").  A reader of THE CREDIT learns the current rule from THE CREDIT.
+    This is the single best maintainability property in the round.
+  RECIPIENT: NO, and worse than "no" -- it adds a 55-line THE RECIPIENT block ~200 lines
+    away and LEAVES THE CREDIT's bullet reading "RESERVE, after a refusal: up to G" (I
+    checked: identify/src-id/lj52shim.c:966 still says it).  The canonical paragraph in the
+    project's most-read comment now contradicts the code.  For a three-rule change that is
+    a real defect, not a nit: the next person to touch the tier reads THE CREDIT first.
+  ADDRESS: NO, by nature.  "The handler of record" is a new concept and needs its own block
+    (18 THE ADDRESS comment references, a ~60-line block) plus a reviewer who knows
+    lj_frame.h's frame_ispcall / frame_prev / LJ_FR2 conventions.  Its THE CREDIT bullet
+    stays correct (the tier IS still G), so it is honest -- just not compressible.
+
+MAINTAINER'S LEDGER BEYOND LINE COUNT
+  R4K: one constant, one field, one 4-line helper, four one-line call sites, one 5-line
+    block in lj52_gc_refused, a 14th WALLSTATS value.  Every existing negative-control
+    anchor intact (13 named sabotages still apply); `unbounded`'s expected set needs
+    re-verifying (stated).  Two re-scopes: W19 (precondition only) and W7 (TIGHTER -- the
+    rare re-scope that strengthens a check).  Four new sabotages, each seen failing.
+  RECIPIENT: 53 lines for three rules of which the machine says two are inert.  All 22+
+    anchors intact.  W19 re-scopes, and the W16R family must now read the tier from
+    od_state/od_credit instead of the refusal COUNT, because rule 1 makes a counted refusal
+    that opens nothing -- a test-instrument consequence of rule 1 that would not exist
+    without it.  Five new sabotages.
+  ADDRESS: 94 lines including a bounded frame walk inside the allocator, 8 new fields, 6
+    more WALLSTATS (19), the kernel's burst top +8 KiB (C6b re-scoped: a real contract
+    change), 6 new mem_test cases, 12 sabotages.  THREE EXISTING SABOTAGES CHANGE, and one
+    of them, rawverdict, LOSES ITS ENTIRE EXPECTED SET -- the design measured it failing 0
+    of 87.  By this project's own rule ("prove a new check can fail"), a sabotage that
+    catches nothing is a hole, and the offered fix (a new case W26) is NOT BUILT and its
+    numbers are estimates.  That alone would block landing until W26 exists.
+
+-------------------------------------------------------------------------------------------
+4. W8 / W2b / W2c / W11, AND WHAT EACH DESIGN ACTUALLY PROVES ABOUT THE RECOVERY
+-------------------------------------------------------------------------------------------
+4.1  All three keep W8, W2b/W2c and W11 passing, and all three leave the fresh-record rule
+alone (R4K and the RECIPIENT set the fresh tier to G explicitly; THE ADDRESS does not touch
+the credit for the sandbox).  mem_test tallies I read from their own logs:
+  R4K        repo 81: 80/81 additive and dropin (W19's precondition); extended 84: 84/84.
+             Controls: shipped 81/84 (W7 W20 W20L), R8K 81/84, R0 80/84, R1K 80/84.
+  RECIPIENT  repo 81: 80/81 (W19); extended 85: 85/85 additive and dropin; shipped 82/85.
+  ADDRESS    repo 81: 80/81 (C6b); extended 87: 87/87 additive x3 and dropin; shipped 83/87.
+
+4.2  THE BEST SINGLE TEST OF THE ROUND IS R4K's W21, AND IT IS THE ONE THE RECIPIENT LACKS.
+R4K reports a surprising reading against its own interest: W8 PASSES WITH THE RESERVE SET
+TO ZERO (R0: 80/81, W19 only).  W8 runs on the main thread -- the kernel, with its 16 KiB
+slice -- and its one allocation while holding is covered by THE WINDOW's lend.  So the case
+the map's section 7 names as the reserve's reason does not in fact guard the reserve's
+size.  R4K then BUILT the case that does: W21, "a recovery that holds across the cycles its
+report costs" (as the sandbox, ~2 KB kept, ~8 KB granted, the armed cycles in between),
+which FAILS on R0 and R1K and passes on shipped/R4K/R8K.  That is how you find the FLOOR
+of a constant, and it is why I believe 4 KiB rather than taking it on assertion.  It also
+found a floor nobody chose: with the JIT on, 1 KiB fails W16Rj/W16RjL because the recorder's
+own allocations share the reserve.
+THE RECIPIENT has no equivalent.  Its R4 bounds the reserve from ABOVE (u2-u1 <= 4 KiB +
+window + 1 KiB) and from below only by 512 B of growth.  Nothing in its 85 checks says
+4 KiB is ENOUGH for a recovery; its only size sabotage is reserveG (too big).  Its test set
+is one-directional on the number it chose.  For a maintainer that is the difference between
+a constant with a measured floor and a constant with a plausible value.
+THE ADDRESS's new cases are the most elaborate (W20-W25, two handlers on one thread, a vote
+overtake, a standing verdict surviving a proof) and its sabotage matrix is the tightest
+(each fails exactly its set, logs in sab6/) -- except rawverdict (4.1 above).  Its W24 is a
+guard, not fail-first, and it exists because revision 1 killed that sandbox: worth grafting
+(section 5).
+
+4.3  THE ONE BEHAVIOUR THE RECIPIENT LOSES THAT R4K KEEPS.
+For a refusal taken BELOW the burst top, the RECIPIENT's clamp floor gives exactly G/2 (the
+burst top) while R4K gives G/2 + 4 KiB.  Its own (g) reports the consequence: the shipped
+shim's reserve let a 32 KiB holder doubling at cap + 2 KiB succeed on retry (ctl_rec.lua
+"does not reproduce under rule 3"), and in the machine's JIT-on string cells at 192 KB that
+is the 16 KiB doubling at 2 048 objects -- 5 of 15 W/V runs got it through and held 2 049;
+they will hold 2 048.  The object count is trivial; the SHAPE is not, because "grow a table
+just past the cap, catch, retry" is ordinary Lua.  Checking the arithmetic at the floor:
+used = cap + 2 KiB, G = 32 KiB.  R4K's top = cap + max(2K, 16K) + 4K = cap + 20 K, so
+18 K fits: GRANTED.  RECIPIENT's top = cap + clamp(6K, 16K, 32K) = cap + 16 K: REFUSED.
+Stock refuses it too, so neither is a contract break -- but R4K is the friendlier of two
+rules that cost the same elsewhere, and it gets there with fewer lines.
+
+-------------------------------------------------------------------------------------------
+5. THE PROBES AND THE GATES: CAN EACH FAIL?  IS THE CONTROL ARM SOUND?  WHAT IS MEASURED?
+-------------------------------------------------------------------------------------------
+5.1  CAN IT FAIL?
+  R4K (f): BEST OF THE THREE.  Every criterion names the control that shows it can fail;
+    (1) voids the whole chain unless V's own od_peak check fails in >= 10 of its 30 JIT-on
+    runs; (2) voids a cell where the probe took no second chance; (3) is judged only if V
+    shows >= 2 bad, with a stated reps top-up and an explicit "reported, not judged"
+    fallback; (7) PRE-COMMITS TO THE NEGATIVE RESULT -- if the extra refusals turn out to be
+    S1 or the OpenOS error path, "this design does not address them and the row stays open
+    with that finding".  That is the j2 lesson absorbed.  Residual: (3) cannot reach
+    significance at 30 runs (section 1.3), and the criterion should say so.
+  ADDRESS (f): second best and the most self-aware.  (a) teeth >= 8 of 15 with VOID below
+    6; (b) a Fisher bar PLUS "a down with holdfail > 0 FAILS the gate" -- a clause aimed at
+    its own known hazard, which is exactly how to pre-register; and it says outright that
+    the main session's instrumented run "can settle first, and should" the per-handler
+    allocation count, and that if the paint out-allocates the fill, "(b) will not be met;
+    that is the design's stated limit, not a defect to be hidden by the gate".  Residual:
+    the redefined second-chance observable (1.5).
+  RECIPIENT (f): weakest.  (1) teeth are there (>= 20 of 60 or VOID).  But (2) asks for an
+    absolute 0 DOWN+STALL+PROC-DEATH in 60 runs on a probe where STOCK stalled 2 of 20 at
+    batch 10 and where the lever is known (1.4) to re-roll in both directions; and its own
+    stated significance is p = 0.035, against the p < 0.01 bar this project's last two gates
+    used, with no note that the bar moved.  Its control arm is 60 candidate runs against 20
+    V runs, unbalanced, plus a POOLED W+V history (21 of 30, 3 down) -- and the results doc
+    warns W and V are different builds.  R4K and THE ADDRESS both interleave by rep against
+    a same-chain V; that is the sound arm and the RECIPIENT should adopt it.
+
+5.2  DOES IT MEASURE THE MACHINE OR THE PROBE?  (applies to all three)
+  - probe2oe is the j2 JUDGE's MODEL of OpenOS's event.timer (three checkArg closures), not
+    OpenOS; probe2k_2048 is a model of Java's signal pushes.  The forensics say so
+    (section 8: "models of the machine, not the machine").  Every "21 -> 0" and "46 -> 6"
+    in this round is measured on those models.
+  - the in-machine absorber is structurally DIFFERENT from the hermetic one (1.1): kernel
+    closures inside a component call, not the probe's own string.format.
+  - the probe itself perturbs what it measures: OCLJCAPX's row-19 paint adds ~1.1 KB of live
+    data and a FIFTH gpu.set per paint, and the probe's own comment says "compare a run only
+    with a baseline taken under this same probe".  Since the paint is the absorber, the
+    instrument is part of the mechanism under test.  All three gates use V under the same
+    probe, which is the right control; none says that the paint's size is itself a treatment.
+  - the pre-registered attribution test from the last round (od_peak within 256 B of a
+    tier's top) ALREADY FAILED for THE WINDOW because od_peak is a whole-run maximum that
+    includes the lend.  R4K's (1) replaces it with a correct absolute bound plus a named
+    kernel-slice exception; the RECIPIENT's (3) does the same; THE ADDRESS's (f) keeps the
+    simple od_peak <= od_limit + kslice.  All three fixed it.
+
+-------------------------------------------------------------------------------------------
+6. MY ONE CONFIRMATORY RUN
+-------------------------------------------------------------------------------------------
+Existing binaries only, pinned (affrun 3FC3FC default; both .err files read back
+"applied=1 effective=0x3FC3FC"), one process per cap, OCLJ_SEED=2, OCLJ_REFLOG=1,
+probe2oe.lua string off 9600, capk 384, JIT on, batch 10, junk 24 -- the cap where R4K's
+seed-2 pair output shows a NEW stall.  Logs: design/j3p/err/{lref_base,lref_lt-R4K}-9600.err.
+
+  shipped (lref_base.exe = forensics' lref_ref.exe, 83a4f083):
+      term 1 (inside the batch's handler), count 5049, od_peak 32844, refusals 2
+      seq=1 delta=44 used=472298 credit=16384 top=472198 over=144 tier0=0 tier1=1 opened=1 win0=2
+      seq=2 delta=52 used=488654 credit=32768 top=488582 over=124 tier0=1 opened=0 win0=2
+  R4K (lref_lt-R4K.exe):
+      term 2 (the dispatcher: a STALL), count 4850, od_peak 21004, refusals 2
+      seq=1 identical to the shipped shim's (delta=44 used=472298 opened=1)
+      seq=2 delta=48 used=476722 credit=20580 top=476394 over=376 tier0=1 opened=0 win0=2
+
+Reads: the first refusal is bit-identical, so the rule changes nothing before a reserve
+opens (as claimed); the reserve credit is 20 580 = G/2 + 4 196, inside the design's stated
+20 528-24 704 range; the excursion falls from 32 844 to 21 004 (the bound tightening, real
+and visible); and the fill's end moved from inside the handler to the dispatcher because the
+reserve top moved into a different phase of the batch.  199 objects of capacity, one stall
+created.  Both directions of 1.4 confirmed on one cap of one seed.
+
+-------------------------------------------------------------------------------------------
+7. SCORES AGAINST THE REQUIREMENTS (practice lens; R1/R5/R7/R9-R12 as REQUIREMENTS.md)
+-------------------------------------------------------------------------------------------
+                         R4K            RECIPIENT       ADDRESS
+R1  (contract)           PARTLY         PARTLY          PARTLY (+: the only one that
+                         (re-rolls,     (same, one      removes the second chance; -: the
+                         3 seeds)       seed)           hold admits live data 12 KiB past S)
+R1b (recovery, kernel)   MET (W21 pins  PARTLY (no      MET (W20-W25, W24 guard; kernel
+                         the floor)     floor case)     keeps 12 KiB, burst top +8 KiB)
+R5  (bound)              MET, TIGHTER   MET, TIGHTER    MET, unchanged
+R7  (minimal)            MET (25)       MET (53)        PARTLY (94 + a frame walk in the
+                                                        allocator; rawverdict catches 0)
+R9  (cost)               MET (-1 %      MET (-0.1..     PARTLY (-1..-6 % collections, but
+                         collections)   -1.7 %)         a walk on every past-cap growth)
+R10 (fail-first)         MET (2-way     PARTLY (1-way   PARTLY (strongest cases, but one
+                         size set)      size set)       sabotage with an empty set, W26
+                                                        unbuilt)
+R11 (defaults)           MET            MET             MET
+R12 (capacity/time)      PARTLY         PARTLY          PARTLY (largest capacity fall;
+                                                        time unmeasured in anger)
+DOCS                     BEST (THE      WORST (THE      OK but uncompressible
+                         CREDIT rewrit- CREDIT left
+                         ten in place)  contradicting)
+TOTAL                    8/10           7/10            5/10
+
+-------------------------------------------------------------------------------------------
+8. WHAT I WOULD GRAFT FROM THE RUNNERS-UP
+-------------------------------------------------------------------------------------------
+SHIP: R4K, as written, with these grafts and two corrections.
+
+From THE RECIPIENT, take now (cheap, no risk, and they pay for the next round):
+  G1  Rule 2, HOOK_VMEVENT handled like HOOK_GC -- 3 lines, zero hermetic effect, and it
+      closes map A4 for the harness's own jit.attach trace counter.  Bring its case R2 and
+      the novmevent sabotage with it.
+  G2  The S1 recogniser as a COUNTER ONLY (gc_refstrtab) with its R3 case and nostrtab
+      sabotage.  No behaviour change, and it is the cheapest way to settle the NOTE's one
+      open question (the 5/4/3 extra refusals): if strtab is nonzero in the machine, the row
+      gains a finding and lj_str_resize gets its own row.
+  G3  Its WALLSTATS shape (od_credit, absorbed, recording) in place of R4K's single 14th
+      "tier" value.  R4K's gate (7) needs od_credit anyway, and absorbed/recording cost
+      nothing and are what the gate's sanity clause (4) is built on.
+From THE RECIPIENT, DEFER: rule 1 (the recorder opens nothing).  It is exact, proven both
+  ways against a --wrap ground truth on 31 000 refusals, and surgical -- and the NOTE
+  measures its in-machine value at ZERO (0 of 50 refusals were the recorder's; hermetically
+  7 of 228).  It also forces the W16R family's tier read to change.  Land it as its own
+  small change WHEN the machine's absorbed= count is nonzero, not bundled here.
+
+From THE ADDRESS, take now:
+  G4  Its W24 shape ("a handler switch keeps its recovery") as a guard in R4K's suite.  R4K
+      has nothing that catches a future lever stranding a program's SECOND handler, and
+      revision 1 of THE ADDRESS is the proof such a lever gets written.
+  G5  Its gate clause style: one bad run with the design's own hazard flag set FAILS the
+      gate.  For R4K the analogue is the (1) exception -- a bad run whose OCLJREF seq=1
+      shows kernel=1 must be reported as the kernel-overrun residual, never silently
+      absorbed into a pass.
+  G6  Its instruction that the instrumented in-machine run settle THE ALLOCATION COUNT PER
+      HANDLER PER STEP first.  R4K's (f) already runs the instrumented native in every
+      cell; adding at= histogramming per pcall costs nothing and it is the ONE number that
+      decides whether THE ADDRESS is ever worth its 94 lines.  Do it in this chain.
+From THE ADDRESS, DEFER the design itself, and say why in the row: it is the only candidate
+  that removes the mechanism rather than bounding it, its hermetic record is monotone across
+  eight cells, and it is blocked on three things that are all answerable -- the handler
+  allocation count (G6), OpenOS's real between-resume footprint against a 4 KiB reserve-tier
+  hold, and W26 plus a near-wall timing that separates the frame walk from noise.
+
+Two corrections to R4K before it lands:
+  C1  Put the per-seed split (21->0, 0->6, 25->0) in the headline and in (f)(3), and state
+      that (3) at 30 runs cannot reach p < 0.01 against V's 3 of 30 (section 1.3), so the
+      chain is judged on (1), (2) and (4) and (3) is reported.  Otherwise the row gets
+      closed on a statistic that was never available.
+  C2  Re-verify `unbounded`'s expected failure set (the design says it cannot, because
+      negative-control.sh writes under build/) and finish the two test re-scopes it flags:
+      W7k's precondition should read the tier, and W16R's "covered" topr should use
+      cap + tier rather than cap + G.

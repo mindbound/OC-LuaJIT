@@ -377,9 +377,9 @@ build_variant_mem stopgap
 #      so no fill stops inside a handler, no window opens, no kernel bound is met;
 #      W18 still passes: with nothing refused the kernel is never refused either
 expect_mem stopgap "a discarded allocator swap is caught" 1 \
-  M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a C5b C6 C6b \
-  W1 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W7k W8 W10 W11 W11w W11wL W12 W13 W14 W15 \
-  W16 W16L W16R W16RL W16Rj W16RjL W17 W19
+  M3 M3b M3c M4 M4c M5 M6b M7 M9 P1a P2a P2b P2c P2e P2f P2g P2h C0b C0d C3a C4b C5a \
+  C5b C6 C6b W1 W1L W1j W2b W2d W3 W4 W5a W5b W5c W7 W7k W7m W8 W10 W11 W11w W11wL W12 \
+  W13 W14 W15 W16 W16L W16R W16RL W16Rj W16RjL W17 W19 W20 W20L W21 W22
 
 
 # --- 4.2 nopending: drop the pre-binding bytes instead of banking them
@@ -471,7 +471,7 @@ sabotage_mem() {
 # and W17 lose them; and the kernel's slice is part of the credit, so W7k, W18
 # and W19 (the kernel's room) go with it.
 sabotage_mem nocredit 's|^  c = lj52_gc_odmax(total);$|  return 0;  /* sabotage: no credit */|' 'sabotage: no credit'
-expect_mem nocredit "refusing at the cap again is caught" 1 W1 W1L W1j W2d W3 W8 W10 W11 W16 W16L W16R W16RL W16Rj W16RjL W17 W18 W19 W7k
+expect_mem nocredit "refusing at the cap again is caught" 1 W1 W10 W11 W16 W16L W16R W16RL W16Rj W16RjL W17 W18 W19 W1L W1j W20 W20L W21 W22 W2d W3 W7k W7m W8
 
 # 4.7 norefusedarm: a refusal that does not arm -- the request bigger than
 # the headroom, refused with the garbage that would cover it uncollected.
@@ -495,7 +495,7 @@ expect_mem nohyst "the per-checkpoint re-arm is caught" 1 W4 W12
 # The W16 family at 8 caps: under a credit of the whole cap each sweep cap
 # costs thousands of cycles (d2-lend: past 300 s at 96 caps).
 MEMTEST_CFLAGS="-DW16_N=8 -DW16R_N=8" sabotage_mem unbounded 's|^  c = lj52_gc_odmax(total);$|  c = total;  /* sabotage: credit = total */|' 'sabotage: credit = total'
-expect_mem unbounded "an unbounded credit is caught" 1 C3a C6b M5 W1 W11 W12 W17 W1L W1j W2b W7 W7k
+expect_mem unbounded "an unbounded credit is caught" 1 C3a C6b M5 W1 W11 W12 W16R W16RL W16Rj W16RjL W17 W1L W1j W20 W20L W22 W2b W7 W7k W7m
 
 # 4.10 nokslice: the kernel's slice gone; the kernel's table.pack after the
 # sandbox spent both tiers is refused.
@@ -503,7 +503,7 @@ expect_mem unbounded "an unbounded credit is caught" 1 C3a C6b M5 W1 W11 W12 W17
 # pack has no room (W16R, W16Rj), the kernel's bound and its room are gone
 # (W7k, W19).
 sabotage_mem nokslice 's|^  if (lj52_gc_kernel(M, g)) c += LJ52_GC_KSLICE;$|  /* sabotage: no kernel slice */|' 'sabotage: no kernel slice'
-expect_mem nokslice "the kernel without its slice is caught" 1 W10 W16 W16L W16R W16RL W16Rj W16RjL W19 W7k
+expect_mem nokslice "the kernel without its slice is caught" 1 W10 W16 W16L W16R W16RL W16Rj W16RjL W19 W20 W20L W7k W7m W8
 
 # 4.11 nofresh: a fresh record past total + G/2 takes the burst tier, so the
 # first allocation after a reload is refused.
@@ -517,7 +517,7 @@ sabotage_mem closereserve 's|^      if (used <= total) M->gc_odstate = LJ52_OD_B
 # Since THE WINDOW: the first refusal's room is lost to the next proof, so the
 # reserve-tier sweep with the JIT on lands outside (W16Rj), and neither the
 # sandbox (W19) nor the kernel (W7k) reaches the reserve top they are checked at.
-expect_mem closereserve "a reserve that every proof closes is caught" 1 W8 W11 W16Rj W16RjL W19 W7k
+expect_mem closereserve "a reserve that every proof closes is caught" 1 W11 W16Rj W16RjL W19 W20 W20L W21 W7k W7m W8
 
 # 4.13 flushwhole: the flush asked for inside the whole watermark again, as
 # until stage C.  A machine holding live data with 100 KB free of a 300 KB
@@ -538,18 +538,18 @@ expect_mem nowindow "a tier top that lends nothing is caught" 1 W16 W16L W16R W1
 # reload's 32 KB request past the reserve top (W11), the kernel refused for
 # the sandbox's lent data (W18) and left no room (W19).
 sabotage_mem noceiling 's|^  if (used + delta > top + LJ52_GC_LEND) return 0;      /\* the ceiling \*/$|  /* sabotage: no ceiling */|' 'sabotage: no ceiling'
-expect_mem noceiling "a window without a ceiling is caught" 1 W7 W11 W11w W11wL W18 W19
+expect_mem noceiling "a window without a ceiling is caught" 1 W11 W11w W11wL W18 W19 W22 W7
 
 # 4.16 slicewindow: a window as wide as the kernel's slice (what the
 # compile-time guard forbids for LJ52_GC_LEND itself): the sandbox's bound
 # (W7) and the kernel's room after it (W19).
 sabotage_mem slicewindow 's|^  if (used + delta > top + LJ52_GC_LEND) return 0;      /\* the ceiling \*/$|  if (used + delta > top + LJ52_GC_KSLICE) return 0;  /* sabotage: a window as wide as the slice */|' 'sabotage: a window as wide as the slice'
-expect_mem slicewindow "a window as wide as the slice is caught" 1 W7 W11w W11wL W19
+expect_mem slicewindow "a window as wide as the slice is caught" 1 W11w W11wL W19 W22 W7
 
 # 4.17 rawverdict: the verdict on one proof's raw heap, which counts the
 # junk the batch's frame still pinned at its last checkpoint.
 sabotage_mem rawverdict 's|^        M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;$|        M->gc_win = used <= top ? 0 : 2;  /* sabotage: the verdict on the raw heap */|' 'sabotage: the verdict on the raw heap'
-expect_mem rawverdict "a verdict on one proof is caught" 1 W16 W16L W16R W16RL W16Rj W16RjL
+expect_mem rawverdict "a verdict on one proof is caught" 1 W16 W16L W16R W16RL W16Rj W16RjL W20 W20L
 
 # 4.18 nolook: the proof read one allocator call late: the decision reaches
 # the second allocation after the cycle -- event.timer's record (its 64 B
@@ -567,13 +567,13 @@ expect_mem refusalkeeps "a refusal that keeps the verdict is caught" 1 W16Rj W16
 # 4.20 kernelwindow: the kernel lends too -- its burst top is no longer hard
 # (C6b) and its bound moves past cap + G + the slice (W7k).
 sabotage_mem kernelwindow 's|^  if ((g->hookmask \& HOOK_GC) \|\| g->gc\.threshold == LJ_MAX_MEM \|\| lj52_gc_kernel(M, g))$|  if ((g->hookmask \& HOOK_GC) \|\| g->gc.threshold == LJ_MAX_MEM)  /* sabotage: the kernel lends too */|' 'sabotage: the kernel lends too'
-expect_mem kernelwindow "a kernel window is caught" 1 C6b W7k
+expect_mem kernelwindow "a kernel window is caught" 1 C6b W7k W7m
 
 # 4.21 noarm: nothing arms the window's cycle -- neither its own arm nor THE
 # CADENCE past the top (each alone is enough; measured: either removed alone
 # fails nothing) -- so a live fill runs on to the window's ceiling (W17).
 sabotage_mem noarm 's|^  if (!M->gc_armed) lj52_gc_arm(M, g, LJ52_ARM_WALL);   /\* the window.s cycle \*/$|  /* sabotage: the window arms nothing */|; s|^    arm = top - used < (top - M->gc_low) >> 1;$|    arm = used <= top \&\& top - used < (top - M->gc_low) >> 1;  /* sabotage: nor the cadence past the top */|' 'sabotage: nor the cadence past the top'
-expect_mem noarm "a window whose cycle nothing arms is caught" 1 W17
+expect_mem noarm "a window whose cycle nothing arms is caught" 1 W16Rj W16RjL W17
 
 # 4.22 nolegacywindow: THE WINDOW in C mode only -- the legacy (dropin)
 # path, the dropin's for ever and every state's before the handover, refuses
@@ -585,13 +585,52 @@ expect_mem nolegacywindow "the legacy path without the window is caught" 1 W16L 
 # 4.23 noverdict: no verdict -- every crossing that fits under the window's
 # ceiling is lent, so live data is refused only at the ceiling.
 sabotage_mem noverdict 's#^  if (M->gc_win == 2 \&\& M->gc_low > top) return 0;      /\* the verdict \*/$#  /* sabotage: no verdict */#' 'sabotage: no verdict'
-expect_mem noverdict "a window with no verdict is caught" 1 W17
+expect_mem noverdict "a window with no verdict is caught" 1 W17 W20 W20L
 
 # 4.24 nogrownreset: the bytes granted since the last proof are never reset,
 # so the two-cycle test subtracts every growth ever granted and never finds
 # data that survived two cycles: no verdict either.
 sabotage_mem nogrownreset 's#^      M->gc_grown = 0;$#      /* sabotage: grown never reset */#' 'sabotage: grown never reset'
-expect_mem nogrownreset "a growth count never reset is caught" 1 W17
+expect_mem nogrownreset "a growth count never reset is caught" 1 W17 W20 W20L
+
+# The expected sets of 4.1-4.24 were re-measured on the final source when THE
+# RESERVE'S SIZE landed (2026-10-05; bench/runs/2026-10-05-reserve/): W20,
+# W20L, W21, W22 and W7m join the sets where the credit, its bound or the
+# reserve is involved, and noarm now also stalls W16Rj/W16RjL -- the reserve
+# top is closer, so a window whose cycle nothing arms is met with the JIT on.
+# --- 4.25-4.30: THE RESERVE'S SIZE (2026-10-05).  The reserve a refusal
+#     opens is LJ52_GC_RSV past the heap it found, sized once, clamped to
+#     [G/2, G] where it is read; a VM event handler gets no credit.
+# 4.25 rsvwhole: the whole tier again, as before the change.  A refusal the
+# program never saw buys G/2 past the cap (W20, W20L), and 4 000 caught
+# refusals reach the old ceiling (W7's tightened bound).
+sabotage_mem rsvwhole 's|^    M->gc_rsv = over + LJ52_GC_RSV;               /\* clamped to G where it is read \*/$|    M->gc_rsv = odmax;  /* sabotage: the whole tier again */|' 'sabotage: the whole tier again'
+expect_mem rsvwhole "a reserve of the whole tier is caught" 1 W7 W20 W20L
+# 4.26 rsvnone: no room past the refusal (the R = 0 object; the #error refuses
+# LJ52_GC_RSV 0 itself, which is that guard's own proof).  A recovery that
+# holds its data across the cycles its report costs is refused inside the
+# report (W21), and W20's "bought more than 1 KB" clause reads nothing bought.
+sabotage_mem rsvnone 's|^    M->gc_rsv = over + LJ52_GC_RSV;               /\* clamped to G where it is read \*/$|    M->gc_rsv = over;  /* sabotage: no room past the refusal */|' 'sabotage: no room past the refusal'
+expect_mem rsvnone "a reserve with no room past the refusal is caught" 1 W20 W20L W21
+# 4.27 rsvfresh: a fresh record's reserve halved.  The eris reload keeps the
+# whole tier (W11): the write is load-bearing.
+sabotage_mem rsvfresh 's|^    M->gc_rsv = lj52_gc_odmax(total);   /\* the whole tier: the bytes are history \*/$|    M->gc_rsv = lj52_gc_odmax(total) >> 1;  /* sabotage: the fresh record keeps half */|' 'sabotage: the fresh record keeps half'
+expect_mem rsvfresh "a fresh record's reserve halved is caught" 1 W11
+# 4.28 rsvunclamped: the reserve read without its clamp to G.  The kernel's
+# own refusal past the sandbox's ceiling sizes G/2 + 24 KiB, and the kernel
+# then passes cap + G + the slice (W7k).
+sabotage_mem rsvunclamped 's|^  return M->gc_rsv < (g >> 1) ? g >> 1 : M->gc_rsv > g ? g : M->gc_rsv;$|  return M->gc_rsv < (g >> 1) ? g >> 1 : M->gc_rsv;  /* sabotage: the reserve read unclamped */|' 'sabotage: the reserve read unclamped'
+expect_mem rsvunclamped "a reserve read unclamped is caught" 1 W7k
+# 4.29 rsvcreep: the reserve re-sized at every refusal.  Caught refusals that
+# keep their data ratchet the top (W7, the only case that catches it: the
+# tightened W7 bound is part of the design).
+sabotage_mem rsvcreep 's|^  if (M->gc_odstate != LJ52_OD_RESERVE) {   /\* THE RESERVE.S SIZE: once, past this heap \*/$|  if (1) {  /* sabotage: the reserve re-sized at every refusal */|' 'sabotage: the reserve re-sized at every refusal'
+expect_mem rsvcreep "a reserve that creeps is caught" 1 W7
+# 4.30 novmevent: a VM event handler gets credit, a window, and its refusal
+# opens the reserve.  The handler's dropped error opens the tier for a
+# program that never saw it (W22).
+sabotage_mem novmevent 's|^  if (g->hookmask \& HOOK_VMEVENT) return 0;   /\* as a finalizer; see THE CREDIT \*/$|  /* sabotage: a vmevent handler gets credit */|; s|^  if (g->hookmask \& HOOK_VMEVENT) return 0;   /\* as a finalizer \*/$|  /* sabotage: and a window */|; s|^  if (g->hookmask \& HOOK_VMEVENT) return;      /\* as a finalizer: before the arm, as HOOK_GC \*/$|  /* sabotage: and its refusal opens the reserve */|' 'sabotage: and its refusal opens the reserve'
+expect_mem novmevent "a vmevent handler's refusal opening the reserve is caught" 1 W22
 
 # =====================================================================
 # 6. THE WATCHDOG.  Two sabotages, each the design's own "before" picture:

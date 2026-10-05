@@ -1,0 +1,22 @@
+AFFRUN mask=3FC3FC applied=1 effective=0x3FC3FC throttle=default applied=-1 pid=31436
+OCLJREFINIT| st=0000000000a67d10 level=1 ring=256 gcring=1024
+OCLJRUN| shape=string off=2864 base=52444 cap=448524
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJCP| st=2 recorder=1
+OCLJXP| fired=1 kind=rsv rsv=24740 used=465072 total=448524 over=16548 top=473264 G=32768 calls=28749
+OCLJREF| gseq=203 st=0000000000a67d10 seq=1 mode=c delta=64 used=465072 total=448524 G=32768 credit=16384 top=464908 ceil=469004 over=228 rsv0=0 rsv=24740 tier=24740 tier0=0 tier1=1 opened=1 tryproof=0 win0=2 win1=0 hyst=1 armed0=0 armby0=1 armed1=1 armby1=1 low=465072 grown=0 kernel=0 wd=1 kthr=0 mainthr=0 curL=0000000000a349e0 mainL=0000000000a30380 kby=0000000000a30380 vm=INTERP vmstate=-1 jst=IDLE jstate=0 incp=0 cfnres=0 recorder=0 trec=-1 tpar=-1 texit=-1 hook=0 gcst=0 gctotal=465072 gcthr=930000 fk=lua ffid=0 at==probe:80 pcsrc=1 ctx=- cat=?:-1 calls=28749 arms=54/26/2/0/20 proofs=101 lends=4 collects=101
+OCLJEV| code=2 count=4640 batches=464 used=465072
+OCLJEV| code=20 count=4640 batches=464 used=464980
+OCLJRING| n=1 cap=256

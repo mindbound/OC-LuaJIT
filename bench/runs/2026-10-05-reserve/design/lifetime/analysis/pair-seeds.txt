@@ -1,0 +1,204 @@
+BASEs2_oe_string_j1 vs R0s2_oe_string_j1: caps 2048; identical 1773 (of A's non-sc caps 1773/1773)
+  A: outside 7, sc 275, sc_out 0, held 4921, held(sc caps) 5126
+  B: outside 7, sc 275, sc_out 0, held 4885, held(sc caps) 4857
+  off 16976  A term 2 [dispatcher] at==probe:81 over=368 | B term 2 [dispatcher] at==probe:81 over=368
+  off 16992  A term 2 [dispatcher] at==probe:81 over=352 | B term 2 [dispatcher] at==probe:81 over=352
+  off 17008  A term 2 [dispatcher] at==probe:81 over=336 | B term 2 [dispatcher] at==probe:81 over=336
+  off 17024  A term 2 [dispatcher] at==probe:81 over=320 | B term 2 [dispatcher] at==probe:81 over=320
+  off 17040  A term 2 [dispatcher] at==probe:81 over=304 | B term 2 [dispatcher] at==probe:81 over=304
+  off 17056  A term 2 [dispatcher] at==probe:81 over=288 | B term 2 [dispatcher] at==probe:81 over=288
+  off 17072  A term 2 [dispatcher] at==probe:81 over=272 | B term 2 [dispatcher] at==probe:81 over=272
+BASEs2_oe_string_j1 vs R4Ks2_oe_string_j1: caps 2048; identical 1773 (of A's non-sc caps 1773/1773)
+  A: outside 7, sc 275, sc_out 0, held 4921, held(sc caps) 5126
+  B: outside 13, sc 275, sc_out 6, held 4894, held(sc caps) 4921
+  off  9600  A term 1 [paint,batch] at==probe:96 over=124 | B term 2 [paint,dispatcher] at==probe:81 over=376
+  off  9616  A term 1 [paint,batch] at==probe:96 over=108 | B term 2 [paint,dispatcher] at==probe:81 over=376
+  off  9632  A term 1 [paint,batch] at==probe:96 over=152 | B term 2 [paint,dispatcher] at==probe:81 over=376
+  off  9648  A term 1 [paint,batch] at==probe:96 over=136 | B term 2 [paint,dispatcher] at==probe:81 over=328
+  off  9664  A term 1 [paint,batch] at==probe:96 over=120 | B term 2 [paint,dispatcher] at==probe:81 over=328
+  off  9680  A term 1 [paint,paint,batch] at==probe:48 over=684 | B term 2 [paint,dispatcher] at==probe:81 over=328
+  off 16976  A term 2 [dispatcher] at==probe:81 over=368 | B term 2 [dispatcher] at==probe:81 over=368
+  off 16992  A term 2 [dispatcher] at==probe:81 over=352 | B term 2 [dispatcher] at==probe:81 over=352
+  off 17008  A term 2 [dispatcher] at==probe:81 over=336 | B term 2 [dispatcher] at==probe:81 over=336
+  off 17024  A term 2 [dispatcher] at==probe:81 over=320 | B term 2 [dispatcher] at==probe:81 over=320
+  off 17040  A term 2 [dispatcher] at==probe:81 over=304 | B term 2 [dispatcher] at==probe:81 over=304
+  off 17056  A term 2 [dispatcher] at==probe:81 over=288 | B term 2 [dispatcher] at==probe:81 over=288
+  off 17072  A term 2 [dispatcher] at==probe:81 over=272 | B term 2 [dispatcher] at==probe:81 over=272
+BASEs2_oe_string_j1 vs R8Ks2_oe_string_j1: caps 2048; identical 1773 (of A's non-sc caps 1773/1773)
+  A: outside 7, sc 275, sc_out 0, held 4921, held(sc caps) 5126
+  B: outside 7, sc 275, sc_out 0, held 4903, held(sc caps) 4992
+  off 16976  A term 2 [dispatcher] at==probe:81 over=368 | B term 2 [dispatcher] at==probe:81 over=368
+  off 16992  A term 2 [dispatcher] at==probe:81 over=352 | B term 2 [dispatcher] at==probe:81 over=352
+  off 17008  A term 2 [dispatcher] at==probe:81 over=336 | B term 2 [dispatcher] at==probe:81 over=336
+  off 17024  A term 2 [dispatcher] at==probe:81 over=320 | B term 2 [dispatcher] at==probe:81 over=320
+  off 17040  A term 2 [dispatcher] at==probe:81 over=304 | B term 2 [dispatcher] at==probe:81 over=304
+  off 17056  A term 2 [dispatcher] at==probe:81 over=288 | B term 2 [dispatcher] at==probe:81 over=288
+  off 17072  A term 2 [dispatcher] at==probe:81 over=272 | B term 2 [dispatcher] at==probe:81 over=272
+BASEs2_oe_string_j1 vs L4s2_oe_string_j1: caps 2048; identical 1773 (of A's non-sc caps 1773/1773)
+  A: outside 7, sc 275, sc_out 0, held 4921, held(sc caps) 5126
+  B: outside 20, sc 275, sc_out 13, held 4886, held(sc caps) 4865
+  off 12000  A term 1 [paint,batch] at==probe:96 over=148 | B term 2 [paint,dispatcher] at==probe:81 over=3776
+  off 12016  A term 1 [paint,batch] at==probe:96 over=132 | B term 2 [paint,dispatcher] at==probe:81 over=3760
+  off 12032  A term 1 [paint,batch] at==probe:96 over=116 | B term 2 [paint,dispatcher] at==probe:81 over=3744
+  off 12048  A term 1 [paint,batch] at==probe:48 over=112 | B term 2 [paint,dispatcher] at==probe:81 over=3728
+  off 12656  A term 1 [paint,batch] at==probe:96 over=152 | B term 2 [paint,dispatcher] at==probe:81 over=3720
+  off 15472  A term 1 [recorder,batch] at==probe:48 over=1256 | B term 2 [recorder,dispatcher] at==probe:81 over=3076
+  off 16256  A term 1 [paint,batch] at==probe:48 over=228 | B term 2 [paint,dispatcher] at==probe:81 over=3720
+  off 16272  A term 1 [paint,batch] at==probe:48 over=212 | B term 2 [paint,dispatcher] at==probe:81 over=3704
+  off 16976  A term 2 [dispatcher] at==probe:81 over=368 | B term 2 [dispatcher] at==probe:81 over=368
+  off 16992  A term 2 [dispatcher] at==probe:81 over=352 | B term 2 [dispatcher] at==probe:81 over=352
+  off 17008  A term 2 [dispatcher] at==probe:81 over=336 | B term 2 [dispatcher] at==probe:81 over=336
+  off 17024  A term 2 [dispatcher] at==probe:81 over=320 | B term 2 [dispatcher] at==probe:81 over=320
+  off 17040  A term 2 [dispatcher] at==probe:81 over=304 | B term 2 [dispatcher] at==probe:81 over=304
+  off 17056  A term 2 [dispatcher] at==probe:81 over=288 | B term 2 [dispatcher] at==probe:81 over=288
+  off 17072  A term 2 [dispatcher] at==probe:81 over=272 | B term 2 [dispatcher] at==probe:81 over=272
+  off 27616  A term 1 [paint,batch] at==probe:96 over=132 | B term 2 [paint,dispatcher] at==probe:81 over=3760
+  off 27632  A term 1 [paint,batch] at==probe:96 over=116 | B term 2 [paint,dispatcher] at==probe:81 over=3744
+  off 27648  A term 1 [paint,batch] at==probe:48 over=112 | B term 2 [paint,dispatcher] at==probe:81 over=3728
+  off 27664  A term 1 [paint,batch] at==probe:96 over=144 | B term 2 [paint,dispatcher] at==probe:81 over=3712
+  off 27680  A term 1 [paint,batch] at==probe:96 over=128 | B term 2 [paint,dispatcher] at==probe:81 over=3696
+BASEs3_oe_string_j1 vs R0s3_oe_string_j1: caps 2048; identical 1748 (of A's non-sc caps 1748/1748)
+  A: outside 28, sc 300, sc_out 25, held 4927, held(sc caps) 5163
+  B: outside 3, sc 300, sc_out 0, held 4887, held(sc caps) 4896
+  off 11488  A term 2 [paint,dispatcher] at==probe:86 over=292 | B term 1 [paint,batch] at==probe:96 over=116
+  off 11504  A term 2 [paint,dispatcher] at==probe:86 over=276 | B term 1 [paint,batch] at==probe:96 over=116
+  off 11520  A term 2 [paint,dispatcher] at==probe:86 over=260 | B term 1 [paint,batch] at==probe:96 over=116
+  off 11536  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:48 over=748
+  off 12624  A term 2 [paint,dispatcher] at==probe:86 over=356 | B term 1 [paint,batch] at==probe:96 over=116
+  off 12736  A term 2 [recorder,dispatcher] at==probe:86 over=312 | B term 1 [recorder,batch] at==probe:48 over=104
+  off 12848  A term 2 [recorder,dispatcher] at==probe:86 over=200 | B term 1 [recorder,batch] at==probe:96 over=112
+  off 13440  A term 2 [recorder,dispatcher] at==probe:86 over=208 | B term 1 [recorder,batch] at==probe:96 over=112
+  off 15008  A term 2 [paint,dispatcher] at==probe:86 over=440 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15024  A term 2 [paint,dispatcher] at==probe:86 over=424 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15040  A term 2 [paint,dispatcher] at==probe:86 over=408 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15056  A term 2 [paint,dispatcher] at==probe:86 over=392 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15072  A term 2 [paint,dispatcher] at==probe:86 over=376 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15088  A term 2 [paint,dispatcher] at==probe:86 over=360 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15104  A term 2 [paint,dispatcher] at==probe:86 over=344 | B term 1 [paint,batch] at==probe:48 over=272
+  off 15120  A term 2 [paint,dispatcher] at==probe:86 over=328 | B term 1 [paint,batch] at==probe:48 over=312
+  off 15136  A term 2 [paint,dispatcher] at==probe:86 over=312 | B term 1 [paint,batch] at==probe:96 over=316
+  off 15152  A term 2 [paint,dispatcher] at==probe:86 over=296 | B term 1 [paint,batch] at==probe:96 over=316
+  off 16432  A term 2 [dispatcher] at==probe:81 over=216 | B term 2 [dispatcher] at==probe:81 over=216
+  off 16448  A term 2 [dispatcher] at==probe:81 over=200 | B term 2 [dispatcher] at==probe:81 over=200
+  off 16464  A term 2 [dispatcher] at==probe:81 over=184 | B term 2 [dispatcher] at==probe:81 over=184
+  off 21696  A term 2 [paint,dispatcher] at==probe:86 over=284 | B term 1 [paint,batch] at==probe:96 over=116
+  off 21712  A term 2 [paint,dispatcher] at==probe:86 over=268 | B term 1 [paint,batch] at==probe:96 over=116
+  off 21728  A term 2 [paint,dispatcher] at==probe:86 over=252 | B term 1 [paint,batch] at==probe:96 over=128
+  off 21744  A term 2 [paint,dispatcher] at==probe:86 over=236 | B term 1 [paint,batch] at==probe:96 over=128
+  off 21760  A term 2 [paint,dispatcher] at==probe:86 over=220 | B term 1 [paint,batch] at==probe:96 over=128
+  off 22336  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:96 over=128
+  off 22352  A term 2 [paint,dispatcher] at==probe:86 over=228 | B term 1 [paint,batch] at==probe:96 over=128
+BASEs3_oe_string_j1 vs R4Ks3_oe_string_j1: caps 2048; identical 1748 (of A's non-sc caps 1748/1748)
+  A: outside 28, sc 300, sc_out 25, held 4927, held(sc caps) 5163
+  B: outside 3, sc 300, sc_out 0, held 4897, held(sc caps) 4960
+  off 11488  A term 2 [paint,dispatcher] at==probe:86 over=292 | B term 1 [paint,batch] at==probe:48 over=376
+  off 11504  A term 2 [paint,dispatcher] at==probe:86 over=276 | B term 1 [paint,batch] at==probe:48 over=376
+  off 11520  A term 2 [paint,dispatcher] at==probe:86 over=260 | B term 1 [paint,batch] at==probe:48 over=376
+  off 11536  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:48 over=328
+  off 12624  A term 2 [paint,dispatcher] at==probe:86 over=356 | B term 1 [paint,batch] at==probe:96 over=148
+  off 12736  A term 2 [recorder,dispatcher] at==probe:86 over=312 | B term 1 [recorder,batch] at==probe:48 over=728
+  off 12848  A term 2 [recorder,dispatcher] at==probe:86 over=200 | B term 1 [recorder,batch] at==probe:48 over=144
+  off 13440  A term 2 [recorder,dispatcher] at==probe:86 over=208 | B term 1 [recorder,batch] at==probe:48 over=144
+  off 15008  A term 2 [paint,dispatcher] at==probe:86 over=440 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15024  A term 2 [paint,dispatcher] at==probe:86 over=424 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15040  A term 2 [paint,dispatcher] at==probe:86 over=408 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15056  A term 2 [paint,dispatcher] at==probe:86 over=392 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15072  A term 2 [paint,dispatcher] at==probe:86 over=376 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15088  A term 2 [paint,dispatcher] at==probe:86 over=360 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15104  A term 2 [paint,dispatcher] at==probe:86 over=344 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15120  A term 2 [paint,dispatcher] at==probe:86 over=328 | B term 1 [paint,batch] at==probe:48 over=112
+  off 15136  A term 2 [paint,dispatcher] at==probe:86 over=312 | B term 1 [paint,batch] at==probe:96 over=112
+  off 15152  A term 2 [paint,dispatcher] at==probe:86 over=296 | B term 1 [paint,batch] at==probe:96 over=112
+  off 16432  A term 2 [dispatcher] at==probe:81 over=216 | B term 2 [dispatcher] at==probe:81 over=216
+  off 16448  A term 2 [dispatcher] at==probe:81 over=200 | B term 2 [dispatcher] at==probe:81 over=200
+  off 16464  A term 2 [dispatcher] at==probe:81 over=184 | B term 2 [dispatcher] at==probe:81 over=184
+  off 21696  A term 2 [paint,dispatcher] at==probe:86 over=284 | B term 1 [paint,batch] at==probe:48 over=296
+  off 21712  A term 2 [paint,dispatcher] at==probe:86 over=268 | B term 1 [paint,batch] at==probe:48 over=296
+  off 21728  A term 2 [paint,dispatcher] at==probe:86 over=252 | B term 1 [paint,batch] at==probe:96 over=300
+  off 21744  A term 2 [paint,dispatcher] at==probe:86 over=236 | B term 1 [paint,batch] at==probe:96 over=300
+  off 21760  A term 2 [paint,dispatcher] at==probe:86 over=220 | B term 1 [paint,batch] at==probe:96 over=300
+  off 22336  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:96 over=300
+  off 22352  A term 2 [paint,dispatcher] at==probe:86 over=228 | B term 1 [paint,batch] at==probe:96 over=300
+BASEs3_oe_string_j1 vs R8Ks3_oe_string_j1: caps 2048; identical 1748 (of A's non-sc caps 1748/1748)
+  A: outside 28, sc 300, sc_out 25, held 4927, held(sc caps) 5163
+  B: outside 3, sc 300, sc_out 0, held 4907, held(sc caps) 5030
+  off 11488  A term 2 [paint,dispatcher] at==probe:86 over=292 | B term 1 [paint,paint,paint,batch] at==probe:96 over=144
+  off 11504  A term 2 [paint,dispatcher] at==probe:86 over=276 | B term 1 [paint,paint,paint,batch] at==probe:96 over=144
+  off 11520  A term 2 [paint,dispatcher] at==probe:86 over=260 | B term 1 [paint,paint,paint,batch] at==probe:96 over=144
+  off 11536  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,paint,batch] at==probe:48 over=104
+  off 12624  A term 2 [paint,dispatcher] at==probe:86 over=356 | B term 1 [paint,paint,batch] at==probe:96 over=144
+  off 12736  A term 2 [recorder,dispatcher] at==probe:86 over=312 | B term 1 [recorder,batch] at==probe:96 over=124
+  off 12848  A term 2 [recorder,dispatcher] at==probe:86 over=200 | B term 1 [recorder,batch] at==probe:48 over=520
+  off 13440  A term 2 [recorder,dispatcher] at==probe:86 over=208 | B term 1 [recorder,batch] at==probe:48 over=520
+  off 15008  A term 2 [paint,dispatcher] at==probe:86 over=440 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15024  A term 2 [paint,dispatcher] at==probe:86 over=424 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15040  A term 2 [paint,dispatcher] at==probe:86 over=408 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15056  A term 2 [paint,dispatcher] at==probe:86 over=392 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15072  A term 2 [paint,dispatcher] at==probe:86 over=376 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15088  A term 2 [paint,dispatcher] at==probe:86 over=360 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15104  A term 2 [paint,dispatcher] at==probe:86 over=344 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15120  A term 2 [paint,dispatcher] at==probe:86 over=328 | B term 1 [paint,batch] at==probe:48 over=480
+  off 15136  A term 2 [paint,dispatcher] at==probe:86 over=312 | B term 1 [paint,batch] at==probe:48 over=432
+  off 15152  A term 2 [paint,dispatcher] at==probe:86 over=296 | B term 1 [paint,batch] at==probe:48 over=432
+  off 16432  A term 2 [dispatcher] at==probe:81 over=216 | B term 2 [dispatcher] at==probe:81 over=216
+  off 16448  A term 2 [dispatcher] at==probe:81 over=200 | B term 2 [dispatcher] at==probe:81 over=200
+  off 16464  A term 2 [dispatcher] at==probe:81 over=184 | B term 2 [dispatcher] at==probe:81 over=184
+  off 21696  A term 2 [paint,dispatcher] at==probe:86 over=284 | B term 1 [paint,batch] at==probe:48 over=480
+  off 21712  A term 2 [paint,dispatcher] at==probe:86 over=268 | B term 1 [paint,batch] at==probe:48 over=480
+  off 21728  A term 2 [paint,dispatcher] at==probe:86 over=252 | B term 1 [paint,batch] at==probe:48 over=432
+  off 21744  A term 2 [paint,dispatcher] at==probe:86 over=236 | B term 1 [paint,batch] at==probe:48 over=432
+  off 21760  A term 2 [paint,dispatcher] at==probe:86 over=220 | B term 1 [paint,batch] at==probe:48 over=432
+  off 22336  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:48 over=432
+  off 22352  A term 2 [paint,dispatcher] at==probe:86 over=228 | B term 1 [paint,batch] at==probe:48 over=432
+BASEs3_oe_string_j1 vs L4s3_oe_string_j1: caps 2048; identical 1748 (of A's non-sc caps 1748/1748)
+  A: outside 28, sc 300, sc_out 25, held 4927, held(sc caps) 5163
+  B: outside 24, sc 300, sc_out 21, held 4888, held(sc caps) 4901
+  off 11488  A term 2 [paint,dispatcher] at==probe:86 over=292 | B term 1 [paint,batch] at==probe:96 over=148
+  off 11504  A term 2 [paint,dispatcher] at==probe:86 over=276 | B term 1 [paint,batch] at==probe:96 over=132
+  off 11520  A term 2 [paint,dispatcher] at==probe:86 over=260 | B term 1 [paint,batch] at==probe:96 over=116
+  off 11536  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:48 over=112
+  off 11904  A term 1 [paint,paint,batch] at==probe:96 over=148 | B term 2 [paint,dispatcher] at==probe:81 over=3776
+  off 11920  A term 1 [paint,paint,batch] at==probe:96 over=132 | B term 2 [paint,dispatcher] at==probe:81 over=3760
+  off 11936  A term 1 [paint,paint,batch] at==probe:96 over=116 | B term 2 [paint,dispatcher] at==probe:81 over=3744
+  off 12528  A term 1 [paint,paint,batch] at==probe:96 over=124 | B term 2 [paint,dispatcher] at==probe:81 over=3752
+  off 12544  A term 1 [paint,paint,batch] at==probe:96 over=108 | B term 2 [paint,dispatcher] at==probe:81 over=3736
+  off 12560  A term 1 [paint,paint,batch] at==probe:96 over=152 | B term 2 [paint,dispatcher] at==probe:81 over=3720
+  off 12624  A term 2 [paint,dispatcher] at==probe:86 over=356 | B term 1 [paint,batch] at==probe:96 over=152
+  off 12736  A term 2 [recorder,dispatcher] at==probe:86 over=312 | B term 1 [recorder,batch] at==probe:48 over=2880
+  off 12848  A term 2 [recorder,dispatcher] at==probe:86 over=200 | B term 1 [recorder,batch] at==probe:48 over=196
+  off 13440  A term 2 [recorder,dispatcher] at==probe:86 over=208 | B term 1 [recorder,batch] at==probe:48 over=204
+  off 15008  A term 2 [paint,dispatcher] at==probe:86 over=440 | B term 1 [paint,paint,batch] at==probe:48 over=444
+  off 15024  A term 2 [paint,dispatcher] at==probe:86 over=424 | B term 1 [paint,paint,batch] at==probe:48 over=428
+  off 15040  A term 2 [paint,dispatcher] at==probe:86 over=408 | B term 1 [paint,paint,batch] at==probe:48 over=412
+  off 15056  A term 2 [paint,dispatcher] at==probe:86 over=392 | B term 1 [paint,paint,batch] at==probe:48 over=396
+  off 15072  A term 2 [paint,dispatcher] at==probe:86 over=376 | B term 1 [paint,paint,batch] at==probe:48 over=380
+  off 15088  A term 2 [paint,dispatcher] at==probe:86 over=360 | B term 1 [paint,paint,batch] at==probe:48 over=364
+  off 15104  A term 2 [paint,dispatcher] at==probe:86 over=344 | B term 1 [paint,batch] at==probe:48 over=348
+  off 15120  A term 2 [paint,dispatcher] at==probe:86 over=328 | B term 1 [paint,batch] at==probe:48 over=372
+  off 15136  A term 2 [paint,dispatcher] at==probe:86 over=312 | B term 1 [paint,batch] at==probe:48 over=356
+  off 15152  A term 2 [paint,dispatcher] at==probe:86 over=296 | B term 1 [paint,batch] at==probe:48 over=340
+  off 16160  A term 1 [paint,batch] at==probe:48 over=128 | B term 2 [paint,dispatcher] at==probe:81 over=3720
+  off 16176  A term 1 [paint,batch] at==probe:48 over=212 | B term 2 [paint,dispatcher] at==probe:81 over=3704
+  off 16432  A term 2 [dispatcher] at==probe:81 over=216 | B term 2 [dispatcher] at==probe:81 over=216
+  off 16448  A term 2 [dispatcher] at==probe:81 over=200 | B term 2 [dispatcher] at==probe:81 over=200
+  off 16464  A term 2 [dispatcher] at==probe:81 over=184 | B term 2 [dispatcher] at==probe:81 over=184
+  off 21696  A term 2 [paint,dispatcher] at==probe:86 over=284 | B term 1 [paint,batch] at==probe:96 over=140
+  off 21712  A term 2 [paint,dispatcher] at==probe:86 over=268 | B term 1 [paint,batch] at==probe:96 over=124
+  off 21728  A term 2 [paint,dispatcher] at==probe:86 over=252 | B term 1 [paint,batch] at==probe:96 over=108
+  off 21744  A term 2 [paint,dispatcher] at==probe:86 over=236 | B term 1 [paint,batch] at==probe:96 over=152
+  off 21760  A term 2 [paint,dispatcher] at==probe:86 over=220 | B term 1 [paint,batch] at==probe:96 over=136
+  off 22336  A term 2 [paint,dispatcher] at==probe:86 over=244 | B term 1 [paint,batch] at==probe:48 over=112
+  off 22352  A term 2 [paint,dispatcher] at==probe:86 over=228 | B term 1 [paint,batch] at==probe:96 over=144
+  off 26304  A term 1 [paint,batch] at==probe:96 over=148 | B term 2 [paint,dispatcher] at==probe:81 over=3776
+  off 26320  A term 1 [paint,batch] at==probe:96 over=132 | B term 2 [paint,dispatcher] at==probe:81 over=3760
+  off 26336  A term 1 [paint,batch] at==probe:96 over=116 | B term 2 [paint,dispatcher] at==probe:81 over=3744
+  off 26896  A term 1 [paint,batch] at==probe:48 over=104 | B term 2 [paint,dispatcher] at==probe:81 over=3784
+  off 26912  A term 1 [paint,batch] at==probe:96 over=140 | B term 2 [paint,dispatcher] at==probe:81 over=3768
+  off 26928  A term 1 [paint,batch] at==probe:96 over=124 | B term 2 [paint,dispatcher] at==probe:81 over=3752
+  off 26944  A term 1 [paint,batch] at==probe:96 over=108 | B term 2 [paint,dispatcher] at==probe:81 over=3736
+  off 26960  A term 1 [paint,batch] at==probe:96 over=152 | B term 2 [paint,dispatcher] at==probe:81 over=3720
+  off 27520  A term 1 [paint,batch] at==probe:48 over=1112 | B term 2 [paint,dispatcher] at==probe:81 over=3760
+  off 27536  A term 1 [paint,batch] at==probe:48 over=1096 | B term 2 [paint,dispatcher] at==probe:81 over=3744
+  off 27552  A term 1 [paint,batch] at==probe:48 over=1080 | B term 2 [paint,dispatcher] at==probe:81 over=3728
+  off 27568  A term 1 [paint,batch] at==probe:48 over=1064 | B term 2 [paint,dispatcher] at==probe:81 over=3712
+  off 27584  A term 1 [paint,batch] at==probe:48 over=1048 | B term 2 [paint,dispatcher] at==probe:81 over=3696

@@ -1,0 +1,667 @@
+d3-final: THE RESERVE'S SIZE, the design to build
+=====================================================================================
+Roadmap row: "A refusal the program never saw opens the reserve tier for it" (docs/roadmap.md),
+round 3, synthesis.  2026-10-05.
+
+Base.  All three judges ranked lifetime's R4K first (safety 8/10, practice 8/10, evidence B+).
+This document builds that rule with the grafts the judges named, one constant changed for a
+stated reason (section 1.3), and rejects the rest with the evidence that rejected it.  Nothing
+was built or run for this document; every figure below is a designer's or a judge's, cited.
+
+Where everything is (W = scratchpad/wall2/sc/):
+  W/design/lifetime.txt, W/design/lifetime/   R4K: R4K.diff, src-plain-R4K/, mem_test_lt.c,
+                                               out/compare-R4K.txt, out/pair-seeds.txt, sab-*/
+  W/design/identify.txt, W/identify/           THE RECIPIENT: identify.diff, memtest_id.diff,
+                                               sabotage.sh, out/summary-cmp.txt
+  W/design/verdict.txt, W/verdict/             THE ADDRESS: verdict-shim.diff, tools/w20_cases.c
+  W/design/j3-{safety,practice,evidence}.txt   the judges
+  W/forensics/ (REPORT.txt, src/, tools/)      the instrumented shim and the hermetic censuses
+  W/map/REPORT.txt                             the absorber map
+  scratchpad/wall2/runsR/an/NOTE.txt           the in-machine forensics (25 runs, 50 refusals)
+  bench/runs/2026-10-05-window/design/         REQUIREMENTS.md, j2-*, d2-final.md (the shape)
+The repo (HEAD 3186e87 plus the uncommitted errmem work) was read, not modified.
+
+-------------------------------------------------------------------------------------
+1. THE DECISION
+-------------------------------------------------------------------------------------
+1.1 What is built
+
+THE RESERVE'S SIZE: when a refusal opens the reserve tier, the tier's credit past the cap is set
+ONCE to max(used - total, G/2) + LJ52_GC_RSV, and read everywhere through a clamp to [G/2, G].
+LJ52_GC_RSV = 8 KiB (two windows; section 1.3).  A fresh record's reserve (W11) stays G.  Nothing
+else about the tiers, THE WINDOW, THE CADENCE, the kernel's slice or the flush changes.  Plus
+one graft from THE RECIPIENT: HOOK_VMEVENT is handled exactly as HOOK_GC (no credit, no window,
+no reserve).  Zero LuaJIT lines; about 30 code lines; two scalar writes on the refusal path, one
+4-line read helper at four sites, three one-line guards; nothing allocates; no knob; no back-off.
+
+1.2 Why this, and why not the others
+
+The in-machine forensics (NOTE.txt) fixed what the designers did not have: in the machine every
+absorbed refusal is a 56-64 B closure the kernel's machine.lua makes on the sandbox thread inside
+a component call (wrapUserdata :1261, unwrapUserdata :1280, checkArg :117), caught by the probe's
+pcall(paint); the recorder absorbed 0 of 50, the string table 0 of 50; at the reserve top the fill
+got 2nd-4th chances as long as the verdict kept landing on those closures.  Against that record:
+
+  - THE RESERVE'S SIZE (lifetime R4K = identify rule 3) is the only lever that reaches the
+    in-machine absorber and is unconditional: whoever caught the refusal, what the second chance
+    buys falls from G/2 + a window (16 KiB at the floor, 256 KiB at 8 MB) to R + a window, and
+    the sandbox's bound after a refusal tightens from total + G + 4 KiB to max(u, S) + R + 4 KiB.
+    Measured (two independent implementations, identical aggregates to the digit): every cap
+    whose program saw its own refusal is byte-identical (9 399 of 9 399 batch-caught caps over
+    seven cells; j3-evidence E1 corrects lifetime's "10 240"); 0 of 10 240 runs past either
+    bound; collections -1 %; capacity -0.06..-0.68 % per cell, all of it in second-chance runs.
+    Every new check has been seen failing in the direction it guards (R0 fails W21, R1K fails
+    W16Rj/W16RjL/W21, five sabotages each caught by a named case).  The read-side clamp
+    (lj52_gc_rsvcredit) is taken over identify's store-side one: j3-safety M-I1 (a lowered cap
+    or a future RESERVE write without the credit breaks the bound; R4K's helper prevents both).
+    R4K's floor form max(u - total, G/2) + R is taken over identify's clamp(u + R - total, G/2,
+    G): a refusal below the burst top keeps S + R, so a 16 KiB doubling caught at cap + 2 KiB is
+    still granted on retry at the floor (j3-practice 4.3).
+
+  - THE ADDRESS (the handler-of-record vote) is REJECTED as the base and DEFERRED as a design.
+    Its hermetic record is the best of the round (second chances 0 in all eight cells, every
+    refusal caught by the batch, 16 173 quiet caps identical), and it is the only lever that
+    removes the lottery instead of bounding its prize.  It is not built because: the vote has
+    no decay, so after one episode on a near-cap machine a new filler meets the hold's ceiling
+    before it can become addressee (M-A1); the identity is execution-mode dependent -- a
+    trace-inlined pcall is invisible to the walk from jit_base, and OpenOS's dispatcher is that
+    shape (M-A2); a frame walk in the allocator on every past-cap growth rests on invariants
+    LuaJIT does not itself exercise on this platform and was tested on probe shapes only
+    (M-A3); when the vote is wrong the design is today's defect plus 8 KiB, and in the machine's
+    own amplified cell the paint (~50-70 allocations per step through the invoke wrapper)
+    plausibly out-allocates the fill (~80) -- the designer's own void condition (M-A4, E11);
+    the rawverdict negative control fails 0 of 87, reproduced, so THE WINDOW's two-cycle rule
+    becomes untestable until an unbuilt W26 exists (M-A5, E14); the reserve-tier hold is one
+    window against OpenOS's handler-copy loop, and revision 1 measured +122 downs there (j3-
+    practice 1.5 B); "441 -> 0" is zero by construction (E8); near-wall timing n = 2 (E13).
+    What is taken from it: the instruction to settle the per-handler allocation count with the
+    instrument (section 6), and the gate clause style "a bad run with the design's own hazard
+    flag set is reported as that hazard, never absorbed into a pass".
+
+  - THE RECIPIENT's rule 1 (the recorder's refusal opens nothing): exact and proven both ways
+    (ctl_rec2 7/7; dbg_r1b2 and 1 092 program-visible RECORD-state refusals read 0; the literal
+    sabotage stalls W16Rj).  DEFERRED: 0 of 50 in-machine refusals were the recorder's; its
+    hermetic reach is 23 of 2 192 second chances; it costs lj_frame.h, a 12-line predicate on
+    the refusal path and the W16R family's tier read (j3-practice G-defer, j3-evidence E22).
+    With the reserve sized, a recorder-opened second chance costs R + a window like any other.
+    Trigger to land it as its own change: a nonzero recorder= count in any in-machine chain's
+    OCLJREF stream.  Rule 2 (HOOK_VMEVENT) is TAKEN: three lines mirroring HOOK_GC, free, and it
+    keeps the harness's own jit.attach trace counter from opening the reserve during the very
+    measurement the gate makes.  The S1 recogniser is NOT taken: the NOTE settled its question
+    (no in-machine refusal's request equals a table doubling; the extra refusals are placed).
+
+  - L4 (close the reserve at the next resume): built by lifetime, 39 of 803 stalls (the shipped
+    shim's 46; p = 0.25), +26 objects bought; the mechanics say why (closing puts the top under
+    the live data, so the verdict forms at the first proof after the resume -- the dispatcher's
+    pack, the step closure, event.timer).  REJECTED by evidence.
+  - L6 (close at the next proof regardless): closereserve fails W8 W11 W16Rj W19 W7k.  REJECTED.
+  - R0 and R1K: W21 fails (the holding recovery is refused inside its report); R1K also stalls
+    W16Rj/W16RjL with the JIT on (the recorder's allocations share the reserve).  REJECTED.
+  - Identifying Lua-level absorbers by chunkname (map L8): a policy about who the program is,
+    fragile; not prototyped by anyone.  NOT TAKEN.
+
+1.3 The constant: 8 KiB, not 4
+
+Lifetime pinned 4 KiB (one window) and showed its floor: W21 (~2 KB held, ~8 KB granted across
+the proofs the report costs) passes at 4 KiB, fails at 1 KiB and 0; W16Rj fails at 1 KiB with the
+JIT on.  Both other judges asked for more: j3-safety M-L1 (the 4 KiB floor is at the edge of a
+real holding recovery, unmeasured; "pin 8 192 if not measured") and j3-evidence E3 (R8K's only
+failures are the design's own 4 096 pins; it passes W21, W16Rj and the bound).  The decision
+rests on three things:
+  (a) What R buys is bounded creep, not fewer lottery draws.  The draws at the reserve top are
+      THE WINDOW's: after an absorbed verdict refusal the window shuts and reopens up to top +
+      LJ52_GC_LEND, whatever the top; R moves the top, not the 4 KiB above it.  R0, R8K and R1K
+      all read 0 of 803 hermetic second-chance stalls over three seeds; R4K read 6, all one
+      six-cap pocket at one seed (off 9600-9680, j3-practice confirmed one pinned); the shipped
+      shim 21 / 0 / 25.  That is phase arithmetic of the probe, not a property of R; it does not
+      transfer to a machine whose absorber is a 3 KB paint through the invoke wrapper.  So the
+      hermetic stall count does not choose R; the recovery's room and the creep do.
+  (b) The error is asymmetric.  Too small, R refuses a program's own catch handler inside its
+      report -- the contract failure THE CREDIT exists to prevent (R1b; 20 of 60 runs ended that
+      way before stage B).  Too large by 4 KiB, a fill that never saw its refusal holds +70
+      string / +13 record objects more at the floor, in second-chance runs only, invisible to a
+      player who never hit the wall.  By code reading a catch handler that prints
+      debug.traceback(err) through the tty holds the traceback (~1 KB) plus g->tmpbuf (~1 KB,
+      halved only at atomic) plus a file handle if it logs: ~2-2.5 KB, against 4 KiB a 1.7x
+      margin and against 8 KiB 3.5x.  Nobody has measured it; section 5 (7) does.
+  (c) The price is stated.  The tightened sandbox bound at the floor becomes total + G/2 +
+      16 KiB = total + G, 4 KiB under the old ceiling instead of 8 KiB under; at 8 MB it is
+      total + 272 KiB against 516 KiB.  W20's pin and the re-scoped W7's bound move to 8 192.
+      Hermetically R8K's W20 reads +8 KiB bought (lifetime (e.2)); its full eight-cell census is
+      owed (section 6) -- identity on non-second-chance caps holds by construction (the rule
+      touches nothing before a reserve opens) and the bound is arithmetic, so what the census
+      must show is the creep and the k2048 cells.
+LJ52_GC_RSV = 2 * LJ52_GC_LEND, written as a literal (8 * 1024) with the relation in the comment
+and two compile-time guards: never under one window (the measured JIT floor), never so large
+that R + LEND exceeds G_min/2 (the tightened bound must be real at the smallest G, not the
+clamp's).  Lowering it to one window later is a one-constant row that section 5 (7)'s
+measurement can open; it is not done here.
+
+1.4 Grafts, in one table
+
+  from            item                                           taken?   where
+  lifetime        the rule, read-side clamp, gc_rsv field,        yes      section 2, 3
+                  THE CREDIT rewritten in place
+  lifetime        W20/W20L/W21, W7 re-scoped (tighter), W19       yes      section 4
+                  re-scoped, W7k/W16R housekeeping
+  lifetime        rsvwhole/rsvzero/rsvfresh/rsvunclamped/rsvcreep yes      section 4 (rsvzero as
+                  sabotages                                                rsvnone: the guard
+                                                                           would refuse 0)
+  lifetime        gate (f): bound + creep + capacity, pre-        yes      section 5, with the
+                  committed negative result on the extra refusals          practice judge's C1
+  identify        rule 2 (HOOK_VMEVENT), case R2 (-> W22),        yes      section 2, 3, 4
+                  novmevent sabotage
+  identify        the WALLSTATS value for the tier's credit       yes      one value (14, "tier")
+  identify        rule 1, the cframe predicate, absorbed/          no       deferred; trigger named
+                  recording counters, the S1 counter
+  identify        store-side clamp, clamp(u + R - total) form     no       M-I1; j3-practice 4.3
+  verdict         the vote, the hold, H, the standing verdict,     no       section 1.2
+                  C6b re-scope
+  verdict         W24's shape as a mem_test guard                  no       it cannot fail on this
+                                                                           family (the window alone
+                                                                           pays a 50 B format);
+                                                                           kept as the test to add
+                                                                           if an identification
+                                                                           lever is ever built
+  verdict         "settle the per-handler allocation count";       yes      section 5 (8), 6
+                  hazard-flag clause style
+  j3-evidence     W8's mechanism corrected; 9 399 not 10 240;      yes      sections 4, 7
+                  R1K rejected on W21 alone; per-seed split in
+                  every headline; k2048_record owed
+
+1.5 What this buys in the machine, stated before the gate runs
+
+  - A fill whose first refusal the paint absorbed holds R + a window past the heap it was
+    refused at (12 KiB at any cap) instead of up to G/2 + a window past the cap (20 KiB at the
+    floor, 260 KiB at 8 MB).  In the amplified JIT-on record cell (12 of 15 runs took the path
+    on W, 9 of 15 on V, 12 of 15 in chainR) the cell's mean capacity falls by the difference;
+    that is stock's parity and the row's purpose.
+  - The sandbox's excursion after a refusal is bounded at max(u, S) + 12 KiB, measured per run
+    from the instrument, instead of total + G + 4 KiB.
+  - The reserve top's lottery -- the verdict landing on the kernel's closures until the ceiling,
+    then wherever the ceiling is crossed -- is NOT changed in expectation.  History: 3 downs in
+    46 second-chance JIT-on record runs across W, V and chainR.  No 30-60-run chain can tell
+    3/21 from 1.5/21; section 5 reports the count and judges only a regression bar.  THE
+    ADDRESS is the lever for that lottery; its two inputs are measured in this chain so the
+    decision to build it is made on data.
+
+-------------------------------------------------------------------------------------
+2. THE RULES, IN THE SHIM'S VOICE
+-------------------------------------------------------------------------------------
+2.1 THE CREDIT, the RESERVE bullet (replaces lj52shim.c:960-963 in place)
+
+ *   - RESERVE, after a refusal: LJ52_GC_RSV past the heap the refusal
+ *     found -- never under the burst tier's top, never past total + G.
+ *     The refusal opens it; a proof that finds the heap back under the
+ *     cap closes it.  A proof that does not -- the cycle ran before the
+ *     program dropped its data -- leaves it open, which is what lets
+ *     "catch, format the message, drop, carry on" work.  THE RESERVE'S
+ *     SIZE (2026-10-05): it was G/2 more past the cap, whoever caught the
+ *     refusal.  In the machine the catcher is usually not the program:
+ *     the first refusal of a fill lands on a 56-64 B closure machine.lua
+ *     makes inside a component call on the sandbox's thread
+ *     (wrapUserdata, unwrapUserdata, checkArg), under whatever pcall
+ *     wraps that call -- the capacity probe's pcall(paint), OpenOS's
+ *     dispatcher -- and the fill never hears.  It then held 16-256 KB
+ *     more than its own refusal allowed and met the reserve top's
+ *     verdict wherever it fell (3 of 30 amplified JIT-on record runs
+ *     down; bench/results-wall-window-2026-10-05.md).  The allocator
+ *     cannot tell that catcher from the program's, so the reserve is
+ *     sized for what a recovery needs, not for a tier: tens of bytes
+ *     (W8) to a few KB held while a message is formatted and printed
+ *     (W21: 2 KB held across the cycles its report costs).  Two windows
+ *     is that with room to spare, a half of the old floor and 1/32 of
+ *     its ceiling.  Sized ONCE, at the refusal that opens the tier:
+ *     later refusals in it shut the window and arm, as before, and
+ *     cannot creep it (W20, W7);
+
+2.2 THE CREDIT, the guard sentence (lj52shim.c:982-983)
+
+ * No credit at all where nothing could repay it: under HOOK_GC (a finalizer;
+ * PUC's cap is hard there too), under HOOK_VMEVENT (a VM event handler --
+ * jit.attach's, the harness's trace counter; its error is dropped with "VM
+ * handler failed" and would open the reserve for a program that never saw
+ * it) and under a host GCSTOP.
+
+2.3 THE CREDIT, the bound sentence (lj52shim.c:983-988)
+
+ * The bound is absolute, not incremental: used + delta <= total + G + the
+ * slice for every growth outside the norefuse window -- the sandbox's own,
+ * total + G + LJ52_GC_LEND, inside it, and after a refusal at heap u,
+ * max(u, total + G/2) + LJ52_GC_RSV + LJ52_GC_LEND, i.e. total + G/2 +
+ * LJ52_GC_RSV + 2 * LJ52_GC_LEND when the sandbox's own refusal opened the
+ * tier (W20, W7) -- so caught refusals cannot ratchet it (mem_test W7,
+ * W7k), and the excursion is charged -- getFreeMemory reads 0, both Java
+ * sides clamp it there.
+
+2.4 The constants (after the KSLICE #error block, lj52shim.c:1128)
+
+#define LJ52_GC_RSV    (8 * 1024)       /* THE RESERVE'S SIZE: two windows (2 * LJ52_GC_LEND) past a refusal */
+#if LJ52_GC_RSV < LJ52_GC_LEND
+#error "the reserve a refusal opens must be at least one window: at 1 KiB the recorder's own allocations stalled W16Rj"
+#endif
+#if LJ52_GC_RSV + LJ52_GC_LEND > LJ52_GC_ODMIN / 2
+#error "the reserve a refusal opens must fit inside the old tier at the smallest G (W20, W7), or the tightened bound is only the clamp's"
+#endif
+
+Both must be seen to fire (set 1 * 1024, then 16 * 1024, compile, restore) before the first
+mem_test run: every gate here was born broken in one direction.
+
+2.5 The helper's and the sizing block's comments
+
+/* THE RESERVE'S SIZE: the reserve tier's credit -- what the refusal that
+ * opened it set, never under the burst tier's, never over G.  G is passed
+ * in so a cap changed since then re-clamps it, and no path can read a
+ * credit the bound does not cover whatever gc_rsv holds.  See THE CREDIT. */
+
+  /* THE RESERVE'S SIZE: once, past this heap.  `used` is the heap the
+   * refused request found; a refusal under the burst top (one big request)
+   * keeps that top plus the room, so its retry is not refused for being
+   * early.  Clamped to G where it is read. */
+
+2.6 The bound, per thread class (T the cap, G = clamp(T/16, 32 KiB, 512 KiB), S = T + G/2,
+    L = LJ52_GC_LEND = 4 KiB, R = LJ52_GC_RSV = 8 KiB, K = LJ52_GC_KSLICE = 16 KiB; u the heap
+    at the refusal that opened the reserve tier; every growth outside the norefuse window)
+
+  sandbox, burst tier:                  used + delta <= S + L                        (unchanged)
+  sandbox, reserve opened by a refusal: used + delta <= max(u, S) + R + L
+                                                     <= S + R + 2L = T + G/2 + 16 KiB  (u <= S + L
+                                                        for a sandbox refusal)
+                                        and always   <= T + G + L                    (the clamp)
+  sandbox, reserve by the fresh-record rule:          <= T + G + L                    (unchanged)
+  the kernel (wd_depth 0, or the outermost arm's thread), either tier:
+                                        used + delta <= T + tier + K, tier in {G/2, clamp(rsv)}
+                                                     <= T + G + K                    (unchanged)
+  the kernel's margin past the sandbox's ceiling:     K - L = 12 KiB in both tiers  (unchanged,
+                                                        #error-guarded, W19)
+  under HOOK_GC, HOOK_VMEVENT or a host GCSTOP:       used + delta <= T  (no credit, no window)
+  Exception, named in the gate: when the heap was already past S + L when the tier opened (the
+  kernel's slice spent past the sandbox's ceiling between resumes, or the kernel's own refusal
+  at S + K), u is what the kernel left and the clamp at G binds: the absolute bound is the one
+  that holds there (observed max credit 24 704 = G/2 + 8 320 at R = 4 KiB; at R = 8 KiB the
+  kernel's own refusal sizes G/2 + 24 KiB, clamped to G up to G = 48 KiB).
+  Everything is charged: getFreeMemory reads 0.
+
+-------------------------------------------------------------------------------------
+3. THE DIFF PLAN AGAINST native/lj52shim.c (in file order; line numbers are 3186e87's)
+-------------------------------------------------------------------------------------
+Start from W/design/lifetime/R4K.diff (161 lines, applies to the repo source at md5 9b912f60;
+build-native.sh's three source gates pass on its output; warning-clean both variants) and make
+the five changes marked (*).  Rename the shadowing `long long g` in the sizing block (R4K.diff
+declares it inside lj52_gc_refused, which already has `global_State *g`; it compiled only because
+-Wshadow is not on).
+
+ 1. struct lj52_mem (:279-282): after gc_grown add
+      long long     gc_rsv;        /* the reserve tier's credit past the cap, set  */
+                                   /* when it opens; see THE RESERVE'S SIZE       */
+ 2. THE CREDIT (:945-992): the RESERVE bullet (2.1), the guard sentence (2.2) (*), the bound
+    sentence (2.3) (*).  Nothing else in the block moves; the nocredit/unbounded anchors are code
+    lines and are untouched.
+ 3. Constants (:1128): LJ52_GC_RSV = 8 * 1024 (*) and the two #error guards (*) (2.4).
+ 4. lj52_gc_reserve (:1179-1187): the fresh-record branch gains
+      M->gc_rsv = lj52_gc_odmax(total);   /* the whole tier: the bytes are history */
+    The `if (!M->gc_hyst && !M->gc_win && ...)` line is unchanged (nofresh's anchor).
+ 5. New, after lj52_gc_reserve:
+      static long long lj52_gc_rsvcredit(lj52_mem *M, long long g)
+      { return M->gc_rsv < (g >> 1) ? g >> 1 : M->gc_rsv > g ? g : M->gc_rsv; }
+ 6. lj52_gc_credit (:1197-1208): after the HOOK_GC line add, on its own line,
+      if (g->hookmask & HOOK_VMEVENT) return 0;   /* as a finalizer; see THE CREDIT */   (*)
+    and replace `if (!lj52_gc_reserve(M, total, used)) c >>= 1;` by
+      if (lj52_gc_reserve(M, total, used)) c = lj52_gc_rsvcredit(M, c);
+      else c >>= 1;
+    `c = lj52_gc_odmax(total);` and the KSLICE line stay (nocredit, unbounded, nokslice anchors).
+ 7. lj52_gc_lend (:1229-1244): after its two-line guard add, on its own line,
+      if (g->hookmask & HOOK_VMEVENT) return 0;   /* as a finalizer */                     (*)
+    The guard line itself is unchanged (kernelwindow's anchor); the ceiling and verdict lines
+    are unchanged (nowindow, noceiling, slicewindow, noverdict anchors).
+ 8. lj52_gc_refused (:1251-1263): after the HOOK_GC return add
+      if (g->hookmask & HOOK_VMEVENT) return;      /* as a finalizer: before the arm, as HOOK_GC */ (*)
+    then, before `M->gc_odstate = LJ52_OD_RESERVE;`, the sizing block:
+      if (M->gc_odstate != LJ52_OD_RESERVE) {   /* THE RESERVE'S SIZE: once, past this heap */
+        long long odmax = lj52_gc_odmax(total), over = used - total;
+        if (over < (odmax >> 1)) over = odmax >> 1;   /* never under the burst tier's top */
+        M->gc_rsv = over + LJ52_GC_RSV;               /* clamped to G where it is read */
+      }
+    `M->gc_win = 0; /* THE WINDOW ... */` and both arm lines are unchanged (refusalkeeps,
+    norefusedarm anchors).
+ 9. lj52_gc_pressure: the proof's top (:1303-1305) and THE CADENCE's top (:1351-1353) each
+    become
+      top = total + (M->gc_odstate == LJ52_OD_RESERVE
+                     ? lj52_gc_rsvcredit(M, lj52_gc_odmax(total))
+                     : lj52_gc_odmax(total) >> 1);
+    The verdict line `M->gc_win = used <= top ? 0 : used - M->gc_grown > top ? 2 : 1;` and
+    `M->gc_grown = 0;` and `if (used <= total) M->gc_odstate = LJ52_OD_BURST;   /* repaid */`
+    are unchanged (rawverdict, nogrownreset, closereserve anchors; the kernel line and
+    `arm = top - used < (top - M->gc_low) >> 1;` stay for noarm).
+10. lj52_wallstats (:2033-2072): the comment's list gains `tier`; the doc paragraph gains
+    "tier: the sandbox's credit in its tier as it stands -- G/2, or what the refusal that opened
+    the reserve set (THE RESERVE'S SIZE); the sandbox's ceiling is then cap + tier + window:
+    W19, W7k, W20 and the harness's CAP-GC read it"; before `return 13;` push
+      lua_pushnumber(L, M == NULL || M->gc_seentotal <= 0 ? -1
+                        : (lua_Number)(M->gc_odstate == LJ52_OD_RESERVE
+                                       ? lj52_gc_rsvcredit(M, lj52_gc_odmax(M->gc_seentotal))
+                                       : lj52_gc_odmax(M->gc_seentotal) >> 1));
+      return 14;
+    Fourteen values; _OCLJ_WALLSTATS is its own global, so LUA_MINSTACK is not in question.
+11. lj52shim.h: nothing.  The legacy (dropin) path shares every function touched; no separate
+    edit.  HOOK_VMEVENT is lj_obj.h's; no new include.
+Transitions not named above are unchanged: HOOK_GC / host GCSTOP / norefuse / gc_busy return
+before the sizing; on-trace nothing new is read; csync and legacy call the same three functions;
+cap change re-clamps at every read (G is passed in, never cached); a fresh record re-derives
+(calloc: gc_rsv 0 until a tier opens, and the only readers are under gc_odstate == RESERVE);
+nothing crosses eris.
+
+Other files:
+  test/native/mem_test.c              section 4 (W7, W19, W7k, W16R re-scopes; W20/W20L/W21/W22)
+  test/native/negative-control.sh     section 4 (4.25-4.30; re-measured expected sets)
+  test/native/OcljSmoke.scala         WALLSTATS read to 14 (ws0 fills 15; :3384, :3398); CAP-GC
+                                      gains " tier=" + v(w3, 14); the recovery mode (section 5.2)
+  docs/roadmap.md                     the row: what is fixed (the prize), what stays (the lottery,
+                                      THE ADDRESS deferred with its two inputs), rule 1 deferred
+                                      with its trigger
+  bench/results-reserve-2026-10-05.md the chain's results; the W8 correction (section 4.1)
+  W/forensics/tools/frag_*.c          the instrumented copy's credit/top/over re-computation must
+                                      read the tier (m-L4); keep lifetime's "OCLJXP| rsv=" line
+                                      at the sizing; regenerate with mkref.py over the final source
+
+-------------------------------------------------------------------------------------
+4. TESTS
+-------------------------------------------------------------------------------------
+4.1 Why W8, W2b/W2c and W11 hold -- and what W8 does not guard
+
+  W8   passes, unchanged text ('err: not enough memory|256|3').  Corrected mechanism (j3-evidence
+       section 1, measured: W8's final used is 1 142 418 B on the shipped shim and on R0, R1K,
+       R4K, R8K and L4 alike): W8 runs on the main thread with no arm, so lj52_gc_kernel reads
+       true, its credit is G/2 + K, lj52_gc_lend returns 0 for it, and its format while holding
+       is paid by THE KERNEL'S SLICE.  W8 guards the slice, not the reserve's size.  The hard
+       constraint "catch, format, drop, carry on, with a proof between catch and drop" is
+       re-stated for this row as "a SANDBOX program's", and that is W21.  Lifetime's "(covered by
+       THE WINDOW's lend)" sentence is not to be copied anywhere.
+  W2b/W2c  the arm in lj52_gc_refused sits after the sizing block and is untouched: every refusal
+       arms from any headroom and the retry after the collection succeeds.  The HOOK_VMEVENT
+       return precedes the arm exactly as HOOK_GC's does; it is reached only under a VM event
+       handler's own allocations.
+  W11  the fresh-record branch sets gc_rsv = G: the loaded machine keeps the whole tier; its line
+       is unchanged ("64 B lent, 32 KB refused").  rsvfresh (that line halved) fails exactly W11:
+       the write is load-bearing.  W11w/W11wL: the `!gc_win` clause is the same line.
+
+4.2 Existing cases that change, each with its reason (all from lifetime's mem_test_lt.c unless
+    noted; read them from W/design/lifetime/mem_test_lt.c with `diff` against the repo's file)
+
+  W7    TIGHTENED (fail-first on the shipped shim).  od_peak <= lim/2 + 8192 + 2 * win, i.e.
+        4 000 caught refusals that keep their data reach cap + G/2 + R + two windows at most.
+        Shipped: 36 846 (= G + 4 078) against 32 768: FAIL.  Final: expected ~28.8 KiB: PASS.
+        The 8192 is a LITERAL, as W19's 11 KB is: a shim that grows the reserve fails here.
+        It is the only case that catches rsvcreep (the reserve re-sized at every refusal), so
+        the re-scope is part of the design.
+  W19   PRECONDITION re-scoped: "the sandbox reached G + window - 1 KB" assumed the tier is G
+        wide; it now reads r[5] >= tier + win - 1024 with tier = select(14, _OCLJ_WALLSTATS())
+        (G on a shim without the value).  The kernel's 11 KiB table, granted armed and at depth
+        0, is the property and is a literal still.  Passes on shipped and final.
+  W7k   precondition `peak > lim + win` re-scoped to read the tier (value 14): at G > 40 KiB
+        the kernel's own refusal sizes G/2 + 24 KiB < G and the old precondition would read
+        false.  Passes unchanged at its cap (od_peak 49 140 <= G + slice 49 152).
+  W16R/W16Rj/W16RL/W16RjL  the "covered" test's reserve-tier top reads cap + tier instead of
+        cap + G (no landing reaches it; housekeeping).  The tier is still judged from the
+        refusal count: rule 1 is not landed, so a counted refusal still opens the tier.
+
+4.3 New cases (each as the sandbox: a coroutine resumed from C under the watchdog's arm)
+
+  W20   "a refusal the program never saw opens two windows of reserve, not G/2".  W16R's program
+        (the step's own handler absorbs the first refusal, the fill goes on with its data) over 8
+        caps; the heap recorded at the first refusal (before anything else allocates) and at the
+        second.  Asserts: a second chance in every cap; used_2 <= max(used_1, cap + G/2) + 8192
+        + window; the fill went on by > 1 KB in at least half the caps (not vacuous).
+        MUST FAIL on the shipped shim: mean +16 386 B (273 objects) against a bound of +12 288:
+        FAIL (lifetime measured it at the 4096 pin; the shipped creep is the same).  Final:
+        ~+8.2 KiB: PASS.
+  W20L  the same on the legacy (dropin) path, the first refusal's heap read from the fake Java
+        state (j_used).  Shipped FAIL; final PASS.  (j3-evidence E6: its legacy read was fixed
+        mid-round; use base-lt4's version.)
+  W21   "a recovery that holds across the cycles its report costs".  W17's live fill until
+        refused; then, still holding, 16 kept lines, 100 garbage strings (THE CADENCE's cycles
+        on them are the proofs the reserve must survive), 16 more kept lines -- ~2 KB kept,
+        ~8 KB granted -- then the drop, 256 B, a table; result 32025603.  Born failing against
+        its sabotage, not the shipped shim: rsvnone (R0) and R1K read -2 (refused inside the
+        report); shipped and final PASS.  This is the guard W8 turned out not to be.
+  W22   "a refusal under HOOK_VMEVENT opens no reserve" (identify's R2, renumbered; the r_mkarr
+        helper comes with it).  JIT off; a "bc" handler attached while there is room; the fill
+        stops 1.5 KiB under S; load('return 1') fires the handler, whose own 16 KiB is refused
+        under HOOK_VMEVENT.  Asserts: the handler fired, its request was refused, the tier reads
+        BURST, the program's 8 KiB after it is refused.  MUST FAIL on the shipped shim: RESERVE,
+        and the 8 KiB granted (measured 82/85 -> R2 among the three).  Final PASS.
+  Count: 81 + 4 = 85 checks.  Expected on the shipped object: 81/85 (W7, W20, W20L, W22 fail);
+  on the final object 85/85, 30 runs with random string-hash seeds on the additive object and 10
+  on the dropin, plus 1 run with -DW16_N=8 -DW16R_N=8 (the negative control's fast form).
+  Macro: `#define WALL_TIER(L) statn(L, "_OCLJ_WALLSTATS", 14)` (-1 on a shim without it).
+
+4.4 Negative-control sabotages for test/native/negative-control.sh (sabotage_mem form: one sed
+    line, a marker, the expected failing set).  The anchors are R4K's lines.
+
+  4.25 rsvwhole      `M->gc_rsv = over + LJ52_GC_RSV;` -> `M->gc_rsv = odmax;`
+                     (the whole tier again)                              expect: W7 W20 W20L
+  4.26 rsvnone       `M->gc_rsv = over + LJ52_GC_RSV;` -> `M->gc_rsv = over;`
+                     (no room past the refusal: the R0 object.  Not `#define LJ52_GC_RSV 0`:
+                     the new #error refuses to compile it, which is that guard's own proof)
+                                                                         expect: W20 W20L W21
+  4.27 rsvfresh      the fresh branch's `M->gc_rsv = lj52_gc_odmax(total);` -> `>> 1`
+                                                                         expect: W11
+  4.28 rsvunclamped  lj52_gc_rsvcredit's return without `M->gc_rsv > g ? g :`
+                                                                         expect: W7k (od_peak
+                                                                         53 100 > G + slice)
+  4.29 rsvcreep      `if (M->gc_odstate != LJ52_OD_RESERVE) {   /* THE RESERVE'S SIZE ...` ->
+                     `if (1) {`  (re-sized at every refusal)             expect: W7, nothing else
+  4.30 novmevent     the three HOOK_VMEVENT lines removed (identify's sabotage.sh has the two
+                     sed expressions; add the credit line's)             expect: W22
+  Each of the five lifetime sabotages was measured failing exactly its set at R = 4 KiB; at
+  8 KiB the sets are the same by construction (the pins moved with the constant) and must be
+  re-measured.  Existing sabotages whose expected sets will change (predictions; measure them
+  in one pass as `negctl-measure.log` did in the window round, then write the sets):
+    nocredit     gains W20 W20L W21 (no second chance can be bought; the holding report is
+                 refused); W22 predicted unchanged (the handler's 16 KiB is refused either way)
+    unbounded    gains W20 W20L (c = total feeds clamp(gc_rsv, total/2, total): the creep is
+                 huge); already lists W7
+    closereserve gains W20 W20L (the second chance is cut at the next proof: the "bought > 1 KB"
+                 clause) and W21 (the proofs inside the report close the tier under held data)
+    nokslice     may gain W20 W20L (the resume loop's table.pack at depth 0)
+    nowindow, noceiling, slicewindow, rawverdict, nolook, refusalkeeps, kernelwindow, noarm,
+    nolegacywindow, noverdict, nogrownreset, norefusedarm, nohyst, nofresh, flushwhole:
+                 predicted unchanged; the measurement decides.
+  Every anchor must still match exactly once (R4K's claim, verified for its 13; the two HOOK_
+  VMEVENT lines in credit/lend are new lines, not edits of guarded ones).
+
+-------------------------------------------------------------------------------------
+5. THE HARNESS GATE (R10, R12)
+-------------------------------------------------------------------------------------
+5.1 Builds and instruments
+
+  E   the control: the current native (THE WINDOW + the lj_err_mem fix), additive and dropin --
+      chainI's E (additive 9371db39).  Same chain, interleaved by rep.
+  F   the final: E + the diff of section 3, additive and dropin.
+  E-i, F-i  both as the instrumented native (W/forensics/src regenerated by tools/mkref.py over
+      each source, OCLJ_REFLOG=1 for the amplified cells, 2 for the recovery cell), built as
+      chainR built refnative2.  Before the chain: the forensics' 2.3 identity method on 1 024
+      caps of string JIT on, plain against instrumented, for F (E's was proven; lifetime's
+      R4K splice was proven on 9 399 caps).  The instrumented copy's OCLJREF credit=/top=/over=
+      must be recomputed through lj52_gc_rsvcredit (m-L4), and lifetime's "OCLJXP| rsv=" line
+      at the sizing kept.
+  The plain natives run the batch-100 matrix, the timing and the suites; the instrumented ones
+  run the amplified and recovery cells (one stderr line per refusal: negligible; chainR did it).
+
+5.2 The probe (test/native/OcljSmoke.scala, CapacityAutorunLua)
+
+  One knob, OCLJ_CAP_RECOVER (default 0, validated 0/1 beside OCLJ_CAP_BATCH).  With 1, the
+  fill's catch branch does, BEFORE dropping and under its own pcall, what a real catch handler
+  does while still holding its data:
+      local rok = pcall(function()
+        local tb = debug.traceback(tostring(err))       -- ~1 KB, held until written
+        io.stderr:write(tb, "\n")                       -- the tty: gpu.set through the kernel's invoke
+        pcall(event.onError, err)                       -- OpenOS's own path: io.open('/tmp/event.log','a'), write, close
+      end)
+      if not rok then rr = rr + 1 end
+  then drops and continues as today.  OCLJCAPX gains a fifth field, rr; the harness classifies
+  rr > 0 as RECOVERY-REFUSED (in addition to the existing condition).  Nothing else in the probe
+  changes; with the knob at 0 the probe is byte-identical to runsV's.
+
+5.3 Cells (192 KB stick, scale 1.8, batch 10, junk 24; interleaved E, F by rep)
+
+  amplified, instrumented:
+    D record (JIT on)          15 reps each          the cell with the second chance (12/15, 9/15,
+                                                     12/15) and the three historical downs
+    L record (dropin, JIT on)   5 reps each
+    O string (JIT off)         10 reps each          the second-chance path without the JIT
+                                                     (V: 8 of 10, all clean): the cleanest creep cell
+    (D string carries no signal -- every run ends at the holder's 16 KiB doubling -- and O record
+    never took the path: both stay in the batch-100 matrix only)
+  recovery, instrumented (OCLJ_REFLOG=2, OCLJ_CAP_RECOVER=1):
+    D record 5 + O string 5 on F; D record 2 + O string 2 on E (the control that the recovery
+    works where the old reserve is 16 KiB)
+  batch-100 matrix, plain: chain V's layout for F (48 runs: 192/256/1024 KB, four shapes, D and
+    O, the dropin at 192 and 1024) plus E's 192 KB D/O cells (4 shapes x 3 reps = 24) and stock's
+    192 KB cells (4 shapes x 1) for same-run last-five and capacity
+  the suites on F: additive JIT on, dropin, JIT off, sieve, stock (5 runs); mem-2, km-1 inside
+  Order: amplified cells first (interleaved), then recovery, then matrix, then suites.  ~160
+  runs: the main session's chain (nohup + Monitor), not a subagent's.  Pinned as every chain
+  (affrun C03C03 for the JVM; native tests 3FC3FC).  No Minecraft open before timing.
+
+5.4 Pass criterion -- ALL must hold; each names how it can fail
+
+  (1) THE BOUND.  Every F run's od_peak <= G/2 + R + 2 L = 32 768 B, unless its OCLJREF seq=1
+      line shows kernel=1 or used > cap + G/2 + L (the kernel's slice spent past the sandbox's
+      ceiling before the sandbox was refused), in which case <= G + L = 36 864 and the run is
+      listed under the kernel-overrun residual, never silently absorbed into the pass.  CAN FAIL:
+      a sizing or clamp defect.  TEETH: the same check applied to E must fail in >= 10 of E's 30
+      amplified runs (E's second-chance runs reach the old reserve top: od_peak 32 844 in the
+      practice judge's pinned confirmation, G + 1 648 in the downs); fewer than 10 and the
+      instrument or the amplification did not transfer: the chain is VOID.
+  (2) THE CREEP (W20 in the machine).  In every F run with >= 2 refusals, used at the LAST
+      refusal minus used at the FIRST (both from OCLJREF) <= R + 2 L + the last delta = 12 288 B
+      + delta; and the OCLJXP rsv= credit at the sizing lies in [G/2 + R, G/2 + R + L] =
+      [24 576, 28 672] unless (1)'s exception applies.  TEETH: on E the same difference exceeds
+      12 288 in >= 10 runs.  CAN FAIL: a refusal that re-sizes the tier, a window that lends past
+      the ceiling.
+  (3) BAD OUTCOMES: reported, with a regression bar, not a success bar (j3-practice C1: at 30
+      runs against a history of 3 in 46 second-chance runs, no count reaches p < 0.01, and the
+      lever does not change the draws).  Judged: 0 PROC-DEATH anywhere; 0 RECOVERY-REFUSED in
+      the non-recovery cells; F's STALL + DOWN over its 30 amplified runs <= E's + 3 in the same
+      chain -- more than that STOPS the landing until every bad F run's OCLJREF sequence has
+      been placed (absorber at=, tier0/1, win0, over) and explains it.  Reported, per build: the
+      count, each bad run's placement, the refusals-per-run distribution (expected unchanged:
+      the draws are THE WINDOW's), and the second-chance incidence (OCLJREF seq=1 with at= in
+      =machine:* or refusals >= pf + 2).  VOID for (3) if E shows < 8 second-chance runs in its
+      15 D-record runs (history 9, 12, 9).
+  (4) CAPACITY (R12).  Batch-100: F >= stock in every cell (the 1024 KB closure cell judged
+      against stock as before, 0.98-0.99x stands); F's single-refusal held count >= 0.99 x
+      runsV's V like for like and >= 0.99 x same-chain E; in the amplified O-string and D-record
+      cells F's second-chance runs hold LESS than E's second-chance runs by at most (G/2 - R) +
+      0 windows = 8 KiB of live data (<= 130 strings / 10 records at 192 KB) and F's median is
+      still >= stock's.  CAN FAIL: a reserve that closed on the program's own recovery shows as
+      RECOVERY-REFUSED or as a fall beyond that.
+  (5) THE SUITE.  smoke-test additive JIT on 66/0, dropin 63/0, JIT off 64/0, sieve 60/0, stock
+      47/0; mem-2 passes on both; km-1's kernelMemory within 1 % of E's; mem_test 85/0 in 30 + 10
+      runs; the negative control: every sabotage, existing (with the re-measured sets of 4.4)
+      and 4.25-4.30, fails exactly its set; wd 35/0; both #error guards seen to fire.
+  (6) COST.  Last-five time F/E <= 1.10 in every 192 KB cell (hermetically collections fall 1 %;
+      a rise is unexplained and fails); CAP-IDLE arms per window within +-10 % of E's, 0 refusals
+      at idle.
+  (7) THE RECOVERY CELL.  In all 10 F recovery runs: class CLEAN, rr = 0, and the held peak after
+      the catch -- max(used) over the OCLJPRF proofs between the catch's OCLJREF line (at= in the
+      autorun chunk, inside the fill) and the first proof under the cap, minus used at the catch
+      -- <= R/2 = 4 096 B.  Report the peak per run.  CAN FAIL: a recovery that holds a traceback,
+      its tmpbuf and a log handle is the shape M-L1 named; if any run reads > 4 096, the margin
+      claim of 1.3 (b) is false and the row records the measured figure; if any run is
+      RECOVERY-REFUSED the gate FAILS.  E's 4 recovery runs must be CLEAN too (the old reserve is
+      16 KiB there), else the probe change, not the shim, is at fault: VOID for (7).
+  (8) THE INSTRUMENT'S OWN QUESTIONS (reported, not judged): per cell the absorber histogram of
+      first refusals (=machine:1261/1280/117, the autorun chunk, OpenOS files) on E and F -- the
+      NOTE's table for F; strtab-shaped requests (delta == 16 (mask+1)) counted from the stream
+      (expected 0); any refusal with kernel=1 (expected 0 in clean runs).
+
+5.5 What the instrumented native is used for, in one list
+  attribution of every refusal (absorber, tier, verdict/ceiling, over) -> (1)'s exception,
+  (3)'s placements, (8); the per-run bound and creep from used=/delta= -> (1), (2); the sizing's
+  credit from OCLJXP rsv= -> (2); the recovery's held peak from OCLJPRF at level 2 -> (7); the
+  control's old arithmetic on E-i (credit 32 768 at seq >= 2) -> the teeth of (1) and (2).
+
+-------------------------------------------------------------------------------------
+6. MEASUREMENTS STILL OWED BEFORE THE DECISION IS FINAL, AND WHO RUNS THEM
+-------------------------------------------------------------------------------------
+Blocking the commit (must be done and written up):
+  M1  The hermetic census of the FINAL object (R = 8 KiB + rule 2), lifetime's layout
+      (W/design/lifetime: build.sh, census.sh, compare_lt.py against the forensics' baseline),
+      all EIGHT cells at seed 1 -- including k2048_record_j1, the one cell the rule made worse
+      under identify (162 -> 163, a new second-chance outside landing; j3-evidence E5) -- and
+      oe-string plus the two census string cells at seeds 2 and 3.  Must hold: non-second-chance
+      caps byte-identical in every cell and seed; 0 runs past either bound; the per-seed
+      outside counts written in BOTH directions, never pooled into one ratio (E2, C1).  Long:
+      the main session (nohup + Monitor), one process per cap, from the designers' scripts.
+  M2  The negative-control measurement run (every sabotage's actual failing set on the final
+      source, 4.4) and the two #error guards fired.  Main session or a bounded subagent:
+      ~40 mem_test builds, under an hour.
+  M3  mem_test: 30 runs additive, 10 dropin, 1 with W16_N=8 (section 4.3).  Subagent-sized.
+  M4  W7k at a 1 MB cap (G = 64 KiB) with the tier-reading precondition, once, to show the
+      precondition holds there (lifetime (c), j3-evidence L6).  Subagent-sized: one extra cap
+      in the case, printed.
+  M5  The in-machine gate of section 5, (1)-(7).  Main session.
+Reported in the results doc, not blocking:
+  M6  The per-handler count of past-cap allocations per step in the machine (THE ADDRESS's
+      decisive input, E11/V2): the forensics' per-allocation tracer (tools/mkalloc.py, scratch,
+      never shipped) built into one F native, 3 D-record runs, every allocation past the cap
+      attributed by the nearest pcall's callee (paint / step / fill / dispatcher).  Main
+      session, after the gate.  With it, and (7)'s between-step footprint, THE ADDRESS can be
+      decided on data.
+  M7  (8)'s strtab and kernel counts; the refusals-per-run distribution on F against E.
+  M8  The hermetic timing with more than two samples per build is NOT owed: this change adds
+      nothing to the per-growth path; (6) in the machine is the measure.
+Not owed any more, and why: identify's seeds (same rule as M1); THE ADDRESS's V1-V6 (deferred;
+M6 covers the one that decides it); the S1 question (the NOTE answered it); W8's mechanism (a
+sentence, section 4.1).
+
+-------------------------------------------------------------------------------------
+7. THE RESIDUALS, HONESTLY
+-------------------------------------------------------------------------------------
+  - The reserve top's lottery stays.  A refusal the paint, the dispatcher or the recorder absorbs
+    still opens the reserve tier for a fill that never saw it; the fill now holds R + a window
+    more and then meets the reserve top's verdict wherever it falls, with the same number of
+    draws as before (the window's 4 KiB above the top).  History: 3 of 46 second-chance JIT-on
+    record runs down; hermetically 0-6 of 803 by phase.  This design bounds the prize, not the
+    draw.  THE ADDRESS is the only candidate that reaches the draw; it is deferred until M6 and
+    (7) say whether the fill wins the vote in a machine and whether a 4 KiB reserve-tier hold
+    survives OpenOS's between-step code, and until W26 gives rawverdict a failing case.
+  - The kernel-overrun residual is untouched: the kernel's slice taking the heap more than
+    4 KiB past the sandbox's top between resumes is refused at the dispatcher's table.pack
+    (k2048: 725 of 2 048 string caps with no second chance; a second chance only moves it to the
+    reserve top, 103 -> 60 under R4K).  One k2048_record run that ended inside now ends down
+    because the ceiling is closer (identify, off 23824).  The levers are THE WINDOW's follow-ups
+    (a kernel regime-P retarget at S + L; L = clamp(G/8, 4 KiB, K)), not this row's.
+  - A recovery that HOLDS more than R = 8 KiB across the proofs its own allocations arm is refused
+    inside its report, where the shipped shim allowed G/2 (16-256 KiB) and stock allows nothing.
+    W21 pins ~2 KB held; (7) measures a traceback-printing one.  A program that catches TWO
+    refusals in one episode and keeps its data gets only the window after the second (the once
+    rule; stock gives it nothing).
+  - The single-request shape: a doubling refused under the burst top and retried with no
+    checkpoint is granted on retry only if it fits under S + R + L (16 KiB at cap + 2 KiB: yes
+    at the floor; 32 KiB: no, as on stock).  W9's class otherwise unchanged.
+  - The recorder still opens the (now bounded) reserve: 23 of 2 192 hermetic second chances, 0
+    of 50 in-machine; its abort still penalises its loop (map L1b).  Rule 1 is exact and ready
+    (identify.diff) when a machine shows recorder > 0.
+  - THE WINDOW's own residuals: F1's burst-top landing at event.timer's record on data that does
+    not fit; the never-verdict band; near-wall cost ~1.16x stage C; the kernel's 12 KiB (down
+    from 16); a verdict on garbage pinned across two cycles.  None is claimed here.
+  - The amplified JIT-on string cells carry no signal (the holder's 16 KiB doubling ends every
+    run); the probe's paint is part of the mechanism it measures (its row-19 paint and fifth
+    gpu.set are ~1.1 KB of live data and the absorber itself), so every in-machine figure
+    compares only under the same probe, E against F.
+  - Three test bars now read the shim's own tier value (W19, W7k, W16R's topr).  The compile-
+    time literals that catch a shim mis-reporting its tier are W20's 8192, W7's bound and W19's
+    11 KB (j3-evidence X2); the two #error guards pin the constant's range.
+  - The hermetic stall counts of this round (46 -> 6, 46 -> 0, 21 -> 0) measured the census
+    probe's phase arithmetic, not the machine's absorber; they are not evidence that any size
+    changes the in-machine down rate, and the results doc must say so.
+  - 8 KiB is a margin, not a measurement: 1.3 (b) is code reading until (7) runs.  If (7) reads
+    held peaks well under 2 KiB everywhere, lowering R to one window is a one-constant row with
+    W20/W7 re-pinned; if it reads over 4 KiB, the residual above is the finding.
+
+Suggested commit subject, in the log's voice: "The collector at the wall, the reserve's size: a
+refusal opens two windows of reserve past the heap it found, not G/2 past the cap".  The user
+runs the commit.

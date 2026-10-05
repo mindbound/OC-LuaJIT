@@ -1,0 +1,12 @@
+== 10:30:35 chainE2 start; java procs: 0
+== 10:31:06 additive build exit 0
+== 10:31:34 dropin build exit 0
+== 10:31:50 wsl build exit 0
+== 10:31:51 clamp cmp in lj_err_mem: 1; lines in lj_err_err: 23
+== 10:40:36 gates: mem        exit=0  checks=81 failures=0 ;wd         exit=0  checks=35 failures=0 ;shim       exit=0  SHIM TESTS: PASS ;security   exit=0  SECURITY TESTS: PASS ;race       exit=0  checks=2 failures=0 ;penalty    exit=0  checks=6 failures=0 ;negctl     exit=0    RESULT: PASS  build-native.sh refuses 'sniffer' NEGATIVE CONTROL: PASS -- security_test.c fails on every reintroduced ;
+== 10:40:54 wsl gates: mem exit=0 checks=81 failures=0;wd exit=0 checks=35 failures=0;penalty exit=0 checks=6 failures=0;
+== 10:40:55 ship2 driver built: exit 0; clamp cmps in its lj_err_mem: 1
+== 10:42:11 ship2 census: verdict_ship2nf_string: 2048 lines 
+== 10:42:11 ship2 ident: caps_in_both=2048  both_rc0=2048  identical=2048  differ=0  A_crash_B_ok=0  A_ok_B_crash=0  both_crash=0
+== 10:50:05 full suites done: 5 of 5 PASS
+== 10:50:05 chainE2 done

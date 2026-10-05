@@ -1,0 +1,14 @@
+== 14:18:37 chainF start; java procs: 0
+d9a51b6b64cf16b3fc16ff82c98cc044 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/E2/libdir-additive/libjnluajit52-windows-x86_64.dll
+8635573e86b8fb8aeafbae52b157a725 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/E2/libdir-dropin/libjnlua52-windows-x86_64.dll
+45eb443b80b886c48c063c8e5b65791b */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/sc/F/libdir-additive/libjnluajit52-windows-x86_64.dll
+8f9bc4196fd6dc8d3c0c7ae4e2e229ee */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/sc/F/libdir-dropin/libjnlua52-windows-x86_64.dll
+b425a80938864fbc5ddf04b2b1d22212 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/sc/refnative2/libdir-additive/libjnluajit52-windows-x86_64.dll
+d52b5aae8036a22725c1bbc55e057bfb */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/sc/refnative2/libdir-dropin/libjnlua52-windows-x86_64.dll
+c3216c8471b4fffd6b363e9ff7d9320c */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/sc/finst-native/libdir-additive/libjnluajit52-windows-x86_64.dll
+714a1778d75d0a7e1c4c5a3f8b6f2de9 */c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/wall/../wall2/sc/finst-native/libdir-dropin/libjnlua52-windows-x86_64.dll
+== 14:53:38 gate done: 60 runs; classes:      59 CLASS=CLEAN       1 CLASS=DOWN 
+== 15:06:24 recovery done: 25 runs; classes:       5 CLASS=CLEAN      20 CLASS=RECOVERY-REFUSED 
+== 15:42:35 matrix done: 76 runs; classes:      76 CLASS=CLEAN 
+== 15:50:34 full suites done: 5 of 5 PASS
+== 15:50:34 chainF done
