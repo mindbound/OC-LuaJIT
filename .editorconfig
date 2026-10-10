@@ -20,3 +20,7 @@ indent_size = 2
 
 [*.{lang,md}]
 trim_trailing_whitespace = false
+
+# NOTICE reproduces third-party license texts verbatim, trailing whitespace included
+[NOTICE]
+trim_trailing_whitespace = false

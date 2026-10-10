@@ -53,4 +53,8 @@ Dev-run the client with OpenComputers present:
 - [CCLuaJIT](https://github.com/vereena0x13/CCLuaJIT) — the JNI-bridge precedent for ComputerCraft.
 - [OC-Wasm](https://gitlab.com/Hawk777/oc-wasm) / [OC-Wasm-GTNH](https://github.com/DCNick3/OC-Wasm-GTNH) and [OpenPython](https://github.com/OpenPythons/OpenPython) — third-party OC architecture precedents.
 - Built on [GTNH ExampleMod1.7.10](https://github.com/GTNewHorizons/ExampleMod1.7.10).
-- The shipped library contains [LuaJIT](https://luajit.org) and [OC-JNLua](https://github.com/MightyPirates/OC-JNLua), and its serializer derives from [Eris](https://github.com/fnuecke/eris). The jar also ships [OpenComputers](https://github.com/MightyPirates/OpenComputers)' `machine.lua`, patched. The test harness is [ocelot-brain](https://gitlab.com/cc-ru/ocelot/ocelot-brain). A proper NOTICE file is still to come (see the licensing row in [docs/roadmap.md](docs/roadmap.md)).
+- The shipped library contains [LuaJIT](https://luajit.org) and [OC-JNLua](https://github.com/MightyPirates/OC-JNLua), adapts a few functions from [Lua](https://www.lua.org) 5.2 and 5.3, and its serializer derives from [Eris](https://github.com/fnuecke/eris); both libraries link GCC's runtime library statically, and the Windows one also parts of the [MinGW-w64](https://www.mingw-w64.org/) runtime. The jar also ships [OpenComputers](https://github.com/GTNewHorizons/OpenComputers)' `machine.lua`, patched, and reproduces parts of OpenComputers' `NativeLuaArchitecture` and `LuaStateFactory` in Java. The test harness is [ocelot-brain](https://gitlab.com/cc-ru/ocelot/ocelot-brain). The license texts of everything the jar bundles are in [NOTICE](NOTICE), which the jar carries too.
+
+## License
+
+MIT, Copyright (c) 2026 Arets Paeglis: see [LICENSE](LICENSE). Third-party notices are in [NOTICE](NOTICE).

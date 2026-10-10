@@ -640,8 +640,8 @@ and at default pacing this workload dies — which is §8c, not a new mechanism.
 setting does not cross `eris`. Anything the emergency-GC work ends up putting on
 the `global_State` — a pressure flag, a deferred-collect bit, a tuned
 `stepmul` — is gone on the far side of a persist unless it is re-established
-at restore, or lives somewhere that survives (the shim applies `OCLJ_JITOFF` at
-`luaopen` time, which does). That is a design constraint on the fix, not a
+at restore, or lives somewhere that survives (~~the shim applies `OCLJ_JITOFF` at
+`luaopen` time, which does~~ **corrected 2026-10-10:** the shim has no `OCLJ_JITOFF` (`lj52shim.c:12-19` lists it among the removed `getenv` hatches); what `lj52_newstate` does to every state is in the restoring state too, such as turning the JIT on, `lj52shim.c:2350-2379`). That is a design constraint on the fix, not a
 property of the heap.
 
 ### 8e. Pacing measured: it buys headroom, sublinearly, and cannot buy enough

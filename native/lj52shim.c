@@ -2503,10 +2503,10 @@ int luaL_getsubtable(lua_State *L, int idx, const char *fname) {
 }
 
 void luaL_requiref(lua_State *L, const char *modname, lua_CFunction openf, int glb) {
-  /* 5.2's luaL_requiref consults package.loaded first and only calls openf if
-   * the module is not already there; several sibling variants always called
-   * openf, which re-runs a library opener and discards the previous module
-   * table (so anything that had already been stored into it is lost). */
+  /* 5.3's luaL_requiref, not 5.2's: openf runs only if package.loaded lacks
+   * the module (PUC 5.2.4 always calls it: lauxlib.c:886-899).  Several sibling
+   * variants always called openf, which re-runs a library opener and discards
+   * the previous module table (so anything already stored into it is lost). */
   luaL_getsubtable(L, LUA_REGISTRYINDEX, "_LOADED");
   lua_getfield(L, -1, modname);
   if (!lua_toboolean(L, -1)) {

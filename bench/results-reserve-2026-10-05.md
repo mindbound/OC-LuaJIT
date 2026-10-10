@@ -121,7 +121,7 @@ practice, evidence) scored them with the in-machine note in hand; a synthesis ch
   past-cap growth was tested on probe shapes only; when the vote is wrong it is today's defect
   plus 8 KiB -- and in the machine's own cell the paint plausibly out-allocates the fill; and
   its `rawverdict` negative control catches nothing. Its decisive input -- which handler owns
-  most past-cap allocations in a machine -- is measured in this change's gate.
+  most past-cap allocations in a machine -- is measured in this change's gate. **Corrected 2026-10-10:** it was not. It is M6 of `design/d3-final.txt` §6, owed after the gate and not blocking, and M6 has not run; the gate's item 8 below counts only which code absorbed each first refusal.
 - **The recipient** (its reserve rule is this one; its recorder rule deferred): a refusal
   raised inside the trace recorder's protected call opens nothing, identified exactly by the
   innermost C frame and proven both ways. 0 of 50 in-machine refusals were the recorder's; the
@@ -349,7 +349,7 @@ here held 8.5-12 KB with the JIT off and more than 16 KB with it on.
   window more, and then meets the verdict wherever it falls, with the same number of draws as
   before. History: 3 of 46 second-chance JIT-on record runs down. This change bounds the prize,
   not the draw. The verdict's address is the lever for the draw, deferred on the evidence
-  above and on the two inputs this gate measures.
+  above and on the two inputs this gate measures. **Corrected 2026-10-10:** of the two, it ran the recovery cell (item 7); the per-handler count, M6, has not run.
 - **A recovery that holds after a second chance** is refused, as on stock. A recovery that
   holds more than 8 KiB after its own first refusal is refused inside its report, where the
   previous build allowed G/2 and stock allows nothing.
