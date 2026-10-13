@@ -289,6 +289,21 @@ typedef struct lj52_mem {
   volatile long gc_traceflushes;  /* flushes performed at the safe point      */
   volatile long gc_flushrefusals; /* flushes refused there: HOOK_GC was set   */
   long long     gc_flushbytes;    /* GCtrace metadata unlinked, cumulative    */
+  /* -- Value disposal; see THE VALUE FINALIZER below.  All NULL/0 until an
+   * install succeeds, and for good on a state nothing installs on (every
+   * dropin state; mem_test's).  Written only by the install, under the Java
+   * monitor, and by lj52_close; read by the wrapper, which runs under that
+   * same monitor. */
+  JavaVM       *vgc_vm;        /* the JVM, from GetJavaVM at install: GetEnv's route */
+  jclass        vgc_class;     /* GLOBAL ref to the Value class; NULL = not installed */
+  jobject       vgc_jstate;    /* WEAK global ref to the Java LuaStateLuaJIT  */
+  jmethodID     vgc_mid;       /* its ocljValueFinalized(Ljava/lang/Object;)V */
+  int           vgc_closing;   /* set by lj52_close before lua_close: no JNI  */
+  int           vgc_pcode;     /* the install's protected part reports here   */
+  long long     vgc_calls;        /* callbacks made into Java                 */
+  long long     vgc_jerr;         /* ... that returned with an exception      */
+  long long     vgc_skip_closing; /* finalizations during lua_close: no JNI   */
+  long long     vgc_skip_noenv;   /* GetEnv refused this thread: skipped      */
 } lj52_mem;
 
 static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
@@ -596,6 +611,310 @@ void lj52_setfield(lua_State *L, int idx, const char *k) {
   }
   lua_setfield(L, idx, k);
 }
+
+/* ================================================================== *
+ * Value disposal: THE VALUE FINALIZER
+ * ================================================================== */
+
+/* WHAT IS BROKEN WITHOUT THIS.  OpenComputers reaches Value.dispose(machine)
+ * through exactly one route: the __gc of the TABLE proxy machine.lua wraps
+ * every host Value in (wrapSingleUserdata; userdataWrapper.__gc calls
+ * userdata.dispose, UserdataAPI.scala:80-85).  LuaJIT finalizes userdata and
+ * cdata, never tables -- 0/200 measured, docs/research/gc-dispose-leak.md --
+ * so on this architecture no Value was ever disposed: a file handle opened
+ * through component.filesystem.open and dropped held one of the filesystem's
+ * handle slots until reboot (16 by default), and every AE2 allItems()
+ * iterator kept its ME-grid listener for ever.
+ *
+ * WHAT THIS DOES.  The Value's own USERDATA -- the one jnlua pushes and the
+ * proxy holds -- IS finalized on LuaJIT, through the `__gc` of jnlua's shared
+ * Java-object metatable, registry[LJ52_JNLUA_OBJECT].  lj52_vgc_install
+ * replaces that one FIELD with lj52_vgc_gc, a C closure whose upvalue 1 is
+ * jnlua's own gcjavaobject (jnlua.c:2120-2135).  For a finalized userdata
+ * whose Java object is an instance of the Value class Java handed in, the
+ * wrapper calls LuaStateLuaJIT.ocljValueFinalized(obj); Java counts the live
+ * userdata of each Value by IDENTITY and disposes at zero.  Then -- always,
+ * whatever happened above -- it chains to gcjavaobject, which releases jnlua's
+ * global ref exactly as it always did.
+ *
+ * WHY THESE SHAPES, each a fact verified in source (F1-F10 of the 2026-10-13
+ * design and its four-lens review; C1-C5 below are that review's):
+ *   - A FIELD, NOT A VALUE-SPECIFIC METATABLE (F1).  jnlua recognises a Java
+ *     object only by rawequal(its metatable, registry["jnlua.Object"])
+ *     (tojavaobject, jnlua.c:2091-2097); a userdata with any other metatable
+ *     reads back from toJavaObjectRaw as null, and OC's userdata.apply, call
+ *     and dispose would NPE.  Nothing in jnlua, OC or ocelot-brain reads or
+ *     writes that `__gc` after jnlua.c:225-227 sets it (F2), and LuaJIT
+ *     resolves `__gc` at separation and finalize time (lj_gc.c:150, :573), not
+ *     at setmetatable, so userdata pushed before the install are covered too.
+ *     ONE rawset, never nil in between: a dead userdata separated while the
+ *     field is absent is markfinalized for good (lj_gc.c:150-152).
+ *   - A CLASS FILTER, MANDATORY (F2).  The same metatable carries every
+ *     JavaFunction (the API and the 21 metamethods) and every LuaError
+ *     (jnlua.c:2178-2193, :2263-2273).  Routed into dispose, each would throw,
+ *     and each throw would mint a new LuaError userdata to finalize in turn.
+ *   - COUNTED IN JAVA, BY IDENTITY (F3, F4).  Every push mints a NEW userdata
+ *     and global ref (pushjavaobject, jnlua.c:2068-2080); the kernel merges a
+ *     re-pushed Value onto its EXISTING proxy through jnlua's __eq, and the
+ *     orphaned userdata dies while the Value lives on.  Disposing per userdata
+ *     would dispose live Values.  Only Java sees every push -- pushJavaObjectRaw
+ *     is the one route into lua_pushjavaobject -- so the count lives there and
+ *     this file only reports deaths.
+ *   - A DIRECT UPCALL WITH THE OBJECT AS ITS ARGUMENT (F8), not a Lua call into
+ *     OC's userdata.dispose.  It does not pass through calljavafunction
+ *     (jnlua.c:2138-2213), so jnlua's luaThread is NOT pointed at this
+ *     finalizer's thread: the Java side must touch no LuaState API, and its
+ *     pushes are refused while a dispose runs.
+ *   - A PENDING EXCEPTION IS SAVED, CLEARED AND RE-THROWN (F9).  lua_loadx runs
+ *     a GC checkpoint after its reader returns (lj_load.c:74), and jnlua's
+ *     reader returns with a Java exception pending when the stream threw
+ *     (jnlua.c:2377-2379).  IsInstanceOf and CallVoidMethod are illegal while
+ *     one is pending; gcjavaobject's DeleteGlobalRef is not, which is why
+ *     stock never had to care.  The re-throw hands the outer native back
+ *     exactly the exception it had, and the callback's own exception is
+ *     cleared and counted, never left for the outer native to misreport.
+ *   - THE CHAIN ALWAYS RUNS, AND NOTHING ON THE LUA SIDE ALLOCATES BEFORE IT.
+ *     A finalizer's error is dropped silently on our states: lj_gc.c:527-534
+ *     sends it to ERRFIN, and lua_newstate leaves vmevmask 0 -- only
+ *     luaL_newstate registers the stderr printer.  A raise before the chain
+ *     would leak jnlua's global ref with no trace anywhere.  The chain is a
+ *     lua_call of the original closure, not a call of its C pointer, because
+ *     gcjavaobject reads ITS OWN upvalue 1 (weak or strong ref): called from
+ *     our frame it would read ours.  That lua_call does not grow the stack
+ *     either: finalizers run on VL, a thread of their own (lj_gc.c:511,
+ *     created at lj_state.c:210) that is idle between them, whose stack starts
+ *     at 48 slots with its limit at slot 39 and is never shrunk below that
+ *     (lj_state.c:98-107, 173-185); finalizer frame, chain frame and the
+ *     callee's LUA_MINSTACK reach about slot 28 (GC64, two-slot frames).
+ *   - NO DISPOSE AT lua_close: STOCK PARITY (F5).  Stock OC does not dispose at
+ *     close either.  lua_1close zeroes the Java luaState before lua_close
+ *     (jnlua.c:358-364), OC's dispose lambda calls toJavaObjectRaw outside its
+ *     try (UserdataAPI.scala:80-85), check() throws, and 5.2 drops a
+ *     finalizer's error at close.  (gc-dispose-leak.md's "(E)" says
+ *     otherwise; the source says this.)  lj52_close sets vgc_closing before
+ *     lua_close, and the wrapper then makes NO JNI call at all: the Java state
+ *     is half torn down, and anything a call minted at close would be
+ *     finalized after the JAVASTATE holder it needs, which lua_close finalizes
+ *     last among what exists when it starts (newest first, lj_state.c:341-356).
+ *     A Value still live when its machine stops leaks, as on stock; one that
+ *     died just before an unload's save is disposed by that save's second
+ *     COLLECT (LuaJITArchitecture.save), because LuaJIT's weak-keyed tables
+ *     are not ephemerons (lj_gc.c:216-217, :494) and the raw userdata dies one
+ *     full cycle after its proxy.
+ *   - THE JVM FROM GetJavaVM, THE STATE BY A WEAK REF, THE RECORD BY
+ *     lj52_memof (F7).  M->envfn and M->javaref are set only on CAPPED states,
+ *     so neither is a route to a JNIEnv or to the Java object.  lj52_memof
+ *     works from any thread of the state, VL included, and M outlives
+ *     lua_close.  The ref to the Java LuaStateLuaJIT is WEAK so the native side
+ *     never keeps a machine's Java state alive; a cleared one skips the call.
+ *     GetEnv asks for JNI_VERSION_1_6, jnlua's own JNLUA_JNIVERSION (jnlua.c:29):
+ *     a newer constant on Java 8 would fail every GetEnv and skip every
+ *     callback silently, which would look exactly like the leak this fixes.
+ *   - THE ADDITIVE VARIANT ONLY (F10, F11).  The JNI entry is a native of
+ *     LuaStateLuaJIT; the dropin backs OC's own class and never installs.  And
+ *     the hook must not be live where OC's TWO-call save mints a second Value
+ *     per proxy sharing the first one's handle (docs/shell-fill.md:381-383):
+ *     the shipped save is one blob, and the harness installs only with its
+ *     bundle on.  Both decisions are Java's; this file installs when asked.
+ *
+ * WHAT A FINALIZER MAY DO is LuaJIT's business, and it is narrow.  It runs on
+ * VL under lj_vm_pcall with hooks off -- no deadline, no watchdog -- and the GC
+ * threshold at LJ_MAX_MEM (lj_gc.c:508-526), so a dispose is neither
+ * interrupted nor re-entered by another finalizer, and the shim's collector
+ * stands aside under HOOK_GC.  It runs at any GC checkpoint inside any jnlua
+ * native, on the thread that holds the LuaState's monitor -- as stock's table
+ * __gc did.  Java checks that monitor rather than trusting it.
+ *
+ * THE INSTALL IS STACK-NEUTRAL ON EVERY PATH (review C1).  It runs after OC's
+ * initialize() has left the kernel thread at index 1, and the kernel swap that
+ * follows counts on the stack being exactly as it was, while a failed
+ * lua_cpcall leaves its error object on top.  So lua_settop restores the entry
+ * top whatever happened, and the protected part never raises for a validation
+ * failure: it reports through M->vgc_pcode and returns.  The JNI part runs
+ * FIRST and clears any exception it leaves, with a distinct code per step
+ * (review C2): Java must always see the code, never a pending Error that
+ * escapes its "start anyway" catch. */
+
+/* The new __gc of registry[LJ52_JNLUA_OBJECT].  Stack: |ud|; upvalue 1 is the
+ * original __gc.  Every JNI call below is made with no exception pending, and
+ * every local ref it makes is deleted before it returns: an armed emergency
+ * collection runs whole cycles at one checkpoint, so thousands of these can
+ * share ONE outer native frame (review C5). */
+static int lj52_vgc_gc(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  if (M != NULL && M->vgc_closing) {
+    M->vgc_skip_closing++;              /* inside lua_close: no JNI at all */
+  } else if (M != NULL && M->vgc_class != NULL) {
+    JavaVM *vm = M->vgc_vm;
+    JNIEnv *env = NULL;
+    if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK || env == NULL) {
+      M->vgc_skip_noenv++;
+    } else {
+      void *ud = lua_touserdata(L, 1);
+      jobject obj = ud != NULL ? *(jobject *)ud : NULL;
+      jthrowable pend = (*env)->ExceptionOccurred(env);
+      if (pend != NULL) (*env)->ExceptionClear(env);
+      /* obj NULL first: IsInstanceOf(NULL, c) is JNI_TRUE. */
+      if (obj != NULL && (*env)->IsInstanceOf(env, obj, M->vgc_class)) {
+        jobject js = (*env)->NewLocalRef(env, M->vgc_jstate);
+        if (js != NULL) {               /* NULL: the Java state is gone */
+          (*env)->CallVoidMethod(env, js, M->vgc_mid, obj);
+          if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionClear(env);
+            M->vgc_jerr++;
+          }
+          (*env)->DeleteLocalRef(env, js);
+          M->vgc_calls++;
+        }
+      }
+      if (pend != NULL) {
+        (*env)->Throw(env, pend);
+        (*env)->DeleteLocalRef(env, pend);   /* legal while pending */
+      }
+    }
+  }
+  /* THE CHAIN, unconditionally: jnlua's gcjavaobject releases the global ref. */
+  lua_pushvalue(L, lua_upvalueindex(1));
+  lua_pushvalue(L, 1);
+  lua_call(L, 1, 0);
+  return 0;
+}
+
+/* The install's Lua part, under lua_cpcall.  Never raises for a validation
+ * failure (see THE INSTALL IS STACK-NEUTRAL above); only an allocation can
+ * make it fail, and the caller reports that as LJ52_VGC_ELUA. */
+static int lj52_vgc_install_p(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  if (M == NULL) return 0;                     /* the caller checked */
+  lua_pushliteral(L, LJ52_JNLUA_OBJECT);
+  lua_rawget(L, LUA_REGISTRYINDEX);            /* mt */
+  if (!lua_istable(L, -1)) {
+    M->vgc_pcode = LJ52_VGC_ENOMT;
+    return 0;
+  }
+  lua_pushliteral(L, "__gc");
+  lua_rawget(L, -2);                           /* mt gc */
+  if (!lua_iscfunction(L, -1)) {
+    M->vgc_pcode = LJ52_VGC_ENOGC;
+    return 0;
+  }
+  if (lua_tocfunction(L, -1) == lj52_vgc_gc)   /* a second install: keep ONE level */
+    return 0;
+  lua_pushliteral(L, "__gc");                  /* mt gc "__gc" */
+  lua_pushvalue(L, -2);                        /* mt gc "__gc" gc */
+  lua_pushcclosure(L, lj52_vgc_gc, 1);         /* mt gc "__gc" wrapper */
+  lua_rawset(L, -4);                           /* mt gc -- the ONE write */
+  return 0;
+}
+
+/* The core behind ocljInstallValueFinalizer.  Returns LJ52_VGC_OK or the code
+ * of the step that failed, with no Java exception pending, the Lua stack as
+ * it was, and every ref this call made released.  A second install replaces
+ * the class and state refs (the wrapper stays one level); a failed one keeps
+ * whatever an earlier success installed. */
+int lj52_vgc_install(lua_State *L, JNIEnv *env, jobject jstate, jclass vclass) {
+  lj52_mem *M = lj52_memof(L);
+  JavaVM *vm = NULL;
+  jclass gcls, oldcls, c;
+  jobject wjs, oldjs;
+  jmethodID mid;
+  int top, st, code;
+  if (M == NULL) return LJ52_VGC_ENORECORD;
+  if (env == NULL) return LJ52_VGC_EJVM;
+  /* -- the JNI part, first: nothing to undo on the Lua side if it fails -- */
+  if ((*env)->GetJavaVM(env, &vm) != JNI_OK || vm == NULL) {
+    (*env)->ExceptionClear(env);
+    return LJ52_VGC_EJVM;
+  }
+  gcls = (jclass)(*env)->NewGlobalRef(env, vclass);
+  if (gcls == NULL) {
+    (*env)->ExceptionClear(env);
+    return LJ52_VGC_EREF;
+  }
+  wjs = (*env)->NewWeakGlobalRef(env, jstate);
+  if (wjs == NULL) {
+    (*env)->ExceptionClear(env);
+    (*env)->DeleteGlobalRef(env, gcls);
+    return LJ52_VGC_EREF;
+  }
+  c = (*env)->GetObjectClass(env, jstate);
+  mid = c != NULL ? (*env)->GetMethodID(env, c, "ocljValueFinalized", "(Ljava/lang/Object;)V")
+                  : NULL;
+  if (mid == NULL) (*env)->ExceptionClear(env);   /* NoSuchMethodError: the code says it */
+  if (c != NULL) (*env)->DeleteLocalRef(env, c);
+  if (mid == NULL) {
+    (*env)->DeleteWeakGlobalRef(env, wjs);
+    (*env)->DeleteGlobalRef(env, gcls);
+    return LJ52_VGC_EMETHOD;
+  }
+  /* -- the Lua part, protected and stack-neutral -- */
+  M->vgc_pcode = LJ52_VGC_OK;
+  top = lua_gettop(L);
+  st = lua_cpcall(L, lj52_vgc_install_p, NULL);
+  lua_settop(L, top);
+  code = st != 0 ? LJ52_VGC_ELUA : M->vgc_pcode;
+  if (code != LJ52_VGC_OK) {
+    (*env)->DeleteWeakGlobalRef(env, wjs);
+    (*env)->DeleteGlobalRef(env, gcls);
+    return code;
+  }
+  /* -- success: the new refs in, any previous install's out -- */
+  oldcls = M->vgc_class;
+  oldjs = M->vgc_jstate;
+  M->vgc_vm = vm;
+  M->vgc_class = gcls;
+  M->vgc_jstate = wjs;
+  M->vgc_mid = mid;
+  if (oldcls != NULL) (*env)->DeleteGlobalRef(env, oldcls);
+  if (oldjs != NULL) (*env)->DeleteWeakGlobalRef(env, oldjs);
+  return LJ52_VGC_OK;
+}
+
+/* The core behind ocljValueGcCounters and _OCLJ_VGCSTATS: calls, jerr,
+ * closing, noenv, installed (0/1); all zero for a state with no record.
+ * Calls nothing but lua_getallocf. */
+void lj52_vgc_counters(lua_State *L, long long out[5]) {
+  lj52_mem *M = lj52_memof(L);
+  out[0] = M != NULL ? M->vgc_calls : 0;
+  out[1] = M != NULL ? M->vgc_jerr : 0;
+  out[2] = M != NULL ? M->vgc_skip_closing : 0;
+  out[3] = M != NULL ? M->vgc_skip_noenv : 0;
+  out[4] = M != NULL && M->vgc_class != NULL;
+}
+
+#ifdef LJ52_ADDITIVE
+/* THE JNI WRAPPERS, additive build only, as the accounting's are above: the
+ * state from jnlua's own luaState field through lj52_jstate.  The install
+ * clears what lj52_jstate leaves pending (a NoSuchFieldError) and answers
+ * ENORECORD -- a closed state (luaState 0) answers the same -- because the
+ * caller's "start anyway" path must see a code, not an Error.  The counters
+ * leave that error to Java, as ocljUsedMemory does: they are the harness's. */
+JNIEXPORT jint JNICALL
+Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljInstallValueFinalizer(JNIEnv *env, jobject obj, jclass vclass) {
+  lua_State *L = lj52_jstate(env, obj);
+  if (L == NULL) {
+    (*env)->ExceptionClear(env);
+    return LJ52_VGC_ENORECORD;
+  }
+  return (jint)lj52_vgc_install(L, env, obj, vclass);
+}
+
+JNIEXPORT void JNICALL
+Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljValueGcCounters(JNIEnv *env, jobject obj, jlongArray out) {
+  long long v[5] = { 0, 0, 0, 0, 0 };
+  jlong j[5];
+  jsize n;
+  int i;
+  lua_State *L = lj52_jstate(env, obj);
+  if (L == NULL && (*env)->ExceptionCheck(env)) return;
+  if (L != NULL) lj52_vgc_counters(L, v);
+  if (out == NULL) return;
+  for (i = 0; i < 5; i++) j[i] = (jlong)v[i];
+  n = (*env)->GetArrayLength(env, out);
+  if (n > 5) n = 5;
+  if (n > 0) (*env)->SetLongArrayRegion(env, out, 0, n, j);
+}
+#endif
 
 /* ================================================================== *
  * the deadline watchdog
@@ -2137,6 +2456,33 @@ static int lj52_wallstats(lua_State *L) {
   return 14;
 }
 
+/* _OCLJ_VGCSTATS() -> calls, jerr, closing, noenv, installed
+ *
+ * THE VALUE FINALIZER's counters (its section, above the watchdog), the same
+ * five lj52_vgc_counters hands Java through ocljValueGcCounters: callbacks
+ * made into LuaStateLuaJIT.ocljValueFinalized, those that came back with an
+ * exception (cleared there), finalizations skipped because the state was
+ * inside lua_close, and because GetEnv refused the thread; installed is 1 once
+ * an install has succeeded.  -1 throughout for a state with no record.
+ * closing can only ever be read as 0 from here -- lua_close is past every
+ * reader -- and is kept so the five line up with the Java array.
+ *
+ * A separate global, not more _OCLJ_GCSTATS positions, for THE reason
+ * _OCLJ_WALLSTATS is one: twenty values is LUA_MINSTACK, and two gates pin
+ * that count (mem_test's C0c, the harness's acc-1).  Read-only, allocates
+ * nothing, raw global -- the sandbox never sees it. */
+static int lj52_vgcstats(lua_State *L) {
+  lj52_mem *M = lj52_memof(L);
+  long long v[5];
+  lj52_vgc_counters(L, v);
+  lua_pushnumber(L, M ? (lua_Number)v[0] : -1);
+  lua_pushnumber(L, M ? (lua_Number)v[1] : -1);
+  lua_pushnumber(L, M ? (lua_Number)v[2] : -1);
+  lua_pushnumber(L, M ? (lua_Number)v[3] : -1);
+  lua_pushinteger(L, M ? (lua_Integer)v[4] : -1);
+  return 5;
+}
+
 /* Installed by lj52_newstate as the raw global _OCLJ_WATCHDOG. */
 static void lj52_wd_install(lua_State *L) {
   lua_createtable(L, 0, 2);
@@ -2155,6 +2501,8 @@ static void lj52_wd_install(lua_State *L) {
   lua_setglobal(L, "_OCLJ_GCSTATS");
   lua_pushcclosure(L, lj52_wallstats, 0);
   lua_setglobal(L, "_OCLJ_WALLSTATS");
+  lua_pushcclosure(L, lj52_vgcstats, 0);
+  lua_setglobal(L, "_OCLJ_VGCSTATS");
 }
 
 /* lua_close does not free the record, so we do -- after making sure no timer
@@ -2173,8 +2521,25 @@ void lj52_close(lua_State *L) {
      * nor charge a free to it. */
     M->accounting = 0;
     M->javaref = NULL;
+    /* THE VALUE FINALIZER's close: from here on its wrapper makes no JNI call
+     * and only chains to jnlua's gcjavaobject -- stock parity, no dispose at
+     * close (F5, at THE VALUE FINALIZER above). */
+    M->vgc_closing = 1;
   }
   lua_close(L);
+  /* The install's refs go only now: every finalizer lua_close ran could still
+   * read M->vgc_class.  GetEnv rather than jnlua's env: this is jnlua's own
+   * lua_1close thread, attached, and if it somehow is not the two refs leak
+   * -- a few bytes of JVM handle table, not a crash. */
+  if (M != NULL && M->vgc_vm != NULL) {
+    JNIEnv *env = NULL;
+    if ((*M->vgc_vm)->GetEnv(M->vgc_vm, (void **)&env, JNI_VERSION_1_6) == JNI_OK && env != NULL) {
+      if (M->vgc_class != NULL) (*env)->DeleteGlobalRef(env, M->vgc_class);
+      if (M->vgc_jstate != NULL) (*env)->DeleteWeakGlobalRef(env, M->vgc_jstate);
+    }
+    M->vgc_class = NULL;
+    M->vgc_jstate = NULL;
+  }
   /* After lua_close, never before: close frees every block -- the GG_State
    * last -- through lj52_alloc into this arena, and only then may the arena
    * itself go. */

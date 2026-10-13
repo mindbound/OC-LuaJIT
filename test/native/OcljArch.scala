@@ -3,7 +3,7 @@ package ocljit.arch
 import li.cil.repack.com.naef.jnlua
 import li.cil.repack.com.naef.jnlua.{LuaGcMetamethodException, LuaRuntimeException, LuaState, LuaStateLuaJIT}
 import totoro.ocelot.brain.{Ocelot, Settings}
-import totoro.ocelot.brain.entity.machine.{Machine, MachineAPI}
+import totoro.ocelot.brain.entity.machine.{Machine, MachineAPI, Value}
 import totoro.ocelot.brain.entity.machine.luac.{LuaStateFactory, NativeLuaAPI, NativeLuaArchitecture, PersistenceAPI}
 import totoro.ocelot.brain.nbt.NBTTagCompound
 
@@ -100,6 +100,11 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
     // mode HERE, before the kernel swap, so both branches below get it.  The
     // mod does the same at the same point (LuaJITArchitecture.initialize).
     applyForinMode()
+    // Value disposal, at the same point and for the same reason: before the
+    // swap, so the stock-kernel fallback gets it too; and initialize() runs
+    // before architecture.load on a restore (Machine.load -> init()), so the
+    // Values userdata.load mints during unpersist are counted.  See below.
+    installValueDisposer()
     val patched = classOf[OCLuaJITArchitecture].getResourceAsStream(OCLuaJITArchitecture.KernelResource)
     if (patched == null) {
       // NOT silent. Falling back to OpenComputers' kernel still RUNS -- that is
@@ -196,6 +201,91 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
           Ocelot.log.warn(msg)
           System.err.println("[ocljit] " + msg)
         }
+    }
+  }
+
+  // ------------------------------------------------------------------ //
+  // Value disposal: the jnlua.Object __gc wrapper, installed per state
+  // ------------------------------------------------------------------ //
+
+  /**
+    * THE SAME CALL THE MOD MAKES (LuaJITArchitecture.initialize, right after
+    * applyForinMode), with ocelot-brain's Value class and this machine as the
+    * Context, so the harness drives the native path the game drives.
+    *
+    * WHY IT EXISTS.  OpenComputers disposes a host Value from the __gc of the
+    * TABLE proxy its kernel wraps the Value in (machine.lua userdataWrapper.__gc,
+    * ocelot-brain machine.lua:1124-1128 / our patched kernel :1170), and LuaJIT
+    * finalizes no table -- so on this VM Value.dispose never ran: sixteen raw
+    * fs.open handles dropped by a program refused every further open until the
+    * computer stopped, and every AE2 allItems() iterator kept its grid listener
+    * (docs/research/gc-dispose-leak.md).  ocljSetValueDisposer makes the
+    * shim's wrapper around the jnlua.Object metatable's __gc (lj52shim.c, THE
+    * VALUE FINALIZER) call back into LuaStateLuaJIT for the Value's USERDATA,
+    * which LuaJIT does finalize, and LuaStateLuaJIT counts live userdata per
+    * Value by identity and disposes at zero (gen-luastate-subclass.py).
+    *
+    * REFLECTIVE, ON PURPOSE (review T1).  smoke-test.sh compiles the tree's
+    * LuaStateLuaJIT.java with this file on EVERY run (smoke-test.sh, step 2a).
+    * A static call would not compile against a LuaStateLuaJIT that predates
+    * the member, so the harness could never be run against HEAD to watch the
+    * milestones fail first.  Reflection makes that run possible: on HEAD the
+    * lookup throws NoSuchMethodException, which is recorded here, and gc-0
+    * FAILS on it because gc-0's expectation is the CONFIGURATION below, never
+    * this outcome.
+    *
+    * WHEN IT IS NOT INSTALLED, by configuration only (DisposeExpected, in the
+    * companion): BundleRoots OFF -- OpenComputers' two-call save restores a
+    * SECOND HandleValue per proxy carrying the SAME handle id (design F10;
+    * docs/shell-fill.md:381-383), and disposing that copy would close the live
+    * file -- and OCLJ_DISPOSE=off, the harness's negative control.  The mod
+    * has neither switch: it always bundles, and always installs.
+    *
+    * A FAILED INSTALL STARTS THE MACHINE ANYWAY, as the mod does (design C2/J4):
+    * the machine is then no worse than HEAD, which leaks every Value.  What
+    * failed is kept in disposeError, by class and message, for gc-0 to quote.
+    * The disposer itself is OC's own UserdataAPI dispose body
+    * (ocelot-brain luac/UserdataAPI.scala:74-81: dispose(machine), a throw
+    * logged as "Error in dispose method of userdata of type ..."), plus two
+    * counters the harness reads; it runs inside a LuaJIT finalizer on the thread
+    * holding the LuaState's monitor and touches no Lua.
+    */
+  @volatile var disposeExpected: Boolean = false
+  @volatile var disposeInstalled: Boolean = false
+  @volatile var disposeError: String = ""
+  /** Values handed to the disposer on this machine, and how many of their disposes threw. */
+  val disposeCalls = new java.util.concurrent.atomic.AtomicLong()
+  val disposeErrors = new java.util.concurrent.atomic.AtomicLong()
+
+  private def installValueDisposer(): Unit = {
+    disposeExpected = OCLuaJITArchitecture.DisposeExpected
+    disposeInstalled = false
+    disposeError = ""
+    if (!disposeExpected) return
+    val context: Machine = machine
+    val disposer = new java.util.function.Consumer[AnyRef] {
+      override def accept(v: AnyRef): Unit = {
+        disposeCalls.incrementAndGet()
+        try v.asInstanceOf[Value].dispose(context)
+        catch {
+          case t: Throwable =>
+            disposeErrors.incrementAndGet()
+            val what = "Error in dispose method of userdata of type " + (if (v == null) "null" else v.getClass.getName)
+            Ocelot.log.warn(what, t)
+            System.err.println("[ocljit] OC-LuaJIT " + whichMachine() + ": " + what + ": " + t)
+        }
+      }
+    }
+    try {
+      OCLuaJITArchitecture.setValueDisposer(OCLuaJITArchitecture.luaOf(this), classOf[Value], disposer)
+      disposeInstalled = true
+    } catch {
+      case t: Throwable =>
+        disposeError = t.getClass.getName + ": " + t.getMessage
+        val msg = "OC-LuaJIT " + whichMachine() + ": Value disposal could not be installed (" + disposeError +
+          ") -- dropped file handles and AE2 iterators will leak until the computer stops; the machine starts regardless."
+        Ocelot.log.error(msg, t)
+        System.err.println("[ocljit] " + msg)
     }
   }
 
@@ -350,7 +440,26 @@ class OCLuaJITArchitecture(machine: Machine) extends NativeLuaArchitecture(machi
         api.save(nbt)
       }
 
-      try lua.gc(LuaState.GcAction.COLLECT, 0) catch {                           // (:426-430)
+      try {                                                                      // (:426-430)
+        lua.gc(LuaState.GcAction.COLLECT, 0)
+        // A SECOND FULL CYCLE, which the original does not need and we do
+        // (review OC-1; the mod's LuaJITArchitecture.save carries the same
+        // line).  LuaJIT's weak-key tables are not ephemerons: the kernel's
+        // wrappedUserdata marks its VALUES strongly (prototype/watchdog/
+        // luajit/src/lj_gc.c:216-217), so a proxy that died before this save
+        // only loses its registry entry in the cycle above, and its Value's
+        // userdata -- what the jnlua.Object __gc wrapper disposes -- is
+        // finalized in the NEXT full cycle.  An unload save is followed by
+        // lua_close, where the wrapper deliberately disposes nothing (stock
+        // parity: jnlua zeroes the Java state before lua_close), so without
+        // this collect a Value dead at an unload save is never disposed, where
+        // stock PUC disposes it in that save's single COLLECT (its ephemeron
+        // runs the proxy's __gc in the same cycle).  The harness's gc-3
+        // asserts exactly this boundary: drop, save, owners back to baseline
+        // before anything else runs.  One more full GC per autosave per
+        // machine is its whole cost.
+        lua.gc(LuaState.GcAction.COLLECT, 0)
+      } catch {
         case _: Throwable =>
           Ocelot.log.warn("Error cleaning up loaded computer. This either means the server is badly overloaded or a user created an evil __gc method, accidentally or not.")
           machine.crash("error in garbage collector, most likely __gc method timed out")
@@ -480,6 +589,55 @@ object OCLuaJITArchitecture {
     if (on) Ocelot.log.info(msg) else Ocelot.log.warn(msg)
     System.err.println("[ocljit] " + msg)
     on
+  }
+
+  /**
+    * THE SWITCH for Value disposal (the class's installValueDisposer): default
+    * ON.  -Docljit.dispose=false, or OCLJ_DISPOSE=off in the environment
+    * (smoke-test.sh validates and exports it), skips the install -- the
+    * harness's NEGATIVE CONTROL: the gc-* milestones then expect the leak,
+    * under a -NEGATIVE-CONTROL id.  Like BundleRoots, the mod has no such
+    * switch; one here is what lets the gc gates be shown to fail on the same
+    * DLL that passes them.
+    */
+  val DisposeOn: Boolean = {
+    var v = System.getProperty("ocljit.dispose")
+    if (v == null) v = System.getenv("OCLJ_DISPOSE")
+    val on = v == null || !Set("0", "false", "off", "no").contains(v.trim.toLowerCase(java.util.Locale.ROOT))
+    val msg = "OC-LuaJIT value disposal: " +
+      (if (on) "ON (the jnlua.Object __gc wrapper is installed on every state this architecture initializes" +
+                (if (BundleRoots) ")" else " -- except that bundled roots are OFF, so it is NOT: see DisposeExpected)")
+       else "OFF -- OCLJ_DISPOSE=off, the NEGATIVE CONTROL: dropped Values leak as on HEAD")
+    if (on) Ocelot.log.info(msg) else Ocelot.log.warn(msg)
+    System.err.println("[ocljit] " + msg)
+    on
+  }
+
+  /**
+    * Whether this run's configuration installs Value disposal: the switch
+    * above AND bundled roots.  Bundled roots are a precondition, not a
+    * preference: OpenComputers' two-call save writes the kernel a second time
+    * into "_stack" when it lands mid-sync-call, and that blob restores a
+    * second HandleValue per proxy with the SAME handle id (design F10;
+    * docs/shell-fill.md:381-383); disposing the copy when its universe dies
+    * would close the file the live kernel still holds.  The milestones key
+    * their expectation on THIS, never on whether an install succeeded (T1).
+    */
+  def DisposeExpected: Boolean = BundleRoots && DisposeOn
+
+  /**
+    * lua.ocljSetValueDisposer(valueClass, disposer), by reflection (see the
+    * class for why).  getMethod on the state's own class, so it finds the
+    * public member of whatever LuaStateLuaJIT was compiled into this run;
+    * the target's own exception is rethrown unwrapped, so a refusal reads as
+    * the IllegalStateException that names lj52_vgc_install's code.
+    */
+  def setValueDisposer(lua: LuaState, valueClass: Class[_], disposer: java.util.function.Consumer[AnyRef]): Unit = {
+    val m = lua.getClass.getMethod("ocljSetValueDisposer", classOf[Class[_]], classOf[java.util.function.Consumer[_]])
+    try { m.invoke(lua, valueClass, disposer); () }
+    catch {
+      case e: java.lang.reflect.InvocationTargetException if e.getCause != null => throw e.getCause
+    }
   }
 
   /**

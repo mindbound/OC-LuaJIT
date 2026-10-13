@@ -2,54 +2,80 @@
 ######## gate: 60 runs
 
 == (1) THE BOUND: od_peak per run (F must be <= G/2 + R + 2L = 32768 unless the kernel exception; E teeth >= 10 over)
-  F: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
-  E: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
+  F: runs 30, past the new bound 0 (kernel exception 0); worst od_peak 27485 (g-record-r2-F-D)
+  E: runs 30, past the new bound 21 (kernel exception 0); worst od_peak 34849 (g-record-r9-E-D)
 
 == (2) THE CREEP: used at the last refusal - used at the first (F <= R + 2L + delta = 16384 + delta); the sizing's rsv in [24576, 28672]
-  F: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
-  E: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
+  F: runs with >= 2 refusals 22, creep past the bound 0; creep median 8270.0 max 9108; sizings 30, outside [G/2+R, +L] 0
+  E: runs with >= 2 refusals 21, creep past the bound 2; creep median 16172 max 17088; sizings 0, outside [G/2+R, +L] 0
 
 == (3) BAD OUTCOMES per build (F's STALL+DOWN <= E's + 3), second-chance incidence, refusals per run
-  E: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
-  F: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
+  E: {'CLEAN': 30}; second chances 21 of 30 (D record: 9 of 15); refusals/run {1: 9, 2: 8, 3: 7, 4: 6}
+  F: {'CLEAN': 29, 'DOWN': 1}; second chances 22 of 30 (D record: 11 of 15); refusals/run {1: 8, 2: 5, 3: 4, 4: 10, 5: 1, 6: 1, 7: 1}
+     BAD g-record-r5-F-L class=DOWN site=- pf=1 refs=5: 1:64B t0>1 w2 at==machine:1261 | 2:56B t1>1 w2 at==machine:117 | 3:64B t1>1 w2 at==machine:1280 | 4:28B t1>1 w2 at==init:18 | 5:48B t1>1 w2 at==/lib/transforms.lua:19
 
 == (4) CAPACITY: held per cell, F against E and stock; second-chance runs' held
-  E amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
-  F amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
+  g-record-D                   E med 607 (n 15, 543-617); F med 580 (n 15, 546-590)
+  g-record-L                   E med 607 (n 5, 603-611); F med 588 (n 4, 579-591)
+  g-string-O                   E med 2484 (n 10, 2210-2484); F med 2348 (n 10, 2210-2404)
+  E amplified: second-chance runs held med 614 (n 21); single-refusal runs med 548 (n 9)
+  F amplified: second-chance runs held med 587 (n 21); single-refusal runs med 1384.0 (n 8)
 
 == (6) COST: t_last5 F/E per cell (<= 1.10); idle arms per window; idle refusals
+  g-record-D                   t_last5 E 0.0017 F 0.0019 ratio 1.12; idle arms E med 21 F med 20; idle refusals 0
+  g-record-L                   t_last5 E 0.0014 F 0.0015 ratio 1.07; idle arms E med 20 F med 20; idle refusals 0
+  g-string-O                   t_last5 E 0.0037 F 0.0033 ratio 0.89; idle arms E med 1.0 F med 1.0; idle refusals 0
 
 == (7) THE RECOVERY CELLS: class, rr, the catch and the held peak after it
 
 == (8) THE INSTRUMENT'S OWN QUESTIONS: first-refusal absorbers per build; kernel=1; power-of-two requests >= 8 KiB
-  E: first {}
-     later {}
+  E: first {'=machine:1261': 9, '=machine:117': 9, '=machine:1280': 3, '=/mnt/58b/autorun.lua:30': 1, '=/mnt/dd5/autorun.lua:30': 1, '=/mnt/213/autorun.lua:30': 1}
+     later {'=machine:1280': 10, '=machine:1261': 6, '=machine:117': 3, '=/mnt/c27/autorun.lua:30': 1, '=/mnt/917/autorun.lua:30': 1, '=/mnt/46e/autorun.lua:30': 1, '=/mnt/a84/autorun.lua:30': 1, '=/mnt/8af/autorun.lua:30': 1}
      kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
-  F: first {}
-     later {}
+  F: first {'=machine:117': 11, '=machine:1261': 8, '=machine:1280': 3, '=/mnt/e54/autorun.lua:30': 1, '=/mnt/b4d/autorun.lua:30': 1, '=/mnt/d91/autorun.lua:47': 1}
+     later {'=machine:117': 19, '=machine:1261': 8, '=machine:1280': 8, '=/mnt/ddb/autorun.lua:30': 1, '=/mnt/477/autorun.lua:32': 1, '=/mnt/0b2/autorun.lua:30': 1, '=/mnt/0ea/autorun.lua:30': 1, '=/mnt/388/autorun.lua:47': 1}
      kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
 
 ######## recover: 25 runs
 
 == (1) THE BOUND: od_peak per run (F must be <= G/2 + R + 2L = 32768 unless the kernel exception; E teeth >= 10 over)
-  F: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
-  E: runs 0, past the new bound 0 (kernel exception 0); worst od_peak 0 ()
+  F: runs 13, past the new bound 0 (kernel exception 0); worst od_peak 28709 (rc3-record-r4-F-D)
+  E: runs 6, past the new bound 6 (kernel exception 0); worst od_peak 34409 (rc3-string-r2-E-O)
 
 == (2) THE CREEP: used at the last refusal - used at the first (F <= R + 2L + delta = 16384 + delta); the sizing's rsv in [24576, 28672]
-  F: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
-  E: runs with >= 2 refusals 0, creep past the bound 0; creep median - max -; sizings 0, outside [G/2+R, +L] 0
+  F: runs with >= 2 refusals 13, creep past the bound 0; creep median 8352 max 11088; sizings 13, outside [G/2+R, +L] 0
+  E: runs with >= 2 refusals 6, creep past the bound 0; creep median 16144.0 max 17956; sizings 0, outside [G/2+R, +L] 0
 
 == (3) BAD OUTCOMES per build (F's STALL+DOWN <= E's + 3), second-chance incidence, refusals per run
-  E: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
-  F: {}; second chances 0 of 0 (D record: 0 of 0); refusals/run {}
+  E: {'RECOVERY-REFUSED': 4, 'CLEAN': 2}; second chances 6 of 6 (D record: 0 of 0); refusals/run {2: 4, 4: 2}
+     BAD rc3-record-r1-E-D class=RECOVERY-REFUSED site=- pf=0 refs=2: 1:28B t0>1 w2 at==/mnt/b31/autorun.lua:30 | 2:56B t1>1 w2 at==machine:117
+     BAD rc3-record-r2-E-D class=RECOVERY-REFUSED site=- pf=0 refs=2: 1:28B t0>1 w2 at==/mnt/38b/autorun.lua:30 | 2:56B t1>1 w2 at==machine:117
+     BAD rc3-record-r3-E-D class=RECOVERY-REFUSED site=- pf=2 refs=4: 1:64B t0>1 w2 at==machine:1280 | 2:64B t1>1 w2 at==machine:1261 | 3:88B t1>1 w2 at==/mnt/006c/autorun.lua:32 | 4:64B t1>1 w2 at==/mnt/006c/autorun.lua:69
+     BAD rc3-string-r3-E-O class=RECOVERY-REFUSED site=- pf=2 refs=4: 1:56B t0>1 w2 at==machine:117 | 2:64B t1>1 w2 at==machine:1280 | 3:52B t1>1 w2 at==/mnt/b01/autorun.lua:47 | 4:48B t1>1 w2 at==/mnt/b01/autorun.lua:69
+  F: {'RECOVERY-REFUSED': 10, 'CLEAN': 3}; second chances 13 of 13 (D record: 0 of 0); refusals/run {2: 2, 3: 5, 4: 3, 5: 3}
+     BAD rc1-record-r1-F-D class=RECOVERY-REFUSED site=- pf=2 refs=4: 1:56B t0>1 w2 at==machine:117 | 2:56B t1>1 w2 at==machine:117 | 3:52B t1>1 w2 at==/mnt/e8f/autorun.lua:30 | 4:44B t1>1 w2 at==/mnt/e8f/autorun.lua:69
+     BAD rc1-record-r2-F-D class=RECOVERY-REFUSED site=- pf=1 refs=3: 1:64B t0>1 w2 at==machine:1261 | 2:28B t1>1 w2 at==/mnt/510/autorun.lua:30 | 3:44B t1>1 w2 at==/mnt/510/autorun.lua:69
+     BAD rc1-record-r3-F-D class=RECOVERY-REFUSED site=- pf=1 refs=3: 1:56B t0>1 w2 at==machine:117 | 2:52B t1>1 w2 at==/mnt/f50/autorun.lua:30 | 3:44B t1>1 w2 at==/mnt/f50/autorun.lua:69
+     BAD rc3-record-r1-F-D class=RECOVERY-REFUSED site=- pf=2 refs=4: 1:64B t0>1 w2 at==machine:1261 | 2:56B t1>1 w2 at==machine:117 | 3:88B t1>1 w2 at==/mnt/6dd/autorun.lua:32 | 4:64B t1>1 w2 at==/mnt/6dd/autorun.lua:69
+     BAD rc3-record-r2-F-D class=RECOVERY-REFUSED site=- pf=0 refs=2: 1:88B t0>1 w2 at==/mnt/b64/autorun.lua:32 | 2:64B t1>1 w2 at==machine:1248
+     BAD rc3-record-r3-F-D class=RECOVERY-REFUSED site=- pf=0 refs=2: 1:28B t0>1 w2 at==/mnt/56c/autorun.lua:30 | 2:56B t1>1 w2 at==machine:117
+     BAD rc3-record-r4-F-D class=RECOVERY-REFUSED site=- pf=2 refs=5: 1:64B t0>1 w2 at==machine:1261 | 2:64B t1>1 w2 at==machine:1261 | 3:900B t1>1 w2 at==/mnt/950/autorun.lua:-1 | 4:28B t1>1 w2 at==/mnt/950/autorun.lua:30 | 5:44B t1>1 w2 at==/mnt/950/autorun.lua:69
+     BAD rc3-record-r5-F-D class=RECOVERY-REFUSED site=- pf=3 refs=5: 1:64B t0>1 w2 at==machine:1261 | 2:64B t1>1 w2 at==machine:1261 | 3:56B t1>1 w2 at==machine:117 | 4:40B t1>1 w2 at==/mnt/e8d/autorun.lua:30 | 5:64B t1>1 w2 at==/mnt/e8d/autorun.lua:69
+     BAD rc3-string-r4-F-O class=RECOVERY-REFUSED site=- pf=3 refs=5: 1:56B t0>1 w2 at==machine:117 | 2:56B t1>1 w2 at==machine:117 | 3:56B t1>1 w2 at==machine:117 | 4:52B t1>1 w2 at==/mnt/7ec/autorun.lua:47 | 5:48B t1>1 w2 at==/mnt/7ec/autorun.lua:69
+     BAD rc3-string-r5-F-O class=RECOVERY-REFUSED site=- pf=2 refs=4: 1:56B t0>1 w2 at==machine:117 | 2:56B t1>1 w2 at==machine:117 | 3:52B t1>1 w2 at==/mnt/966/autorun.lua:47 | 4:48B t1>1 w2 at==/mnt/966/autorun.lua:69
 
 == (4) CAPACITY: held per cell, F against E and stock; second-chance runs' held
+  rc1-record-D                 F med 587 (n 3, 583-587)
+  rc3-record-D                 E med 549 (n 3, 547-614); F med 583 (n 5, 544-587)
   rc3-record-S                 S med 256 (n 3, 256-257)
+  rc3-string-O                 E med 2210 (n 3, 2209-2484); F med 2210 (n 5, 2210-2352)
   rc3-string-S                 S med 901 (n 3, 901-1024)
   E amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
   F amplified: second-chance runs held med - (n 0); single-refusal runs med - (n 0)
 
 == (6) COST: t_last5 F/E per cell (<= 1.10); idle arms per window; idle refusals
+  rc3-record-D                 t_last5 E 0.0017 F 0.0015 ratio 0.88; idle arms E med 20 F med 21; idle refusals 0
+  rc3-string-O                 t_last5 E 0.0028 F 0.0028 ratio 1.00; idle arms E med 1 F med 0; idle refusals 0
 
 == (7) THE RECOVERY CELLS: class, rr, the catch and the held peak after it
   rc1-record-r1-F-D        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:117 catch==/mnt/e8f/autorun.lua:30 heldpeak=0
@@ -79,12 +105,12 @@
   rc3-string-r5-F-O        class=RECOVERY-REFUSED rr=1 pf=2 refs=4 opener==machine:117 catch==/mnt/966/autorun.lua:47 heldpeak=-12
 
 == (8) THE INSTRUMENT'S OWN QUESTIONS: first-refusal absorbers per build; kernel=1; power-of-two requests >= 8 KiB
-  E: first {}
-     later {}
+  E: first {'=/mnt/b31/autorun.lua:30': 1, '=/mnt/38b/autorun.lua:30': 1, '=machine:1280': 1, '=/mnt/3ab/autorun.lua:47': 1, '=/mnt/74e/autorun.lua:47': 1, '=machine:117': 1}
+     later {'=machine:117': 2, '=boot/00_base.lua:21': 2, '=machine:1261': 1, '=/mnt/006c/autorun.lua:32': 1, '=/mnt/006c/autorun.lua:69': 1, '=machine:1280': 1, '=/mnt/b01/autorun.lua:47': 1, '=/mnt/b01/autorun.lua:69': 1}
      kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
-  F: first {}
-     later {}
-     kernel=1 refusals 0; recorder=1 0; power-of-two >= 8 KiB requests 0
+  F: first {'=machine:117': 4, '=machine:1261': 4, '=/mnt/b64/autorun.lua:32': 1, '=/mnt/56c/autorun.lua:30': 1, '=/mnt/6b6/autorun.lua:47': 1, '=/mnt/03b/autorun.lua:47': 1}
+     later {'=machine:117': 7, '=/lib/filesystem.lua:303': 3, '=machine:732': 3, '=machine:1261': 2, '=/mnt/e8f/autorun.lua:30': 1, '=/mnt/e8f/autorun.lua:69': 1, '=/mnt/510/autorun.lua:30': 1, '=/mnt/510/autorun.lua:69': 1}
+     kernel=1 refusals 0; recorder=1 1; power-of-two >= 8 KiB requests 0
 
 ######## matrix: 76 runs
 

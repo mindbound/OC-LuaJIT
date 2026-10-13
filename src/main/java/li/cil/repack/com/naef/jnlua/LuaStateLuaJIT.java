@@ -3,6 +3,10 @@ package li.cil.repack.com.naef.jnlua;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /**
  * The OC-LuaJIT LuaState: a fourth JNLua binding class alongside OC's own.
@@ -16,11 +20,15 @@ import java.io.OutputStream;
  * That is how OpenComputers runs 5.2, 5.3 and 5.4 side by side in one JVM, and
  * it is what lets OC-LuaJIT be ADDITIVE rather than a replacement.
  *
- * Three behavioural overrides, and only these: the capped constructor,
+ * Six behavioural overrides, and only these. The capped constructor,
  * getFreeMemory() and setTotalMemory(int) keep the memory accounting's figures
  * on the native side, so an allocation never crosses JNI to account for itself
- * (docs/accounting-sync.md). Nothing else is overridden: we are 5.2-class, so
- * the base class's arith/gc enum numbering is already correct.
+ * (docs/accounting-sync.md). pushJavaObjectRaw(Object),
+ * pushJavaFunction(JavaFunction) and close() keep Value disposal's count of
+ * live userdata per Value, which native/lj52shim.c's jnlua.Object __gc wrapper
+ * takes back down through ocljValueFinalized (docs/research/gc-dispose-leak.md).
+ * Nothing else is overridden: we are 5.2-class, so the base class's arith/gc
+ * enum numbering is already correct.
  *
  * The nested LuaDebug is MANDATORY: jnlua.c JNI_OnLoad does
  * referenceclass(JNI_LUASTATE_CLASS "$LuaDebug") at :1741 and fails the
@@ -77,6 +85,389 @@ public class LuaStateLuaJIT extends LuaState {
 
     /** Hands the cap to the native side, switching it to native accounting. */
     private native void ocljSetTotalMemory(int total);
+
+    /* ---- Value disposal: the Java half of lj52shim.c's jnlua.Object __gc wrapper ---- */
+
+    /**
+     * Live userdata per counted object, by IDENTITY: [0] is the count, [1] is 1
+     * when the object's class overrides Object.equals. An IdentityHashMap calls
+     * neither hashCode nor equals, so no Value code runs when a Value is pushed.
+     */
+    private final IdentityHashMap<Object, int[]> ocljLive = new IdentityHashMap<Object, int[]>();
+
+    /** Per class: does it override Object.equals? Reflection on the class, never a call. */
+    private final IdentityHashMap<Class<?>, Boolean> ocljEqualsClasses = new IdentityHashMap<Class<?>, Boolean>();
+
+    /** How many entries of ocljLive have [1] == 1. While it is 0, a zero disposes. */
+    private int ocljEqLive;
+
+    /** Set together by ocljSetValueDisposer, dropped together by close(). */
+    private Class<?> ocljValueClass;
+
+    private Consumer<Object> ocljValueDisposer;
+
+    /** True while the disposer, or an equals the merge check calls, runs. */
+    private boolean ocljInDispose;
+
+    /**
+     * Sticky: a bookkeeping step failed (only an allocation can), so no NEW
+     * entry is made from then on. An object whose userdata went uncounted must
+     * never get an entry later, or a counted userdata of it could reach zero
+     * while the uncounted one's proxy is live. Existing entries keep counting.
+     */
+    private boolean ocljCountBroken;
+
+    /* ocljValueStats(), in its order. Every one but ocljVsUnlocked under the monitor. */
+    private long ocljVsCounted;
+    private long ocljVsFinalized;
+    private long ocljVsDisposed;
+    private long ocljVsMissing;
+    private long ocljVsMergedSkips;
+    private final AtomicLong ocljVsUnlocked = new AtomicLong();
+    private long ocljVsDisposeErrors;
+    private long ocljVsRefused;
+    private long ocljVsBookkeepingFailures;
+
+    /**
+     * Installs Value disposal: from here on every userdata of an instance of
+     * valueClass is counted, by identity, as it is pushed, and when the last one
+     * is finalized the object is handed to the disposer.
+     *
+     * THE DISPOSER'S CONTRACT. It runs inside a LuaJIT finalizer -- lj52shim.c's
+     * wrapper around the jnlua.Object __gc -- on the thread that holds this
+     * LuaState's monitor, with no Lua hooks, in the middle of whichever Lua API
+     * call ran the GC step. It must not touch this LuaState: pushJavaObjectRaw
+     * and pushJavaFunction throw IllegalStateException while it runs, and any
+     * other call would land on the stack of whatever coroutine was running. What
+     * it throws is counted (ocljValueStats) and dropped; it should log its own.
+     * Nothing is disposed at close(), exactly as stock OpenComputers.
+     *
+     * Call it once, before the first Value is pushed (LuaJITArchitecture does, in
+     * initialize()). A userdata pushed earlier is not counted, and if its object
+     * is pushed again after the install, that earlier userdata's death takes one
+     * off the new count and can dispose the object under a live proxy. A second
+     * call replaces the class and the disposer. Throws IllegalStateException when
+     * the state is closed or the native side refuses -- the message names the
+     * code, and nothing is installed -- and NullPointerException for a null
+     * argument.
+     */
+    public synchronized void ocljSetValueDisposer(Class<?> valueClass, Consumer<Object> disposer) {
+        // isOpen(), not check(): check() is package-private in OC's jar, and every
+        // other member this class uses is public or protected.
+        if (!isOpen()) {
+            throw new IllegalStateException("Lua state is closed");
+        }
+        if (valueClass == null || disposer == null) {
+            throw new NullPointerException(valueClass == null ? "valueClass" : "disposer");
+        }
+        final int rc = ocljInstallValueFinalizer(valueClass);
+        if (rc != 0) {
+            throw new IllegalStateException(
+                "Value disposal not installed: lj52_vgc_install returned code " + rc + " (" + ocljVgcCode(rc) + ")");
+        }
+        ocljValueClass = valueClass;
+        ocljValueDisposer = disposer;
+    }
+
+    /** Whether ocljSetValueDisposer succeeded on this state and it is not closed. */
+    public synchronized boolean ocljValueDisposalInstalled() {
+        return ocljValueDisposer != null;
+    }
+
+    /**
+     * The Java side's counters: [0] Value userdata counted at a push, [1]
+     * finalizations seen under the monitor, [2] disposes that returned, [3]
+     * finalizations with no entry (pushed before the install, or uncounted),
+     * [4] zeros not disposed because a live equal object may share the proxy,
+     * [5] finalizations on a thread without the monitor (leaked), [6] disposes
+     * that threw, [7] pushes refused inside a dispose, [8] live entries now,
+     * [9] bookkeeping steps that threw (one at a push stops new entries).
+     */
+    public synchronized long[] ocljValueStats() {
+        final long[] s = new long[10];
+        s[0] = ocljVsCounted;
+        s[1] = ocljVsFinalized;
+        s[2] = ocljVsDisposed;
+        s[3] = ocljVsMissing;
+        s[4] = ocljVsMergedSkips;
+        s[5] = ocljVsUnlocked.get();
+        s[6] = ocljVsDisposeErrors;
+        s[7] = ocljVsRefused;
+        s[8] = ocljLive.size();
+        s[9] = ocljVsBookkeepingFailures;
+        return s;
+    }
+
+    /**
+     * The native side's counters (lj52_vgc_counters): [0] wrapper callbacks
+     * made, [1] callbacks that left a Java exception, [2] finalizations skipped
+     * at close, [3] skipped for want of a JNIEnv, [4] 1 if the wrapper is
+     * installed. All zero on a closed state, whose record is gone.
+     */
+    public synchronized long[] ocljValueGcCounters() {
+        final long[] out = new long[5];
+        if (isOpen()) {
+            ocljValueGcCounters(out);
+        }
+        return out;
+    }
+
+    /**
+     * Counted BEFORE the native push: jnlua's push runs a GC checkpoint, which
+     * can finalize the dying previous userdata of this very object; counted
+     * first, its count stays above zero there. A push that throws made no
+     * userdata with the jnlua.Object metatable -- lua_setmetatable is the last
+     * step of jnlua.c's pushjavaobject (OC-JNLua native/src/jnlua.c:2068-2080)
+     * -- so the count is rolled back.
+     */
+    @Override
+    public synchronized void pushJavaObjectRaw(Object object) {
+        final int[] n = ocljCountPush(object);
+        final boolean created = n != null && n[0] == 1;
+        try {
+            super.pushJavaObjectRaw(object);
+        } catch (final Throwable t) {
+            ocljUncountPush(object, n, created);
+            throw t;
+        }
+        if (n != null) {
+            ocljVsCounted++;
+        }
+    }
+
+    /**
+     * The second route to a jnlua.Object userdata: an object that is both a
+     * Value and a JavaFunction would otherwise have its function userdata's
+     * death take one off a count only raw pushes added.
+     *
+     * NOT rolled back when it throws, unlike pushJavaObjectRaw. jnlua's
+     * pushjavafunction_protected gives the userdata its metatable FIRST and
+     * then allocates the closure (OC-JNLua native/src/jnlua.c:656-660), so a
+     * push that fails there -- out of memory, on a capped machine -- leaves a
+     * userdata that will be finalized. Keeping its count costs a leak when
+     * no userdata was made; dropping it could dispose a live Value.
+     */
+    @Override
+    public synchronized void pushJavaFunction(JavaFunction javaFunction) {
+        final int[] n = ocljCountPush(javaFunction);
+        super.pushJavaFunction(javaFunction);
+        if (n != null) {
+            ocljVsCounted++;
+        }
+    }
+
+    /**
+     * Nothing is disposed at lua_close (the wrapper skips there, as stock
+     * OpenComputers disposes nothing at close), so the entries left are only
+     * references: drop them, and the disposer, which holds the machine.
+     */
+    @Override
+    public synchronized void close() {
+        super.close();
+        if (!isOpen()) {
+            ocljLive.clear();
+            ocljEqualsClasses.clear();
+            ocljEqLive = 0;
+            ocljValueClass = null;
+            ocljValueDisposer = null;
+        }
+    }
+
+    /** Pre-counts o if it is to be counted: its entry, or null. */
+    private int[] ocljCountPush(final Object o) {
+        if (ocljInDispose) {
+            ocljVsRefused++;
+            throw new IllegalStateException("a Value's dispose may not push into Lua");
+        }
+        final Class<?> c = ocljValueClass;
+        if (c == null || !c.isInstance(o)) {
+            return null;
+        }
+        try {
+            int[] n = ocljLive.get(o);
+            if (n == null) {
+                if (ocljCountBroken) {
+                    return null;
+                }
+                final int eq = ocljOverridesEquals(o.getClass()) ? 1 : 0;
+                n = new int[2];
+                n[1] = eq;
+                ocljLive.put(o, n);
+                ocljEqLive += eq;
+            }
+            n[0]++;
+            return n;
+        } catch (final Throwable t) {
+            ocljCountBroken = true;
+            ocljVsBookkeepingFailures++;
+            return null;
+        }
+    }
+
+    /**
+     * Rolls back a pre-count whose push threw. If the entry existed before and
+     * reaches zero here, every other userdata of the object died during the
+     * failed push: it is unreachable, and goes the way of any zero.
+     */
+    private void ocljUncountPush(final Object o, final int[] n, final boolean created) {
+        if (n == null) {
+            return;
+        }
+        try {
+            if (ocljLive.get(o) != n || --n[0] > 0) {
+                return;
+            }
+            ocljLive.remove(o);
+            ocljEqLive -= n[1];
+            if (!created) {
+                ocljAtZero(o);
+            }
+        } catch (final Throwable t) {
+            ocljVsBookkeepingFailures++;
+        }
+    }
+
+    /**
+     * Called ONLY by lj52shim.c's wrapper around the jnlua.Object __gc, inside a
+     * LuaJIT finalizer, when a userdata whose object is an instance of the
+     * installed class dies -- never at lua_close, where the wrapper skips. The
+     * native side looks it up by name and signature (GetMethodID
+     * "ocljValueFinalized", "(Ljava/lang/Object;)V"): rename neither alone.
+     *
+     * NOT synchronized, deliberately. The GC step that runs the finalizer was
+     * started by a synchronized LuaState method, so this thread holds the
+     * monitor already. Were that ever false, blocking here would wait on a
+     * thread that may be waiting on this one; a leak is the safe failure, so it
+     * counts and returns. Nothing may escape into the wrapper.
+     */
+    private void ocljValueFinalized(final Object value) {
+        if (!Thread.holdsLock(this)) {
+            ocljVsUnlocked.incrementAndGet();
+            return;
+        }
+        try {
+            ocljVsFinalized++;
+            final int[] n = ocljLive.get(value);
+            if (n == null) {
+                ocljVsMissing++;
+                return;
+            }
+            if (--n[0] > 0) {
+                return;
+            }
+            ocljLive.remove(value);
+            ocljEqLive -= n[1];
+            ocljAtZero(value);
+        } catch (final Throwable t) {
+            ocljVsBookkeepingFailures++;
+        }
+    }
+
+    /**
+     * The last counted userdata of value is gone. The kernel merges a push onto
+     * a live proxy when existing.equals(new), so while any object of a class
+     * that overrides equals is live, a zero disposes only if none of them
+     * equals this one; otherwise, or if equals throws, the object leaks as on
+     * HEAD, never disposed under a live proxy. The gate is the EXISTING
+     * object's class: an overriding equals may accept a value whose own class
+     * does not override it.
+     */
+    private void ocljAtZero(final Object value) {
+        if (!isOpen()) {
+            return;
+        }
+        if (ocljEqLive > 0 && ocljMayBeMerged(value)) {
+            ocljVsMergedSkips++;
+            return;
+        }
+        ocljDispose(value);
+    }
+
+    /** Whether a live counted object of an equals-overriding class equals value. */
+    private boolean ocljMayBeMerged(final Object value) {
+        final boolean was = ocljInDispose;
+        ocljInDispose = true;
+        try {
+            for (final Map.Entry<Object, int[]> e : ocljLive.entrySet()) {
+                final Object o = e.getKey();
+                if (e.getValue()[1] != 0 && o.equals(value)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (final Throwable t) {
+            return true;
+        } finally {
+            ocljInDispose = was;
+        }
+    }
+
+    /** Hands value to the disposer, refusing pushes while it runs. */
+    private void ocljDispose(final Object value) {
+        final Consumer<Object> disposer = ocljValueDisposer;
+        if (disposer == null) {
+            return;
+        }
+        final boolean was = ocljInDispose;
+        ocljInDispose = true;
+        try {
+            disposer.accept(value);
+            ocljVsDisposed++;
+        } catch (final Throwable t) {
+            ocljVsDisposeErrors++;
+        } finally {
+            ocljInDispose = was;
+        }
+    }
+
+    /** Cached per class. When the reflection fails, assume it does: that only skips. */
+    private boolean ocljOverridesEquals(final Class<?> c) {
+        Boolean b = ocljEqualsClasses.get(c);
+        if (b == null) {
+            boolean overrides;
+            try {
+                overrides = c.getMethod("equals", Object.class)
+                    .getDeclaringClass() != Object.class;
+            } catch (final Throwable t) {
+                overrides = true;
+            }
+            b = Boolean.valueOf(overrides);
+            ocljEqualsClasses.put(c, b);
+        }
+        return b.booleanValue();
+    }
+
+    /** lj52_vgc_install's codes (LJ52_VGC_* in native/lj52shim.h). */
+    private static String ocljVgcCode(int rc) {
+        switch (rc) {
+            case 1:
+                return "ENORECORD: no lua_State, or no lj52 record for it";
+            case 2:
+                return "EJVM: GetJavaVM failed";
+            case 3:
+                return "EREF: a global or weak global reference could not be made";
+            case 4:
+                return "EMETHOD: no ocljValueFinalized(Object) on this class";
+            case 5:
+                return "ENOMT: the registry's jnlua.Object metatable is not a table";
+            case 6:
+                return "ENOGC: the jnlua.Object __gc is not a C function";
+            case 7:
+                return "ELUA: the protected install failed in Lua";
+            default:
+                return "unknown code";
+        }
+    }
+
+    /**
+     * lj52_vgc_install through the additive JNI entry: 0, or the code of the
+     * step that refused. It never leaves a Java exception pending, so the code
+     * always arrives.
+     */
+    private native int ocljInstallValueFinalizer(Class<?> valueClass);
+
+    /** lj52_vgc_counters into out[0..4]; see ocljValueGcCounters(). */
+    private native void ocljValueGcCounters(long[] out);
 
     /* ---- the 82 inherited natives, redeclared so they bind to OUR library ---- */
 

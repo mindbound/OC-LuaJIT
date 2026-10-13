@@ -49,7 +49,8 @@ and in the GTNH jar. Every caller -- GTNH `NativeLuaArchitecture`
 (`recomputeMemory`, `runThreaded`'s `kernelMemory` and kernel-error path,
 `save`, `load`, `close`), GTNH `ComputerAPI` (`computer.freeMemory` /
 `totalMemory`), GTNH `LuaStateFactory` (`createState`, the `init` probe),
-ocelot-brain's equivalents, the mod (`LuaJITArchitecture.java:499,574`) and
+ocelot-brain's equivalents, the mod (`LuaJITArchitecture.java:581,674`;
+`:499,574` before Value disposal, 2026-10-13) and
 the harness -- calls them by `invokevirtual`, so overrides in
 `LuaStateLuaJIT` dispatch. No reflection touches the fields anywhere (the
 only `setAccessible` calls in the GTNH jar are LuaJ's), and no other mod jar
@@ -146,7 +147,10 @@ private native void ocljSetTotalMemory(int total);
 
 The class's header note "No behavioural overrides, deliberately" is replaced
 by one naming these three and pointing here. `synchronized` is not inherited,
-so the generator emits it, and a reflection check asserts it.
+so the generator emits it, and a reflection check asserts it. (Since
+2026-10-13 the note names six: these three, and Value disposal's
+`pushJavaObjectRaw`, `pushJavaFunction` and `close()`, pointing to
+`docs/research/gc-dispose-leak.md`.)
 
 ### Why the monitor makes it exact
 
@@ -172,7 +176,10 @@ and `total` is not raced.
 - **Mismatched pieces**: a new class with an old DLL throws
   `UnsatisfiedLinkError` from the capped constructor (OC catches it and the
   machine does not start); an old class with a new DLL stays in legacy mode.
-  `verifyModAssets` refuses a jar whose native lacks the two export names. An
+  `verifyModAssets` refuses a jar whose native lacks the two export names
+  (four since 2026-10-13, with Value disposal's two; a native with only these
+  two would start every machine with disposal uninstalled and an error
+  logged, `LuaJITArchitecture.java:258-266`). An
   uncapped state (`computer.lua.limitMemory=false`) calls neither native, so a
   new class on an old library serves it as before -- the review's case: the
   first build of the override asked the native on every `getFreeMemory()`,
@@ -184,6 +191,11 @@ and `total` is not raced.
   names, the two new names asserted exactly; dropin unchanged at 87/89, no
   `LuaStateLuaJIT_*`); `nm` asserts the additive shim object defines both;
   a regenerate-and-diff gate for `LuaStateLuaJIT.java`; spotless.
+  Since 2026-10-13 Value disposal's two natives (`ocljInstallValueFinalizer`,
+  `ocljValueGcCounters`; THE VALUE FINALIZER in `native/lj52shim.c`) make it
+  four oclj natives, asserted by exact name on the object and in the exports,
+  and 91 `Java_*` / 93 PE names in the additive (`native/build-native.sh:904`);
+  the dropin stays at 87/89 with none (`:910`).
 - **`_OCLJ_GCSTATS`**, six values appended after the 14th (twenty in all,
   which is `LUA_MINSTACK`, so the function needs no stack check): 15 `total`
   (C), 16 `used` (C), 17 `csync`, 18 used-reads, 19 allocator calls, 20

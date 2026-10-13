@@ -1,0 +1,18 @@
+--- src/main/java/li/cil/repack/com/naef/jnlua/LuaStateLuaJIT.java	2026-10-13 19:13:47.010842900 +0300
++++ countafter/LuaStateLuaJIT.java	2026-10-13 19:22:21.107144600 +0300
+@@ -222,14 +222,8 @@
+      */
+     @Override
+     public synchronized void pushJavaObjectRaw(Object object) {
++        super.pushJavaObjectRaw(object);
+         final int[] n = ocljCountPush(object);
+-        final boolean created = n != null && n[0] == 1;
+-        try {
+-            super.pushJavaObjectRaw(object);
+-        } catch (final Throwable t) {
+-            ocljUncountPush(object, n, created);
+-            throw t;
+-        }
+         if (n != null) {
+             ocljVsCounted++;
+         }

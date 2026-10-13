@@ -1,0 +1,8 @@
+chain b started 16:27:29
+  fix-bundleoff env=[OCLJ_PERSIST_BUNDLE=off]
+fix-bundleoff exit=1 SMOKE| CHECKS: 79   FAILURES: 3   WALL: 101.4s
+  sab-onecollect env=[OCLJ_ARCH_SRC=/c/Users/astro/claude-tmp/oclj/sabotage/OcljArch-onecollect.scala]
+sab-onecollect exit=1 SMOKE| CHECKS: 79   FAILURES: 1   WALL: 98.2s
+  sab-countafter env=[OCLJ_JAVA_SRC=/c/Users/astro/claude-tmp/oclj/sabotage/countafter/LuaStateLuaJIT.java]
+sab-countafter exit=1 SMOKE| CHECKS: 79   FAILURES: 1   WALL: 101.4s
+chain b finished 16:32:54

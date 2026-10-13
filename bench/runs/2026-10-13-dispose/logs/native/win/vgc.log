@@ -1,0 +1,51 @@
+vgc_test: linking /c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-windows-x86_64/lj52shim.o (ace486b48078bf05fff9683e1a45b03a, 34259 bytes)
+vgc_test -- Value disposal: the __gc wrapper on jnlua.Object, against a strict fake JNI
+  PASS  V0a LJ52_JNLUA_OBJECT is jnlua's own spelling                    LJ52_JNLUA_OBJECT="jnlua.Object", jnlua's JNLUA_OBJECT="jnlua.Object"
+  PASS  V0b the install codes are the contract's 0..7                    OK 0 ENORECORD 1 EJVM 2 EREF 3 EMETHOD 4 ENOMT 5 ENOGC 6 ELUA 7
+  PASS  V0c a state with no install reports zero counters                calls 0 jerr 0 closing 0 noenv 0 installed 0
+  PASS  V1a the install: OK, installed, a new C __gc, __metatable kept   rc=0 installed=1; __gc a C function: yes, still the original: no; __metatable false: yes; stack +0, locals left 0, pending none
+  PASS  V1b one callback per Value, on the installed state, resolved method callbacks: A 1, B 1 (all 2); to the installed state: yes; bad arguments 0
+  PASS  V1c every callback before its original, through a live ref       callbacks after the original: A 0, B 0; through a deleted ref: A 0, B 0; deleted-ref uses in the collect 0
+  PASS  V1d the original __gc ran once each, inside its own closure      originals: A 1, B 1 (outside their own closure: 0, 0)
+  PASS  V1e the wrapper's calls on GetEnv's env, at JNI_VERSION_1_6      GetEnv calls 2 (versions other than 1.6: 0); calls on another thread's env 0
+  PASS  V2a non-Values: no callback, no NewLocalRef or CallVoidMethod    rc=0; wrapper ran 3 times (GetEnv); callbacks 0/0/0; NewLocalRef 0, CallVoidMethod 0
+  PASS  V2b the original __gc ran once for each non-Value                originals 1/1/1 (outside their closure: 0)
+  PASS  V3a lj52_close: no callback for the live Values (stock parity)   rc=0; callbacks during close 0
+  PASS  V3b the original __gc ran once for each live userdata at close   8 of 8 userdata had their original exactly once (outside the closure: 0); holder's gc 1
+  PASS  V3c no JNI call during close but the release                     during lj52_close: GetEnv 1, DeleteGlobalRef 1 (of the class 1), DeleteWeakGlobalRef 1 (of the state 1), deletes of anything else 0, every other call 0
+  PASS  V3d the class and state refs released after close, once each     the shim's live refs across close: global 1 -> 0, weak 1 -> 0; deleted: class 1, state 1; reference misuse during close 0
+  PASS  V3e every jnlua.Object finalization at close counted as a closing skip closing counter read inside the holder's gc (the last finalizer at close): 8, want 8
+  PASS  V4a nothing but the exception-safe JNI calls while it is pending rc=0; calls outside the exception-safe list while it was pending: 0
+  PASS  V4b the callback is still made                                   callbacks 1
+  PASS  V4c the SAME exception is pending afterwards (re-thrown)         pending afterwards: the same exception
+  PASS  V4d the original __gc ran                                        originals 1
+  PASS  V5a the callback's exception is cleared, nothing left pending    rc=0; callbacks 1; pending after the finalizer: nothing
+  PASS  V5b counted: jerr 1, calls 1                                     jerr 1, calls 1
+  PASS  V5c the original __gc still ran                                  originals 1
+  PASS  V6a a second install keeps the one wrapper over the original     rc 0 then 0; __gc after the second: the first's wrapper yes, upvalues 1, upvalue 1 the original yes
+  PASS  V6b a Value: one callback, one original                          callbacks 1, originals 1
+  PASS  V6c the second install's refs replaced the first's               the shim's live refs after two installs: global +1, weak +1 (want +1, +1)
+  PASS  V7a no jnlua.Object: ENOMT, nothing changed, nothing left        rc=5 (ENOMT 5); registry entry still absent yes; stack +0; pending none; refs left: global +0 weak +0 local 0; installed 0
+  PASS  V7b __gc a Lua function: ENOGC, nothing changed, nothing left    rc=6 (ENOGC 6); __gc still that function yes; stack +0; pending none; refs left: global +0 weak +0 local 0; installed 0
+  PASS  V7c the protected call refused: ELUA, stack top unchanged        rc=7 (ELUA 7); refusals 0 -> 1; stack +0; __gc still the original yes; pending none; refs left: global +0 weak +0 local 0; installed 0
+  PASS  V7d with room again the same state installs                      rc=0, installed 1
+  PASS  V8a GetEnv refused: no callback, no JNIEnv call                  rc=0; GetEnv 1 (all refused); callbacks 0; JNIEnv calls 0
+  PASS  V8b the original __gc still ran (jnlua's own env lookup)         originals 1
+  PASS  V8c counted: noenv 1, calls 0                                    noenv 1, calls 0
+  PASS  V9a GetMethodID fails: EMETHOD, exception cleared, nothing left  rc=4 (want 4); the failing call made 1 times; pending at return: none; refs left: global +0 weak +0 local 0; __gc untouched yes; stack +0; installed 0
+  PASS  V9b NewWeakGlobalRef fails: EREF, exception cleared, nothing left rc=3 (want 3); the failing call made 1 times; pending at return: none; refs left: global +0 weak +0 local 0; __gc untouched yes; stack +0; installed 0
+  PASS  V9c NewGlobalRef of the class fails: EREF, cleared, nothing left rc=3 (want 3); the failing call made 1 times; pending at return: none; refs left: global +0 weak +0 local 0; __gc untouched yes; stack +0; installed 0
+  PASS  V9d GetJavaVM fails: EJVM, nothing left                          rc=2 (want 2); the failing call made 1 times; pending at return: none; refs left: global +0 weak +0 local 0; __gc untouched yes; stack +0; installed 0
+  PASS  V9e a state the shim did not make: ENORECORD, no JNI call        rc=1 (ENORECORD 1); JNI calls 0 (GetEnv 0); stack +0; counters 0 0 0 0 0
+  PASS  V10a the armed cycle: 2000 finalizations in ONE checkpoint       rc=0; callbacks in the arming allocation 0, in the next one's checkpoint 2000 (of 2000); each Value once: callback 2000, original 2000; arms 0 -> 1, collects 0 -> 1
+  PASS  V10b no local-ref growth across those finalizations              live local refs: 0 before the checkpoint, peak 1 during it, 0 after
+  PASS  V11a calls == callbacks == the finalized Values                  rc=0; calls 7, callbacks received 7; each Value once 7/7, each non-Value never 5/5; jerr 0 closing 0 noenv 0 installed 1
+  PASS  V11b the Lua-side stats report the same five figures             _OCLJ_VGCSTATS 1-5: 7 0 0 0 1; lj52_vgc_counters: 7 0 0 0 1
+  PASS  V12a every call on its thread's env, GetEnv at 1.6               calls on another thread's env 0; GetEnv at a version other than 1.6: 0
+  PASS  V12b no dead, unknown or mis-kinded reference                    deleted/unknown/mis-kinded references 0, bad arguments 0
+  PASS  V12c nothing unsafe while an exception is pending                calls outside the exception-safe list while an exception was pending: 0
+  PASS  V12d no JNI slot outside the contract's list                     trapped calls 0
+  PASS  V12e no local reference left live                                live local refs at the end: 0
+  PASS  V12f every global and weak reference deleted                     live at the end: global 0 (the shim's 0), weak 0 (the shim's 0)
+
+checks=47 failures=0

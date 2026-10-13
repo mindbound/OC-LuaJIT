@@ -387,6 +387,26 @@ grep -q 'define JNLUA_JAVASTATE' "$JN" \
          LuaState by watching the lua_setfield that binds it under that key, and
          takes the key from jnlua's own macro; without it the cap stops
          enforcing silently."
+# THE VALUE FINALIZER'S KEY, pinned on both sides (lj52shim.c, THE VALUE
+# FINALIZER).  The shim finds jnlua's shared Java-object metatable at
+# registry[LJ52_JNLUA_OBJECT], and that is a COPY of jnlua.c's JNLUA_OBJECT:
+# lj52shim.c is its own translation unit and cannot borrow jnlua's macro the
+# way the lua_setallocf macro borrows JNLUA_JAVASTATE.  A copy can drift, so
+# both spellings are asserted here, exactly.  Drifted, every install answers
+# LJ52_VGC_ENOMT: machines still start, LuaJITArchitecture logs the refusal,
+# and dropped file handles and AE2 iterators leak until reboot again -- the
+# defect the finalizer exists to remove, back behind one log line.
+grep -qE '^#define[[:space:]]+JNLUA_OBJECT[[:space:]]+"jnlua\.Object"[[:space:]]*$' "$JN" \
+  || fail "OC-JNLua no longer defines JNLUA_OBJECT as \"jnlua.Object\" (jnlua.c:31
+         at da3d4d45).  lj52shim.h's LJ52_JNLUA_OBJECT is a copy of that key: the
+         Value finalizer would find no metatable to install on, and Values would
+         never be disposed.  Re-read jnlua.c's Java-object metatable and update
+         lj52shim.h DELIBERATELY, then this pattern."
+grep -qE '^#define[[:space:]]+LJ52_JNLUA_OBJECT[[:space:]]+"jnlua\.Object"([[:space:]]|$)' "$OCLJ_SHIM/lj52shim.h" \
+  || fail "lj52shim.h's LJ52_JNLUA_OBJECT is no longer \"jnlua.Object\", the key
+         jnlua.c's JNLUA_OBJECT registers its Java-object metatable under.  The
+         Value finalizer would install on nothing (LJ52_VGC_ENOMT at every
+         machine start).  The two spellings must be equal."
 
 grep -q 'define lua_load(L, r, d, cn, mode) lua_loadx' "$OCLJ_SHIM/lj52shim.h" \
   || fail "lj52shim.h does not map lua_load onto lua_loadx.  The chunk-mode
@@ -596,9 +616,10 @@ say "=============== 2. lj52shim.c ==============="
 rm -f "$OBJ/lj52shim.o"
 # -I the JDK headers: the shim includes <jni.h> so its allocator can use
 # jnlua's own getluamemory/setluamemory to publish the machine's RAM use.
-# -DLJ52_ADDITIVE compiles in the two JNI natives LuaStateLuaJIT declares for
-# the accounting's Java boundary (docs/accounting-sync.md).  The dropin backs
-# OpenComputers' own LuaState, which declares neither, so it must not export them.
+# -DLJ52_ADDITIVE compiles in the four JNI natives LuaStateLuaJIT declares: two
+# for the accounting's Java boundary (docs/accounting-sync.md) and two for Value
+# disposal (THE VALUE FINALIZER in lj52shim.c).  The dropin backs OpenComputers'
+# own LuaState, which declares none of them, so it must not export them.
 SHIMDEF=
 [ "$OCLJ_VARIANT" = additive ] && SHIMDEF=-DLJ52_ADDITIVE
 "$CC" -c -O2 $PICFLAG -Wall -Wextra $SHIMDEF -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
@@ -617,23 +638,31 @@ for sym in lj_alloc_create lj_alloc_f lj_alloc_destroy lj_alloc_setprng lj_prng_
     || fail "lj52shim.o does not reference $sym: the per-state lj_alloc arena (lj52_back) is gone"
 done
 say "    lj_alloc arena symbols referenced: lj_alloc_create, lj_alloc_f, lj_alloc_destroy, lj_alloc_setprng, lj_prng_seed_secure"
-# THE ACCOUNTING'S JAVA BOUNDARY (docs/accounting-sync.md).  The two cores are in
-# every build; the two JNI natives over them only in the additive, the one whose
-# class declares them.  Counted on the OBJECT, before any link: a shim that lost
-# them, or a dropin that grew them, is named here rather than as an export count.
+# THE SHIM'S JAVA BOUNDARY: the accounting's (docs/accounting-sync.md) and Value
+# disposal's (THE VALUE FINALIZER in lj52shim.c).  The four cores are in every
+# build -- the native tests drive them with no JVM -- and the four JNI natives
+# over them only in the additive, the one whose class declares them.  Counted on
+# the OBJECT, before any link: a shim that lost them, or a dropin that grew
+# them, is named here rather than as an export count.
 for sym in lj52_mem_used lj52_mem_settotal; do
   nm --defined-only "$OBJ/lj52shim.o" 2>/dev/null | grep -qw "$sym" \
     || fail "lj52shim.o does not define $sym: the accounting's C side (docs/accounting-sync.md) is gone"
 done
-NOCLJ=$(nm --defined-only "$OBJ/lj52shim.o" 2>/dev/null | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_oclj(UsedMemory|SetTotalMemory)$' || true)
+for sym in lj52_vgc_install lj52_vgc_counters; do
+  nm --defined-only "$OBJ/lj52shim.o" 2>/dev/null | grep -qw "$sym" \
+    || fail "lj52shim.o does not define $sym: Value disposal's C side (THE VALUE FINALIZER) is gone"
+done
+NOCLJ=$(nm --defined-only "$OBJ/lj52shim.o" 2>/dev/null | grep -cE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_oclj(UsedMemory|SetTotalMemory|InstallValueFinalizer|ValueGcCounters)$' || true)
 if [ "$OCLJ_VARIANT" = additive ]; then
-  [ "$NOCLJ" = "2" ] || fail "the additive lj52shim.o defines $NOCLJ of the 2 accounting natives
-         (ocljUsedMemory, ocljSetTotalMemory): LuaStateLuaJIT would throw
-         UnsatisfiedLinkError from its capped constructor"
+  [ "$NOCLJ" = "4" ] || fail "the additive lj52shim.o defines $NOCLJ of the 4 oclj natives
+         (ocljUsedMemory, ocljSetTotalMemory, ocljInstallValueFinalizer,
+         ocljValueGcCounters): LuaStateLuaJIT would throw UnsatisfiedLinkError
+         from its capped constructor, or every machine start would log Value
+         disposal as uninstalled and leak dropped handles until reboot"
 else
-  [ "$NOCLJ" = "0" ] || fail "the dropin lj52shim.o defines $NOCLJ accounting natives of LuaStateLuaJIT, a class it does not back"
+  [ "$NOCLJ" = "0" ] || fail "the dropin lj52shim.o defines $NOCLJ oclj natives of LuaStateLuaJIT, a class it does not back"
 fi
-say "    accounting boundary: lj52_mem_used, lj52_mem_settotal defined; LuaStateLuaJIT oclj* natives = $NOCLJ (variant=$OCLJ_VARIANT)"
+say "    Java boundary: lj52_mem_used, lj52_mem_settotal, lj52_vgc_install, lj52_vgc_counters defined; LuaStateLuaJIT oclj* natives = $NOCLJ (variant=$OCLJ_VARIANT)"
 
 # --------------------------------------------------------------- 3
 say "=============== 3. OC-JNLua jnlua.c (checkout unmodified; one diagnostic line patched on a copy; shim force-included) ==============="
@@ -657,10 +686,10 @@ if [ "$OCLJ_VARIANT" = additive ]; then
   JNLUA_SRC="$OCLJ_BUILD/jnlua-luajit.c"
   # THE CLASS THIS LIBRARY BACKS MUST BE THE GENERATOR'S OUTPUT, BYTE FOR BYTE.
   # LuaStateLuaJIT.java declares the natives this build exports -- jnlua's 82,
-  # redeclared, and the accounting's two -- and is generated from this same
-  # OC-JNLua checkout.  A hand edit, or a generator change never regenerated,
-  # would pair a class and a library that disagree, to be found at best as an
-  # UnsatisfiedLinkError in a player's game.
+  # redeclared, the accounting's two and Value disposal's two -- and is
+  # generated from this same OC-JNLua checkout.  A hand edit, or a generator change
+  # never regenerated, would pair a class and a library that disagree, to be found
+  # at best as an UnsatisfiedLinkError in a player's game.
   GEN_PY=
   for c in "${OCLJ_PYTHON:-}" python3 python; do
     [ -n "$c" ] || continue
@@ -865,29 +894,33 @@ if command -v objdump >/dev/null 2>&1 && command -v nm >/dev/null 2>&1; then
   # invariant across both -- and what actually matters -- is the JNI surface:
   # the 87 Java_* names plus the two JNI_On* hooks. That is asserted on both.
   #
-  # THE ADDITIVE EXPORTS TWO MORE: LuaStateLuaJIT's own accounting natives,
-  # ocljUsedMemory and ocljSetTotalMemory (docs/accounting-sync.md), asserted
-  # by exact name -- 89 Java_* and 91 PE names.  The dropin exports neither.
-  OCLJN=$(syms | grep -cxE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_oclj(UsedMemory|SetTotalMemory)')
+  # THE ADDITIVE EXPORTS FOUR MORE, LuaStateLuaJIT's own natives, asserted by
+  # exact name: the accounting's ocljUsedMemory and ocljSetTotalMemory
+  # (docs/accounting-sync.md), and Value disposal's ocljInstallValueFinalizer
+  # and ocljValueGcCounters (THE VALUE FINALIZER in lj52shim.c) -- 91 Java_*
+  # and 93 PE names.  The dropin exports none of them.
+  OCLJN=$(syms | grep -cxE 'Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_oclj(UsedMemory|SetTotalMemory|InstallValueFinalizer|ValueGcCounters)')
   if [ "$OCLJ_VARIANT" = additive ]; then
-    WANT_J=89; WANT_PE=91
-    [ "$OCLJN" = "2" ] || fail "the additive exports $OCLJN of LuaStateLuaJIT's 2 accounting natives
-         (ocljUsedMemory, ocljSetTotalMemory); its capped constructor would throw"
+    WANT_J=91; WANT_PE=93
+    [ "$OCLJN" = "4" ] || fail "the additive exports $OCLJN of LuaStateLuaJIT's 4 oclj natives
+         (ocljUsedMemory, ocljSetTotalMemory, ocljInstallValueFinalizer,
+         ocljValueGcCounters); its capped constructor would throw, or Value
+         disposal would never install and dropped handles would leak until reboot"
   else
     WANT_J=87; WANT_PE=89
-    [ "$OCLJN" = "0" ] || fail "the dropin exports $OCLJN accounting natives of LuaStateLuaJIT"
+    [ "$OCLJN" = "0" ] || fail "the dropin exports $OCLJN oclj natives of LuaStateLuaJIT"
   fi
   [ "$EXPORTS" = "$WANT_J" ] || fail "Java_* export count is $EXPORTS, expected $WANT_J ($OCLJ_VARIANT).  The ABI surface no
-         longer matches OC-JNLua da3d4d45 plus the accounting natives.  Either
-         jnlua.c was bumped (update this number deliberately) or a translation
-         unit failed to link in."
+         longer matches OC-JNLua da3d4d45 plus LuaStateLuaJIT's oclj natives.
+         Either jnlua.c was bumped (update this number deliberately) or a
+         translation unit failed to link in."
   syms | grep -qx JNI_OnLoad   || fail "no JNI_OnLoad export"
   syms | grep -qx JNI_OnUnload || fail "no JNI_OnUnload export"
   if [ "$OCLJ_OS" = windows ]; then
     [ "$NSYM" = "$WANT_PE" ] || fail "PE export table holds $NSYM names, expected exactly $WANT_PE
          ($WANT_J Java_* + JNI_OnLoad + JNI_OnUnload).  Something else became visible."
   fi
-  say "    ABI surface: Java_* = $EXPORTS (want $WANT_J), accounting natives = $OCLJN, total = $NSYM"
+  say "    ABI surface: Java_* = $EXPORTS (want $WANT_J), oclj natives = $OCLJN, total = $NSYM"
 else
   say "    SKIPPED: objdump and nm are both needed to verify the symbol surface"
   say "    (this build has NOT been checked for the dropin/additive mix-up)"

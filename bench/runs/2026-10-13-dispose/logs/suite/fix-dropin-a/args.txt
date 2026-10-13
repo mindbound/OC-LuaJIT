@@ -1,0 +1,1 @@
+native=luajit lib=/c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir jit=on only=UNSET dispose= bundle= javasrc=

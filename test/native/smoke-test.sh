@@ -101,6 +101,22 @@
 #                 in this mode so ocelot-brain's "Kernel crashed" line lands
 #                 in smoke.log (the wd-load rig did it with
 #                 JAVA_TOOL_OPTIONS=-Dlog4j2.level=WARN).
+#   OCLJ_PERSIST_BUNDLE  on (default) | off.  Read by the additive arm's
+#                 architecture adapter (OcljArch.scala, BundleRoots) straight from
+#                 the environment the JVM inherits.  "off" falls back to
+#                 OpenComputers' own two-call save: the NEGATIVE CONTROL for the
+#                 stk-* milestones, which then fail, as they must.  It also turns
+#                 Value disposal off (a two-call restore mints a second Value per
+#                 proxy with the same handle id), so the gc-* milestones expect
+#                 the leak there, under -NEGATIVE-CONTROL ids.
+#   OCLJ_DISPOSE  on (default) | off.  Additive arm only, read the same way
+#                 (OcljArch.scala, DisposeOn).  "off" skips installing Value
+#                 disposal -- the jnlua.Object __gc wrapper that disposes a
+#                 dropped host Value (a file handle, an AE2 iterator) -- on every
+#                 state: the NEGATIVE CONTROL for the gc-* milestones, which then
+#                 assert the leak under -NEGATIVE-CONTROL ids, on the same DLL
+#                 that passes them with it on.  Validated below; the final banner
+#                 says NEGATIVE CONTROL, so such a run cannot pass for the product.
 #   OCLJ_RAM_TIER one | onehalf | two | twohalf | three | threehalf (default).
 #                 The machine's RAM stick (ocelot-brain's ramSizes: 192, 256,
 #                 384, 512, 768, 1024 KB as the sandbox sees them; the real
@@ -533,6 +549,24 @@ case $OCLJ_PROBE in ""|grace|capacity|rawrace) ;; *) fail "OCLJ_PROBE must be un
 case $OCLJ_RAM_TIER in one|onehalf|two|twohalf|three|threehalf) ;;
   *) fail "OCLJ_RAM_TIER must be one, onehalf, two, twohalf, three or threehalf, not '$OCLJ_RAM_TIER'";; esac
 [ "$OCLJ_RAM_TIER" != "threehalf" ] && say "    OCLJ_RAM_TIER=$OCLJ_RAM_TIER -- a smaller RAM stick than the 3.5 the reference numbers were taken at"
+# VALUE DISPOSAL'S NEGATIVE CONTROL.  The JVM reads OCLJ_DISPOSE itself
+# (OcljArch.scala, DisposeOn), so passing it through is only an export -- but
+# it is VALIDATED here, because the adapter reads anything outside
+# 0/false/off/no as ON: a misspelt "of" would silently run the product arm and
+# file it as the control.  Exported unconditionally (default on), so what the
+# JVM reads is exactly what this script printed.
+: "${OCLJ_DISPOSE:=on}"
+case $OCLJ_DISPOSE in on|off) ;; *) fail "OCLJ_DISPOSE must be on or off, not '$OCLJ_DISPOSE'";; esac
+export OCLJ_DISPOSE
+if [ "$OCLJ_DISPOSE" = off ]; then
+  if [ "$OCLJ_NATIVE" = additive ]; then
+    say "    OCLJ_DISPOSE=off -- NEGATIVE CONTROL: Value disposal is NOT installed; the gc-* milestones expect the leak"
+  elif [ "$OCLJ_NATIVE" = stock ]; then
+    say "    OCLJ_DISPOSE=off -- ignored: stock PUC disposes through the proxy table's own __gc; only the additive arm installs Value disposal"
+  else
+    say "    OCLJ_DISPOSE=off -- ignored: only the additive arm installs Value disposal (the dropin leaks by construction)"
+  fi
+fi
 CONF_ARG=$(wm "$CONF")
 if command -v timeout >/dev/null 2>&1; then
   timeout -k 10 "$OCLJ_TIMEOUT" "$JAVA" -Docljit.jit="$OCLJ_JIT" -Docljit.kernel="$OCLJ_KERNEL" -Docljit.native="$OCLJ_NATIVE" -Docljit.benchdir="$OCLJ_BENCHDIR" -Docljit.gcstepmul="$OCLJ_GCSTEPMUL" -Docljit.gcpause="$OCLJ_GCPAUSE" -Docljit.censusarch="$OCLJ_CENSUS_ARCH" -Docljit.censusram="$OCLJ_CENSUS_RAM" -Docljit.ramtier="$OCLJ_RAM_TIER" -cp "$RUNCP" $OCLJ_MAIN "$CONF_ARG" $OCLJ_MAIN_ARGS > "$LOG" 2>&1
@@ -661,6 +695,15 @@ stamp "log: $LOG"
 if [ $OK -eq 1 ]; then
   if [ "$OCLJ_VERDICT" = census ]; then
     echo "CENSUS PASS -- the system ran to the tick limit on the pinned architecture, without error."
+  elif [ "$OCLJ_DISPOSE" = off ] && [ "$OCLJ_NATIVE" = additive ]; then
+    # The same rule as the allowBytecode banner below: a run that passed in its
+    # NEGATIVE-CONTROL polarity must not print the product's pass line.  Its
+    # gc-* milestones passed by showing the LEAK; that is not a result about the
+    # shipped architecture.
+    echo "SMOKE PASS (NEGATIVE CONTROL, OCLJ_DISPOSE=off) --"
+    echo "  Value disposal was NOT installed, and the gc-* milestones saw the leak"
+    echo "  it leaves.  This run shows those gates can fail; it is NOT a result"
+    echo "  about the shipped architecture."
   elif [ "$OCLJ_ALLOW_BYTECODE" = false ]; then
     # NAME THE VM THAT ACTUALLY RAN.  This line was hard-coded to "on LuaJIT",
     # which was simply false for the stock arm -- and unnoticeable for as long as

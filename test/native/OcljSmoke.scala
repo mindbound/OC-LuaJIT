@@ -15,6 +15,46 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 
 /**
+ * THE vd-* PROBE'S VALUES (Smoke.valueDisposalProbes).  Each counts its own
+ * disposes, so a test reads what happened to ONE object rather than a total
+ * that a stray dispose of another could balance.  Instances of ocelot-brain's
+ * Value, because that is the class the probe installs, exactly as OcljArch
+ * installs it on a machine; the disposer hands them a null Context, which
+ * none of them reads.
+ */
+class VdCountingValue(val id: Int) extends totoro.ocelot.brain.entity.machine.AbstractValue {
+  def this() = this(-1)                 // a Value must have one (Value.scala); never used here
+  @volatile var disposes: Int = 0
+  override def dispose(context: totoro.ocelot.brain.entity.machine.Context): Unit = disposes += 1
+  override def toString: String = "VdCountingValue#" + id
+}
+
+/** Equal by `key`, distinct by `id`: the third-party shape the kernel MERGES
+  * (wrapSingleUserdata's `v == data` reaches JNLua's __eq, which is
+  * existing.equals(new)), and the only one the count has to treat specially. */
+class VdEqValue(val key: Int, val id: Int) extends totoro.ocelot.brain.entity.machine.AbstractValue {
+  def this() = this(-1, -1)
+  @volatile var disposes: Int = 0
+  override def dispose(context: totoro.ocelot.brain.entity.machine.Context): Unit = disposes += 1
+  override def equals(o: Any): Boolean = o match { case e: VdEqValue => e.key == key; case _ => false }
+  override def hashCode(): Int = key
+  override def toString: String = "VdEqValue#" + id + "(key " + key + ")"
+}
+
+/** A dispose that breaks the disposer's contract by pushing into the state it
+  * was finalized in.  It records what the push did instead of letting it
+  * escape, so the count of refusals is read from both sides. */
+class VdPushingValue(target: LuaState) extends totoro.ocelot.brain.entity.machine.AbstractValue {
+  @volatile var disposes: Int = 0
+  @volatile var push: String = "<never disposed>"
+  override def dispose(context: totoro.ocelot.brain.entity.machine.Context): Unit = {
+    disposes += 1
+    push = try { target.pushJavaObjectRaw("vd-7-pushed-from-a-dispose"); "WENT THROUGH" }
+           catch { case t: Throwable => t.getClass.getName + ": " + t.getMessage }
+  }
+}
+
+/**
  * OC-LuaJIT smoke test.  One command, one verdict.
  *
  * Boots REAL OpenOS 1.8.9 on ocelot-brain against the LuaJIT-backed
@@ -2077,6 +2117,963 @@ object Smoke {
     }
   }
 
+  // ------------------------------------------------------------------ //
+  // (gc-*, vd-*) VALUE DISPOSAL
+  // ------------------------------------------------------------------ //
+
+  /*
+   * WHAT IS UNDER TEST.  OpenComputers disposes a host Value -- a file handle,
+   * an AE2 iterator -- from the __gc of the TABLE proxy its kernel wraps the
+   * Value in, and LuaJIT finalizes no table, so on OC-LuaJIT before the fix
+   * Value.dispose never ran (docs/research/gc-dispose-leak.md).  The fix
+   * (lj52shim.c, THE VALUE FINALIZER; gen-luastate-subclass.py) wraps the
+   * jnlua.Object metatable's __gc and disposes a Value when the LAST of its
+   * userdata is finalized, counted per object by identity in LuaStateLuaJIT.
+   *
+   * TWO LAYERS, because each sees what the other cannot.  The machine
+   * milestones (gc-0..3) run the whole path -- OcljArch's install, the real
+   * kernel's wrap and forced collects, a persisted and restored machine,
+   * HandleValue.dispose closing a real filesystem's handle -- and read the
+   * effect where a player would feel it: the filesystem's owner set and
+   * whether one more open succeeds.  They cannot see a premature dispose of a
+   * MERGED re-push (no ocelot-brain callback hands a Value back), or what
+   * happens at close, or the guards.  The private-state probe (vd-*) can: the
+   * real jnlua and our DLL with Value classes of its own that count their own
+   * disposes, on states made exactly as a machine's are.
+   *
+   * EVERY EXPECTATION IS A FUNCTION OF THE CONFIGURATION (review T1): the arm,
+   * OCLJ_DISPOSE and OCLJ_PERSIST_BUNDLE, never whether an install happened to
+   * succeed -- keyed on the outcome, a failed install would read as a passing
+   * LEAK control.  And EVERY NEW MEMBER IS REACHED BY REFLECTION, so this same
+   * harness compiles and runs against a LuaStateLuaJIT that predates them, and
+   * fails there, first (the memory rule: prove a new check can fail).
+   */
+
+  type BrainMachine = totoro.ocelot.brain.entity.machine.Machine
+  type BrainFs = totoro.ocelot.brain.entity.fs.FileSystem
+
+  /** What the gc-* milestones must show in this run.  kind: "" the product
+    * (and stock), "dropin" the permanent same-DLL control, "neg" an additive
+    * run configured off -- the negative control. */
+  final case class GcPlan(disposed: Boolean, kind: String, why: String)
+
+  def gcPlanFor(): GcPlan = nativeMode match {
+    case "stock" =>
+      GcPlan(disposed = true, "", "stock PUC 5.2: the proxy table's own __gc disposes, in the cycle the proxy dies")
+    case "additive" =>
+      val bundle = OCLuaJITArchitecture.BundleRoots
+      val on = OCLuaJITArchitecture.DisposeOn
+      if (bundle && on) GcPlan(disposed = true, "", "additive, Value disposal configured on")
+      else GcPlan(disposed = false, "neg", "additive with Value disposal configured OFF (" +
+        (if (!on) "OCLJ_DISPOSE=off" else "") + (if (!on && !bundle) ", " else "") +
+        (if (!bundle) "OCLJ_PERSIST_BUNDLE=off, which it is never paired with" else "") +
+        "): the NEGATIVE CONTROL")
+    case _ =>
+      GcPlan(disposed = false, "dropin", "dropin: OpenComputers' own NativeLua52Architecture over our native " +
+        "installs nothing, so this is the permanent same-DLL control")
+  }
+
+  /** stk's naming convention: the product's id, "-dropin-control-" for the
+    * dropin, "-NEGATIVE-CONTROL" for an additive run configured off. */
+  def gcId(num: String, positive: String, leakTail: String, plan: GcPlan): String = plan.kind match {
+    case "dropin" => num + "-dropin-control-" + leakTail
+    case "neg"    => num + "-" + positive + "-NEGATIVE-CONTROL"
+    case _        => num + "-" + positive
+  }
+
+  /** What the gc disks hold: one small file, opened and read, never written. */
+  val GcProbeText: String = "OC-LuaJIT value-disposal probe: opened, held, dropped; never written.\n"
+
+  /** The NBT bytes of a HandleValue's `owner` tag naming `address`: TAG_String
+    * (8), name length 5, "owner", then writeUTF's length and the address
+    * (NBTTagCompound.a, NBTTagString.write).  The address is a per-disk UUID,
+    * so this counts the persisted recipes of ONE disk's handles -- where
+    * RecipeNeedle counts every disk's. */
+  def ownerNeedle(address: String): String = {
+    val n = address.getBytes(StandardCharsets.UTF_8).length
+    new String(Array[Byte](8, 0, 5), StandardCharsets.ISO_8859_1) + "owner" +
+      new String(Array[Byte](((n >> 8) & 0xff).toByte, (n & 0xff).toByte), StandardCharsets.ISO_8859_1) + address
+  }
+
+  /**
+   * A filesystem's OWNER SET for one machine: the handles FileSystem.open
+   * recorded under the machine's address (ocelot-brain FileSystem.scala:152-160)
+   * and close removes (:246-256).  It is what maxHandles is checked against, so
+   * it is the leak itself, not a symptom of it.  The field is private
+   * (`private val owners`, javap: a plain field of that name); a missing field
+   * is a changed ocelot-brain and FAILS the milestone by name, never SKIPs it
+   * (review T7).
+   *
+   * Read under the MACHINE's monitor -- every dispose runs inside a GC step,
+   * and every GC step on a machine's state runs under it (Machine.run, the
+   * saves, evalStrLocked) -- and then the filesystem's own lock, the one its
+   * callbacks take.  None is "no entry at all", kept apart from an empty set
+   * (review T11).
+   */
+  lazy val ownersField: java.lang.reflect.Field = {
+    val k = classOf[totoro.ocelot.brain.entity.fs.FileSystem]
+    val f = try k.getDeclaredField("owners") catch {
+      case _: NoSuchFieldException =>
+        k.getDeclaredFields.find(_.getName.endsWith("$$owners")).getOrElse(
+          throw new IllegalStateException("ocelot-brain's FileSystem has no 'owners' field any more: " +
+            "it changed shape, and the gc milestones cannot count handles"))
+    }
+    f.setAccessible(true)
+    f
+  }
+
+  private def ownersSet(fs: BrainFs, m: BrainMachine): Option[scala.collection.mutable.Set[Any]] =
+    ownersField.get(fs).asInstanceOf[scala.collection.mutable.Map[String, scala.collection.mutable.Set[Any]]]
+      .get(m.node.address)
+
+  def ownersOf(fs: BrainFs, m: BrainMachine): Option[Int] =
+    m.synchronized { fs.fileSystem.synchronized { ownersSet(fs, m).map(_.size) } }
+
+  /** (owned, of them with a LIVE handle) -- (-1, -1) when there is no entry. */
+  def ownedLive(fs: BrainFs, m: BrainMachine): (Int, Int) =
+    m.synchronized {
+      fs.fileSystem.synchronized {
+        ownersSet(fs, m) match {
+          case None => (-1, -1)
+          case Some(set) => (set.size, set.count(h => fs.fileSystem.getHandle(h.asInstanceOf[Int]) != null))
+        }
+      }
+    }
+
+  def ownersTxt(o: Option[Int]): String = o.fold("absent")(_.toString)
+
+  /** The FileSystem of the disk in `c` with this address, or null. */
+  def diskFsOf(c: Case, addr: String): BrainFs = {
+    val it = c.inventory.entities.iterator
+    while (it.hasNext) it.next() match {
+      case d: HDDManaged =>
+        val f = d.fileSystem
+        if (f != null && f.node != null && f.node.address == addr) return f
+      case _ =>
+    }
+    null
+  }
+
+  def gcField(r: String, i: Int): String = { val a = r.split("/"); if (a.length > i) a(i) else "<missing>" }
+  def gcNum(r: String, i: Int): Int = try gcField(r, i).toInt catch { case _: Throwable => -1 }
+
+  /** The shared precondition of gc-1 and gc-2: the ONE hold, before f1. */
+  final case class GcHold(ok: Boolean, n: Int, detail: String)
+
+  /**
+   * "ocljgchold": the sandbox opens hdd2's probe.txt until the filesystem
+   * refuses, bounded at max(64, 2*maxHandles+1) so a run under a raised
+   * filesystem.maxHandles (OCLJ_CONF_EXTRA, a pack's 64) still ends on the
+   * refusal rather than on the bound (review T11).  It holds iff the sandbox
+   * held exactly maxHandles, the refusal is the limit's own text (FileSystem
+   * .scala:152-153, an IOException the kernel hands back as nil, msg), and the
+   * owner set says the same, every handle live -- measured against a baseline
+   * of no entry at all, not assumed.
+   */
+  def gcHoldHandles(ws: Workspace, m: BrainMachine, screen: Screen, fs: BrainFs, addr: String, maxH: Int): GcHold = {
+    def row(): String = parse(nonEmptyScreen(screen), "OCLJGC")
+    val base = ownersOf(fs, m)
+    val r0 = row()
+    val seq0 = gcNum(r0, 1)
+    val bound = math.max(64, 2 * maxH + 1)
+    val queued = m.signal("ocljgchold", addr, Integer.valueOf(bound))
+    def ended(x: String): Boolean = (gcField(x, 0) == "held" || gcField(x, 0) == "ERR") && gcNum(x, 1) > seq0
+    var r = r0
+    var t = 0
+    while (!ended(r) && t < 1200 && m.isRunning) {
+      ws.update(); Thread.sleep(25); t += 1
+      if (t % 2 == 0) r = row()
+    }
+    var settle = 0
+    while (settle < 4 && m.isRunning) { ws.update(); Thread.sleep(25); settle += 1 }
+    r = row()
+    val held = gcNum(r, 2)
+    val refusal = gcField(r, 3)
+    val (owned, live) = ownedLive(fs, m)
+    val ok = gcField(r, 0) == "held" && gcNum(r, 1) > seq0 && held == maxH && owned == maxH && live == maxH &&
+             refusal == "too_many_open_handles" && base.forall(_ == 0)
+    val detail = "the sandbox held " + held + " handles of maxHandles " + maxH + " and was refused with " + refusal +
+      "; hdd2's owners for this machine " + ownersTxt(base) + " -> " + owned + " (" + live + " live); row " + r +
+      " after " + t + " ticks" + (if (gcField(r, 0) == "ERR") " (sandbox error " + gcField(r, 9) + ")" else "")
+    p("GC HOLD: signal queued=" + queued + " (bound " + bound + "); " + detail +
+      (if (ok) "" else "   <- NOT SATURATED: gc-1 and gc-2 fail on it"))
+    GcHold(ok, held, detail)
+  }
+
+  /**
+   * (gc-0) installed exactly when configured.  The architecture records what
+   * its reflective install did (OcljArch, installValueDisposer); the state
+   * says it again from both sides -- the Java half's ocljValueDisposalInstalled
+   * and the native half's installed flag -- so an install that "succeeded" on
+   * the Java side without a wrapper in place cannot pass either.
+   */
+  def gcInstalledCheck(m: BrainMachine, lua: LuaState): Unit = {
+    val expected = OCLuaJITArchitecture.DisposeExpected
+    val id = if (expected) "gc-0-value-disposer-installed" else "gc-0-value-disposer-installed-NEGATIVE-CONTROL"
+    val arch = m.architecture match { case a: OCLuaJITArchitecture => a; case _ => null }
+    if (arch == null) {
+      milestone(id, ok = false, "the machine is not driven by OCLuaJITArchitecture: " +
+        (if (m.architecture == null) "null" else m.architecture.getClass.getName))
+      return
+    }
+    val (said, vgc) = m.synchronized {
+      (try vdInstalled(lua).toString catch { case t: Throwable => "n/a(" + vdWhy(t) + ")" },
+       try vdGcCounters(lua).mkString("/") catch { case t: Throwable => "n/a(" + vdWhy(t) + ")" })
+    }
+    val vgcParts = vgc.split("/")
+    val vgcInstalled = if (vgcParts.length >= 5) vgcParts(4) else "n/a"
+    val stateOk = if (expected) said == "true" && vgcInstalled == "1" else said != "true" && vgcInstalled != "1"
+    val ok = arch.disposeExpected == expected && arch.disposeInstalled == expected && stateOk
+    milestone(id, ok,
+      "configured " + (if (expected) "ON" else "OFF -- " + gcPlanFor().why) +
+        "; the architecture installed=" + arch.disposeInstalled +
+        (if (arch.disposeError.nonEmpty) " (" + arch.disposeError + ")" else "") +
+        "; the state says ocljValueDisposalInstalled=" + said +
+        ", native calls/jerr/closing/noenv/installed=" + vgc +
+        (if (ok) ""
+         else if (expected && !arch.disposeInstalled)
+           "   <- configured ON and NOT installed: every dropped Value leaks as before the fix" +
+             (if (arch.disposeError.contains("NoSuchMethod")) " (this LuaStateLuaJIT predates Value disposal)" else "")
+         else if (!expected && arch.disposeInstalled) "   <- configured OFF and installed anyway: the negative control is not one"
+         else if (arch.disposeExpected != expected) "   <- the architecture read a different configuration than the harness"
+         else "   <- the state disagrees with the architecture about the install"))
+  }
+
+  /**
+   * (gc-1, gc-2) DROP fifteen of the sixteen held handles, keep one, and
+   * watch the kernel's own collector dispose them -- or not.  `pre` is the
+   * caller's failed precondition, if any: a FAIL, never a skip.
+   *
+   * PASS when DISPOSED is expected: the drop chain reported done with the
+   * registry-shaped witness cleared; owners came back to 1 -- the bystander
+   * alone -- within the bounded Java poll; the bystander still read (seek 0 +
+   * read: nothing live was disposed, T3); the fresh open succeeded; and after
+   * the bystander's close owners read 0, the disk's baseline.  PASS when the
+   * LEAK is expected: the same chain and bystander, but owners never below
+   * maxHandles through the same bound, the fresh open refused with the limit's
+   * text, and maxHandles-1 left after the close.  Both: same nonce, running,
+   * no lastError -- a reboot or stop closes every handle (FileSystem.scala
+   * :259-272) and would pass DISPOSED for the wrong reason.  Never a forced GC
+   * from here on the asserted path: a finalizer run on the harness thread is
+   * not the one the game runs.
+   */
+  def gcDrop(id: String, plan: GcPlan, label: String, ws: Workspace, m: BrainMachine, screen: Screen,
+             fs: BrainFs, nonce: String, maxH: Int, pre: String): Unit = {
+    p("--- (" + id.take(4) + ") drop the " + label + " copy of hdd2's held handles, keeping one bystander; expecting " +
+      (if (plan.disposed) "the dropped ones DISPOSED" else "the LEAK (" + plan.why + ")") + " ---")
+    if (pre.nonEmpty) { milestone(id, ok = false, "precondition: " + pre); return }
+    if (screen == null || m == null || !m.isRunning) {
+      milestone(id, ok = false, "no running machine with a screen to drop on: " +
+        (if (m == null) "no machine" else "running=" + m.isRunning + " lastError=" + m.lastError))
+      return
+    }
+    def row(): String = parse(nonEmptyScreen(screen), "OCLJGC")
+    val arch = m.architecture match { case a: OCLuaJITArchitecture => a; case _ => null }
+    val calls0 = if (arch == null) -1L else arch.disposeCalls.get
+    val (owned0, live0) = ownedLive(fs, m)
+    val r0 = row()
+    val seq0 = gcNum(r0, 1)
+    if (gcField(r0, 0) != "held" || gcNum(r0, 2) != maxH || owned0 != maxH || live0 != maxH) {
+      milestone(id, ok = false, "precondition on THIS machine's own disk: row " + r0 + " (want held/<seq>/" + maxH +
+        "/...), owners " + owned0 + " of which " + live0 + " live (want " + maxH + " and " + maxH + ")" +
+        "   <- not saturated before the drop, so nothing measured after it would mean anything")
+      return
+    }
+    val queued = m.signal("ocljgcdrop")
+    var r = r0
+    var t = 0
+    var witTick = -1
+    var oneTick = -1
+    var lo = Int.MaxValue
+    def track(): Unit = {
+      val o = ownersOf(fs, m).getOrElse(-1)
+      if (o >= 0 && o < lo) lo = o
+      if (oneTick < 0 && o == 1) oneTick = t
+    }
+    def ended(x: String): Boolean = {
+      val s = gcField(x, 0)
+      val q = gcNum(x, 1)
+      ((s == "done" || s == "nogc") && q >= seq0 + 2) || (s == "ERR" && q > seq0)
+    }
+    while (!ended(r) && t < 1600 && m.isRunning) {
+      ws.update(); Thread.sleep(25); t += 1
+      r = row()
+      if (witTick < 0 && gcNum(r, 1) > seq0 && gcNum(r, 5) >= 0) witTick = t
+      track()
+    }
+    // THE BOUNDED JAVA POLL (review T8): owners == 1, the bystander alone.
+    // The same bound in every arm, so a LEAK expectation is given the time to
+    // be wrong in: a control that stopped looking early could pass a dispose.
+    var extra = 0
+    while (oneTick < 0 && extra < 80 && m.isRunning) {
+      ws.update(); Thread.sleep(25); t += 1; extra += 1
+      track()
+    }
+    val ownersDone = ownersOf(fs, m)
+    val rDone = row()
+    val calls1 = if (arch == null) -1L else arch.disposeCalls.get
+    // Close the bystander: this disk's part in the run ends with it.
+    val seqD = gcNum(rDone, 1)
+    m.signal("ocljgcclose")
+    var rc = rDone
+    var tc = 0
+    while (!((gcField(rc, 0) == "closed" || gcField(rc, 0) == "ERR") && gcNum(rc, 1) > seqD) && tc < 400 && m.isRunning) {
+      ws.update(); Thread.sleep(25); tc += 1
+      rc = row()
+    }
+    val ownersClosed = ownersOf(fs, m)
+    val nonceNow = parse(nonEmptyScreen(screen), "OCLJNONCE")
+    val st = gcField(rDone, 0)
+    val witAt = gcNum(rDone, 5)
+    val twinAt = gcNum(rDone, 6)
+    val keep = gcField(rDone, 7)
+    val reopen = gcField(rDone, 8)
+    val chainOk = st == "done" && gcNum(rDone, 1) >= seq0 + 2 && witAt >= 0
+    val keepOk = keep.startsWith("ok") && keep != "ok0"
+    val closedOk = gcField(rc, 0) == "closed"
+    val alive = m.isRunning && m.lastError == null && nonceNow == nonce
+    val disposedOk = reopen == "ok" && oneTick >= 0 && ownersDone.contains(1) && ownersClosed.contains(0)
+    val leakOk = reopen == "too_many_open_handles" && oneTick < 0 && lo == maxH &&
+                 ownersDone.contains(maxH) && ownersClosed.contains(maxH - 1)
+    val ok = chainOk && keepOk && closedOk && alive && (if (plan.disposed) disposedOk else leakOk)
+    val lag = if (oneTick >= 0 && witTick >= 0) (oneTick - witTick).toString + " ticks after the row showed the witness clear"
+              else if (oneTick >= 0) "the witness row not seen"
+              else "n/a"
+    val detail = label + ": dropped " + (maxH - 1) + " of " + maxH + " held (signal queued=" + queued +
+      "); witness cleared at step " + witAt + " of " + gcNum(rDone, 4) + " (the plain twin at " + twinAt +
+      ", recorded); owners " + owned0 + " -> min " + (if (lo == Int.MaxValue) "n/a" else lo.toString) + " -> " +
+      ownersTxt(ownersDone) + " at done -> " + ownersTxt(ownersClosed) + " after the bystander's close; owners==1 " +
+      (if (oneTick >= 0) "at tick " + oneTick + " (" + lag + ")" else "never in " + t + " ticks") +
+      "; bystander read " + keep + ", fresh open " + reopen +
+      (if (arch != null) "; disposer calls +" + (calls1 - calls0) + " (dispose errors " + arch.disposeErrors.get + ")" else "") +
+      "; nonce " + (if (nonceNow == nonce) "unchanged" else nonce + " -> " + nonceNow) +
+      ", running=" + m.isRunning + " lastError=" + m.lastError
+    val why =
+      if (ok) (if (plan.disposed) "" else "   (the leak, as this arm must show: " + plan.why + ")")
+      else if (st == "nogc") "   <- the witness never cleared in 200 steps: no GC cycle ran, so nothing was measured"
+      else if (st == "ERR") "   <- the sandbox chain failed: " + gcField(rDone, 9)
+      else if (!chainOk) "   <- the drop chain never reported done (row " + rDone + ")"
+      else if (!alive) "   <- the machine rebooted, stopped or crashed: that closes every handle, so owners prove nothing"
+      else if (!keepOk) "   <- THE BYSTANDER DID NOT READ: a dispose closed a handle whose proxy was still live"
+      else if (!closedOk) "   <- closing the bystander failed: " + rc
+      else if (plan.disposed) {
+        if (reopen == "too_many_open_handles" && ownersDone.contains(maxH))
+          "   <- LEAK: the witness cleared and the kernel collected, but no dropped handle was disposed"
+        else if (oneTick < 0)
+          "   <- owners never came back to the bystander alone: " + ownersTxt(ownersDone) + " still open (a PARTIAL dispose)"
+        else if (!ownersClosed.contains(0))
+          "   <- after the bystander's close owners read " + ownersTxt(ownersClosed) + ", not the baseline 0"
+        else "   <- the fresh open was refused (" + reopen + ") although owners came back"
+      } else {
+        if (oneTick >= 0 || lo < maxH) "   <- DISPOSED where this arm must leak (" + plan.why + "): the control is not one"
+        else "   <- not the leak's shape"
+      }
+    milestone(id, ok, detail + why)
+  }
+
+  /** The kernel's wrappedUserdata, read off the kernel THREAD (stack index 1)
+    * the way RegistryProbeLua does: tagged proxies still registered.  `next`,
+    * not pairs, and nothing kept: the count is all that leaves. */
+  val RegistryTagLua: String =
+    """local co = ...
+      |local function frame_local(th, name)
+      |  for level = 0, 100 do
+      |    if not debug.getinfo(th, level, "S") then return nil end
+      |    local i = 1
+      |    while true do
+      |      local n, v = debug.getlocal(th, level, i)
+      |      if n == nil then break end
+      |      if n == name then return v end
+      |      i = i + 1
+      |    end
+      |  end
+      |end
+      |local reg = frame_local(co, "wrappedUserdata")
+      |if type(reg) ~= "table" then return "noreg" end
+      |local n = 0
+      |for k in next, reg do
+      |  if type(k) == "table" and rawget(k, "__ocljgc3") == %%TAG%% then n = n + 1 end
+      |end
+      |return tostring(n)
+      |""".stripMargin
+
+  /** A chunk run on the raw state with the kernel thread as its argument,
+    * under the machine's monitor (evalStrLocked's reasoning); refuses rather
+    * than guesses when index 1 is not a thread. */
+  def evalKernelLocked(machine: BrainMachine, lua: LuaState, code: String): String =
+    machine.synchronized {
+      var base = -1
+      try {
+        base = lua.getTop
+        if (base < 1 || !lua.isThread(1)) "<shape: top=" + base + ">"
+        else {
+          lua.load(new ByteArrayInputStream(code.getBytes(StandardCharsets.UTF_8)), "=gcprobe", "t")
+          lua.pushValue(1)
+          lua.call(1, 1)
+          val r = if (lua.isNil(-1)) "<nil>" else lua.toString(-1)
+          lua.setTop(base)
+          r
+        }
+      } catch {
+        case t: Throwable =>
+          if (base >= 0) try lua.setTop(base) catch { case _: Throwable => }
+          "<error: " + t.getMessage + ">"
+      }
+    }
+
+  /**
+   * (gc-3) THE SAVE BOUNDARY (review OC-1).  LuaJIT's weak keys are not
+   * ephemerons, so a proxy that dies just before a save loses only its
+   * registry entry in the save's first full cycle and its Value's userdata
+   * waits for the next; an unload save is followed by lua_close, where nothing
+   * is disposed (stock parity).  So the architecture's save runs a SECOND
+   * COLLECT (OcljArch.save; LuaJITArchitecture.save), and this checks it: the
+   * sandbox opens `want` handles on hdd3, tags their proxies and drops them in
+   * ONE resume that also paints its own row; the harness then saves with as
+   * few update() calls as it can -- one wakes the machine, then the screen is
+   * watched -- and, holding the machine's monitor from the read to the save so
+   * no resume can slip between, PROVES none of the resumes it did allow
+   * completed a cycle: every tagged proxy still in the kernel's registry.  The
+   * owner set right after ws.save, before anything else runs, is the verdict:
+   * DISPOSED -> back to the baseline; LEAK -> unchanged.
+   *
+   * A DISPOSED arm whose guard failed but which disposed anyway proved nothing
+   * either way (a cycle before the save did the work), so it tries again, at
+   * most three times, each with a fresh tag; a LEAK arm's verdict needs no
+   * guard and is never retried.  On stock the single COLLECT already disposes
+   * (PUC's ephemeron runs the proxy's __gc in that cycle).
+   */
+  def gcSaveBoundary(id: String, plan: GcPlan, ws: Workspace, m: BrainMachine, screen: Screen, fs3: BrainFs, nonce: String): Unit = {
+    val want = 4
+    p("--- (gc-3) the SAVE BOUNDARY: " + want + " handles opened and dropped on hdd3 in one resume, then saved at once; expecting " +
+      (if (plan.disposed) "them DISPOSED by the save itself" else "the LEAK (" + plan.why + ")") + " ---")
+    if (fs3 == null) { milestone(id, ok = false, "no hdd3 in this run"); return }
+    val arch = if (m == null) null else m.architecture
+    val lua = if (arch == null || !arch.isInstanceOf[NativeLuaArchitecture]) null else luaOf(arch)
+    if (lua == null || !m.isRunning) {
+      milestone(id, ok = false, "no running machine with a native state: " +
+        (if (m == null) "no machine" else "running=" + m.isRunning + " lastError=" + m.lastError))
+      return
+    }
+    val addr3 = fs3.node.address
+    def row(): String = parse(nonEmptyScreen(screen), "OCLJGC3")
+    var attempt = 0
+    var finished = false
+    var lastOk = false
+    var lastDetail = ""
+    var lastWhy = ""
+    while (!finished && attempt < 3) {
+      attempt += 1
+      val base = ownersOf(fs3, m).getOrElse(0)
+      val r0 = row()
+      val seq0 = gcNum(r0, 1)
+      val queued = m.signal("ocljgc3", addr3, Integer.valueOf(want), Integer.valueOf(attempt))
+      def seen(x: String): Boolean = gcNum(x, 1) > seq0 && (gcField(x, 0) == "dropped" || gcField(x, 0) == "ERR")
+      var r = r0
+      var updates = 0
+      while (!seen(r) && updates < 400 && m.isRunning) {
+        ws.update(); updates += 1
+        var q = 0
+        while (!seen(r) && q < 10) { Thread.sleep(5); q += 1; r = row() }
+      }
+      // NO update() from here to the verdict, and the monitor held across the
+      // guard, the save and the read after it.
+      val tag = attempt.toString
+      var present = ""; var before: Option[Int] = None; var after: Option[Int] = None; var presentAfter = ""
+      var saveOk = true; var saveErr = ""; var saveMs = 0L
+      val nbt3 = new NBTTagCompound()
+      m.synchronized {
+        present = evalKernelLocked(m, lua, RegistryTagLua.replace("%%TAG%%", tag))
+        before = ownersOf(fs3, m)
+        val tS = System.currentTimeMillis()
+        try ws.save(nbt3) catch { case t: Throwable => saveOk = false; saveErr = " " + t }
+        saveMs = System.currentTimeMillis() - tS
+        after = ownersOf(fs3, m)
+        presentAfter = evalKernelLocked(m, lua, RegistryTagLua.replace("%%TAG%%", tag))
+      }
+      val kBlob = findBlob(nbt3, m.node.address + "_kernel")
+      val k = if (kBlob == null) 0 else kBlob.length
+      val nonceNow = parse(nonEmptyScreen(screen), "OCLJNONCE")
+      val rowOk = gcField(r, 0) == "dropped" && gcNum(r, 2) == want && gcField(r, 3) == "none"
+      val guardOk = present == want.toString
+      val heldBefore = before.contains(base + want)
+      val savedOk = saveOk && k > 10000
+      val alive = m.isRunning && m.lastError == null && nonceNow == nonce
+      val ok =
+        if (plan.disposed) rowOk && guardOk && heldBefore && savedOk && after.contains(base) && alive
+        else rowOk && heldBefore && savedOk && after.contains(base + want) && alive
+      lastOk = ok
+      lastDetail = "attempt " + attempt + " (signal queued=" + queued + ", tag " + tag + "): row " + r +
+        "; " + updates + " update(s) between the signal and the save; tagged proxies still registered when the save began " +
+        present + " of " + want + " (the guard: no cycle since the drop), after it " + presentAfter +
+        "; hdd3 owners " + base + " -> " + ownersTxt(before) + " before the save -> " + ownersTxt(after) +
+        " right after it (" + saveMs + " ms, ok=" + saveOk + saveErr + ", _kernel=" + k + " B)" +
+        "; nonce " + (if (nonceNow == nonce) "unchanged" else nonce + " -> " + nonceNow) +
+        ", running=" + m.isRunning + " lastError=" + m.lastError
+      lastWhy =
+        if (ok) (if (plan.disposed) "" else "   (the leak, as this arm must show: " + plan.why + ")")
+        else if (!rowOk) "   <- the sandbox did not open and drop " + want + " handles (row " + r + ")"
+        else if (!savedOk) "   <- the save wrote no kernel blob, so its collects are not what ran"
+        else if (!alive) "   <- the machine rebooted, stopped or crashed: that closes every handle"
+        else if (plan.disposed && !guardOk)
+          "   <- INSTRUMENT: a GC cycle completed between the drop and the save in every attempt, so the save " +
+            "boundary was never the one under test (not a verdict on the fix)"
+        else if (!heldBefore) "   <- the handles were not all still owned when the save began"
+        else if (plan.disposed)
+          "   <- LEAK AT THE SAVE BOUNDARY: every dropped proxy was still registered when the save began and its " +
+            "collects did not dispose them -- one full cycle only clears the registry entries on LuaJIT (review OC-1)"
+        else "   <- DISPOSED where this arm must leak (" + plan.why + "): the control is not one"
+      p("GC-3 " + lastDetail + (if (ok) "" else lastWhy))
+      finished = !(plan.disposed && rowOk && savedOk && alive && !guardOk && after.contains(base))
+    }
+    milestone(id, lastOk, lastDetail + lastWhy)
+  }
+
+  // ---- vd-*: the private-state probe ----------------------------------
+
+  private lazy val lsjClass: Class[_] = classOf[li.cil.repack.com.naef.jnlua.LuaStateLuaJIT]
+
+  /** A LuaStateLuaJIT member by reflection; the target's own throw unwrapped. */
+  def vdCall(target: AnyRef, name: String, types: Seq[Class[_]], args: Seq[AnyRef]): AnyRef = {
+    val mth = lsjClass.getDeclaredMethod(name, types: _*)
+    mth.setAccessible(true)
+    try mth.invoke(target, args: _*)
+    catch { case e: java.lang.reflect.InvocationTargetException if e.getCause != null => throw e.getCause }
+  }
+
+  /** [0] counted [1] finalized [2] disposed [3] missing [4] mergedSkips
+    * [5] unlocked [6] disposeErrors [7] refusedInDispose [8] live entries
+    * (and [9] bookkeeping failures where the generator emits it). */
+  def vdStats(s: LuaState): Array[Long] = vdCall(s, "ocljValueStats", Nil, Nil).asInstanceOf[Array[Long]]
+  /** [0] calls [1] jerr [2] closing [3] noenv [4] installed -- zeros on a closed state. */
+  def vdGcCounters(s: LuaState): Array[Long] = vdCall(s, "ocljValueGcCounters", Nil, Nil).asInstanceOf[Array[Long]]
+  def vdInstalled(s: LuaState): Boolean =
+    vdCall(s, "ocljValueDisposalInstalled", Nil, Nil).asInstanceOf[java.lang.Boolean].booleanValue
+  def vdWhy(t: Throwable): String = t.getClass.getName + ": " + t.getMessage
+
+  /** The disposer the probe installs: OC's dispose body with no machine, and
+    * the order in which it was handed objects. */
+  final class VdLog {
+    val order = new java.util.concurrent.CopyOnWriteArrayList[AnyRef]()
+    val disposer: java.util.function.Consumer[AnyRef] = new java.util.function.Consumer[AnyRef] {
+      override def accept(v: AnyRef): Unit = {
+        order.add(v)
+        v.asInstanceOf[totoro.ocelot.brain.entity.machine.Value].dispose(null)
+      }
+    }
+  }
+
+  /** The kernel's wrap, reduced to what makes it merge: a weak-KEY registry of
+    * proxy -> raw userdata, and a re-push of a live Value handed back its
+    * EXISTING proxy through `v == data`, i.e. JNLua's __eq
+    * (ocelot-brain machine.lua:1167-1184, wrapSingleUserdata). */
+  val VdKernelShapeLua: String =
+    "__wrapped = setmetatable({}, {__mode = 'k'}) " +
+    "function __wrap(data) " +
+    "  for k, v in pairs(__wrapped) do if v == data then return k end end " +
+    "  local proxy = {} __wrapped[proxy] = data return proxy " +
+    "end return 'ok'"
+
+  def vdEcho(s: LuaState): Unit = {
+    s.pushJavaFunction(new li.cil.repack.com.naef.jnlua.JavaFunction {
+      // A Value handed BACK to Lua, as a driver that returns a cached Value
+      // does: a NEW userdata for the same object, through the counted push.
+      override def invoke(l: LuaState): Int = { l.pushJavaObjectRaw(l.toJavaObjectRaw(1)); 1 }
+    })
+    s.setGlobal("__echo")
+  }
+
+  def vdPush(s: LuaState, global: String, v: AnyRef): Unit = { s.pushJavaObjectRaw(v); s.setGlobal(global) }
+
+  /** Full collects from the harness thread, which holds the state's monitor
+    * inside gc(): on a private state that is the game's own situation. */
+  def vdGc(s: LuaState, n: Int = 3): Unit = { var i = 0; while (i < n) { s.gc(LuaState.GcAction.COLLECT, 0); i += 1 } }
+
+  private def dl(a: Array[Long], b: Array[Long], i: Int): Long = b(i) - a(i)
+
+  /** One vd case on a fresh state from the arm's own factory: capped exactly as
+    * a machine's (createState -> create(Some(Int.MaxValue)) under limitMemory),
+    * real jnlua, our DLL; installed first unless the case is about installing.
+    * Anything thrown is a FAIL -- on a LuaStateLuaJIT without the members,
+    * NoSuchMethodException, which is the shape this fails in before the fix. */
+  def vdCase(id: String, install: Boolean = true)(body: (LuaState, VdLog) => (Boolean, String)): Unit = {
+    var s: LuaState = null
+    try {
+      val opt = armFactory.createState()
+      if (opt.isEmpty) milestone(id, ok = false, "createState() returned None")
+      else {
+        s = opt.get
+        if (!lsjClass.isInstance(s)) milestone(id, ok = false, "the arm's state is " + s.getClass.getName + ", not LuaStateLuaJIT")
+        else {
+          val log = new VdLog
+          if (install)
+            OCLuaJITArchitecture.setValueDisposer(s, classOf[totoro.ocelot.brain.entity.machine.Value], log.disposer)
+          val (ok, detail) = body(s, log)
+          milestone(id, ok, detail)
+        }
+      }
+    } catch {
+      case t: Throwable =>
+        milestone(id, ok = false, "threw " + vdWhy(t) + (t match {
+          case _: NoSuchMethodException => "   <- this LuaStateLuaJIT has no Value disposal (the shape it fails in before the fix)"
+          case _ => ""
+        }))
+    } finally {
+      if (s != null) try { if (s.isOpen) { s.setTop(0); s.close() } } catch { case _: Throwable => }
+    }
+  }
+
+  /**
+   * THE PRIVATE-STATE PROBE.  Nine cases, each its own id:
+   *   vd-1  the kernel's merge (review T3): a Value echoed back three times
+   *         through a JavaFunction is merged by `v == data` onto its live
+   *         proxy, and its three orphaned userdata die -- 0 disposes while the
+   *         proxy lives, exactly 1 when it goes.  The orphans' finalization is
+   *         asserted too, so "kept alive" is shown, not merely not disproved.
+   *   vd-2  N distinct Values dropped -> N disposes, one each; non-Values (a
+   *         raw String, a LuaError, a JavaFunction's own userdata) collected
+   *         with no callback at all: the C class filter, from the Java side.
+   *   vd-3  Values that override equals (review T12): simultaneous -- b merged
+   *         onto a's live proxy -- never a dispose while it lives and at most
+   *         one in all; the sequential case (a's proxy gone, its userdata not
+   *         yet, an equal b pushed) RECORDED, since there it may leak where
+   *         stock disposes both (a documented difference).
+   *   vd-4  close() with K counted Values alive: nothing disposed, no callback
+   *         into Java at all, the count dropped, no crash (stock parity).
+   *   vd-5  a refused install (review T6): the jnlua.Object __gc swapped for a
+   *         Lua function -> IllegalStateException naming code 6 (ENOGC), the
+   *         stack untouched, nothing counted; then the same install, __gc
+   *         restored, works -- so the refusal was the swap's.
+   *   vd-6  the lock guard (J3): the callback from a thread NOT holding the
+   *         monitor leaks (counted unlocked) instead of blocking, and with the
+   *         monitor reaches the lookup (an uncounted object: missing).
+   *   vd-7  a dispose may not push (J7): refused, counted, the stack untouched.
+   *   vd-8  the members' shape: the overrides synchronized, the callback
+   *         private and NOT synchronized, the two natives private native.
+   *   vd-9  the count comes BEFORE the push (review C3/OC-3/J2): a GC step
+   *         forced inside the push itself finalizes the object's earlier,
+   *         unreachable userdata -- which must count down the push in
+   *         flight, not dispose the object the push is handing to Lua.
+   */
+  def valueDisposalProbes(): Unit = {
+    if (nativeMode != "additive") {
+      p("MILESTONE vd-1..9: SKIP -- native=" + nativeMode + ": they test LuaStateLuaJIT's Value disposal, " +
+        "which only the additive arm has (not counted)")
+      return
+    }
+    p("--- (vd) Value disposal on private states: real jnlua, our DLL, Value classes that count their own disposes ---")
+    val valueClass = classOf[totoro.ocelot.brain.entity.machine.Value]
+
+    // ---- vd-1 ----
+    vdCase("vd-1-kernel-merge-keeps-value-alive") { (s, _) =>
+      val top0 = s.getTop
+      vdEcho(s)
+      val shape = evalStr(s, VdKernelShapeLua)
+      val c = new VdCountingValue(1)
+      vdPush(s, "__v", c)
+      val wrapped = evalStr(s, "__p = __wrap(__v) __v = nil return type(__p)")
+      val a = vdStats(s)
+      val same = evalStr(s, "local same = 0 for i = 1, 3 do " +
+        "if __wrap(__echo(__wrapped[__p])) == __p then same = same + 1 end end return tostring(same)")
+      vdGc(s)
+      val b = vdStats(s)
+      val whileLive = c.disposes
+      evalStr(s, "__p = nil return 'ok'")
+      vdGc(s)
+      val e = vdStats(s)
+      val ok = shape == "ok" && wrapped == "table" && same == "3" && dl(a, b, 0) == 3 && dl(a, b, 1) == 3 &&
+        whileLive == 0 && c.disposes == 1 && dl(b, e, 1) == 1 && dl(b, e, 2) == 1 && dl(a, e, 3) == 0 &&
+        e(8) == 0 && s.getTop == top0
+      (ok, "a Value wrapped kernel-style, echoed back 3x through a JavaFunction: merged onto its live proxy " + same +
+        "/3 (JNLua __eq); counted pushes +" + dl(a, b, 0) + ", orphans finalized +" + dl(a, b, 1) +
+        ", disposes while the proxy lived " + whileLive + "; the proxy dropped: finalized +" + dl(b, e, 1) +
+        ", disposes " + c.disposes + " (stats: disposed +" + dl(b, e, 2) + ", missing +" + dl(a, e, 3) +
+        ", live entries " + e(8) + "; stack " + top0 + " -> " + s.getTop + ")" +
+        (if (ok) ""
+         else if (same != "3") "   <- wrap() did not merge: JNLua's __eq did not answer true for two userdata of one object, so F3's premise is not this state's"
+         else if (dl(a, b, 1) < 3) "   <- the orphaned userdata were not all finalized: 'kept alive' is not shown, only not disproved"
+         else if (whileLive != 0) "   <- DISPOSED UNDER A LIVE PROXY: an orphan of a merged re-push took the count to zero"
+         else if (c.disposes != 1) "   <- the last userdata's death disposed " + c.disposes + " times"
+         else "   <- the counters disagree with the object"))
+    }
+
+    // ---- vd-2 ----
+    vdCase("vd-2-distinct-values-disposed-non-values-not") { (s, _) =>
+      val n = 8
+      val vs = (1 to n).map(i => new VdCountingValue(200 + i))
+      evalStr(s, "__t = {} __w = setmetatable({}, {__mode = 'v'}) return 'ok'")
+      var i = 0
+      while (i < n) { s.getGlobal("__t"); s.pushJavaObjectRaw(vs(i)); s.rawSet(-2, i + 1); s.pop(1); i += 1 }
+      s.getGlobal("__w"); s.pushJavaObjectRaw("vd-2: a String, not a Value"); s.rawSet(-2, 1); s.pop(1)
+      s.pushJavaFunction(new li.cil.repack.com.naef.jnlua.JavaFunction {
+        override def invoke(l: LuaState): Int = throw new li.cil.repack.com.naef.jnlua.LuaRuntimeException("vd-2: thrown by a JavaFunction")
+      })
+      s.setGlobal("__thrower")
+      s.pushJavaFunction(new li.cil.repack.com.naef.jnlua.JavaFunction {
+        override def invoke(l: LuaState): Int = 0
+      })
+      s.setGlobal("__noop")
+      val kinds = evalStr(s,
+        "local ok, e = pcall(__thrower) __w[2] = e " +
+        "local u = debug and debug.getupvalue and select(2, debug.getupvalue(__noop, 1)) __w[3] = u " +
+        "__thrower = nil __noop = nil " +
+        "return type(__w[1]) .. ',' .. type(__w[2]) .. ',' .. type(__w[3])")
+      val a = vdStats(s)
+      evalStr(s, "__t = nil return 'ok'")
+      vdGc(s)
+      val b = vdStats(s)
+      val left = evalStr(s, "local k = 0 for j = 1, 3 do if type(__w[j]) == 'userdata' then k = k + 1 end end return tostring(k)")
+      val each = vs.map(_.disposes)
+      val ok = kinds.startsWith("userdata,") && each.forall(_ == 1) && dl(a, b, 2) == n && dl(a, b, 1) == n &&
+        dl(a, b, 3) == 0 && left == "0"
+      (ok, n.toString + " distinct Values dropped: disposes each [" + each.mkString(",") + "], stats disposed +" + dl(a, b, 2) +
+        ", callbacks +" + dl(a, b, 1) + ", missing +" + dl(a, b, 3) + "; non-Values (raw String, LuaError, " +
+        "JavaFunction userdata) typed " + kinds + ", still uncollected after the collects: " + left +
+        (if (ok) ""
+         else if (!kinds.startsWith("userdata,")) "   <- the raw String did not become a userdata: the non-Value case did not run"
+         else if (left != "0") "   <- a non-Value userdata survived three full collects: their finalization is not shown"
+         else if (dl(a, b, 1) > n || dl(a, b, 3) > 0) "   <- callbacks for objects that are NOT Values: the class filter let them through"
+         else if (!each.forall(_ == 1)) "   <- not one dispose per dropped Value"
+         else "   <- the counters disagree with the objects"))
+    }
+
+    // ---- vd-3 ----
+    vdCase("vd-3-equal-values-at-most-one-dispose") { (s, _) =>
+      val shape = evalStr(s, VdKernelShapeLua)
+      val a1 = new VdEqValue(7, 1)
+      val b1 = new VdEqValue(7, 2)
+      vdPush(s, "__v", a1)
+      evalStr(s, "__pa = __wrap(__v) __v = nil return 'ok'")
+      vdPush(s, "__v", b1)
+      val merged = evalStr(s, "local p = __wrap(__v) __v = nil return tostring(p == __pa)")
+      val a = vdStats(s)
+      vdGc(s)
+      val b = vdStats(s)
+      val whileLive = a1.disposes + b1.disposes
+      evalStr(s, "__pa = nil return 'ok'")
+      vdGc(s)
+      val c = vdStats(s)
+      val simTotal = a1.disposes + b1.disposes
+      // the sequential case: a2's proxy gone and its registry entry with it
+      // (one full cycle), its userdata not yet; then an equal b2 pushed, which
+      // the registry can no longer merge, so it gets a proxy of its own
+      val a2 = new VdEqValue(9, 3)
+      val b2 = new VdEqValue(9, 4)
+      vdPush(s, "__v", a2)
+      evalStr(s, "__pa2 = __wrap(__v) __v = nil return 'ok'")
+      evalStr(s, "__pa2 = nil return 'ok'")
+      s.gc(LuaState.GcAction.COLLECT, 0)
+      val entries = evalStr(s, "local k = 0 for _ in pairs(__wrapped) do k = k + 1 end return tostring(k)")
+      vdPush(s, "__v", b2)
+      val own = evalStr(s, "__pb2 = __wrap(__v) __v = nil return tostring(__pb2 ~= nil)")
+      vdGc(s)
+      val b2WhileLive = b2.disposes
+      evalStr(s, "__pb2 = nil return 'ok'")
+      vdGc(s)
+      val e = vdStats(s)
+      val ok = shape == "ok" && merged == "true" && dl(a, b, 1) >= 1 && whileLive == 0 && simTotal <= 1 &&
+        b2WhileLive == 0 && a2.disposes <= 1 && b2.disposes <= 1
+      (ok, "simultaneous: b merged onto a's live proxy=" + merged + ", b's orphan finalized (+" + dl(a, b, 1) +
+        " callbacks, merged-skips +" + dl(a, b, 4) + "), disposes while a's proxy lived " + whileLive +
+        ", after everything died a=" + a1.disposes + " b=" + b1.disposes + " (at most one in all)" +
+        "; sequential (RECORDED): registry entries after one cycle " + entries + ", b2 got its own proxy=" + own +
+        ", b2 disposed while live " + b2WhileLive + ", in the end a2=" + a2.disposes + " b2=" + b2.disposes +
+        " (stock disposes both; merged-skips +" + dl(c, e, 4) + ")" +
+        (if (ok) ""
+         else if (merged != "true") "   <- the kernel shape did not merge two equal Values: JNLua's __eq is not existing.equals(new) here"
+         else if (dl(a, b, 1) < 1) "   <- b's orphan was never finalized: 'never while a lives' is not shown"
+         else if (whileLive != 0) "   <- DISPOSED UNDER A LIVE PROXY: an equal Value's zero disposed what a's proxy still reaches"
+         else if (b2WhileLive != 0) "   <- the sequential case disposed b2 while its own proxy lived"
+         else "   <- more than one dispose"))
+    }
+
+    // ---- vd-4 ----
+    vdCase("vd-4-close-disposes-nothing") { (s, log) =>
+      val k = 6
+      val vs = (1 to k).map(i => new VdCountingValue(400 + i))
+      evalStr(s, "__k = {} return 'ok'")
+      var i = 0
+      while (i < k) { s.getGlobal("__k"); s.pushJavaObjectRaw(vs(i)); s.rawSet(-2, i + 1); s.pop(1); i += 1 }
+      val a = vdStats(s)
+      val g = vdGcCounters(s)
+      s.setTop(0)
+      s.close()
+      val b = vdStats(s)
+      val still = vdInstalled(s)
+      val ok = a(8) == k && g(4) == 1 && !s.isOpen && vs.forall(_.disposes == 0) && log.order.isEmpty &&
+        dl(a, b, 1) == 0 && dl(a, b, 2) == 0 && dl(a, b, 5) == 0 && b(8) == 0 && !still
+      (ok, k.toString + " counted Values alive (live entries " + a(8) + ", native installed=" + g(4) + "), then close(): open=" +
+        s.isOpen + ", disposes " + vs.map(_.disposes).sum + ", callbacks into Java during the close +" + dl(a, b, 1) +
+        " (unlocked +" + dl(a, b, 5) + "), live entries after " + b(8) + ", installed after " + still +
+        " -- the native side's closing skips are not readable here (its record is freed with the state; vgc_test V3 counts them)" +
+        (if (ok) ""
+         else if (dl(a, b, 1) != 0 || dl(a, b, 5) != 0) "   <- the wrapper called into Java DURING lua_close: the closing flag did not hold"
+         else if (vs.exists(_.disposes != 0)) "   <- something was disposed at close: stock disposes nothing there"
+         else if (b(8) != 0 || still) "   <- close() kept the count or the disposer (and with it the machine)"
+         else "   <- the install was not in place before the close"))
+    }
+
+    // ---- vd-5 ----
+    vdCase("vd-5-refused-install-counts-nothing", install = false) { (s, log) =>
+      val top0 = s.getTop
+      val swapped = evalStr(s,
+        "local mt = debug.getregistry()['jnlua.Object'] if type(mt) ~= 'table' then return 'no-metatable' end " +
+        "__vd5gc = rawget(mt, '__gc') mt.__gc = function() end return type(__vd5gc)")
+      var refusal = "<not refused: it installed>"
+      try OCLuaJITArchitecture.setValueDisposer(s, valueClass, log.disposer)
+      catch { case t: Throwable => refusal = vdWhy(t) }
+      val top1 = s.getTop
+      val restored = evalStr(s,
+        "local mt = debug.getregistry()['jnlua.Object'] mt.__gc = __vd5gc __vd5gc = nil " +
+        "return type(rawget(mt, '__gc'))")
+      val installedAfter = vdInstalled(s)
+      val g = vdGcCounters(s)
+      val a = vdStats(s)
+      val c1 = new VdCountingValue(501)
+      vdPush(s, "__c", c1)
+      evalStr(s, "__c = nil return 'ok'")
+      vdGc(s)
+      val b = vdStats(s)
+      var second = "ok"
+      try OCLuaJITArchitecture.setValueDisposer(s, valueClass, log.disposer)
+      catch { case t: Throwable => second = vdWhy(t) }
+      val c2 = new VdCountingValue(502)
+      vdPush(s, "__c", c2)
+      evalStr(s, "__c = nil return 'ok'")
+      vdGc(s)
+      val refusedRight = refusal.startsWith("java.lang.IllegalStateException") &&
+        (refusal.contains("code 6") || refusal.contains("ENOGC"))
+      val ok = swapped == "function" && refusedRight && top1 == top0 && restored == "function" && !installedAfter &&
+        g(4) == 0 && dl(a, b, 0) == 0 && c1.disposes == 0 && second == "ok" && c2.disposes == 1
+      (ok, "__gc swapped for a Lua function (" + swapped + "): install -> " + refusal + "; stack " + top0 + " -> " + top1 +
+        "; installed after=" + installedAfter + " (native " + g(4) + "); a Value pushed and dropped: counted +" + dl(a, b, 0) +
+        ", disposes " + c1.disposes + "; __gc restored (" + restored + "), the same install -> " + second +
+        ", and a Value dropped after it disposed " + c2.disposes + "x" +
+        (if (ok) ""
+         else if (!refusedRight) "   <- not refused with ENOGC (code 6): the install does not check what it wraps"
+         else if (top1 != top0) "   <- the refused install moved the stack (C1): the kernel thread at index 1 would be lost"
+         else if (installedAfter || g(4) != 0 || dl(a, b, 0) != 0) "   <- a refused install left the class set: Values counted with no wrapper to count them down, pinned forever"
+         else if (second != "ok" || c2.disposes != 1) "   <- with __gc restored the install still did not work: the refusal was not the swap's"
+         else "   <- the swap itself did not happen"))
+    }
+
+    // ---- vd-6 ----
+    vdCase("vd-6-unlocked-callback-leaks") { (s, log) =>
+      val c = new VdCountingValue(600)
+      vdPush(s, "__c", c)                                    // live: its count is 1
+      val a = vdStats(s)
+      val fin = lsjClass.getDeclaredMethod("ocljValueFinalized", classOf[Object])
+      fin.setAccessible(true)
+      val err = new java.util.concurrent.atomic.AtomicReference[String]("")
+      val th = new Thread(new Runnable {
+        override def run(): Unit = try { fin.invoke(s, c); () } catch { case t: Throwable => err.set(vdWhy(t)) }
+      }, "vd-6-without-the-monitor")
+      th.setDaemon(true)
+      th.start()
+      th.join(10000)
+      val b = vdStats(s)
+      val stranger = new VdCountingValue(601)              // never pushed: no entry
+      s.synchronized { fin.invoke(s, stranger) }
+      val e = vdStats(s)
+      val ok = !th.isAlive && err.get.isEmpty && dl(a, b, 5) == 1 && dl(a, b, 1) == 0 && c.disposes == 0 &&
+        b(8) == a(8) && dl(b, e, 1) == 1 && dl(b, e, 3) == 1 && stranger.disposes == 0 && log.order.isEmpty
+      (ok, "the callback for a LIVE counted Value from a thread without the monitor: returned=" + !th.isAlive +
+        (if (err.get.nonEmpty) " (threw " + err.get + ")" else "") + ", unlocked +" + dl(a, b, 5) +
+        ", callbacks under the monitor +" + dl(a, b, 1) + ", its disposes " + c.disposes + ", live entries " + a(8) +
+        " -> " + b(8) + "; with the monitor, for an object never counted: callbacks +" + dl(b, e, 1) +
+        ", missing +" + dl(b, e, 3) + ", disposes " + stranger.disposes +
+        (if (ok) ""
+         else if (th.isAlive) "   <- the unlocked callback BLOCKED: inside a GC step that is a deadlock"
+         else if (c.disposes != 0) "   <- the unlocked callback counted down and DISPOSED a live Value"
+         else "   <- the guard's counters are not what it did"))
+    }
+
+    // ---- vd-7 ----
+    vdCase("vd-7-dispose-may-not-push") { (s, _) =>
+      val v = new VdPushingValue(s)
+      vdPush(s, "__pv", v)
+      val a = vdStats(s)
+      evalStr(s, "__pv = nil return 'ok'")
+      val top0 = s.getTop
+      vdGc(s)
+      val top1 = s.getTop
+      val b = vdStats(s)
+      val after = evalStr(s, "return 'alive'")
+      val ok = v.disposes == 1 && v.push.startsWith("java.lang.IllegalStateException") && dl(a, b, 7) == 1 &&
+        dl(a, b, 2) == 1 && dl(a, b, 6) == 0 && top1 == top0 && after == "alive"
+      (ok, "a dispose that pushes into its own state: disposes " + v.disposes + ", its push -> " + v.push +
+        "; refused +" + dl(a, b, 7) + ", disposed +" + dl(a, b, 2) + ", dispose errors +" + dl(a, b, 6) +
+        "; stack " + top0 + " -> " + top1 + ", the state afterwards: " + after +
+        (if (ok) ""
+         else if (v.push == "WENT THROUGH") "   <- the push was NOT refused: it landed on whatever coroutine's stack ran the GC step"
+         else "   <- the refusal is not what the counters say"))
+    }
+
+    // ---- vd-9 ----
+    // The step is forced from Java, not Lua, so no chunk's own allocations can
+    // run it early: one full collect with __c still set leaves the collector
+    // in its pause and the userdata alive; __c = nil makes it unreachable;
+    // RESTART puts the threshold at the current total, so the very next
+    // allocation check -- jnlua's lua_pushcfunction inside the push
+    // (jnlua.c:681) -- runs a step, and a step multiplier this large finishes
+    // the whole cycle there, finalizer included (lj_gc.c lj_gc_step).
+    vdCase("vd-9-count-before-push") { (s, _) =>
+      val c = new VdCountingValue(900)
+      vdPush(s, "__c", c)
+      s.gc(LuaState.GcAction.COLLECT, 0)
+      val dropped = evalStr(s, "__c = nil return 'ok'")
+      val oldMul = s.gc(LuaState.GcAction.SETSTEPMUL, 1000000)
+      s.gc(LuaState.GcAction.RESTART, 0)
+      val a = vdStats(s)
+      s.pushJavaObjectRaw(c)
+      val b = vdStats(s)
+      s.setGlobal("__c2")
+      s.gc(LuaState.GcAction.SETSTEPMUL, oldMul)
+      val inPush = c.disposes
+      evalStr(s, "__c2 = nil return 'ok'")
+      vdGc(s)
+      val e = vdStats(s)
+      val ok = dropped == "ok" && dl(a, b, 1) >= 1 && inPush == 0 && a(8) == 1 && b(8) == 1 && c.disposes == 1 &&
+        dl(b, e, 2) == 1
+      (ok, "a Value pushed, collected around, dropped; then pushed again with a full GC cycle forced inside the push: " +
+        "callbacks during the push +" + dl(a, b, 1) + ", disposes during it " + inPush + ", live entries " + a(8) +
+        " -> " + b(8) + "; the new userdata dropped: disposes " + c.disposes + " (stats disposed +" + dl(b, e, 2) +
+        "; step multiplier was " + oldMul + ")" +
+        (if (ok) ""
+         else if (dl(a, b, 1) < 1) "   <- the earlier userdata was not finalized INSIDE the push: the case did not run, nothing is shown"
+         else if (inPush != 0) "   <- DISPOSED BY ITS OWN PUSH: the earlier userdata's death took the count to zero before the push counted"
+         else if (c.disposes != 1) "   <- the pushed userdata's own death disposed " + c.disposes + " times"
+         else "   <- the counters disagree with the object"))
+    }
+
+    // ---- vd-8 ----
+    try {
+      import java.lang.reflect.{Method, Modifier}
+      val k = lsjClass
+      def mth(name: String, ps: Class[_]*): Method = k.getDeclaredMethod(name, ps: _*)
+      val pjo = mth("pushJavaObjectRaw", classOf[Object])
+      val pjf = mth("pushJavaFunction", classOf[li.cil.repack.com.naef.jnlua.JavaFunction])
+      val cls = mth("close")
+      val set = mth("ocljSetValueDisposer", classOf[Class[_]], classOf[java.util.function.Consumer[_]])
+      val fin = mth("ocljValueFinalized", classOf[Object])
+      val ins = mth("ocljInstallValueFinalizer", classOf[Class[_]])
+      val cnt = mth("ocljValueGcCounters", classOf[Array[Long]])
+      def mods(x: Method): String = Modifier.toString(x.getModifiers)
+      def sync(x: Method): Boolean = Modifier.isSynchronized(x.getModifiers)
+      def privNative(x: Method): Boolean = Modifier.isPrivate(x.getModifiers) && Modifier.isNative(x.getModifiers)
+      val ok = sync(pjo) && sync(pjf) && sync(cls) && sync(set) &&
+        Modifier.isPrivate(fin.getModifiers) && !sync(fin) && !Modifier.isNative(fin.getModifiers) &&
+        privNative(ins) && privNative(cnt)
+      milestone("vd-8-members-shape", ok,
+        "pushJavaObjectRaw [" + mods(pjo) + "], pushJavaFunction [" + mods(pjf) + "], close [" + mods(cls) +
+          "], ocljSetValueDisposer [" + mods(set) + "], ocljValueFinalized [" + mods(fin) +
+          "], ocljInstallValueFinalizer [" + mods(ins) + "], ocljValueGcCounters(long[]) [" + mods(cnt) + "]" +
+          (if (ok) ""
+           else if (sync(fin)) "   <- the callback is synchronized: from a thread without the monitor it would BLOCK inside a GC step (J3)"
+           else "   <- the count's exactness rests on the monitor: every override synchronized, the natives private"))
+    } catch { case t: Throwable => milestone("vd-8-members-shape", ok = false, "threw " + vdWhy(t)) }
+  }
+
   def bytecodeGate(): Unit = {
     // On a state of its OWN, never the running machine's: these probes
     // deliberately provoke load errors, and a rejected load can leave values
@@ -2518,6 +3515,173 @@ object Smoke {
       |  local s = string.format("OCLJMP=%s/%d/%d/%d/%s", mpState, mpSeq, mpHeld, mpFree, mpErr)
       |  component.gpu.set(1, 50, s .. string.rep(" ", math.max(0, 150 - #s)))
       |end
+      |
+      |-- (gc-1, gc-2, gc-3) VALUE DISPOSAL, sandbox half.  OpenComputers disposes
+      |-- a host Value from the __gc of the TABLE proxy the kernel wraps it in
+      |-- (machine.lua userdataWrapper.__gc), and LuaJIT finalizes no table, so
+      |-- before the fix a raw fs.open handle a program dropped was never closed:
+      |-- drop sixteen and that filesystem refuses every further open until the
+      |-- computer stops.  These probes do exactly that, on DEDICATED disks that
+      |-- hold probe.txt and nothing else, so a leak here cannot starve the stk
+      |-- burst on the boot disk, which the harness runs afterwards.
+      |--
+      |-- ONE HOLD, TWO DROPS (review T2).  "ocljgchold" opens probe.txt until
+      |-- the filesystem refuses, keeping every handle in gcHeld -- an upvalue of
+      |-- the listeners below, so f1's persist carries all of them.  The harness
+      |-- then drops the RESTORED copy (gc-2, on ws2) and the ORIGINAL (gc-1),
+      |-- one "ocljgcdrop" each; two holds would find the first one's leak.  A
+      |-- drop keeps ONE handle, gcKeep, the bystander (T3): a dispose that hit
+      |-- a live Value would close it, and its read after the collects says not.
+      |--
+      |-- THE WITNESS (T8) is built in the SAME resume as the drop, in the
+      |-- kernel registry's own shape: a weak-KEY table whose dead key holds a
+      |-- value that only a weak-VALUE table also sees.  LuaJIT marks a weak-key
+      |-- table's values strongly (lj_gc.c:216-217), so that value -- like a
+      |-- dropped proxy's raw userdata in wrappedUserdata -- outlives the cycle
+      |-- that clears its entry and dies in the next: gcWit[1] clears at the
+      |-- SECOND cycle, the plain twin gcTwin[1] at the first.  All three
+      |-- tables are FILE-LEVEL upvalues until the chain ends; a weak-key table
+      |-- that is itself garbage clears after ONE cycle and proves nothing.  The
+      |-- kernel's forced collect, every tenth resume (build/native/kernel/
+      |-- machine.lua:1631-1636; ocelot-brain's :1523-1528), drives both -- the
+      |-- sandbox has no collectgarbage.  Twelve steps after the witness clears
+      |-- (at least one more forced full collect, which also runs every pending
+      |-- finalizer) the bystander is read and ONE fresh open is tried: "ok"
+      |-- once the dropped handles were disposed, "too many open handles" while
+      |-- they leak.  Then "ocljgcclose" closes the bystander.
+      |local gcFs, gcHeld, gcKeep = nil, nil, nil
+      |local gcState, gcSeq, gcN, gcRefusal, gcErr = "idle", 0, 0, "none", "none"
+      |local gcStep, gcWitAt, gcTwinAt, gcKeepRd, gcReopen = 0, -1, -1, "none", "none"
+      |local gcWitReg, gcWit, gcTwin = nil, nil, nil
+      |local gcDirty = false
+      |local function gcTxt(x)
+      |  return (tostring(x):gsub("[ /]", "_"):sub(1, 40))
+      |end
+      |event.listen("ocljgchold", function(_, addr, bound)
+      |  local ok, err = pcall(function()
+      |    gcFs = component.proxy(addr)
+      |    if not gcFs then error("no filesystem " .. tostring(addr), 0) end
+      |    gcHeld, gcRefusal = {}, "none"
+      |    for i = 1, math.floor(tonumber(bound) or 64) do
+      |      local h, e = gcFs.open("probe.txt", "r")
+      |      if not h then gcRefusal = gcTxt(e) break end
+      |      gcHeld[#gcHeld + 1] = h
+      |    end
+      |    gcN = #gcHeld
+      |  end)
+      |  if ok then gcState = "held" else gcErr = gcTxt(err) gcState = "ERR" end
+      |  gcSeq = gcSeq + 1
+      |  gcDirty = true
+      |  return false   -- one-shot: the hold happens once, on the machine f1 saves
+      |end)
+      |local function gcDropStep()
+      |  gcStep = gcStep + 1
+      |  if gcTwinAt < 0 and gcTwin[1] == nil then gcTwinAt = gcStep end
+      |  if gcWitAt < 0 and gcWit[1] == nil then gcWitAt = gcStep end
+      |  gcDirty = true
+      |  if gcWitAt >= 0 and gcStep >= gcWitAt + 12 then
+      |    local okr, r = pcall(function()
+      |      gcFs.seek(gcKeep, "set", 0)
+      |      return gcFs.read(gcKeep, 8)
+      |    end)
+      |    if not okr then gcKeepRd = "err:" .. gcTxt(r)
+      |    elseif type(r) == "string" then gcKeepRd = "ok" .. #r
+      |    else gcKeepRd = "nil:" .. gcTxt(r) end
+      |    local oko, h, e = pcall(function() return gcFs.open("probe.txt", "r") end)
+      |    if not oko then gcReopen = "err:" .. gcTxt(h)
+      |    elseif h then pcall(function() return gcFs.close(h) end) gcReopen = "ok"
+      |    else gcReopen = gcTxt(e) end
+      |    gcWitReg, gcWit, gcTwin = nil, nil, nil
+      |    gcState = "done"
+      |    gcSeq = gcSeq + 1
+      |    return
+      |  end
+      |  if gcStep >= 200 then
+      |    gcWitReg, gcWit, gcTwin = nil, nil, nil
+      |    gcState = "nogc"
+      |    gcSeq = gcSeq + 1
+      |    return
+      |  end
+      |  event.timer(0, gcDropStep)
+      |end
+      |event.listen("ocljgcdrop", function()
+      |  if gcState ~= "held" or type(gcHeld) ~= "table" or #gcHeld < 1 then
+      |    gcErr = "drop-in-state-" .. gcState
+      |    gcState = "ERR"
+      |    gcSeq = gcSeq + 1
+      |    gcDirty = true
+      |    return
+      |  end
+      |  gcKeep = gcHeld[1]
+      |  gcHeld = nil                   -- every other proxy is garbage from here on
+      |  gcWitReg = setmetatable({}, {__mode = "k"})
+      |  gcWit = setmetatable({}, {__mode = "v"})
+      |  gcTwin = setmetatable({}, {__mode = "v"})
+      |  local v = {}
+      |  gcWitReg[{}] = v
+      |  gcWit[1] = v
+      |  v = nil
+      |  gcTwin[1] = {}
+      |  gcStep, gcWitAt, gcTwinAt, gcKeepRd, gcReopen = 0, -1, -1, "none", "none"
+      |  gcState = "dropping"
+      |  gcSeq = gcSeq + 1
+      |  gcDirty = true
+      |  event.timer(0, gcDropStep)
+      |end)
+      |event.listen("ocljgcclose", function()
+      |  if gcKeep == nil then
+      |    gcErr = "close-without-keep"
+      |    gcState = "ERR"
+      |  else
+      |    local ok, r, e = pcall(function() return gcFs.close(gcKeep) end)
+      |    gcKeep = nil
+      |    if not ok then gcErr = "close:" .. gcTxt(r) gcState = "ERR"
+      |    elseif e ~= nil then gcErr = "close:" .. gcTxt(e) gcState = "ERR"
+      |    else gcState = "closed" end
+      |  end
+      |  gcSeq = gcSeq + 1
+      |  gcDirty = true
+      |end)
+      |local function gcPaint()
+      |  local s = string.format("OCLJGC=%s/%d/%d/%s/%d/%d/%d/%s/%s/%s", gcState, gcSeq, gcN, gcRefusal,
+      |    gcStep, gcWitAt, gcTwinAt, gcKeepRd, gcReopen, gcErr)
+      |  component.gpu.set(1, 37, s .. string.rep(" ", math.max(0, 150 - #s)))
+      |end
+      |
+      |-- (gc-3) THE SAVE BOUNDARY (review OC-1), on a THIRD disk so it does not
+      |-- depend on gc-1's outcome.  One signal opens `want` handles, tags each
+      |-- proxy with rawset (a field the kernel never reads), and drops them all
+      |-- -- they were locals of the pcall'd function -- in the SAME resume, which
+      |-- also paints the row itself rather than waiting for the heartbeat.  The
+      |-- harness then saves with as few resumes in between as it can manage and
+      |-- PROVES none of them completed a cycle: every tagged proxy must still be
+      |-- in the kernel's wrappedUserdata, read off the raw state just before the
+      |-- save.  So the save's own collects are what has to dispose them -- two
+      |-- on LuaJIT, where a single one only clears the entries.
+      |local g3State, g3Seq, g3N, g3Refusal, g3Err = "idle", 0, 0, "none", "none"
+      |local function g3Paint()
+      |  local s = string.format("OCLJGC3=%s/%d/%d/%s/%s", g3State, g3Seq, g3N, g3Refusal, g3Err)
+      |  component.gpu.set(1, 38, s .. string.rep(" ", math.max(0, 150 - #s)))
+      |end
+      |event.listen("ocljgc3", function(_, addr, want, tag)
+      |  local ok, err = pcall(function()
+      |    local fs = component.proxy(addr)
+      |    if not fs then error("no filesystem " .. tostring(addr), 0) end
+      |    local hs = {}
+      |    g3Refusal = "none"
+      |    for i = 1, math.floor(tonumber(want) or 4) do
+      |      local h, e = fs.open("probe.txt", "r")
+      |      if not h then g3Refusal = gcTxt(e) break end
+      |      rawset(h, "__ocljgc3", tag)
+      |      hs[#hs + 1] = h
+      |    end
+      |    g3N = #hs
+      |  end)
+      |  if ok then g3State = "dropped" else g3Err = gcTxt(err) g3State = "ERR" end
+      |  g3Seq = g3Seq + 1
+      |  pcall(g3Paint)
+      |  gcDirty = true
+      |end)
       |
       |-- The computer.lua.allowBytecode gate, probed from INSIDE the real
       |-- machine.lua sandbox.  This `load` is the sandbox wrapper at
@@ -3034,6 +4198,11 @@ object Smoke {
       |  if mpDirty or n % 20 == 0 then
       |    mpDirty = false
       |    mpPaint()
+      |  end
+      |  if gcDirty or n % 20 == 0 then
+      |    gcDirty = false
+      |    gcPaint()
+      |    g3Paint()
       |  end
       |  end)
       |  if not pok then
@@ -3965,6 +5134,31 @@ object Smoke {
 
     computer.inventory(4) = Loot.LuaBiosEEPROM.create()
     computer.inventory(5) = Loot.OpenOsFloppy.create()
+    // THE gc-* DISKS: two more HDDs, each bound to a fresh directory holding
+    // probe.txt and NOTHING else -- no autorun.lua, so OpenOS mounts them and
+    // runs nothing.  Dedicated, because what the gc milestones do to a disk is
+    // saturate its handle limit, and on an arm that leaks (the dropin, the
+    // negative controls, HEAD) a saturated BOOT disk would make stk's 8-open
+    // burst fail too: one defect reported as two.  hdd2 carries gc-1/gc-2's
+    // single hold (review T2), hdd3 gc-3's save boundary, so neither depends on
+    // the other's outcome.  Default run only: the probe modes plant their own
+    // autorun and must see the machine they always saw.
+    var hdd2: HDDManaged = null
+    var hdd3: HDDManaged = null
+    if (probeMode.isEmpty) {
+      def gcDisk(tag: String): HDDManaged = {
+        val dir = Files.createTempDirectory("ocljit-smoke-" + tag)
+        Files.write(dir.resolve("probe.txt"), GcProbeText.getBytes(StandardCharsets.UTF_8))
+        val d = new HDDManaged(Tier.One)
+        d.customRealPath = Some(dir)
+        p(tag + " real path = " + dir + " (probe.txt only), address " + d.fileSystem.node.address)
+        d
+      }
+      hdd2 = gcDisk("hdd2")
+      hdd3 = gcDisk("hdd3")
+      computer.inventory(6) = hdd2
+      computer.inventory(7) = hdd3
+    }
     // Tier.Three (160x50), not Tier.One (50x16).  Results come back by reading
     // fixed screen rows, and a 64-hex sha256 digest does not fit on a 50-column
     // row -- nor do nine benchmark rows plus the existing nonce/gate/deadline
@@ -4138,6 +5332,15 @@ object Smoke {
     if (nativeMode == "stock")
       p("MILESTONE acc-1-machine-handover: SKIP -- native=stock: PUC has no _OCLJ_GCSTATS (not counted)")
     else accHandover("acc-1-machine-handover", accBoot._1, accBoot._2)
+    // --- (gc-0) Value disposal is installed exactly when configured -------
+    // Keyed on the configuration, never on the outcome (review T1): an install
+    // that failed must FAIL here, not quietly turn gc-1..3 into LEAK controls.
+    if (nativeMode != "additive")
+      p("MILESTONE gc-0-value-disposer-installed: SKIP -- native=" + nativeMode +
+        ": only OCLuaJITArchitecture installs Value disposal; " +
+        (if (nativeMode == "stock") "stock PUC disposes through the proxy table's own __gc"
+         else "this arm leaks by construction") + " (not counted)")
+    else gcInstalledCheck(computer.machine, mLua)
     var qj = 0
     quiesced(computer.machine, "the JIT probe read-out")
     if (jitMode == "off")
@@ -4989,6 +6192,20 @@ object Smoke {
       p("ENCORE warm: " + encName + ", best of " + encSeqBefore + " samples = " + encWarm + " s")
     }
 
+    // --- (gc) the ONE hold on hdd2, BEFORE f1, so f1 persists it ----------
+    // gc-2 drops the restored copy inside the restore block and gc-1 the
+    // original after it (review T2); each re-asserts the saturation on its own
+    // FileSystem before it drops.  No milestone here: the hold is their shared
+    // precondition, and both quote it when it did not hold.
+    val gcPlan = gcPlanFor()
+    val maxH = totoro.ocelot.brain.Settings.get.maxHandles
+    val hdd2Fs: totoro.ocelot.brain.entity.fs.FileSystem = if (hdd2 == null) null else hdd2.fileSystem
+    val hdd2Addr = if (hdd2Fs == null) "<none>" else hdd2Fs.node.address
+    p("--- (gc) Value disposal: expecting " + (if (gcPlan.disposed) "DISPOSED" else "the LEAK") + " -- " + gcPlan.why + " ---")
+    val gcHold: GcHold =
+      if (hdd2Fs == null) GcHold(false, 0, "no hdd2 in this run")
+      else gcHoldHandles(ws, computer.machine, screen, hdd2Fs, hdd2Addr, maxH)
+
     // --- (f1) persist through OC's own PersistenceAPI ------------------
     p("--- persisting the workspace (eris.persist through OC's PersistenceAPI) ---")
     val nbt = new NBTTagCompound()
@@ -5075,10 +6292,24 @@ object Smoke {
     // this, f7 below would pass vacuously on a run where no proxy was reachable.
     val blobText = if (blob == null) "" else new String(blob, StandardCharsets.ISO_8859_1)
     val udInBlob = blobText.contains("HandleValue")
-    milestone("f1b-blob-carries-userdata", udInBlob,
+    // SINCE THE gc-* HOLD (review T10) the class name alone is not specific:
+    // hdd2's sixteen held handles carry it too, and would pass this on a run
+    // where udh was not on the persisted path at all.  So the recipe for a
+    // handle owned by the BOOT disk -- udh's -- is counted by its NBT payload,
+    // the "owner" string tag naming that disk (ownerNeedle); hdd2's are counted
+    // the same way, and are gc-2's own anti-vacuity: the restore mints exactly
+    // the Values gc-2 then disposes.
+    val hddAddr = hdd.fileSystem.node.address
+    val udRecipes = countOccurrences(blob, ownerNeedle(hddAddr))
+    val gcRecipes = if (hdd2Fs == null) -1 else countOccurrences(blob, ownerNeedle(hdd2Addr))
+    milestone("f1b-blob-carries-userdata", udInBlob && udRecipes >= 1,
       "persisted blob " + (if (udInBlob) "CONTAINS" else "does NOT contain") +
-        " the userdata class name HandleValue; blobBytes=" +
-        (if (blob == null) -1 else blob.length))
+        " the userdata class name HandleValue; recipes owned by the boot disk (udh) = " + udRecipes +
+        ", by hdd2 (the gc hold) = " + gcRecipes + "; blobBytes=" +
+        (if (blob == null) -1 else blob.length) +
+        (if (udInBlob && udRecipes >= 1) ""
+         else if (udInBlob) "   <- only OTHER disks' handles were persisted: udh is not on the persisted path, and f7 would be vacuous"
+         else ""))
 
     val udBefore = parse(nonEmptyScreen(screen), "OCLJUD")
     val ctrBeforeRestore = try parse(nonEmptyScreen(screen), "OCLJCTR").toInt catch { case _: Throwable => -1 }
@@ -5251,8 +6482,12 @@ object Smoke {
       }
     } catch { case t: Throwable => restoreErr = t.toString; t.printStackTrace() }
 
+    val gc2Id = gcId("gc-2", "restored-drop-disposes", "restored-drop-leaks", gcPlan)
     if (computer2 == null) {
       milestone("f2-restore-resumes", ok = false, "restore failed: " + restoreErr)
+      // Never a SKIP (review T7): the restore is gc-2's precondition, and its
+      // absence is a failure of the run, not a reason to say nothing.
+      milestone(gc2Id, ok = false, "no restored machine to drop on: " + restoreErr)
     } else {
       p("restored machine running=" + computer2.machine.isRunning +
         " lastError=" + computer2.machine.lastError)
@@ -5459,7 +6694,41 @@ object Smoke {
 
       milestone("f4-restore-no-error", computer2.machine.lastError == null,
         "restored lastError=" + computer2.machine.lastError)
+
+      // --- (gc-2) drop the RESTORED copy of the hold, while ws2 still ticks --
+      // The Values being disposed are the ones userdata.load minted during
+      // unpersist -- on our architecture counted only because initialize(),
+      // which installs the disposer, runs before load (Machine.load -> init()).
+      // Asserted on ws2's OWN hdd2, which must be a different FileSystem object
+      // from ws's: a read of the wrong disk could only fail.  And the restored
+      // handles must be LIVE: FileSystem.close drops an owner entry only for a
+      // handle whose file reopened on load (FileSystem.scala:246-256 with
+      // InputStreamFileSystem.scala:57-71), so a dead restored id would leak
+      // even with a correct fix.
+      val fs2 = if (hdd2Fs == null) null else diskFsOf(computer2, hdd2Addr)
+      val pre2 =
+        if (!gcHold.ok) "the hold before f1 did not saturate hdd2, so there is nothing to drop: " + gcHold.detail
+        else if (fs2 == null) "the restored computer has no disk with hdd2's address " + hdd2Addr
+        else if (fs2 eq hdd2Fs) "ws2's hdd2 FileSystem IS ws's: the restore did not build its own disk"
+        else if (gcRecipes < gcHold.n) "f1's blob carries " + gcRecipes + " hdd2 recipes for " + gcHold.n +
+          " held handles: the restore did not mint the Values this would dispose"
+        else ""
+      gcDrop(gc2Id, gcPlan, "restored (ws2)", ws2, computer2.machine, screen2, fs2, nonceA, maxH, pre2)
     }
+
+    // --- (gc-1) drop the ORIGINAL's copy of the hold ----------------------
+    // After the restore block (ws2's copy is gc-2's) and before fi, so stk and
+    // mem-2 never meet a held hdd2 handle.  The original machine has run m4's
+    // five saves since the hold; nothing dropped anything in between.
+    gcDrop(gcId("gc-1", "live-drop-disposes", "live-drop-leaks", gcPlan), gcPlan, "live (ws)",
+      ws, computer.machine, screen, hdd2Fs, nonceA, maxH,
+      if (hdd2Fs == null) "no hdd2 in this run"
+      else if (!gcHold.ok) "the hold before f1 did not saturate hdd2, so there is nothing to drop: " + gcHold.detail
+      else "")
+
+    // --- (gc-3) the SAVE BOUNDARY: drop, then save at once (review OC-1) -----
+    gcSaveBoundary(gcId("gc-3", "save-boundary-disposes", "save-boundary-leaks", gcPlan), gcPlan,
+      ws, computer.machine, screen, if (hdd3 == null) null else hdd3.fileSystem, nonceA)
 
     // --- (fi) a save that lands MID-FOR-IN over the kernel's iterators ----
     // On the ORIGINAL machine too, before stk starts its endless fs.open
@@ -5536,6 +6805,10 @@ object Smoke {
     // (a setTotalMemory that does not forward), e4's unbounded allocation runs
     // until the harness's timeout, and nothing after it would report.
     accountingProbes()
+    // Value disposal on private states (vd-*), before memoryProbes for
+    // accountingProbes' reason: e4's unbounded allocation is the one probe
+    // that can run into the harness's timeout, and nothing after it reports.
+    valueDisposalProbes()
     memoryProbes()
 
     finish()

@@ -1,0 +1,3 @@
+shim exit=0 SHIM TESTS: PASS
+security exit=0 SECURITY TESTS: PASS
+race exit=0 checks=2 failures=0

@@ -72,3 +72,6 @@ __pycache__/
 serializer/*.blob
 serializer/*.keys
 .claude/settings.local.json
+
+# Claude Code session scratchpads, mirrored here by a user-level Stop hook
+.claude/scratch/

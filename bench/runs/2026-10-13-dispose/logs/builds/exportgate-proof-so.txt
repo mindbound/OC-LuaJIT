@@ -1,0 +1,14 @@
+so=libdir-additive/libjnluajit52-linux-x86_64.so md5=45b25422
+  oclj natives  2 want 4  -> FAIL
+  Java_* count  89 want 91 -> FAIL
+  gradle need: ocljUsedMemory byte matches 2
+  gradle need: ocljSetTotalMemory byte matches 2
+  gradle need: ocljInstallValueFinalizer byte matches 0
+  gradle need: ocljValueGcCounters byte matches 0
+so=libdir-additive/libjnluajit52-linux-x86_64.so md5=0deb53ab
+  oclj natives  4 want 4  -> PASS
+  Java_* count  91 want 91 -> PASS
+  gradle need: ocljUsedMemory byte matches 2
+  gradle need: ocljSetTotalMemory byte matches 2
+  gradle need: ocljInstallValueFinalizer byte matches 2
+  gradle need: ocljValueGcCounters byte matches 2

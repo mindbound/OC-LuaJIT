@@ -1,0 +1,7 @@
+vgc exit=0
+mem exit=0
+wd exit=0
+penalty exit=0
+negctl exit=0
+race exit=1
+security exit=2

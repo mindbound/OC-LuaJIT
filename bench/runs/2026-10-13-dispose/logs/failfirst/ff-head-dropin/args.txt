@@ -1,0 +1,1 @@
+native=luajit lib=/c/Users/astro/claude-tmp/oclj/head-aa12418/libdir jit=on only=UNSET dispose= bundle= javasrc=/c/Users/astro/claude-tmp/oclj/head-aa12418/java/LuaStateLuaJIT.java

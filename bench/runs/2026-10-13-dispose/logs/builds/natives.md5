@@ -1,0 +1,8 @@
+0deb53ab6372376526584647919968fc *new-6445f2e4/libdir-additive/libjnluajit52-linux-x86_64.so
+6445f2e4fb8d3f190f8a48cc21fc4203 *new-6445f2e4/libdir-additive/libjnluajit52-windows-x86_64.dll
+60a8a522b46f7946c6db02fe19c8939b *new-6445f2e4/libdir/libjnlua52-windows-x86_64.dll
+82a7918d9a29b073127088b48351b8cc *head-aa12418/java/LuaStateLuaJIT.java
+45b254229fbb1397578d22663a50a89a *head-aa12418/libdir-additive/libjnluajit52-linux-x86_64.so
+45eb443b80b886c48c063c8e5b65791b *head-aa12418/libdir-additive/libjnluajit52-windows-x86_64.dll
+8f9bc4196fd6dc8d3c0c7ae4e2e229ee *head-aa12418/libdir/libjnlua52-windows-x86_64.dll
+c156983377d062cdbbf577596c054a8d *build/libs/ocluajit-aa12418-master+aa124186c8-dirty.jar

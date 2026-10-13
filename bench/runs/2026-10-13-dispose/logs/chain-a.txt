@@ -1,0 +1,20 @@
+chain a started 16:22:47
+  fix-additive-on env=[] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive on UNSET
+  fix-dropin env=[] luajit /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir on UNSET
+  fix-stock env=[] stock - on UNSET
+fix-additive-on exit=0 SMOKE| CHECKS: 79   FAILURES: 0   WALL: 98.2s
+fix-dropin exit=0 SMOKE| CHECKS: 66   FAILURES: 0   WALL: 102.5s
+fix-stock exit=0 SMOKE| CHECKS: 50   FAILURES: 0   WALL: 100.2s
+  fix-additive-off env=[] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive off UNSET
+  fix-additive-sieve env=[] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive on sieve
+  fix-disposeoff env=[OCLJ_DISPOSE=off] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive on UNSET
+fix-additive-off exit=0 SMOKE| CHECKS: 77   FAILURES: 0   WALL: 103.8s
+fix-additive-sieve exit=0 SMOKE| CHECKS: 73   FAILURES: 0   WALL: 86.7s
+fix-disposeoff exit=0 SMOKE| CHECKS: 79   FAILURES: 0   WALL: 103.4s
+  fix-bundleoff env=[OCLJ_PERSIST_BUNDLE=off] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive on UNSET
+  sab-onecollect env=[OCLJ_ARCH_SRC=/c/Users/astro/claude-tmp/oclj/sabotage/OcljArch-onecollect.scala] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive on UNSET
+  sab-countafter env=[OCLJ_JAVA_SRC=/c/Users/astro/claude-tmp/oclj/sabotage/countafter/LuaStateLuaJIT.java] additive /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive on UNSET
+fix-bundleoff exit=1 
+sab-onecollect exit=1 
+sab-countafter exit=1 
+chain a finished 16:26:53

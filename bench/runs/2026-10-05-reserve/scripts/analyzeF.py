@@ -13,11 +13,16 @@ def kv(line, key, cast=float, default=None):
     return cast(m.group(1)) if m else default
 
 def parse_run(d):
-    name = os.path.basename(os.path.normpath(d))
-    p = os.path.join(d, "run.log")
+    # a run is either the chain's own directory (<name>/run.log, <name>/exit.txt) or, in the
+    # archive (bench/runs/2026-10-05-reserve/logs/runsF), the one file <name>.log
+    if d.endswith(".log"):
+        name = os.path.basename(d)[:-len(".log")]; p = d; ex = None
+    else:
+        name = os.path.basename(os.path.normpath(d))
+        p = os.path.join(d, "run.log"); ex = os.path.join(d, "exit.txt")
     if not os.path.exists(p): return None
     r = {"name": name, "refs": [], "prfs": [], "xps": [], "class": "?", "exit": None}
-    try: r["exit"] = open(os.path.join(d, "exit.txt")).read().strip()
+    try: r["exit"] = open(ex).read().strip()
     except Exception: pass
     for line in open(p, encoding="utf-8", errors="replace"):
         if "OCLJREF|" in line:
@@ -46,10 +51,21 @@ def parse_run(d):
             r["rr"] = int(f[4]) if len(f) > 4 else -1
             r["class"] = (re.search(r'class=([A-Z-]+)', line) or [None, "?"])[1]
             r["site"] = (re.search(r'site=(\S+)', line) or [None, "?"])[1]
-    # the name's build letter: ...-E-D / -F-D / -S-stock etc.
-    last = name.rsplit("-", 1)[-1]
-    r["build"] = "S" if last == "stock" else last if last in ("E", "F") else "?"
-    r["cell"] = re.sub(r'-r\d+-', "-", name).rsplit("-", 1)[0]
+    # the name's build token, in all three spellings the chain used: gate and recover put the
+    # build before the native letter (g-record-r1-E-D), the matrix after it (one-array-r1-D-E),
+    # and stock arms end -S-stock (native letter S, build "stock").  The cell is the name with
+    # the repetition (-rN) and the build token removed, so E, F and stock share a cell only when
+    # they share a native letter.
+    toks = name.split("-")
+    if toks[-1] == "stock":
+        r["build"] = "S"; toks = toks[:-1]
+    elif toks[-1] in ("E", "F"):
+        r["build"] = toks[-1]; toks = toks[:-1]
+    elif len(toks) >= 2 and toks[-2] in ("E", "F"):
+        r["build"] = toks[-2]; toks = toks[:-2] + toks[-1:]
+    else:
+        r["build"] = "?"
+    r["cell"] = "-".join(t for t in toks if not re.fullmatch(r'r\d+', t))
     return r
 
 def nz(v, d=0):
@@ -162,7 +178,7 @@ def gate(runs):
 
 def main():
     for sub in ("gate", "recover", "matrix"):
-        dirs = sorted(glob.glob(os.path.join(ROOT, sub, "*", "")))
+        dirs = sorted(glob.glob(os.path.join(ROOT, sub, "*", ""))) + sorted(glob.glob(os.path.join(ROOT, sub, "*.log")))
         runs = [x for x in (parse_run(d) for d in dirs) if x]
         if not runs: continue
         print("\n######## %s: %d runs" % (sub, len(runs)))

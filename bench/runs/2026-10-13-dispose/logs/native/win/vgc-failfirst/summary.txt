@@ -1,0 +1,7 @@
+head object compile exit=0
+905e1db7f61a30f8337f5a7d1c447397 *head-src/lj52shim.c
+1e1dba02522b40cb8b6b3bb07a65c306 *head-src/lj52shim.h
+79f19c63a629fac8ab1be5c322bf22c1 *head-lj52shim.o
+head object lj52_vgc_* defined: 0
+vgc_test on HEAD's object exit=1
+vgc_test on this build's object exit=0 checks=47 failures=0

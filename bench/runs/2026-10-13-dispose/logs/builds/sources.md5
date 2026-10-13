@@ -1,0 +1,13 @@
+8fefd18a14d438f2937765a2377e324b *native/lj52shim.c
+c0f8d30558c21110712fa40aeeaf433a *native/lj52shim.h
+fe7aed286919b6bcaa37e9db14732336 *native/build-native.sh
+6ee1cf1ec1f29b8dbcbaf2480b1d3718 *native/jnlua/gen-luastate-subclass.py
+9b1575227073341dab41565440d48375 *build.gradle.kts
+b7cdb5ffef39af64a4708fc92876a607 *src/main/java/li/cil/repack/com/naef/jnlua/LuaStateLuaJIT.java
+7002b569afb1388e5181db15ea59306f *src/main/java/io/github/astronfo/ocluajit/arch/LuaJITArchitecture.java
+5cec07a0efb59f3738076efd5dd7a00d *test/native/OcljArch.scala
+1c32c5c4a836719d3b2721e71091dabc *test/native/OcljSmoke.scala
+84e2c55d9c999d297727a86f7dae557c *test/native/smoke-test.sh
+6c4b07d1ef2cd0b8e2b11aa9d98beb73 *test/native/negative-control.sh
+7467ff272f7b742760124b8220ff1234 *test/native/vgc_test.c
+b1f1f2a74b3dac8406f8b4faa89b12d0 *test/native/run-vgc.sh

@@ -148,16 +148,23 @@ val verifyModAssets by tasks.registering {
             logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources (" + want + ")")
         }
 
-        // THE NATIVE MUST BACK THE CLASS IN THIS TREE.  LuaStateLuaJIT declares two
-        // natives of its own for the memory accounting's Java boundary
-        // (docs/accounting-sync.md) and calls one from its capped constructor, so a
-        // native built before them would stop every LuaJIT machine from starting,
-        // with an UnsatisfiedLinkError.  The names are plain ASCII both in a PE
-        // export table and in an ELF dynamic string table.
+        // THE NATIVE MUST BACK THE CLASS IN THIS TREE.  LuaStateLuaJIT declares four
+        // natives of its own: two for the memory accounting's Java boundary
+        // (docs/accounting-sync.md), one of them called from its capped constructor,
+        // and two for Value disposal (THE VALUE FINALIZER in native/lj52shim.c), the
+        // install called from every LuaJITArchitecture.initialize().  A native built
+        // before the first two would stop every LuaJIT machine from starting, with an
+        // UnsatisfiedLinkError; one built before the last two would start every
+        // machine with Value disposal uninstalled -- logged once, then dropped file
+        // handles and AE2 iterators leaking until reboot, the defect it exists to
+        // remove.  The names are plain ASCII both in a PE export table and in an ELF
+        // dynamic string table.
         if (ours.isNotEmpty()) {
             val need = listOf(
                 "Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljUsedMemory",
                 "Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljSetTotalMemory",
+                "Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljInstallValueFinalizer",
+                "Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljValueGcCounters",
             )
             val lacking = ours.filter { f ->
                 val bytes = String(f.readBytes(), Charsets.ISO_8859_1)
@@ -165,13 +172,15 @@ val verifyModAssets by tasks.registering {
             }
             if (lacking.isNotEmpty()) {
                 throw GradleException(
-                    "OC-LuaJIT: " + lacking.joinToString { it.name } + " does not export the " +
-                        "memory-accounting natives LuaStateLuaJIT declares (ocljUsedMemory, " +
-                        "ocljSetTotalMemory). It was built before them, and every LuaJIT machine " +
-                        "would fail to start. Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh"
+                    "OC-LuaJIT: " + lacking.joinToString { it.name } + " does not export all four " +
+                        "oclj natives LuaStateLuaJIT declares (ocljUsedMemory, ocljSetTotalMemory, " +
+                        "ocljInstallValueFinalizer, ocljValueGcCounters). It was built before them: " +
+                        "every LuaJIT machine would fail to start, or would start with Value disposal " +
+                        "uninstalled and leak dropped file handles until reboot. Rebuild it: " +
+                        "OCLJ_VARIANT=additive sh native/build-native.sh"
                 )
             }
-            logger.lifecycle("OC-LuaJIT: native exports the accounting natives LuaStateLuaJIT declares")
+            logger.lifecycle("OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares")
         }
 
         if (!kernelFile.isFile) {

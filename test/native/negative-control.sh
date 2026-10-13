@@ -734,6 +734,143 @@ build_variant_wd notimer
 expect_wd_alarm notimer "without the async injection, the deadline is NEVER enforced (the test's alarm ends it)"
 
 # =====================================================================
+# 7. VALUE DISPOSAL.  vgc_test.c against sabotaged copies of THE VALUE
+#    FINALIZER in lj52shim.c: lj52_vgc_gc (the __gc wrapper on jnlua's
+#    shared jnlua.Object metatable), lj52_vgc_install, and lj52_close's
+#    closing flag and release.  One sabotage per guard: the contract's
+#    seven first (the 2026-10-13 design, section 6), then the review's
+#    three (C5, T4), each a mistake that crashes or leaks in a JVM and
+#    passes everything else.  The expected sets are ALSO written in
+#    vgc_test.c's header: keep the two in step.  They were PREDICTED from
+#    the contract before the shim existed, then measured once on scratch
+#    copies of the first complete shim (2026-10-13, never in this
+#    directory); a set that differs here is a finding about the test or
+#    the shim, not noise.
+#    No permanent sabotage for V6 (a second install's already-wrapped
+#    test) or V8 (the wrapper's GetEnv check): their paths are
+#    unreachable in production, and the review asked for them to be shown
+#    failing once by hand, not kept (T4).
+# =====================================================================
+build_variant_vgc() {
+  v=$1
+  d=$WORK/$v
+  "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+    || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
+  "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
+    "$SELF_DIR/vgc_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
+    "$LJ/libluajit.a" -lm -o "$d/vgc_test.exe" 2>"$d/test.err" \
+    || { sed -n '1,25p' "$d/test.err"; fail "$v: vgc_test.c did not link"; }
+}
+
+expect_vgc() {  # expect_vgc <name> <label> <expected status> <expected FAIL ids...>
+  v=$1; label=$2; want_status=$3; shift 3
+  if [ $# -eq 0 ]; then want=""; else want=$(printf '%s\n' "$@" | sort | tr '\n' ' '); fi
+  d=$WORK/$v
+  ( cd "$d" && ./vgc_test.exe ) >"$d/run.log" 2>&1
+  st=$?
+  got=$(grep '^  FAIL ' "$d/run.log" | awk '{print $2}' | sort | tr '\n' ' ')
+  echo
+  say "--- $v : $label"
+  say "    exit status  want=$want_status got=$st"
+  say "    failing ids  want=[$want]"
+  say "                 got =[$got]"
+  if [ "$st" = "$want_status" ] && [ "$got" = "$want" ]; then
+    verdict 0 "$label"
+  else
+    echo "  ---- test output ----"; sed -n '1,200p' "$d/run.log" | sed 's/^/  | /'
+    verdict 1 "$label"
+  fi
+}
+
+# sabotage_vgc <name> <sed expression> <marker the expression leaves> <how many lines carry it>
+# The count, not just a grep -q: several of these rewrite more than one line,
+# and a sabotage that applied to half of them would fail a subset of its ids
+# and read as a test that had lost its teeth.
+sabotage_vgc() {
+  mkdir -p "$WORK/$1"
+  cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/$1/"
+  sed -i "$2" "$WORK/$1/lj52shim.c"
+  n=$(grep -c "$3" "$WORK/$1/lj52shim.c" || true)
+  [ "$n" = "$4" ] || fail "$1: the sabotage patch applied to $n lines, want $4 -- THE VALUE FINALIZER has been reworded"
+  build_variant_vgc "$1"
+}
+
+# --- 7.0 positive control ----------------------------------------------
+mkdir -p "$WORK/vgccanon"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/vgccanon/"
+build_variant_vgc vgccanon
+expect_vgc vgccanon "canonical shim passes every Value-disposal check" 0
+
+# 7.1 vgcnochain: the wrapper never chains to jnlua's gcjavaobject, so no
+# Java object's global ref is ever released.  Every check that counts the
+# original's runs fails (V1d V2b V3b V4d V5c V6b V8b V10a) and so does the
+# end-of-run ledger (V12f); the callbacks all still happen, so nothing else.
+sabotage_vgc vgcnochain '/^static int lj52_vgc_gc(lua_State \*L) {$/,/^}$/{s|^  lua_pushvalue(L, lua_upvalueindex(1));$|  /* sabotage: no chain */|;s|^  lua_pushvalue(L, 1);$|  /* sabotage: no chain */|;s|^  lua_call(L, 1, 0);$|  /* sabotage: no chain */|}' 'sabotage: no chain' 3
+expect_vgc vgcnochain "a wrapper that never chains to gcjavaobject is caught" 1 V1d V2b V3b V4d V5c V6b V8b V10a V12f
+
+# 7.2 vgcnoclosing: the closing flag never read.  At lua_close the wrapper
+# calls into Java for every live Value (V3a), makes JNI calls while the
+# state closes (V3c), and counts no closing skip (V3e).  Every original and
+# the release after close still happen (V3b, V3d pass).
+sabotage_vgc vgcnoclosing 's|^  if (M != NULL \&\& M->vgc_closing) {$|  if (0) {  /* sabotage: no closing check */|' 'sabotage: no closing check' 1
+expect_vgc vgcnoclosing "a wrapper that calls Java during lua_close is caught" 1 V3a V3c V3e
+
+# 7.3 vgcnosave: a pending exception neither saved nor re-thrown.  The
+# wrapper calls IsInstanceOf, NewLocalRef and CallVoidMethod with it
+# pending (V4a, V12c), and the post-callback ExceptionCheck takes it for
+# the callback's own and clears it: the outer native's exception is LOST
+# (V4c).  The callback is still made (V4b passes).
+sabotage_vgc vgcnosave 's|^      jthrowable pend = (\*env)->ExceptionOccurred(env);$|      jthrowable pend = NULL;  /* sabotage: no save, no re-throw */|' 'sabotage: no save, no re-throw' 1
+expect_vgc vgcnosave "a pending exception not saved and re-thrown is caught" 1 V4a V4c V12c
+
+# 7.4 vgcnofilter: no IsInstanceOf.  Every JavaFunction, LuaError and
+# String reaches ocljValueFinalized (V2a), and the counter counts them
+# (V11a).
+sabotage_vgc vgcnofilter 's|^      if (obj != NULL \&\& (\*env)->IsInstanceOf(env, obj, M->vgc_class)) {$|      if (obj != NULL) {  /* sabotage: no class filter */|' 'sabotage: no class filter' 1
+expect_vgc vgcnofilter "a wrapper with no class filter is caught" 1 V2a V11a
+
+# 7.5 vgcnosettop: the install's lua_settop after its lua_cpcall gone (the
+# review's C1).  The protected part reports a failed check by returning, so
+# only a FAILED lua_cpcall leaves anything on the stack, and only the
+# forced refusal shows it: the stack one deeper (V7c).
+sabotage_vgc vgcnosettop '/^int lj52_vgc_install(/,/^}$/s|^  lua_settop(L, top);$|  (void)top;  /* sabotage: no settop */|' 'sabotage: no settop' 1
+expect_vgc vgcnosettop "an install that leaves the cpcall's error on the stack is caught" 1 V7c
+
+# 7.6 vgcnoinstclear: no ExceptionClear on an install failure (the
+# review's C2).  The NoSuchMethodError (V9a) or OutOfMemoryError (V9b,
+# V9c) is still pending at the return, so Java would see an Error thrown,
+# never the code.  GetJavaVM's failure leaves nothing pending (V9d passes).
+sabotage_vgc vgcnoinstclear '/^int lj52_vgc_install(/,/^}$/{s|^    (\*env)->ExceptionClear(env);$|    /* sabotage: no clear on an install failure */|;s|^  if (mid == NULL) (\*env)->ExceptionClear(env);.*$|  /* sabotage: no clear on an install failure */|}' 'sabotage: no clear on an install failure' 4
+expect_vgc vgcnoinstclear "an install failure that leaves its exception pending is caught" 1 V9a V9b V9c
+
+# 7.7 vgcnodeljs: the wrapper never deletes its local ref to the Java
+# state.  One leaked local per Value finalized: 2000 inside one armed
+# checkpoint, one jnlua native frame in production (V10b), and every one
+# still live at the end (V12e).
+sabotage_vgc vgcnodeljs 's|^          (\*env)->DeleteLocalRef(env, js);$|          /* sabotage: js never deleted */|' 'sabotage: js never deleted' 1
+expect_vgc vgcnodeljs "a local ref leaked per finalizer is caught" 1 V10b V12e
+
+# 7.8 vgcswapchain: the original FIRST, then the callback (the review's
+# C5a).  jnlua's gcjavaobject deletes the global ref, and IsInstanceOf and
+# CallVoidMethod then run on the deleted reference: in a JVM, a crash.
+# Here the order check (V1c) and the reference ledger (V12b); the fake's
+# deleted reference still answers for its object, so nothing downstream.
+sabotage_vgc vgcswapchain '/^static int lj52_vgc_gc(lua_State \*L) {$/,/^}$/{s|^  lj52_mem \*M = lj52_memof(L);$|&\n  lua_pushvalue(L, lua_upvalueindex(1)); lua_pushvalue(L, 1); lua_call(L, 1, 0);  /* sabotage: swapchain */|;s|^  lua_pushvalue(L, lua_upvalueindex(1));$|  /* sabotage: swapchain (moved up) */|;s|^  lua_pushvalue(L, 1);$|  /* sabotage: swapchain (moved up) */|;s|^  lua_call(L, 1, 0);$|  /* sabotage: swapchain (moved up) */|}' 'sabotage: swapchain' 4
+expect_vgc vgcswapchain "a callback after the original released the ref is caught" 1 V1c V12b
+
+# 7.9 vgcnorelease: lj52_close never deletes the install's class and state
+# refs: two JNI refs leaked per machine boot (V3d), and so at the end of
+# the run (V12f).  The GetEnv before them stays, so V3c passes.
+sabotage_vgc vgcnorelease 's|^      if (M->vgc_class != NULL) (\*env)->DeleteGlobalRef(env, M->vgc_class);$|      /* sabotage: no release */|;s|^      if (M->vgc_jstate != NULL) (\*env)->DeleteWeakGlobalRef(env, M->vgc_jstate);$|      /* sabotage: no release */|' 'sabotage: no release' 2
+expect_vgc vgcnorelease "class and state refs never released after close is caught" 1 V3d V12f
+
+# 7.10 vgcnopostclear: the callback's exception left pending.  The outer
+# native would return into Java with an exception nobody there threw
+# (V5a); still counted (V5b passes), and the original still runs.
+sabotage_vgc vgcnopostclear '/^static int lj52_vgc_gc(lua_State \*L) {$/,/^}$/s|^            (\*env)->ExceptionClear(env);$|            /* sabotage: the callback exception left pending */|' 'sabotage: the callback exception left pending' 1
+expect_vgc vgcnopostclear "a callback exception left pending is caught" 1 V5a
+
+# =====================================================================
 # 5. and the build itself refuses the sabotaged sources.
 #    A second, independent tooth.  Even if nobody ever ran the test,
 #    build-native.sh's preflight greps lj52shim.{c,h} for the escape hatches

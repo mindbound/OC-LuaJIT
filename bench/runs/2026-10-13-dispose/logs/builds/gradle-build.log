@@ -1,0 +1,92 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as configuration cache cannot be reused because system property 'java.io.tmpdir' has changed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.34 available! Run ./gradlew updateBuildScript
+Recommend replacing '4.19.0' with '4.19' for Eclipse JDT
+'indentWithSpaces' is deprecated, use 'leadingTabsToSpaces' in your gradle build script instead.
+'indentWithSpaces' is deprecated, use 'leadingTabsToSpaces' in your gradle build script instead.
+
+> Task :extractDependencyATs SKIPPED
+> Task :downloadFernflower SKIPPED
+> Task :generateForgeSrgMappings SKIPPED
+> Task :downloadVanillaJars SKIPPED
+> Task :processApiResources NO-SOURCE
+> Task :processMcLauncherResources NO-SOURCE
+> Task :processInjectedTagsResources NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :compileInjectedInterfacesJava NO-SOURCE
+> Task :processInjectedInterfacesResources NO-SOURCE
+> Task :injectedInterfacesClasses UP-TO-DATE
+> Task :checkstyleInjectedInterfaces NO-SOURCE
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :extractNatives2 UP-TO-DATE
+
+> Task :verifyModAssets
+OC-LuaJIT: packaging 2 native(s): libjnluajit52-linux-x86_64.so (836280 bytes), libjnluajit52-windows-x86_64.dll (839353 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources (8c5a1168)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+OC-LuaJIT: packaging the patched kernel (52904 bytes)
+
+> Task :createMcLauncherFiles UP-TO-DATE
+> Task :spotlessKotlin UP-TO-DATE
+> Task :spotlessMisc UP-TO-DATE
+> Task :spotlessScala UP-TO-DATE
+> Task :spotlessKotlinCheck UP-TO-DATE
+> Task :spotlessMiscCheck UP-TO-DATE
+> Task :spotlessScalaCheck UP-TO-DATE
+> Task :compileMcLauncherJava UP-TO-DATE
+> Task :mcLauncherClasses UP-TO-DATE
+> Task :checkstyleMcLauncher SKIPPED
+> Task :stageModAssets
+> Task :injectTags
+> Task :packageMcLauncher
+> Task :sourcesJar
+> Task :mergeVanillaSidedJars SKIPPED
+> Task :processResources
+> Task :deobfuscateMergedJarToSrg SKIPPED
+> Task :decompileSrgJar SKIPPED
+> Task :cleanupDecompSrgJar SKIPPED
+> Task :patchDecompiledJar SKIPPED
+> Task :applyJST SKIPPED
+> Task :remapDecompiledJar SKIPPED
+> Task :spotlessJava
+> Task :spotlessJavaCheck
+> Task :spotlessCheck
+> Task :decompressDecompiledSources
+> Task :compilePatchedMcJava UP-TO-DATE
+> Task :processPatchedMcResources
+> Task :patchedMcClasses
+> Task :checkstylePatchedMc SKIPPED
+> Task :compileApiJava NO-SOURCE
+> Task :apiClasses UP-TO-DATE
+> Task :checkstyleApi NO-SOURCE
+> Task :compileInjectedTagsJava
+> Task :injectedTagsClasses
+> Task :checkstyleInjectedTags SKIPPED
+> Task :packagePatchedMc
+> Task :processIdeVirtualMainResources SKIPPED
+
+> Task :compileJava
+Jabel: initialized
+
+> Task :classes
+> Task :compileIdeVirtualMainJava SKIPPED
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :checkstyleTest NO-SOURCE
+> Task :test NO-SOURCE
+> Task :jar
+> Task :reobfJar
+> Task :assemble
+> Task :ideVirtualMainClasses SKIPPED
+> Task :checkstyleIdeVirtualMain SKIPPED
+> Task :checkstyleMain
+> Task :check
+> Task :build
+
+BUILD SUCCESSFUL in 31s
+27 actionable tasks: 16 executed, 11 up-to-date
+Configuration cache entry stored.
+rc=0

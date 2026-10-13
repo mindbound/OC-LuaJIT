@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import net.minecraft.nbt.NBTTagCompound;
 
@@ -13,6 +14,7 @@ import li.cil.oc.OpenComputers;
 import li.cil.oc.Settings;
 import li.cil.oc.api.machine.Architecture;
 import li.cil.oc.api.machine.Machine;
+import li.cil.oc.api.machine.Value;
 import li.cil.oc.common.SaveHandler;
 import li.cil.oc.server.machine.luac.LuaStateFactory;
 import li.cil.oc.server.machine.luac.NativeLuaAPI;
@@ -22,6 +24,7 @@ import li.cil.repack.com.naef.jnlua.LuaGcMetamethodException;
 import li.cil.repack.com.naef.jnlua.LuaRuntimeException;
 import li.cil.repack.com.naef.jnlua.LuaStackTraceElement;
 import li.cil.repack.com.naef.jnlua.LuaState;
+import li.cil.repack.com.naef.jnlua.LuaStateLuaJIT;
 import scala.Enumeration;
 
 /**
@@ -150,6 +153,11 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
         // applyForinMode for why a refusal is a warning and not a failure.
         applyForinMode();
 
+        // Value disposal, HERE for the same reason, and before any Value is
+        // pushed. A failure is logged and the machine starts anyway; see
+        // installValueDisposal.
+        installValueDisposal();
+
         final InputStream patched = LuaJITArchitecture.class.getResourceAsStream(KERNEL_RESOURCE);
         if (patched == null) {
             // NOT silent. OpenComputers' own kernel is not known to work here:
@@ -183,6 +191,80 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
             } catch (final IOException ignored) {}
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------ //
+    // Value disposal: Value.dispose from the userdata, not the table proxy
+    // ------------------------------------------------------------------ //
+
+    /**
+     * WHAT IS BROKEN WITHOUT IT. The kernel wraps every host Value -- a Java
+     * object pushed as a JNLua userdata -- in a TABLE proxy whose __gc calls
+     * userdata.dispose, OpenComputers' only route to Value.dispose (OC's
+     * machine.lua:1124-1128; UserdataAPI.scala:81-88). LuaJIT finalizes no
+     * table (docs/research/gc-dispose-leak.md: table __gc 0/200, userdata
+     * 200/200), so before this nothing was ever disposed here: a computer that
+     * drops file handles from component.filesystem.open runs into the handle
+     * limit until it stops, and every AE2 allItems() iterator keeps its
+     * ME-grid listener for good.
+     *
+     * WHAT THIS DOES. It gives LuaStateLuaJIT a disposer for
+     * li.cil.oc.api.machine.Value. native/lj52shim.c wraps the __gc of the
+     * shared jnlua.Object metatable, so the death of a Value's USERDATA reaches
+     * the generated class, which counts live userdata per object by identity
+     * and calls the disposer when the last one is gone -- not at each one,
+     * because the kernel merges a re-pushed Value onto its existing proxy and
+     * the new userdata dies while the Value lives on. The disposer is
+     * OpenComputers' own binding, word for word: this machine as the Context,
+     * and a dispose that throws logged with OpenComputers' message and
+     * dropped. As in stock, nothing is disposed when the state closes.
+     *
+     * WHY HERE. Right after applyForinMode, for its reason: before the kernel
+     * swap, so that the fallback branch has it too. And before any Value
+     * exists: Machine.load runs initialize() before load(nbt)
+     * (Machine.scala:774-775), so a restore's userdata.load pushes are counted
+     * as well.
+     *
+     * WHY A FAILURE STARTS THE MACHINE ANYWAY. Without disposal the machine is
+     * exactly what it was before disposal existed, and that ran. Anything
+     * initialize() throws becomes a computer that will not start
+     * (Machine.scala:916-922), so EVERYTHING is caught here -- a stale native
+     * without the export (UnsatisfiedLinkError), a native refusal
+     * (IllegalStateException naming its code), a state that is not ours
+     * (ClassCastException) -- and logged as an error at every boot it happens.
+     *
+     * THE DISPOSER RUNS INSIDE A LuaJIT FINALIZER, on the thread that holds
+     * the LuaState's monitor: the executor slice, or the server thread in a
+     * synchronized call or a save -- the threads stock disposes on. It must
+     * not touch the LuaState (LuaStateLuaJIT.ocljSetValueDisposer), and
+     * OpenComputers' dispose bodies do not.
+     */
+    private void installValueDisposal() {
+        try {
+            ((LuaStateLuaJIT) lua()).ocljSetValueDisposer(Value.class, new Consumer<Object>() {
+
+                @Override
+                public void accept(final Object value) {
+                    try { // UserdataAPI.scala:83-85
+                        ((Value) value).dispose(machine());
+                    } catch (final Throwable t) {
+                        final String type = value.getClass()
+                            .getName();
+                        OpenComputers.log()
+                            .warn("Error in dispose method of userdata of type " + type, t);
+                    }
+                }
+            });
+        } catch (final Throwable t) {
+            io.github.astronfo.ocluajit.OCLuaJIT.LOG.error(
+                whichMachine() + ": Value disposal could not be installed. The machine starts anyway, as it did "
+                    + "before disposal existed, but the host objects it drops are never disposed: file handles "
+                    + "from component.filesystem.open count against the handle limit until the computer stops "
+                    + "or restarts, internet sockets and requests stay open until then, and AE2 allItems() "
+                    + "iterators keep their ME-grid listener. A native library that does not match this jar "
+                    + "is the usual cause.",
+                t);
+        }
     }
 
     // ------------------------------------------------------------------ //
@@ -533,6 +615,24 @@ public class LuaJITArchitecture extends NativeLuaArchitecture {
             }
 
             try { // (:421-425)
+                lua.gc(LuaState.GcAction.COLLECT, 0);
+                // A SECOND FULL CYCLE, which stock does not need and Value
+                // disposal does. LuaJIT's weak-key tables are not ephemerons:
+                // the values of a weak-KEYED table are marked strongly
+                // (prototype/watchdog/luajit/src/lj_gc.c:214-217), so the cycle in
+                // which a Value's proxy dies only clears its wrappedUserdata
+                // entry, and the raw userdata it held is finalized -- and its
+                // Value disposed -- in the NEXT full cycle. Stock PUC disposes
+                // it in its one COLLECT (:421). A chunk or world unload closes
+                // the state right after this save with no Lua in between
+                // (Chunk.onChunkUnload, then the save, then TE.onChunkUnload),
+                // and nothing is disposed at close, so without this a Value
+                // whose proxy died since the kernel's last collect (every 10
+                // resumes: OC's machine.lua:1524-1530, the patched kernel's
+                // :1631-1636) would never be disposed: an AE2 iterator dropped
+                // just before an unload would keep its ME-grid listener for
+                // good. One more full GC per machine per save buys back
+                // stock's "dead at the save is disposed".
                 lua.gc(LuaState.GcAction.COLLECT, 0);
             } catch (final Throwable t) {
                 OpenComputers.log()

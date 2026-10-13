@@ -1,0 +1,50 @@
+
+== FX  fixtures and anti-vacuity guards ==
+PASS FX1    state came from the shim (_OCLJ_NATIVE present)            luajit/LuaJIT 2.1.ROLLING
+PASS FX2    string.dump produced a real bytecode chunk                 69 bytes, first byte 0x1B
+
+== MG  C-API chunk-mode gate (jnlua's LuaState.load path) ==
+PASS MG1    mode "t"  + bytecode -> REFUSE (allowBytecode=false)       status=3 delta=+1 msg=attempt to load chunk with wrong mode
+PASS MG1D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG2    mode "t"  + text     -> accept                             status=0 delta=+1
+PASS MG2D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG3    mode "b"  + text     -> REFUSE (the other direction)       status=3 delta=+1 msg=attempt to load chunk with wrong mode
+PASS MG3D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG4    mode "b"  + bytecode -> accept                             status=0 delta=+1
+PASS MG4D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG5    mode "bt" + bytecode -> accept (allowBytecode=true)        status=0 delta=+1
+PASS MG5D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG6    mode "bt" + text     -> accept                             status=0 delta=+1
+PASS MG6D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG7    mode NULL  + bytecode -> accept (5.2: no check)            status=0 delta=+1
+PASS MG7D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG8    mode NULL  + text     -> accept (5.2: no check)            status=0 delta=+1
+PASS MG8D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG9    refusal names the MODE, not a stray syntax error           "attempt to load chunk with wrong mode"
+
+== SB  sandbox `load` (machine.lua:754, verbatim) ==
+PASS SB0    fixture: sandbox sees a 0x1B-leading dump                  270/27
+PASS SB1    allowBytecode=false: load(string.dump(f)) is REFUSED       refused: attempt to load chunk with wrong mode
+PASS SB2    allowBytecode=false: a TEXT chunk still loads and runs     42
+PASS SB3    allowBytecode=false: caller-supplied mode="bt" does NOT bypass refused: attempt to load chunk with wrong mode
+PASS SB4    allowBytecode=true: load(string.dump(f)) is ACCEPTED and runs 42
+
+== ER  eris's internal bytecode route stays open ==
+PASS ER1    lua_loadx(..., "b") accepts our own LuaJIT bytecode        
+PASS ER2      ... and the bytecode it loaded actually runs             
+PASS ER3    eris library is present in this state                      table
+PASS ER4    eris round-trips a CLOSURE through its own bytecode route  435/true/42
+PASS SB5    sandbox is STILL shut in the same state eris just used     still refused
+
+== LE  lua_compare(LUA_OPLE) follows 5.2's __le rules ==
+PASS LE1    __le-only metatable, __le returns true  -> true            got true 
+PASS LE2    __le-only metatable, __le returns false -> false           got false 
+PASS LE3    __le and __lt both true -> true (5.1 form answers false)   got true 
+PASS LE4    LUA_OPLE fired __le once and __lt never (le/lt calls)      1/0
+PASS LE5    control: 1 <= 2 is true                                    got true 
+PASS LE6    control: 2 <= 1 is false                                   got false 
+PASS LE7    control: LUA_OPLT still works                              true
+PASS LE8    control: LUA_OPEQ still works                              false
+
+37 checks, 0 failures
+SECURITY TESTS: PASS

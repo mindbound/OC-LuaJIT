@@ -258,6 +258,25 @@ void lj52_close(lua_State *L);
 long long lj52_mem_used(lua_State *L);
 void lj52_mem_settotal(lua_State *L, long long total);
 
+/* VALUE DISPOSAL (THE VALUE FINALIZER in lj52shim.c; docs/research/gc-dispose-
+ * leak.md): the cores behind LuaStateLuaJIT's ocljInstallValueFinalizer and
+ * ocljValueGcCounters natives, exposed so a JVM-free test (test/native/
+ * vgc_test.c, a fake JNIEnv) can drive them, as mem_test drives the two above.
+ *
+ * The registry key is a COPY of jnlua.c's JNLUA_OBJECT, not jnlua's macro:
+ * lj52shim.c is its own translation unit and never sees jnlua.c's defines.
+ * build-native.sh therefore asserts the two spellings are equal, and refuses to
+ * build when they are not -- a drifted key would make every install return
+ * LJ52_VGC_ENOMT, which is a loud refusal at machine start, not a silent leak,
+ * but the build is the cheaper place to find it. */
+#define LJ52_JNLUA_OBJECT "jnlua.Object"   /* must equal jnlua.c's JNLUA_OBJECT; build-native.sh asserts it */
+enum {                                    /* lj52_vgc_install's codes; 0 = installed */
+  LJ52_VGC_OK = 0, LJ52_VGC_ENORECORD = 1, LJ52_VGC_EJVM = 2, LJ52_VGC_EREF = 3, LJ52_VGC_EMETHOD = 4,
+  LJ52_VGC_ENOMT = 5, LJ52_VGC_ENOGC = 6, LJ52_VGC_ELUA = 7
+};
+int  lj52_vgc_install(lua_State *L, JNIEnv *env, jobject jstate, jclass vclass);
+void lj52_vgc_counters(lua_State *L, long long out[5]); /* calls, jerr, closing, noenv, installed(0/1); zeros if no record */
+
 /* The one write we have to watch: newstate_protected binds the Java LuaState
  * into registry[JNLUA_JAVASTATE] as a full userdata holding a weak global ref,
  * and close_protected sets that key to nil.  Caching the userdata's address

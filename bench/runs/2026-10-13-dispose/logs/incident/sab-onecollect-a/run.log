@@ -1,0 +1,60 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] dll     = /c/Users/astro/claude-tmp/oclj/new-6445f2e4/libdir-additive/libjnluajit52-windows-x86_64.dll (839353 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +1s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +2s  LuaStateLuaJIT compiled
+[smoke] +9s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = /c/Users/astro/claude-tmp/oclj/runs/sab-onecollect-a/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/claude-tmp/oclj/runs/sab-onecollect-a/work/libdir-additive
+patch-machine-lua: ok  46451 -> 54527 bytes, 13 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at /c/Users/astro/claude-tmp/oclj/runs/sab-onecollect-a/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+SMOKE| ========================================================================
+SMOKE| OC-LuaJIT smoke test -- OpenOS on LuaJIT, persist, resume
+SMOKE| java=1.8.0_504 amd64  os=Windows 11
+SMOKE| conf=C:/Users/astro/claude-tmp/oclj/runs/sab-onecollect-a/work/ocljit.conf
+2026-10-13T16:26:51.239Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-13T16:26:51.277Z main WARN Unsupported platform, you won't be able to host games with persistent computers.
+2026-10-13T16:26:51.278Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-13T16:26:51.308Z main WARN Unsupported platform, you won't be able to host games with persistent computers.
+2026-10-13T16:26:51.309Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-13T16:26:51.338Z main WARN Unsupported platform, you won't be able to host games with persistent computers.
+SMOKE| LuaStateFactory.isAvailable  = false
+SMOKE| LuaStateFactory.include52    = false
+SMOKE| LuaStateFactory.includeLuaJ  = true
+SMOKE| forceNativeLibPathFirst      = 'C:/Users/astro/claude-tmp/oclj/runs/sab-onecollect-a/work/libdir-additive'
+SMOKE| computer.lua.allowBytecode   = false
+SMOKE| RAM tier = threehalf (1024 KB as the sandbox sees it; x ramScale 1.8 real bytes, plus kernelMemory)
+SMOKE| quarantined, not in the default suite: sieve,strings   (run one with OCLJ_BENCH_ONLY=<name>)
+SMOKE| planted 10 more .lua from bench\oc; suite = mandelbrot,binarytrees,trampoline,matmul,strings2,nqueens,sha256 x5 reps; encore = mandelbrot every 5 s
+SMOKE| planted mandelbrot.lua (1972 B) and a 120-deep directory tree
+SMOKE| hdd real path = C:\Users\astro\claude-tmp\ocljit-smoke-hdd2833976542502081169 (autorun.lua planted, 47594 bytes)
+SMOKE| hdd2 real path = C:\Users\astro\claude-tmp\ocljit-smoke-hdd24456671968130557018 (probe.txt only), address c3a43a5e-ba81-4333-8aa5-7e235090ba0d
+SMOKE| hdd3 real path = C:\Users\astro\claude-tmp\ocljit-smoke-hdd38025207657038315864 (probe.txt only), address 56ce6896-c358-4f67-a391-5d6263c5690b
+SMOKE| architecture pinned to ocljit.arch.OCLuaJITArchitecture   (ocljit.native=additive)
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT value disposal: ON (the jnlua.Object __gc wrapper is installed on every state this architecture initializes)
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+SMOKE| MILESTONE a-lua-state-opens: PASS -- LuaState created after 1 ticks
+SMOKE| MILESTONE b-machine.lua-sandbox: PASS -- kernelMemory=165111 after 2 ticks; running=true; lastError=null
+SMOKE| quiesced after 3 spins, before the VM fingerprint
+SMOKE| FATAL: LuaStateFactory.isAvailable == false: no native loaded, LuaJ would be substituted. Check that debug.forceNativeLibPathFirst points at a directory containing libjnlua52-windows-x86_64.dll and that the DLL's dependencies resolve.
+SMOKE| VERDICT: FAIL
+[smoke] =============== 5. verdict ===============
+  java exit=3 (124 = timed out)
+  the harness did not report a passing verdict
+  no VM fingerprint line: the run did not prove which VM it used
+  no LuaJIT fingerprint: the run did not prove which VM it used --
+  ocelot-brain substitutes LuaJ when the native fails to load, and LuaJ
+  has no Eris, so every persistence assertion would pass vacuously.
+[smoke] +12s  log: /c/Users/astro/claude-tmp/oclj/runs/sab-onecollect-a/work/smoke.log
+SMOKE FAIL

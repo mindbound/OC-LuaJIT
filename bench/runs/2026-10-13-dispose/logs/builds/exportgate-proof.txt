@@ -1,0 +1,42 @@
+dll=/c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/dispose/head-aa12418/libdir-additive/libjnluajit52-windows-x86_64.dll md5=45eb443b variant=additive
+  oclj natives  2 want 4  -> FAIL
+  Java_* count  89 want 91 -> FAIL
+  PE names      91 want 93 -> FAIL
+  gradle need: ocljUsedMemory byte matches 2
+  gradle need: ocljSetTotalMemory byte matches 2
+  gradle need: ocljInstallValueFinalizer byte matches 0
+  gradle need: ocljValueGcCounters byte matches 0
+dll=/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-windows-x86_64.dll md5=6445f2e4 variant=additive
+  oclj natives  4 want 4  -> PASS
+  Java_* count  91 want 91 -> PASS
+  PE names      93 want 93 -> PASS
+  gradle need: ocljUsedMemory byte matches 2
+  gradle need: ocljSetTotalMemory byte matches 2
+  gradle need: ocljInstallValueFinalizer byte matches 2
+  gradle need: ocljValueGcCounters byte matches 2
+dll=/c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/dispose/head-aa12418/libdir/libjnlua52-windows-x86_64.dll md5=8f9bc419 variant=dropin
+  oclj natives  0 want 0  -> PASS
+  Java_* count  87 want 87 -> PASS
+  PE names      89 want 89 -> PASS
+  gradle need: ocljUsedMemory byte matches 0
+  gradle need: ocljSetTotalMemory byte matches 0
+  gradle need: ocljInstallValueFinalizer byte matches 0
+  gradle need: ocljValueGcCounters byte matches 0
+dll=/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir/libjnlua52-windows-x86_64.dll md5=60a8a522 variant=dropin
+  oclj natives  0 want 0  -> PASS
+  Java_* count  87 want 87 -> PASS
+  PE names      89 want 89 -> PASS
+  gradle need: ocljUsedMemory byte matches 0
+  gradle need: ocljSetTotalMemory byte matches 0
+  gradle need: ocljInstallValueFinalizer byte matches 0
+  gradle need: ocljValueGcCounters byte matches 0
+so /c/Users/astro/AppData/Local/Temp/claude/C--Users-astro-Downloads-OC-LuaJIT/b3c2bf14-9324-494a-a9cb-2700e7c43afc/scratchpad/dispose/head-aa12418/libjnluajit52-linux-x86_64.so
+  ocljUsedMemory 
+  ocljSetTotalMemory 
+  ocljInstallValueFinalizer 
+  ocljValueGcCounters 
+so /c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+  ocljUsedMemory 2
+  ocljSetTotalMemory 2
+  ocljInstallValueFinalizer 2
+  ocljValueGcCounters 2

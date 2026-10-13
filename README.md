@@ -10,10 +10,10 @@ Adds a **LuaJIT** architecture selectable with shift+right-click on any OC CPU, 
 
 | run | what it establishes |
 |---|---|
-| OpenOS 1.8.9, smoke suite | boots to a shell, **persists and resumes** (same boot nonce, counter still counting), the deadline watchdog fires and the machine survives, the RAM cap holds and OOMs at the cap, the bytecode gate refuses — 65 checks, 0 failures (2026-10-03, JIT on) |
+| OpenOS 1.8.9, smoke suite | boots to a shell, **persists and resumes** (same boot nonce, counter still counting), the deadline watchdog fires and the machine survives, the RAM cap holds and OOMs at the cap, the bytecode gate refuses, file handles a program drops unclosed are disposed and free their slots, live, after a restore and at a save — 79 checks, 0 failures (2026-10-13, JIT on) |
 | AxisOS, census | boots to a login prompt over 14000 ticks, emergency collector refusing nothing |
 
-Both run on `ocljit.arch.OCLuaJITArchitecture` over the additive `libjnluajit52` library, which is the shape the mod ships. The same suite also runs in two control arms — our VM as a drop-in under OpenComputers' own 5.2 architecture, and stock PUC-Lua 5.2 as a baseline — and each arm refuses the others' fingerprint.
+Both run on `ocljit.arch.OCLuaJITArchitecture` over the additive `libjnluajit52` library, which is the shape the mod ships. Both, like every in-game run so far, are on Windows: the jar also carries the Linux library, which no JVM has loaded yet (see the roadmap). The same suite also runs in two control arms — our VM as a drop-in under OpenComputers' own 5.2 architecture, and stock PUC-Lua 5.2 as a baseline — and each arm refuses the others' fingerprint.
 
 The mod-side adapter is the same construction, compiled against the pinned OpenComputers jar (1.12.58-GTNH) and run in game on 1.12.61 and 1.12.64. Its jar carries the patched watchdog kernel under our own asset domain and loads it in place of OpenComputers' after `initialize()`. What is still open, release blockers included, is in [docs/roadmap.md](docs/roadmap.md).
 

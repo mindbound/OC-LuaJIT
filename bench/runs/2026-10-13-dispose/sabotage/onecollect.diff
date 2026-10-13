@@ -1,0 +1,10 @@
+--- test/native/OcljArch.scala	2026-10-13 18:44:48.916692700 +0300
++++ OcljArch-onecollect.scala	2026-10-13 19:22:21.107144600 +0300
+@@ -458,7 +458,6 @@
+         // asserts exactly this boundary: drop, save, owners back to baseline
+         // before anything else runs.  One more full GC per autosave per
+         // machine is its whole cost.
+-        lua.gc(LuaState.GcAction.COLLECT, 0)
+       } catch {
+         case _: Throwable =>
+           Ocelot.log.warn("Error cleaning up loaded computer. This either means the server is badly overloaded or a user created an evil __gc method, accidentally or not.")
