@@ -6,7 +6,10 @@
 #   OCLJ_PENALTY_RUNS=<N>   re-loads (default 40)
 #   OCLJ_LJLIB=<file>       link THIS libluajit.a instead of the build's, for
 #                           the fail-first A/B: the headers still come from the
-#                           build copy (the patch changes no header)
+#                           build copy (the patch changes no header), so the
+#                           archive must have this build's feature set
+#                           (native/luajit/oclj_features.h, FFI off), or
+#                           penalty_test exits 2, "proved nothing"
 #
 # Same shape as run-wd.sh: consumes build-native.sh's libluajit.a so the test
 # exercises exactly the archive the DLL links.  No shim and no JNI: the defect

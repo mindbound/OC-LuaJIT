@@ -1,0 +1,17 @@
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168
+  format: 3
+
+-- the VM-features word
+  FAIL: eris.version() returns the VM-features word
+  FAIL: the word is the fingerprint's last field  -- 1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168
+  FAIL: the word has the documented shape  -- 
+-- control: the surgery itself is sound
+-- every token flipped is refused by the fingerprint, nothing restored
+  FAIL: seven tokens  -- 0
+-- a fingerprint WITHOUT the word (the pre-word layout) is refused
+  FAIL: a three-field fingerprint is refused naming the missing word, state unchanged  -- eris-lj: build fingerprint mismatch (blob is from a different natives build)
+-- the refusal precedes the checksum
+
+FINGERPRINT RESULT: 4 passed, 5 FAILED

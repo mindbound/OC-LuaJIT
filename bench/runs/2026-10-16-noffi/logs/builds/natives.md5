@@ -1,0 +1,16 @@
+# Windows (frozen copy C:/Users/astro/claude-tmp/oclj/new-r1-aa0f3fa9, which the harness ran)
+aa0f3fa9a467080af1ad7683bf90ab82 *new-r1-aa0f3fa9/libdir-additive/libjnluajit52-windows-x86_64.dll
+a0bbb5fa029c665085f91bd58c15edaf *new-r1-aa0f3fa9/libdir/libjnlua52-windows-x86_64.dll
+f2aafeedd648b9a5cc41a6045c39a1e0181fd82b33d183d69e1185b8ffb59a96 *new-r1-aa0f3fa9/libdir-additive/libjnluajit52-windows-x86_64.dll
+9e887a14103eb7f0fb41d107c5c17abb5ff9b7cae4d49695592bd58a4e643aa9 *new-r1-aa0f3fa9/libdir/libjnlua52-windows-x86_64.dll
+# Linux (WSL; loaded by no JVM), from logs/linux/host.txt
+cb8c83734946e45f9c0736dab54b018f  build/native/libdir/libjnlua52-linux-x86_64.so
+767a6c1d09cfa248515f2436387f00cd  build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+# HEAD 62970a0's natives (the harness fail-first), frozen at C:/Users/astro/claude-tmp/oclj/new-6445f2e4
+6445f2e4fb8d3f190f8a48cc21fc4203 *new-6445f2e4/libdir-additive/libjnluajit52-windows-x86_64.dll
+60a8a522b46f7946c6db02fe19c8939b *new-6445f2e4/libdir/libjnlua52-windows-x86_64.dll
+# The jar ./gradlew build made from this tree (2026-10-16, after the harness chain; logs/builds/gradle-build.log), not installed in the game
+ff55afa0c4bd11663be14beb8c8bd1ce *build/libs/ocluajit-62970a0-master+62970a0b93-dirty.jar
+# dist/ as gradle packaged it
+767a6c1d09cfa248515f2436387f00cd *build/native/dist/libjnluajit52-linux-x86_64.so
+aa0f3fa9a467080af1ad7683bf90ab82 *build/native/dist/libjnluajit52-windows-x86_64.dll

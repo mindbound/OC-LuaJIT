@@ -1,0 +1,4 @@
+chain ff-a started 19:30:06
+r1ff-head-additive exit=1 SMOKE| CHECKS: 80   FAILURES: 1   WALL: 92.4s d3=[SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: FAIL -- load('return 1LL') in the sandbox -> ACCEPTED   <- the lexer made a cdata: this native was built WITH FFI]
+r1ff-head-stock exit=1 SMOKE| CHECKS: 51   FAILURES: 1   WALL: 95.3s d3=[SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: FAIL -- load('return 1LL') in the sandbox -> other   <- refused, but not as a malformed number]
+chain ff-a finished 19:33:28

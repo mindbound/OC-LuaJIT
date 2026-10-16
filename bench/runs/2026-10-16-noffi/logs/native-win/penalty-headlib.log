@@ -1,0 +1,2 @@
+penalty_test: linking /c/Users/astro/claude-tmp/oclj/head-62970a0/libluajit.a (8ccf8430cc5d3772238485b9161633c5, 835854 bytes)
+penalty_test: proved nothing -- libluajit.a laid out a 6384-byte GG_State, this file was compiled for 6376: a different LuaJIT feature set (native/luajit/oclj_features.h)

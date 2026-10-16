@@ -1,0 +1,5 @@
+fragment (the build.gradle.kts computation): 85097158|ffi0.lua52.
+this build, additive DLL (dist)                                        contains -> accepted
+this build, Linux additive .so (dist)                                  contains -> accepted
+the same DLL with |ffi0.lua52. edited to |ffi1.lua52. (1 occurrence edited) MISSING -> verifyModAssets refuses
+HEAD 62970a0 additive DLL                                              MISSING -> verifyModAssets refuses

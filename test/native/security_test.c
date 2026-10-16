@@ -3,7 +3,7 @@
  *
  * This file exists to FAIL. It is written so that a shim which drops
  * lua_load's `mode`, or which implements lua_compare(LUA_OPLE) the 5.1 way,
- * cannot pass it. tests/negative-control.sh proves that claim by building
+ * cannot pass it. test/native/negative-control.sh proves that claim by building
  * exactly those broken shims and running this binary against them.
  *
  * ---------------------------------------------------------------------
@@ -58,8 +58,39 @@
  * lua_pcall so a raise is recorded as a failure instead of unwinding the test.
  * ---------------------------------------------------------------------
  *
- * Build and run: sh tests/run-security.sh
- * Prove it has teeth: sh tests/negative-control.sh (three sabotaged shims)
+ * REGRESSION 4 -- cdata minted by the LEXER (section FF)
+ *
+ * A LuaJIT built with FFI turns `1LL`, `2ULL`, `0x10ULL` and `3i` into cdata
+ * in the lexer, loading the FFI library on demand to do it (lj_lex.c:116,
+ * :127) -- no `ffi` in the environment needed, so sandboxed code could make
+ * them.  Cdata cannot be persisted: one alive at save time would cost the
+ * machine its state (by reading).  The native is built without FFI
+ * (native/luajit/oclj_features.h), so each of those is a syntax error,
+ * "malformed number"; an FFI-flagged bytecode dump is refused as
+ * "incompatible bytecode" (lj_bcread.c:404-410), the route an
+ * allowBytecode=true server would take (an eris blob from another build is
+ * refused earlier, at its fingerprint); and the registry
+ * never gains _LOADED.ffi or _PRELOAD.ffi.  FF0 and FF9 are the controls
+ * (plain literals and a plain dump still load), FFP the fixture.  The two
+ * dumps below were made on an FFI-on build of the same tree (1ee778a4, GC64)
+ * with string.dump(load(<src>), true).
+ *
+ * REGRESSION 5 -- string.buffer without FFI (section BF)
+ *
+ * Its FFI-only methods (reserve, commit, ref, putcdata; lib_buffer.c:183-237)
+ * are compiled out with FFI, and its objects are USERDATA (BF0) -- not cdata,
+ * as docs/ffi-decision.md said until 2026-10-16.  It is reached through
+ * registry._PRELOAD, as no sandbox can reach it; it stays unexposed.
+ *
+ * FF and BF test the ARCHIVE, not the shim, so no sabotaged shim in
+ * negative-control.sh flips them: their fail-first is this file against an
+ * FFI-on build (HEAD 62970a0: FF1-FF8, FF10, FF11 and BF1-BF4 fail).
+ * ---------------------------------------------------------------------
+ *
+ * Build and run: sh test/native/run-security.sh
+ * Prove it has teeth: sh test/native/negative-control.sh (three sabotaged
+ *   shims, and two layout arms: the canonical shim, and then eris_lj.c,
+ *   compiled for another LuaJIT layout)
  * The same gate, end to end in a booted OpenOS: smoke-test.sh milestone
  *   d2-sandbox-bytecode-gate, whose own negative control is a second run
  *   with OCLJ_ALLOW_BYTECODE=true.
@@ -143,6 +174,18 @@ static int evalstr(lua_State *L, const char *src, char *out, size_t outn) {
   lua_settop(L, base);
   return okv;
 }
+
+/* string.dump(load("return 1LL"), true) from an FFI-ON build of this tree
+ * (1ee778a4, GC64): flags byte 0x0E = STRIP|FFI|FR2 (lj_bcdump.h:43-45).
+ * Byte 3 of both dumps is BCDUMP_VERSION (2): a change to the bytecode must
+ * raise it (lj_bcdump.h:36-37), and these fixtures must follow. */
+static const unsigned char BC_FFI[] = {
+  0x1B,0x4C,0x4A,0x02,0x0E,0x12,0x06,0x00,0x01,0x00,0x01,0x00,0x02,0x28,0x00,
+  0x00,0x00,0x4C,0x00,0x02,0x00,0x02,0x01,0x00,0x00 };
+/* string.dump(load("return 1"), true), same build: flags 0x0A = STRIP|FR2. */
+static const unsigned char BC_PLAIN[] = {
+  0x1B,0x4C,0x4A,0x02,0x0A,0x0F,0x02,0x00,0x01,0x00,0x00,0x00,0x02,0x29,0x00,
+  0x01,0x00,0x4C,0x00,0x02,0x00,0x00 };
 
 /* ------------------------------------------------------------------ */
 /* LE probes, run protected                                            */
@@ -476,6 +519,126 @@ int main(void) {
   check("LE7", i == LE_TRUE, "control: LUA_OPLT still works", le_name(i));
   i = le_try(L, "n1", "n2", LUA_OPEQ, buf, sizeof buf);
   check("LE8", i == LE_FALSE, "control: LUA_OPEQ still works", le_name(i));
+
+  /* ---------------------------------------------------------------- FF */
+  section("FF  FFI compiled out: no cdata from source or bytecode");
+  evalstr(L, "local a, b, c, d = load('return 1, 0x10, 1e3, 0x7fffffff')() "
+             "return type(a) .. type(b) .. type(c) .. type(d) .. '/' .. (a + b + c + d)",
+          buf, sizeof buf);
+  check("FF0", strcmp(buf, "numbernumbernumbernumber/2147484664") == 0,
+        "control: plain numeric literals still load as numbers", buf);
+  evalstr(L, "return tostring(debug.getregistry()._LOADED.ffi)", buf, sizeof buf);
+  check("FFP", strcmp(buf, "nil") == 0,
+        "fixture: registry._LOADED.ffi is nil BEFORE any literal", buf);
+  {
+    struct { const char *id, *src, *near, *label; } lit[] = {
+      { "FF1", "return 1LL",                 "'1LL'",    "`1LL` is a syntax error (malformed number)" },
+      { "FF2", "return 2ULL",                "'2ULL'",   "`2ULL` is a syntax error" },
+      { "FF3", "return 0x10ULL",             "'0x10ULL'","`0x10ULL` is a syntax error" },
+      { "FF4", "return 3i",                  "'3i'",     "`3i` (imaginary) is a syntax error" },
+      { "FF5", "local m = 1LL << 40 return m","'1LL'",   "`1LL << 40` is a syntax error" }
+    };
+    for (i = 0; i < (int)(sizeof lit / sizeof lit[0]); i++) {
+      int top0 = lua_gettop(L);
+      int st = luaL_loadstring(L, lit[i].src);
+      const char *msg = (st != 0 && lua_isstring(L, -1)) ? lua_tostring(L, -1) : "";
+      if (st == 0) {
+        /* HEAD: it compiled.  Say what the chunk evaluates to -- without
+         * calling into the value beyond lua_type. */
+        if (lua_pcall(L, 0, 1, 0) == 0)
+          snprintf(detail, sizeof detail, "LOADED; returns lua_type %d (%s)",
+                   lua_type(L, -1), lua_typename(L, lua_type(L, -1)));
+        else
+          snprintf(detail, sizeof detail, "LOADED; raised %s", lua_tostring(L, -1));
+      } else {
+        snprintf(detail, sizeof detail, "status=%d \"%s\"", st, msg);
+      }
+      check(lit[i].id, st == LUA_ERRSYNTAX && strstr(msg, "malformed number") &&
+                       strstr(msg, lit[i].near), lit[i].label, detail);
+      lua_settop(L, top0);
+    }
+  }
+  /* The sandbox's route: lib_base `load` with mode "t" and an EMPTY env. */
+  evalstr(L, "local f, e = load('return 1LL', '=lit', 't', {}) "
+             "if f then return 'LOADED: ' .. type(f()) end return 'refused: ' .. tostring(e)",
+          buf, sizeof buf);
+  check("FF6", strncmp(buf, "refused:", 8) == 0 && strstr(buf, "malformed number"),
+        "Lua load('return 1LL', name, 't', {}) refuses", buf);
+  /* The lexer used to open FFI on demand (lj_lex.c:121-137 -> lj_ctype.h:397
+   * -> luaopen_ffi -> lib_ffi.c:829-837 registers _LOADED.ffi). */
+  evalstr(L, "local r = debug.getregistry() "
+             "return tostring(r._LOADED.ffi) .. '/' .. tostring(r._PRELOAD.ffi)",
+          buf, sizeof buf);
+  check("FF7", strncmp(buf, "nil/", 4) == 0,
+        "registry._LOADED.ffi is still nil after FF1-FF6", buf);
+  { size_t n = strlen(buf);   /* the _PRELOAD half alone: FF7 has _LOADED */
+    check("FF8", n >= 4 && strcmp(buf + n - 4, "/nil") == 0,
+          "registry._PRELOAD.ffi is nil (lib_init.c:32-37)", buf); }
+  /* Bytecode: an allowBytecode=true server reaches lua_loadx(..., "b"); eris
+   * unpersist does too, but only for a blob that already passed the
+   * fingerprint. */
+  {
+    BufReader r;
+    int top0 = lua_gettop(L), st, plain_ok;
+    r.p = (const char *)BC_PLAIN; r.n = sizeof BC_PLAIN; r.done = 0;
+    st = lua_loadx(L, bufread, &r, "=bcplain", "b");
+    plain_ok = (st == 0);
+    snprintf(detail, sizeof detail, "status=%d%s%s", st, st ? " " : "",
+             st && lua_isstring(L, -1) ? lua_tostring(L, -1) : "");
+    check("FF9", st == 0, "control: a plain stripped dump loads in mode \"b\"", detail);
+    lua_settop(L, top0);
+    r.p = (const char *)BC_FFI; r.n = sizeof BC_FFI; r.done = 0;
+    st = lua_loadx(L, bufread, &r, "=bcffi", "b");
+    if (st == 0) {
+      if (lua_pcall(L, 0, 1, 0) == 0)
+        snprintf(detail, sizeof detail, "LOADED; returns lua_type %d (%s)",
+                 lua_type(L, -1), lua_typename(L, lua_type(L, -1)));
+      else
+        snprintf(detail, sizeof detail, "LOADED; raised %s", lua_tostring(L, -1));
+    } else {
+      snprintf(detail, sizeof detail, "status=%d \"%s\"", st,
+               lua_isstring(L, -1) ? lua_tostring(L, -1) : "");
+    }
+    /* The loader raises "incompatible bytecode" for four header reasons
+     * (lj_bcread.c:394-418).  The two dumps differ only in the FFI flag, so
+     * the refusal is the FFI one only while the plain dump (FF9) loads. */
+    if (!plain_ok)
+      strncat(detail, " (FF9 control failed: the header is refused for another reason)",
+              sizeof detail - strlen(detail) - 1);
+    check("FF10", plain_ok && st != 0 && strstr(detail, "incompatible bytecode") != NULL,
+          "an FFI-flagged dump (return 1LL) is refused in mode \"b\"", detail);
+    lua_settop(L, top0);
+  }
+  evalstr(L, "return tostring(debug.getregistry()._LOADED.ffi)", buf, sizeof buf);
+  check("FF11", strcmp(buf, "nil") == 0,
+        "registry._LOADED.ffi is still nil after FF10", buf);
+
+  /* ---------------------------------------------------------------- BF */
+  section("BF  string.buffer: FFI-only methods compiled out, the rest intact");
+  /* Reached the way the machine state could: _PRELOAD, no package/require
+   * (luaopen_string preregisters it, lib_string.c:686). */
+  evalstr(L, "local open = debug.getregistry()._PRELOAD['string.buffer'] "
+             "if type(open) ~= 'function' then return 'NO PRELOAD: ' .. type(open) end "
+             "local sb = open('string.buffer') local b = sb.new() "
+             "b:put('ab', 12) "
+             "return type(b) .. '/' .. b:tostring() .. '/' .. type(b.put) .. type(b.get) .. type(b.set) .. type(b.reset)",
+          buf, sizeof buf);
+  check("BF0", strcmp(buf, "userdata/ab12/functionfunctionfunctionfunction") == 0,
+        "control: string.buffer works; its objects are USERDATA", buf);
+  {
+    const char *m[] = { "reserve", "commit", "ref", "putcdata" };
+    const char *ids[] = { "BF1", "BF2", "BF3", "BF4" };
+    for (i = 0; i < 4; i++) {
+      char src[256], what[96];
+      snprintf(src, sizeof src,
+               "local sb = debug.getregistry()._PRELOAD['string.buffer']('string.buffer') "
+               "return type(sb.new().%s)", m[i]);
+      evalstr(L, src, buf, sizeof buf);
+      snprintf(what, sizeof what, "buf:%s is absent (lib_buffer.c:183-237)", m[i]);
+      check(ids[i], strcmp(buf, "nil") == 0, what, buf);
+    }
+  }
+
 
   /* ---------------------------------------------------------------- */
   printf("\n%d checks, %d failures\n", checks, failures);

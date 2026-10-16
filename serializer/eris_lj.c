@@ -15,6 +15,9 @@
  *   'E' 'L' 'J' <u8 format> <u8 fplen> <fingerprint bytes>
  *   <one value record>
  *   <u32le crc32 of every preceding byte>
+ * The fingerprint is COMMIT|LUAJIT_VERSION|SERHASH|VM-features word
+ * (ERIS_LJ_FINGERPRINT below); a blob whose fingerprint differs is refused
+ * before its checksum is read, naming the field that differs.
  * Value records: see the Tag enum. Multi-byte integers are ULEB128.
  * Numbers are canonical: exact integers in +-2^53 as zigzag ULEB128
  * (identical on DUALNUM and non-DUALNUM builds), everything else
@@ -69,6 +72,19 @@
 #include "lj_tab.h"
 #include "lj_debug.h"
 #include "lj_trace.h"
+#include "lj_dispatch.h"
+
+/* THE FEATURE CHANNEL.  The internal headers above change with LuaJIT's
+ * feature macros (GG_State is 6376 bytes without FFI, 6384 with), and so does
+ * the VM-features word below; this file must see exactly libluajit.a's set.
+ * That set is native/luajit/oclj_features.h, which build-native.sh's build
+ * copy of LuaJIT includes from lj_arch.h.  A compile against a LuaJIT tree
+ * without that header stops here; one whose copy of it carries a different
+ * set compiles, and is refused at run time by the GG_State check
+ * (eris_lj_ggsize below) when the difference moves GG_State. */
+#ifndef OCLJ_LUAJIT_FEATURES
+#error "eris_lj.c must be compiled against native/build-native.sh's LuaJIT build copy (-I<build>/luajit-<platform>/src), whose lj_arch.h includes native/luajit/oclj_features.h"
+#endif
 
 #include "eris_lj.h"
 
@@ -89,7 +105,7 @@
 /* Largest reference id we can hand to lua_rawseti/lua_rawgeti. */
 #define ERIS_LJ_MAXREF 0x7fffffff
 
-/* ERIS_LJ_COMMIT is the LUAJIT tree's HEAD (native/build-native.sh:355), not
+/* ERIS_LJ_COMMIT is the LUAJIT tree's HEAD (build-native.sh's LJ_COMMIT), not
  * this file's.  Every change to the serializer therefore used to ship under an
  * unchanged fingerprint, and a blob written by the old restore code would load
  * silently under the new one -- the exact silent-misload the fingerprint exists
@@ -98,7 +114,65 @@
 #ifndef ERIS_LJ_SERHASH
 #define ERIS_LJ_SERHASH "nohash"
 #endif
-#define ERIS_LJ_FINGERPRINT ERIS_LJ_COMMIT "|" LUAJIT_VERSION "|" ERIS_LJ_SERHASH
+/* THE VM-FEATURES WORD, the fingerprint's fourth field.  Compile-time
+ * properties of the LuaJIT this file is compiled against that change what a
+ * blob's bytes mean: ffi (a prototype may carry int64/uint64/complex
+ * constants, lj_bcwrite.c:214-226), lua52 (the permanent set and the MM enum,
+ * lj_obj.h:549-555), gc64/fr2 (frame layout: every stack slot number in a
+ * thread record is offset by LJ_FR2), dn (DUALNUM: a canonical number
+ * restores as an int or a double), le/be and p64/p32.  Seven tokens, always,
+ * in this order; a restore requires an exact match.  It is derived HERE, from
+ * this file's own macros, so it is true only because this file sees
+ * libluajit.a's feature set: the #error under the includes above, the GG_State
+ * check (eris_lj_ggsize below, compared by lj52_newstate and test_main.c), and
+ * build-native.sh's check of the word against the built luajit.exe. */
+#if LJ_HASFFI
+#define ELJ_W_FFI "ffi1"
+#else
+#define ELJ_W_FFI "ffi0"
+#endif
+#if LJ_52
+#define ELJ_W_52 "lua52"
+#else
+#define ELJ_W_52 "lua51"
+#endif
+#if LJ_GC64
+#define ELJ_W_GC "gc64"
+#else
+#define ELJ_W_GC "gc32"
+#endif
+#if LJ_FR2
+#define ELJ_W_FR "fr2"
+#else
+#define ELJ_W_FR "fr1"
+#endif
+#if LJ_DUALNUM
+#define ELJ_W_DN "dn1"
+#else
+#define ELJ_W_DN "dn0"
+#endif
+#if LJ_BE
+#define ELJ_W_END "be"
+#else
+#define ELJ_W_END "le"
+#endif
+#if LJ_64
+#define ELJ_W_PTR "p64"
+#else
+#define ELJ_W_PTR "p32"
+#endif
+#define ERIS_LJ_FEATURES ELJ_W_FFI "." ELJ_W_52 "." ELJ_W_GC "." ELJ_W_FR "." ELJ_W_DN "." ELJ_W_END "." ELJ_W_PTR
+#define ERIS_LJ_FINGERPRINT ERIS_LJ_COMMIT "|" LUAJIT_VERSION "|" ERIS_LJ_SERHASH "|" ERIS_LJ_FEATURES
+/* The header stores the length in one byte.  Refuse at BUILD time: a runtime
+ * check fails every persist, which the architecture answers by dropping the
+ * saved state. */
+_Static_assert(sizeof(ERIS_LJ_FINGERPRINT) - 1 <= 255, "eris-lj fingerprint exceeds the header's u8 length");
+
+/* sizeof(GG_State) as THIS object sees it.  lua_newstate's first allocation is
+ * the GG_State as libluajit.a lays it out (lj_state.c:269); lj52_newstate and
+ * test_main.c refuse a state when the two differ, because elj_bc_orig reads
+ * jit_State through L2J at an offset that moves with the feature set. */
+size_t eris_lj_ggsize(void) { return sizeof(GG_State); }
 
 /* Fixed stack slots used by both directions. */
 #define PERMIDX 1  /* perms (persist) / uperms (unpersist) table */
@@ -3123,6 +3197,58 @@ static int l_persist(lua_State *L)
   return 1;
 }
 
+/* Name the first '|'-separated field of the fingerprint that differs, with
+ * both sides quoted (bytes outside printable ASCII shown as '?', each side
+ * capped), so a server log says WHICH build property moved. */
+static void fp_quote(luaL_Buffer *B, const unsigned char *p, size_t n)
+{
+  size_t i;
+  luaL_addchar(B, '\'');
+  for (i = 0; i < n && i < 64; i++)
+    luaL_addchar(B, (p[i] >= 0x20 && p[i] < 0x7f) ? (char)p[i] : '?');
+  if (n > 64) luaL_addstring(B, "...");
+  luaL_addchar(B, '\'');
+}
+
+static int fp_report(lua_State *L, int field, const unsigned char *b,
+                     size_t bn, const unsigned char *o, size_t on)
+{
+  static const char *const names[] = {
+    "LuaJIT commit", "LuaJIT version", "serializer hash", "VM features"
+  };
+  luaL_Buffer B;
+  luaL_buffinit(L, &B);
+  luaL_addstring(&B, "eris-lj: build fingerprint mismatch: ");
+  luaL_addstring(&B, field < 4 ? names[field] : "extra field");
+  luaL_addstring(&B, " differs (blob ");
+  fp_quote(&B, b, bn);
+  luaL_addstring(&B, ", this build ");
+  fp_quote(&B, o, on);
+  luaL_addstring(&B, "); the blob is from a different natives build");
+  luaL_pushresult(&B);
+  return lua_error(L);
+}
+
+static int fp_mismatch(lua_State *L, const unsigned char *b, size_t blen)
+{
+  const unsigned char *o = (const unsigned char *)ERIS_LJ_FINGERPRINT;
+  size_t olen = sizeof(ERIS_LJ_FINGERPRINT) - 1, bi = 0, oi = 0;
+  int field = 0;
+  for (;;) {
+    size_t bs = bi, os = oi;
+    int bend, oend;
+    while (bi < blen && b[bi] != '|') bi++;
+    while (oi < olen && o[oi] != '|') oi++;
+    if (bi - bs != oi - os || memcmp(b + bs, o + os, bi - bs) != 0)
+      return fp_report(L, field, b + bs, bi - bs, o + os, oi - os);
+    bend = bi >= blen; oend = oi >= olen;
+    if (bend || oend)   /* equal so far; one side has a field the other lacks */
+      return fp_report(L, field + 1, b + bi + !bend, bend ? 0 : blen - bi - 1,
+                       o + oi + !oend, oend ? 0 : olen - oi - 1);
+    bi++; oi++; field++;
+  }
+}
+
 static int l_unpersist(lua_State *L)
 {
   Info I;
@@ -3169,11 +3295,11 @@ static int l_unpersist(lua_State *L)
     return luaL_error(L, "eris-lj: format version mismatch (expected %d)",
                       ERIS_LJ_FORMAT);
   hdr_fplen = r_byte(&I);
+  if (I.pos + hdr_fplen > inlen)
+    return luaL_error(L, "eris-lj: data too short to be a valid blob");
   if (hdr_fplen != (unsigned char)fplen ||
-      I.pos + hdr_fplen > inlen ||
       memcmp(in + I.pos, ERIS_LJ_FINGERPRINT, hdr_fplen) != 0)
-    return luaL_error(L, "eris-lj: build fingerprint mismatch "
-                         "(blob is from a different natives build)");
+    return fp_mismatch(L, in + I.pos, hdr_fplen);
   I.pos += hdr_fplen;
 
   stored = (uint32_t)in[inlen - 4] | ((uint32_t)in[inlen - 3] << 8) |
@@ -3196,7 +3322,8 @@ static int l_version(lua_State *L)
   lua_pushliteral(L, ERIS_LJ_VERSION);
   lua_pushliteral(L, ERIS_LJ_FINGERPRINT);
   lua_pushinteger(L, ERIS_LJ_FORMAT);
-  return 3;
+  lua_pushliteral(L, ERIS_LJ_FEATURES);
+  return 4;
 }
 
 static const luaL_Reg eris_lj_funcs[] = {

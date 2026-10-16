@@ -1,11 +1,13 @@
 #!/bin/sh
 # =====================================================================
-# negative-control.sh -- PROVE tests/security_test.c has teeth.
+# negative-control.sh -- PROVE test/native/security_test.c has teeth.
 #
 # A security test that has never been observed to fail is not evidence.
 # This script rebuilds the shim three more times, each time reintroducing
 # ONE historical defect verbatim, and requires the security test to fail --
-# on exactly the checks that defect corresponds to and no others.
+# on exactly the checks that defect corresponds to and no others.  Two more
+# arms (3b, 3c) compile the canonical sources for another LuaJIT layout and
+# require that no state is made at all.
 #
 #   1. dropmode  the rt variant's
 #                  #define lua_load(L,r,d,cn,mode) lua_load((L),(r),(d),(cn))
@@ -19,6 +21,18 @@
 #   3. le51      the same shim's lua_compare(LUA_OPLE) as
 #                  !lua_lessthan(L, idx2, idx1)
 #                which is 5.1's rule and raises on an __le-only metatable.
+#   3b. layout   the canonical shim compiled against a copy of the build
+#                copy's headers with LUAJIT_DISABLE_FFI taken out of
+#                oclj_features.h: lj52_newstate's layout gate must refuse the
+#                state, so security_test.c exits 2 and stderr says LJ52 LAYOUT.
+#   3c. layout-eris  the canonical shim, linked with an eris_lj.c compiled
+#                against that same header copy: the gate's other comparison
+#                (eris_lj_ggsize()) must refuse the state, the same way.
+#
+# Sections FF and BF of security_test.c test the LuaJIT ARCHIVE (FFI compiled
+# out), not the shim, so no sabotage here flips them; their fail-first is the
+# test run against an FFI-on build (HEAD 62970a0: FF1-FF8, FF10, FF11 and
+# BF1-BF4 fail).
 #
 # The sabotage is applied to COPIES under the build directory. The canonical
 # native/lj52shim.{c,h} are never written to, and no build flag or
@@ -26,7 +40,7 @@
 # is the point, and build-native.sh enforces it (see step 5 below, which
 # checks that it refuses the sabotaged sources outright).
 #
-#   OCLJ_BUILD=<build dir used by build-native.sh> sh tests/negative-control.sh
+#   OCLJ_BUILD=<build dir used by build-native.sh> sh test/native/negative-control.sh
 #
 # Exit 0 iff: the canonical build PASSES, every sabotaged build FAILS, and
 # each failure set is exactly the expected one.
@@ -267,6 +281,68 @@ build_variant le51
 # LE1/LE2 raise (no __lt on an __le-only metatable), LE3 answers false where
 # 5.2 answers true, LE4 shows __lt fired and __le did not.
 expect le51 "5.1 __le semantics are caught" 1 LE1 LE2 LE3 LE4
+
+# =====================================================================
+# 3b. layout -- the canonical shim, compiled for ANOTHER LuaJIT layout.
+#
+# The headers come from a copy of the build copy's src/ whose
+# oclj_features.h lacks '#define LUAJIT_DISABLE_FFI 1', so this shim sees
+# GG_State as 6384 bytes while libluajit.a lays out 6376 (Windows x64) --
+# the drift a compile against the wrong LuaJIT tree, or a stale object,
+# produces.  lj52_newstate's layout gate must refuse the state before
+# anything reads an internal: security_test.c then gets no state and exits
+# 2 (SETUP FAILURE, no check runs), and stderr names the layout.  Without
+# the gate the state would be created and every check would run against a
+# shim that reads jit_State 8 bytes off.
+# =====================================================================
+d=$WORK/layout
+mkdir -p "$d/inc"
+cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$d/"
+cp "$LJ"/*.h "$d/inc/" || fail "layout: cannot copy $LJ/*.h"
+grep -qx '#define LUAJIT_DISABLE_FFI 1' "$LJ/oclj_features.h" \
+  || fail "layout: oclj_features.h no longer says '#define LUAJIT_DISABLE_FFI 1'; this arm toggles exactly that line -- revisit it"
+grep -vx '#define LUAJIT_DISABLE_FFI 1' "$LJ/oclj_features.h" > "$d/inc/oclj_features.h"
+cmp -s "$LJ/oclj_features.h" "$d/inc/oclj_features.h" && fail "layout: the header toggle did not take"
+"$CC" -c -O2 -I"$d/inc" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
+  || { sed -n '1,25p' "$d/shim.err"; fail "layout: lj52shim.c did not compile"; }
+"$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
+  "$SELF_DIR/security_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
+  "$LJ/libluajit.a" -lm -o "$d/security_test.exe" 2>"$d/test.err" \
+  || { sed -n '1,25p' "$d/test.err"; fail "layout: security_test.c did not link"; }
+expect layout "a shim compiled for another LuaJIT layout gets no state (exit 2, no check runs)" 2
+# The message's three numbers: the archive's GG_State, the shim's, eris_lj's.
+# Here the SHIM is the one that differs (archive == eris != shim).
+gg3() { grep '^LJ52 LAYOUT' "$1" | awk '{ for (i = 1; i <= NF; i++) { if ($i ~ /^[0-9]+-byte$/) a = $i + 0; if ($i == "compiled" && $(i+1) == "for") s = $(i+2) + 0; if ($i == "eris_lj.c" && $(i+1) == "for") r = $(i+2) + 0 } } END { print a + 0, s + 0, r + 0 }'; }
+set -- $(gg3 "$d/run.log")
+if grep -q 'luaL_newstate returned NULL' "$d/run.log" && [ "$1" -gt 0 ] && [ "$1" = "$3" ] && [ "$1" != "$2" ]; then
+  verdict 0 "... and lj52_newstate names the shim's layout as the one that differs ($*)"
+else
+  verdict 1 "... and lj52_newstate names the shim's layout as the one that differs ($*)"
+fi
+
+# =====================================================================
+# 3c. layout-eris -- the canonical shim, linked with an eris_lj.c compiled
+# for ANOTHER LuaJIT layout: lj52_layout_ok's second comparison,
+# eris_lj_ggsize() against the shim's own sizeof(GG_State).  The shim and
+# the archive agree here, so only the serializer's view can refuse the
+# state, and the verdict requires the message to say exactly that
+# (archive == shim != eris).
+# =====================================================================
+e=$WORK/layout-eris
+mkdir -p "$e"
+"$CC" -c -O2 -I"$WORK/layout/inc" -I"$OCLJ_SER" -DERIS_LJ_COMMIT='"negctl"' "$OCLJ_SER/eris_lj.c" -o "$e/eris_lj.o" 2>"$e/eris.err" \
+  || { sed -n '1,25p' "$e/eris.err"; fail "layout-eris: eris_lj.c did not compile"; }
+"$CC" -O2 -I"$LJ" -I"$WORK/canon" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$WORK/canon/lj52shim.h" \
+  "$SELF_DIR/security_test.c" "$WORK/canon/lj52shim.o" "$e/eris_lj.o" \
+  "$LJ/libluajit.a" -lm -o "$e/security_test.exe" 2>"$e/test.err" \
+  || { sed -n '1,25p' "$e/test.err"; fail "layout-eris: security_test.c did not link"; }
+expect layout-eris "a serializer compiled for another LuaJIT layout gets no state (exit 2, no check runs)" 2
+set -- $(gg3 "$e/run.log")
+if grep -q 'luaL_newstate returned NULL' "$e/run.log" && [ "$1" -gt 0 ] && [ "$1" = "$2" ] && [ "$1" != "$3" ]; then
+  verdict 0 "... and lj52_newstate names the serializer's layout as the one that differs ($*)"
+else
+  verdict 1 "... and lj52_newstate names the serializer's layout as the one that differs ($*)"
+fi
 
 # =====================================================================
 # 4. THE MEMORY HALF.  Same discipline, a different test binary: these

@@ -1,0 +1,39 @@
+### HEAD serializer (8c5a1168): save in A(ffi), load in B(noffi), control load in A
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 fplen=36 fmt=3 4th=nil
+persist 1LL closure: ok=true bytes=134
+saved
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 fplen=36 fmt=3 4th=nil
+plain: ok=true n=4 r[4]=x
+spk: ok=true restored=true sentinel.hit=1
+ffi: ok=false eris-lj: cannot load function (eris-lj: cannot load incompatible bytecode)
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168 fplen=36 fmt=3 4th=nil
+plain: ok=true n=4 r[4]=x
+spk: ok=true restored=true sentinel.hit=1
+ffi: ok=true g(41)=42LL
+
+### WORD prototype: save in A(ffi), load in B(noffi), control load in A2(ffi, separately linked)
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|1fff0ab8|ffi1.lua52.gc64.fr2.dn0.le.p64 fplen=67 fmt=3 4th=ffi1.lua52.gc64.fr2.dn0.le.p64
+persist 1LL closure: ok=true bytes=165
+saved
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|1fff0ab8|ffi0.lua52.gc64.fr2.dn0.le.p64 fplen=67 fmt=3 4th=ffi0.lua52.gc64.fr2.dn0.le.p64
+plain: ok=false eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi1.lua52.gc64.fr2.dn0.le.p64', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64'); the blob is from a different natives build
+spk: ok=false eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi1.lua52.gc64.fr2.dn0.le.p64', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64'); the blob is from a different natives build sentinel.hit=nil
+ffi: ok=false eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi1.lua52.gc64.fr2.dn0.le.p64', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64'); the blob is from a different natives build
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|1fff0ab8|ffi1.lua52.gc64.fr2.dn0.le.p64 fplen=67 fmt=3 4th=ffi1.lua52.gc64.fr2.dn0.le.p64
+plain: ok=true n=4 r[4]=x
+spk: ok=true restored=true sentinel.hit=1
+ffi: ok=true g(41)=42LL
+
+### HEAD blobs into WORD B(noffi)
+plain: ok=false eris-lj: build fingerprint mismatch: serializer hash differs (blob '8c5a1168', this build '1fff0ab8'); the blob is from a different natives build
+spk: ok=false eris-lj: build fingerprint mismatch: serializer hash differs (blob '8c5a1168', this build '1fff0ab8'); the blob is from a different natives build sentinel.hit=nil
+ffi: ok=false eris-lj: build fingerprint mismatch: serializer hash differs (blob '8c5a1168', this build '1fff0ab8'); the blob is from a different natives build
+
+### SABOTAGE (fingerprint compare removed): save in A(ffi), load in B(noffi)
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|fb7f3484|ffi1.lua52.gc64.fr2.dn0.le.p64 fplen=67 fmt=3 4th=ffi1.lua52.gc64.fr2.dn0.le.p64
+persist 1LL closure: ok=true bytes=165
+saved
+version=eris-lj 0.3 (M3) fp=1ee778a4|LuaJIT 2.1.ROLLING|fb7f3484|ffi0.lua52.gc64.fr2.dn0.le.p64 fplen=67 fmt=3 4th=ffi0.lua52.gc64.fr2.dn0.le.p64
+plain: ok=true n=4 r[4]=x
+spk: ok=true restored=true sentinel.hit=1
+ffi: ok=false eris-lj: cannot load function (eris-lj: cannot load incompatible bytecode)

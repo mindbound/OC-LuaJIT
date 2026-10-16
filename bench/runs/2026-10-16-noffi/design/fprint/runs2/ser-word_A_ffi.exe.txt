@@ -1,0 +1,12 @@
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|1fff0ab8|ffi1.lua52.gc64.fr2.dn0.le.p64
+  format: 3
+
+-- the VM-features word
+-- control: the surgery itself is sound
+-- every token flipped is refused by the fingerprint, nothing restored
+-- a fingerprint WITHOUT the word (the pre-word layout) is refused
+-- the refusal precedes the checksum
+
+FINGERPRINT RESULT: ALL 16 TESTS PASS

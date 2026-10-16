@@ -19,8 +19,10 @@
 #              checkout itself stays pristine and is asserted so below.
 #   lj52shim.o the compatibility layer (5.2 surface on the 5.1 ABI)
 #   eris_lj.o  our Eris-API-compatible serializer (serializer/eris_lj.c)
-#   libluajit.a  LuaJIT 2.1 static, LUA52COMPAT + CHECKHOOK, plus TWO
-#              functions patched on the build copy.  lj_func_freeproto scrubs
+#   libluajit.a  LuaJIT 2.1 static, with the feature set native/luajit/
+#              oclj_features.h names (LUA52COMPAT + CHECKHOOK + DISABLE_FFI),
+#              plus FOUR changes made on the build copy, three of them to
+#              functions.  lj_func_freeproto scrubs
 #              the trace-abort penalty cache of the dying prototype's loop
 #              heads (native/luajit/patch-penalty-scrub.sh).  The cache is
 #              keyed by bytecode ADDRESS and upstream never clears it when a
@@ -46,17 +48,34 @@
 #              bench/runs/2026-10-05-errmem/).  Inside an xpcall message
 #              handler lj_err_mem hands to lj_err_err, which pushes with no
 #              refresh at all.  Same steps as the scrub.
+#              recff_format keeps string.format's integer conversions
+#              compiled without FFI (native/luajit/patch-strfmt-xint-noffi.sh):
+#              upstream's no-FFI branch is a NYI for %x %X %o %u, and for %d
+#              with a flag or a width, on an int-typed operand, so the trace
+#              stitches around the call and a hot loop runs 1.6-2.1x slower
+#              when its strings repeat, 1.2x when each is new (2026-10-16);
+#              the patch formats the int as the double the
+#              interpreter formats, through the same C function.  And
+#              lj_arch.h includes oclj_features.h
+#              (native/luajit/patch-features-include.sh): THE LUAJIT FEATURE
+#              SET below.  Same steps as the scrub, both.
 #
-# WHY THOSE TWO LUAJIT FLAGS (both are mandatory, not tuning):
-#   LUAJIT_ENABLE_LUA52COMPAT -- OC's platform (machine.lua, OpenOS, the
-#       sandbox) is Lua 5.2 source. Without it table.unpack, __pairs,
-#       goto/labels-adjacent behaviour and 5.2 coroutine semantics differ.
-#   LUAJIT_ENABLE_CHECKHOOK   -- REQUIRED TO BOOT with the JIT on.
-#       machine.lua's first statement spins waiting for a count hook.  A stock
-#       LuaJIT never delivers a count hook from inside a compiled trace, so
-#       the kernel hangs before the sandbox is ever built.  CHECKHOOK makes
-#       the recorder emit hook checks.  It is NOT an upstream LuaJIT option:
-#       it exists only in the pinned tree (see LUAJIT_SRC below).
+# THE LUAJIT FEATURE SET is native/luajit/oclj_features.h, with the reason
+# for each flag: LUAJIT_ENABLE_LUA52COMPAT (OC's platform is Lua 5.2 source),
+# LUAJIT_ENABLE_CHECKHOOK (machine.lua cannot boot with the JIT on without
+# it) and LUAJIT_DISABLE_FFI (with FFI the lexer mints unpersistable cdata
+# from `1LL`), and an #error for every other option the pinned LuaJIT tests
+# that changes a structure, the bytecode, the unwinder or what a gate here
+# measures (a census of its LUAJIT_* conditionals, 2026-10-16).  It is ONE
+# file, read
+# by the LuaJIT archive and by every translation unit of ours that includes a
+# LuaJIT internal header, because those macros change LuaJIT's structures:
+# GG_State is 6376 bytes without FFI and 6384 with it, and the shim and the
+# serializer read jit_State at an offset that moves with it.  Step 1 copies it
+# into the build copy and makes lj_arch.h include it, refuses a feature -D on
+# any LuaJIT compile line, and checks the preprocessor's verdict through
+# -I"$LJ"; stage 1b compares the archive's GG_State with the one our headers
+# describe, and lj52_newstate does the same at run time.
 #
 # ---------------------------------------------------------------------
 # EXTERNAL INPUTS (none of them live in this repo; see PREREQUISITES at
@@ -239,22 +258,27 @@ esac
 # falls back to the bundled PUC native, and one JVM ends up running both VMs at
 # once -- which is the shipped configuration, and a far stronger check of the
 # no-collision claim than any symbol count.
-LJ_FLAGS="-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK $PICFLAG"
+# NO FEATURE MACRO TRAVELS AS A FLAG: they are all in native/luajit/
+# oclj_features.h (THE LUAJIT FEATURE SET, above).  PICFLAG is codegen only and
+# changes no structure, so it alone still reaches XCFLAGS.
+LJ_FLAGS="$PICFLAG"
+LJ_FEATURES_H=$OCLJ_REPO/native/luajit/oclj_features.h
 
 # --------------------------------------------------------------- 0
 say "=============== 0. preflight ==============="
 say "host    = $PLATFORM   (lib*$LIBEXT, jni_md in $JNI_MD/)"
-if [ "$OCLJ_OS" != windows ]; then
+if [ "$OCLJ_OS" != windows ] && [ "$OCLJ_OS" != linux ]; then
   # NOT A REFUSAL -- the build script is portable and everything up to the shim
   # works here (LuaJIT with -fPIC, the naming, the ELF postflight).  What is not
-  # portable yet is lj52shim.c's deadline watchdog, which is a Win32 timer queue;
-  # the shim REFUSES rather than silently building an untested backend, at
-  # lj52shim.c:498.  Saying so now means the cause is named before the twenty
-  # seconds of LuaJIT, instead of being inferred from the cascade of errors that
-  # gcc emits after an #error it has already reported.
-  say "    NOTE: on $OCLJ_OS this build is expected to stop in step 2 at"
-  say "          lj52shim.c:498 -- the deadline watchdog has only a Win32 backend."
-  say "          A POSIX one is a roadmap item; everything before it works here."
+  # portable is lj52shim.c's deadline watchdog: it has a Win32 timer-queue
+  # backend and a Linux pthread one, and on any other host the shim REFUSES with
+  # an #error rather than silently building an untested backend.  Saying so now
+  # means the cause is named before the twenty seconds of LuaJIT, instead of
+  # being inferred from the cascade of errors that gcc emits after an #error it
+  # has already reported.
+  say "    NOTE: on $OCLJ_OS this build is expected to stop in step 2 at lj52shim.c's"
+  say "          #error \"lj52 watchdog: only the Win32 and Linux backends exist\"."
+  say "          Everything before it works here."
 fi
 command -v "$CC" >/dev/null 2>&1 || fail "no C compiler '$CC' on PATH (MinGW-w64 gcc on Windows, gcc or clang elsewhere)"
 say "cc      = $("$CC" --version | head -1)"
@@ -271,11 +295,12 @@ fi
 [ -f "$OCLJ_SHIM/lj52shim.c" ] || fail "no $OCLJ_SHIM/lj52shim.c"
 [ -f "$OCLJ_SHIM/lj52shim.h" ] || fail "no $OCLJ_SHIM/lj52shim.h"
 [ -f "$OCLJ_SER/eris_lj.c" ]   || fail "no $OCLJ_SER/eris_lj.c"
+[ -f "$LJ_FEATURES_H" ]        || fail "no $LJ_FEATURES_H: the LuaJIT feature set"
 [ -f "$OCLJ_LUAJIT/src/lj_record.c" ] || fail "no LuaJIT source at $OCLJ_LUAJIT"
 grep -q LUAJIT_ENABLE_CHECKHOOK "$OCLJ_LUAJIT/src/lj_record.c" \
-  || fail "$OCLJ_LUAJIT is a STOCK LuaJIT: lj_record.c has no LUAJIT_ENABLE_CHECKHOOK.
-         Machine.lua cannot boot with the JIT on against a stock tree.
-         Use the pinned tree in this repo (prototype/watchdog/luajit)."
+  || fail "$OCLJ_LUAJIT/src/lj_record.c has no LUAJIT_ENABLE_CHECKHOOK option: not a
+         LuaJIT 2.x tree.  Use the pinned checkout (prototype/watchdog/luajit, upstream
+         1ee778a4; make -C prototype/watchdog luajit-src)."
 # --- ONE BEHAVIOUR, NO ESCAPE HATCHES -------------------------------------
 # The abandoned shim variants each carried a switch that selected a known-
 # broken path: OCLJ_NOMODECHECK disabled the chunk-mode (allowBytecode) gate,
@@ -419,7 +444,7 @@ grep -q 'lj52shim.h' "$OCLJ_SER/eris_lj.c" \
          bytecode load path must reach the genuine lua_loadx directly."
 
 LJ_COMMIT=$(git -C "$OCLJ_LUAJIT" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
-say "luajit  = $OCLJ_LUAJIT @ $LJ_COMMIT (CHECKHOOK patch present)"
+say "luajit  = $OCLJ_LUAJIT @ $LJ_COMMIT (feature set: native/luajit/oclj_features.h)"
 say "jnlua   = $OCLJ_JNLUA @ $(git -C "$OCLJ_JNLUA" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)"
 say "shim    = $OCLJ_SHIM"
 say "out     = $OCLJ_OUT/$DLL_NAME"
@@ -430,6 +455,7 @@ mkdir -p "$OBJ" "$OCLJ_OUT" || fail "cannot create $OCLJ_BUILD"
 # --------------------------------------------------------------- 1
 say "=============== 1. LuaJIT 2.1 (static) ==============="
 say "    XCFLAGS=$LJ_FLAGS   BUILDMODE=static"
+say "    features (native/luajit/oclj_features.h): $(grep -E '^#define LUAJIT_' "$LJ_FEATURES_H" | awk '{printf "%s ", $2}')"
 # PER-PLATFORM INTERMEDIATE TREES, for the same reason the output directories
 # are split. These were one shared directory, which is fine while only one
 # platform ever builds and wrong the moment a second does: the Windows build
@@ -443,7 +469,7 @@ if [ ! -d "$LJ_WORK" ]; then
   rm -rf "$LJ_WORK/.git"
 fi
 LJ=$LJ_WORK/src
-# THE FIRST OF THE TWO FUNCTIONS OF LUAJIT WE CHANGE, on the copy, every
+# THE FIRST OF THE FOUR LUAJIT FILES WE CHANGE, on the copy, every
 # build.  The copy
 # persists between builds, and the patch script's "already patched" path
 # verifies only four marker lines -- so a stale or hand-edited block on the
@@ -511,6 +537,63 @@ sh "$OCLJ_REPO/native/luajit/patch-fastfunc-errmem-top.sh" "$LJ/lj_err.c" "$LJ/l
   || fail "$LJ/lj_err.c does not carry the ERRMEM top clamp exactly twice -- the
          copy make is about to compile is not the patched one"
 say "    lj_err.c: ERRMEM top clamp present twice in the freshly re-derived build copy (asserted by content before make)"
+# THE THIRD: recff_format must keep string.format's integer conversions
+# compiled without FFI (native/luajit/patch-strfmt-xint-noffi.sh).  Upstream's
+# no-FFI branch is a NYI for %x %X %o %u, and for %d with a flag or a width,
+# on an int-typed operand: the trace stitches around the call, and a hot loop
+# runs 1.6-2.1x slower when its strings repeat, 1.2x when each is new
+# (2026-10-16).  Same steps as the scrub and the clamp:
+# pristine checkout asserted, re-copied, the fallback ABSENT after the copy,
+# patched, present exactly once before make, lj_ffrecord.o newer after; the
+# FFI / integer-format gate after the CHECKHOOK probe proves the loop compiles
+# and prints what the interpreter prints.
+FMTX_MARK='OC-LuaJIT (native/luajit/patch-strfmt-xint-noffi.sh)'
+grep -q -F -- "$FMTX_MARK" "$OCLJ_LUAJIT/src/lj_ffrecord.c" \
+  && fail "$OCLJ_LUAJIT/src/lj_ffrecord.c carries the no-FFI integer-format fallback:
+         the pinned checkout must stay pristine.  The patch belongs on the build copy only."
+cp -f "$OCLJ_LUAJIT/src/lj_ffrecord.c" "$LJ/lj_ffrecord.c" \
+  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_ffrecord.c over $LJ/lj_ffrecord.c"
+grep -q -F -- "$FMTX_MARK" "$LJ/lj_ffrecord.c" \
+  && fail "$LJ/lj_ffrecord.c still carries the integer-format fallback right after the
+         pristine re-copy -- the copy did not take"
+say "    lj_ffrecord.c: pristine copy re-taken from $OCLJ_LUAJIT/src"
+sh "$OCLJ_REPO/native/luajit/patch-strfmt-xint-noffi.sh" "$LJ/lj_ffrecord.c" "$LJ/lj_ffrecord.c" \
+  || fail "the no-FFI integer-format patch refused (see above)"
+[ "$(grep -c -F -- "$FMTX_MARK" "$LJ/lj_ffrecord.c")" = "1" ] \
+  || fail "$LJ/lj_ffrecord.c does not carry the integer-format fallback exactly once -- the
+         copy make is about to compile is not the patched one"
+say "    lj_ffrecord.c: no-FFI integer-format fallback present in the freshly re-derived build copy (asserted by content before make)"
+# THE FOURTH, AND THE ONLY HEADER: lj_arch.h includes oclj_features.h
+# (native/luajit/patch-features-include.sh), the one file that names the
+# feature set (THE LUAJIT FEATURE SET, in this script's header).  The header
+# is copied in from native/luajit and compared; lj_arch.h is re-taken from the
+# pristine checkout and patched like the three .c files; and the include must
+# be there exactly once, directly after lua.h, before make runs.
+FEAT_INC='#include "oclj_features.h"'
+grep -q -F -- "$FEAT_INC" "$OCLJ_LUAJIT/src/lj_arch.h" \
+  && fail "$OCLJ_LUAJIT/src/lj_arch.h includes oclj_features.h: the pinned checkout must
+         stay pristine.  The include belongs on the build copy only."
+[ -e "$OCLJ_LUAJIT/src/oclj_features.h" ] \
+  && fail "$OCLJ_LUAJIT/src/oclj_features.h exists: the pinned checkout must stay pristine.
+         The feature header lives in native/luajit and is copied to the build copy only."
+cp -f "$OCLJ_LUAJIT/src/lj_arch.h" "$LJ/lj_arch.h" \
+  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_arch.h over $LJ/lj_arch.h"
+grep -q -F -- "$FEAT_INC" "$LJ/lj_arch.h" \
+  && fail "$LJ/lj_arch.h still includes oclj_features.h right after the pristine re-copy --
+         the copy did not take"
+cp -f "$LJ_FEATURES_H" "$LJ/oclj_features.h" \
+  || fail "cannot copy $LJ_FEATURES_H into $LJ"
+cmp -s "$LJ_FEATURES_H" "$LJ/oclj_features.h" \
+  || fail "$LJ/oclj_features.h differs from $LJ_FEATURES_H right after the copy"
+say "    lj_arch.h: pristine copy re-taken; oclj_features.h copied from native/luajit"
+sh "$OCLJ_REPO/native/luajit/patch-features-include.sh" "$LJ/lj_arch.h" "$LJ/lj_arch.h" \
+  || fail "the feature-header include patch refused (see above)"
+FEAT_AT=$(awk -v a='#include "lua.h"' -v b="$FEAT_INC" \
+  'prev == a && index($0, b) == 1 { n++ } { prev = $0 } END { print n + 0 }' "$LJ/lj_arch.h")
+[ "$(grep -c -F -- "$FEAT_INC" "$LJ/lj_arch.h")" = "1" ] && [ "$FEAT_AT" = "1" ] \
+  || fail "$LJ/lj_arch.h does not include oclj_features.h exactly once, directly after
+         lua.h -- the copy make is about to compile does not carry the feature set"
+say "    lj_arch.h: includes oclj_features.h once, right after lua.h (asserted by content before make)"
 make -C "$LJ" clean >/dev/null 2>&1
 # Q= makes the Makefile echo full compiler command lines, so the flags can be
 # asserted rather than assumed.
@@ -535,17 +618,41 @@ say "    lj_func.o recompiled from the patched lj_func.c ($(date -r "$LJ/lj_func
 grep -q 'lj_err\.c' "$OCLJ_BUILD/luajit_build.log" \
   || fail "lj_err.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
 say "    lj_err.o recompiled from the patched lj_err.c ($(date -r "$LJ/lj_err.o" +%H:%M:%S) > $(date -r "$LJ/lj_err.c" +%H:%M:%S))"
+[ -f "$LJ/lj_ffrecord.o" ] || fail "no $LJ/lj_ffrecord.o after make"
+[ "$LJ/lj_ffrecord.o" -nt "$LJ/lj_ffrecord.c" ] \
+  || fail "lj_ffrecord.o is not newer than the patched lj_ffrecord.c -- make did not recompile it"
+grep -q -F 'lj_ffrecord.c' "$OCLJ_BUILD/luajit_build.log" \
+  || fail "lj_ffrecord.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
+say "    lj_ffrecord.o recompiled from the patched lj_ffrecord.c ($(date -r "$LJ/lj_ffrecord.o" +%H:%M:%S) > $(date -r "$LJ/lj_ffrecord.c" +%H:%M:%S))"
 
-# The two flags must be OBSERVABLE, not merely passed.
-grep -q -- "-DLUAJIT_ENABLE_LUA52COMPAT" "$OCLJ_BUILD/luajit_build.log" \
-  || fail "LUA52COMPAT never reached the compiler command line"
-grep -q -- "-DLUAJIT_ENABLE_CHECKHOOK" "$OCLJ_BUILD/luajit_build.log" \
-  || fail "CHECKHOOK never reached the compiler command line"
-# And one flag must NOT be there: LUAJIT_USE_SYSMALLOC compiles lj_alloc out,
-# and the shim keeps every state's blocks in an lj_alloc arena (lj52_back).
-if grep -q -- "-DLUAJIT_USE_SYSMALLOC" "$OCLJ_BUILD/luajit_build.log"; then
-  fail "LUAJIT_USE_SYSMALLOC is on: lj_alloc is compiled out, and the shim's per-state arenas (lj52_back) need it"
+# THE FEATURE SET HAS ONE CHANNEL, AND IT MUST BE OBSERVABLE (THE LUAJIT
+# FEATURE SET, in the header).  First: no feature macro may reach a LuaJIT
+# compile line -- a second copy of the set on a command line is exactly how
+# the archive and our translation units drifted apart (until 2026-10-16 the
+# archive had LUA52COMPAT and the shim, compiled without it, did not).  The
+# Makefile's own -DLUAJIT_TARGET, and LUAJIT_UNWIND_EXTERNAL on Linux, are
+# platform facts, not features, and are allowed.  An ALLOWLIST: every other
+# LUAJIT_* on a compile line is refused, with or without a space after -D,
+# including the ones the header does not name.
+G3BAD=$(grep -oE -- '-D *LUAJIT_[A-Za-z0-9_]+' "$OCLJ_BUILD/luajit_build.log" | tr -d ' ' \
+  | grep -vxE -- '-DLUAJIT_(TARGET|UNWIND_EXTERNAL)' | sort | uniq -c)
+if [ -n "$G3BAD" ]; then
+  echo "$G3BAD"
+  fail "a LuaJIT feature macro reached the compiler command line (counted above).  The
+         feature set has ONE channel, native/luajit/oclj_features.h; a second copy on a
+         command line is how the archive and our translation units drift apart."
 fi
+# Second: the preprocessor's verdict, through exactly the -I every translation
+# unit of ours compiles with.  OCLJ_LUAJIT_FEATURES says the header was read;
+# the LJ_* values say what it decided.
+LJDM=$("$CC" -I"$LJ" -E -dM "$LJ/lj_arch.h" 2>&1)
+for d in 'OCLJ_LUAJIT_FEATURES 1' 'LJ_52 1' 'LJ_HASFFI 0' 'LJ_HASJIT 1' 'LJ_GC64 1'; do
+  printf '%s\n' "$LJDM" | grep -qx "#define $d" \
+    || fail "through -I$LJ the preprocessor does not say '#define $d'.  Every translation
+         unit of ours compiles through exactly that -I: native/luajit/oclj_features.h is
+         not reaching lj_arch.h, or it no longer says what this build needs."
+done
+say "    feature set through -I\$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1"
 
 LJEXE=$LJ/luajit.exe; [ -x "$LJEXE" ] || LJEXE=$LJ/luajit
 [ -x "$LJEXE" ] || fail "no luajit interpreter was produced"
@@ -576,20 +683,113 @@ case "$CHN" in ''|*[!0-9]*) fail "checkhook probe produced no number: $CH" ;; es
          iterations.  machine.lua's first statement spins waiting for that hook
          and will hang with the JIT on."
 
+# FFI COMPILED OUT, AND string.format's INTEGER CONVERSIONS STILL COMPILED,
+# functionally, on the luajit.exe that links this libluajit.a.  The line it
+# prints must be exactly NF_WANT (the fail message says what each field
+# means).  The probe never calls pcall(require, "ffi"): a stray ffi.lua on a
+# search path would answer that.  It checks the lexer (`1LL`), the preload
+# luaL_openlibs would register, and the registry entry the lexer's on-demand
+# load used to leave.
+cat > "$OCLJ_BUILD/noffi.lua" <<'EOF'
+local f, e = load("return 1LL", "=lit")
+local lit = f and "ACCEPTED" or (tostring(e):find("malformed number", 1, true) and "refused" or "other")
+f = nil
+local jutil = require("jit.util")
+local fmt = string.format
+local s = string.rep(string.char(0, 1, 127, 128, 200, 255), 400)
+local function arm(hot)
+  local st, mine = { loop = 0, stitch = 0, abort = 0 }, {}
+  local function cb(what, tr, func)
+    if what == "start" then mine[tr] = (func == hot)
+    elseif what == "stop" and mine[tr] then
+      local lt = jutil.traceinfo(tr).linktype
+      if st[lt] then st[lt] = st[lt] + 1 end
+    elseif what == "abort" and mine[tr] then st.abort = st.abort + 1 end
+  end
+  jit.flush()
+  jit.attach(cb, "trace")
+  local out = hot(s)
+  jit.attach(cb)
+  return st.loop .. "/" .. st.stitch .. "/" .. st.abort, out
+end
+local function hs(str) local n = 0 for i = 1, #str do n = n + #fmt("%s", str:byte(i)) end return n end
+local function hx(str) local t = {} for i = 1, #str do local v = str:byte(i) - 128
+  t[#t + 1] = fmt("%02x|%X|%#o|%u|%5d|%+d|%-4i;", v, v, v, v, v, v, v) end return table.concat(t) end
+local function hi(str) local t = {} for i = 1, #str do local v = str:byte(i) - 128
+  t[#t + 1] = fmt("%02x|%X|%#o|%u|%5d|%+d|%-4i;", v, v, v, v, v, v, v) end return table.concat(t) end
+jit.off(hi)
+local sres = arm(hs)
+local xres, xout = arm(hx)
+print("lit=" .. lit .. " preload=" .. tostring(package.preload.ffi) .. " loaded=" .. tostring(package.loaded.ffi) ..
+  " s=" .. sres .. " x=" .. xres .. " same=" .. tostring(xout == hi(s)))
+EOF
+NF=$("$LJEXE" "$OCLJ_BUILD/noffi.lua" 2>&1)
+say "    FFI / integer-format gate: $NF"
+NF_WANT='lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=true'
+[ "$NF" = "$NF_WANT" ] || fail "the FFI / integer-format gate read
+           $NF
+         want
+           $NF_WANT
+         lit, preload, loaded other than refused, nil, nil: FFI is compiled IN -- the
+           lexer mints cdata from 1LL and loads ffi (native/luajit/oclj_features.h did not
+           reach the archive).
+         s other than 0/1/0: the trace detector did not see the stitch every build makes
+           for %s of a number, so this gate proved nothing.
+         x other than 1/0/0: string.format's integer conversions stitch or abort instead
+           of compiling (native/luajit/patch-strfmt-xint-noffi.sh is not in effect): a
+           hot %x, %o, %u or %5d of an int runs up to about 2x slower.
+         same=false: the compiled output differs from the interpreter's."
+# And no FFI entry point in the archive.  The reader is checked first: an nm
+# that printed nothing would make the absence check pass vacuously.
+LJSYMS=$(nm "$LJ/libluajit.a" 2>/dev/null)
+printf '%s\n' "$LJSYMS" | grep -qE ' T lua_newstate$' \
+  || fail "nm lists no 'T lua_newstate' in $LJ/libluajit.a: the symbol reader is not
+         working, and the FFI-symbol check below would pass vacuously"
+if printf '%s\n' "$LJSYMS" | grep -qE ' T (luaopen_ffi|lj_ccallback_new)$'; then
+  printf '%s\n' "$LJSYMS" | grep -E ' T (luaopen_ffi|lj_ccallback_new)$'
+  fail "libluajit.a defines FFI entry points (above): FFI is compiled in"
+fi
+say "    libluajit.a: lua_newstate defined; luaopen_ffi and lj_ccallback_new not (FFI compiled out)"
+
 # --------------------------------------------------------------- 1b
-# The shim creates the state with its OWN allocf, lj52_alloc (lua_newstate),
-# and never swaps it, so no block ever changes allocators; since 2026-10-02 the
-# blocks underneath live in a per-state lj_alloc arena (lj52_back).  Only a
-# GC64 build accepts a caller-supplied allocf on x64.  This probe proves that
-# property with a plain realloc/free allocf -- the property, not our
-# allocator -- at build time rather than as a machine running unaccounted.
-say "=============== 1b. GC64 / foreign-allocator gate ==============="
+# TWO PROPERTIES OF THE ARCHIVE, ONE PROBE.
+#
+# THE FOREIGN ALLOCATOR.  The shim creates the state with its OWN allocf,
+# lj52_alloc (lua_newstate), and never swaps it, so no block ever changes
+# allocators; since 2026-10-02 the blocks underneath live in a per-state
+# lj_alloc arena (lj52_back).  Only a GC64 build accepts a caller-supplied
+# allocf on x64.  This probe proves that property with a plain realloc/free
+# allocf -- the property, not our allocator -- at build time rather than as a
+# machine running unaccounted.
+#
+# THE LAYOUT GATE.  lua_newstate's first allocator call is the GG_State
+# (lj_state.c:269), so its size is the archive's own answer to "which feature
+# set was I built with?".  The probe includes lj_obj.h and lj_dispatch.h
+# through -I"$LJ" -- the exact view lj52shim.c and eris_lj.c compile with --
+# and fails unless sizeof(GG_State) there is the same number.  Until
+# 2026-10-16 it included only <lua.h>, so it could not see layout: linked
+# against a no-FFI archive it still printed FOREIGN-ALLOC-OK (measured
+# 2026-10-16; HEAD's own archive and shim agreed, 6384 both).  The NEGATIVE ARM
+# compiles the same probe against a copy of those headers whose
+# oclj_features.h lacks '#define LUAJIT_DISABLE_FFI 1', and must MISMATCH
+# (6384 against 6376 on Windows x64): a gate never seen to fail proves
+# nothing, so this one is seen to fail on every build.  lj52_newstate makes
+# the same comparison at run time, for objects this script did not compile.
+say "=============== 1b. GC64 / foreign-allocator / layout gate ==============="
 cat > "$OCLJ_BUILD/allocprobe.c" <<'EOF'
 #include <stdio.h>
 #include <stdlib.h>
 #include <lua.h>
+#include "lj_obj.h"
+#include "lj_dispatch.h"
+#ifndef OCLJ_LUAJIT_FEATURES
+#error "this LuaJIT tree's lj_arch.h does not include oclj_features.h"
+#endif
+static unsigned long calls = 0;
+static size_t first = 0;
 static void *a(void *ud, void *p, size_t o, size_t n) {
   (void)ud; (void)o;
+  if (calls++ == 0 && p == NULL) first = n;
   if (n == 0) { free(p); return NULL; }
   return realloc(p, n);
 }
@@ -597,19 +797,56 @@ int main(void) {
   lua_State *L = lua_newstate(a, NULL);
   if (!L) { printf("FOREIGN-ALLOC-REFUSED\n"); return 1; }
   lua_close(L);
-  printf("FOREIGN-ALLOC-OK\n");
+  if (first != sizeof(GG_State)) {
+    printf("GG-LAYOUT-MISMATCH lib=%lu tu=%lu\n", (unsigned long)first, (unsigned long)sizeof(GG_State));
+    return 2;
+  }
+  printf("FOREIGN-ALLOC-OK GG=%lu\n", (unsigned long)first);
   return 0;
 }
 EOF
 "$CC" -O0 -I"$LJ" "$OCLJ_BUILD/allocprobe.c" "$LJ/libluajit.a" -lm \
-  -o "$OCLJ_BUILD/allocprobe.exe" >/dev/null 2>&1 || fail "allocator probe would not link"
+  -o "$OCLJ_BUILD/allocprobe.exe" >"$OCLJ_BUILD/allocprobe.err" 2>&1 \
+  || { head -5 "$OCLJ_BUILD/allocprobe.err"; fail "allocator/layout probe would not compile or link"; }
 PROBE=$("$OCLJ_BUILD/allocprobe.exe" 2>&1)
 say "    $PROBE"
-[ "$PROBE" = "FOREIGN-ALLOC-OK" ] \
-  || fail "this LuaJIT refuses a foreign allocator (non-GC64 x64 build).
+case "$PROBE" in
+  "FOREIGN-ALLOC-OK GG="[0-9]*)
+    LJ_GG=${PROBE#FOREIGN-ALLOC-OK GG=} ;;
+  "FOREIGN-ALLOC-REFUSED"*)
+    fail "this LuaJIT refuses a foreign allocator (non-GC64 x64 build).
          lj52_newstate() would fall back to luaL_newstate: a state on LuaJIT's
          internal allocator with no accounting record, the RAM cap silently
-         unenforced (_OCLJ_GCSTATS heap = -1; the harness's b2 and al-1 fail)."
+         unenforced (_OCLJ_GCSTATS heap = -1; the harness's b2 and al-1 fail)." ;;
+  "GG-LAYOUT-MISMATCH"*)
+    fail "LAYOUT: $PROBE -- libluajit.a laid out a GG_State of a different size than
+         the headers every translation unit of ours compiles against (-I$LJ).  The
+         shim and the serializer would read jit_State at the wrong offset." ;;
+  *)
+    fail "the allocator/layout probe said '$PROBE'" ;;
+esac
+case $LJ_GG in ''|*[!0-9]*) fail "the allocator/layout probe said '$PROBE'" ;; esac
+NEGI=$OCLJ_BUILD/layoutneg-$PLATFORM
+rm -rf "$NEGI"
+mkdir -p "$NEGI" || fail "cannot create $NEGI"
+cp "$LJ"/*.h "$NEGI"/ || fail "cannot copy $LJ/*.h for the layout gate's negative arm"
+grep -qx '#define LUAJIT_DISABLE_FFI 1' "$LJ/oclj_features.h" \
+  || fail "oclj_features.h no longer says '#define LUAJIT_DISABLE_FFI 1'; the layout gate's
+         negative arm toggles exactly that line.  Revisit the arm with the feature set."
+grep -vx '#define LUAJIT_DISABLE_FFI 1' "$LJ/oclj_features.h" > "$NEGI/oclj_features.h"
+cmp -s "$LJ/oclj_features.h" "$NEGI/oclj_features.h" \
+  && fail "the layout gate's negative arm: the header toggle did not take"
+"$CC" -O0 -I"$NEGI" "$OCLJ_BUILD/allocprobe.c" "$LJ/libluajit.a" -lm \
+  -o "$OCLJ_BUILD/allocprobe-neg.exe" >"$OCLJ_BUILD/allocprobe-neg.err" 2>&1 \
+  || { head -5 "$OCLJ_BUILD/allocprobe-neg.err"; fail "the layout gate's negative arm would not compile or link"; }
+NPROBE=$("$OCLJ_BUILD/allocprobe-neg.exe" 2>&1)
+case "$NPROBE" in
+  "GG-LAYOUT-MISMATCH lib=$LJ_GG tu="[0-9]*)
+    say "    negative arm (FFI toggled back on in a header copy): $NPROBE -- the gate can fail" ;;
+  *)
+    fail "THE LAYOUT GATE CANNOT FAIL: compiled for a LuaJIT WITH FFI, against this
+         archive, the probe said '$NPROBE'" ;;
+esac
 
 # --------------------------------------------------------------- 2
 say "=============== 2. lj52shim.c ==============="
@@ -622,6 +859,8 @@ rm -f "$OBJ/lj52shim.o"
 # own LuaState, which declares none of them, so it must not export them.
 SHIMDEF=
 [ "$OCLJ_VARIANT" = additive ] && SHIMDEF=-DLJ52_ADDITIVE
+# -I"$LJ" is also how the shim gets LuaJIT's feature set (THE LUAJIT FEATURE
+# SET): no -D here, and lj52shim.c refuses to compile without it.
 "$CC" -c -O2 $PICFLAG -Wall -Wextra $SHIMDEF -I"$LJ" -I"$OCLJ_SHIM" -I"$OCLJ_SER" \
   -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" \
   "$OCLJ_SHIM/lj52shim.c" -o "$OBJ/lj52shim.o" 2>"$OCLJ_BUILD/shim.err"
@@ -795,16 +1034,51 @@ say "    serializer hash = $SER_HASH  (blobs are pinned to this)"
 # Compiled WITHOUT -include lj52shim.h on purpose: the serializer must reach
 # the genuine LuaJIT lua_load/lua_loadx so it can load the LuaJIT bytecode it
 # writes with lj_bcwrite.  The 'b' path stays open INTERNALLY to eris_lj while
-# lj52_load keeps it shut to sandbox code (allowBytecode=false).
+# lj52_load keeps it shut to sandbox code (allowBytecode=false).  -I"$LJ"
+# carries the feature set here too; eris_lj.c refuses to compile without it.
+# The object is judged by [ -f ] below, so the last build's must go first: gcc
+# leaves an existing -o target in place when a compile fails, and the word
+# check and the link would take it.
+rm -f "$OBJ/eris_lj.o"
 "$CC" -c -O2 $PICFLAG -I"$LJ" -I"$OCLJ_SER" -DERIS_LJ_COMMIT="\"$LJ_COMMIT\"" \
   -DERIS_LJ_SERHASH="\"$SER_HASH\"" \
   "$OCLJ_SER/eris_lj.c" -o "$OBJ/eris_lj.o" 2>"$OCLJ_BUILD/eris.err"
 [ -f "$OBJ/eris_lj.o" ] || { grep -oE 'error: .*' "$OCLJ_BUILD/eris.err" | head -20; fail "eris_lj.c did not compile"; }
+# THE VM-FEATURES WORD, checked against the library rather than trusted.  The
+# blob fingerprint ends in a word eris_lj.c derives from the macros it was
+# compiled with (THE VM-FEATURES WORD in eris_lj.c: ffi, lua52, gc64, fr2, dn,
+# le/be, p64/p32); blobs carry it, and a build that cannot interpret a blob
+# refuses it by that word.  Four of its tokens show in the behaviour of the
+# luajit.exe that links this libluajit.a: whether `1LL` loads (ffi), whether
+# table.unpack exists (lua52), and string.dump's flags byte (BCDUMP_F_FR2 8,
+# BCDUMP_F_BE 1; lj_bcdump.h:42-45).  gc64, dn and p64 are what stage 1b's
+# GG_State comparison and oclj_features.h's refusals cover.
+OBS=$("$LJEXE" -e 'local d = string.dump(function() end):byte(5) io.write(load("return 1LL") and "ffi1" or "ffi0", " ", table.unpack and "lua52" or "lua51", " ", d % 16 >= 8 and "fr2" or "fr1", " ", d % 2 == 1 and "be" or "le")' 2>&1)
+case "$OBS" in
+  "ffi"[01]" lua5"[12]" fr"[12]" "[lb]e) : ;;
+  *) fail "luajit.exe's feature observation is malformed: '$OBS'" ;;
+esac
+WORD=$(grep -a -o -E "[|]$SER_HASH[|]ffi[01][.][a-z0-9.]+" "$OBJ/eris_lj.o" | head -1)
+WORD=${WORD##*|}
+case "$WORD" in
+  ffi[01].lua5[12].gc64.fr[12].dn[01].[lb]e.p64|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p64|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p32) : ;;
+  *) fail "eris_lj.o carries no well-formed VM-features word after '|$SER_HASH|' (got '$WORD')" ;;
+esac
+for t in $OBS; do
+  case ".$WORD." in
+    *".$t."*) : ;;
+    *) fail "eris_lj.o's VM-features word '$WORD' disagrees with libluajit.a, which behaves
+         as '$OBS' (token $t): every blob would carry a false description of the VM
+         that wrote it" ;;
+  esac
+done
+say "    VM-features word $WORD (luajit.exe agrees: $OBS)"
 
 # --------------------------------------------------------------- 5
 say "=============== 5. link ==============="
 # javavm.c is deliberately NOT linked: it is OC-JNLua's "start a JVM from Lua"
 # entry point, which the embedded (JVM-hosted) direction never uses.
+rm -f "$OCLJ_OUT/$DLL_NAME"   # judged by [ -f ] below: a failed link must not leave the last library
 "$CC" -shared -o "$OCLJ_OUT/$DLL_NAME" \
   "$OBJ/jnlua.o" "$OBJ/lj52shim.o" "$OBJ/eris_lj.o" \
   "$LJ/libluajit.a" -lm $LINK_EXTRA \
@@ -972,9 +1246,13 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #      git clone https://github.com/MightyPirates/OC-JNLua.git
 #    Only native/src/jnlua.c is consumed.  Its gradle build is not used.
 #
-# 4. LuaJIT: already vendored in this repo at prototype/watchdog/luajit,
-#    pinned to upstream 1ee778a4 PLUS the CHECKHOOK patch (lj_record.c).
-#    A stock LuaJIT clone will NOT work -- the preflight rejects it.
+# 4. LuaJIT: a checkout at prototype/watchdog/luajit (gitignored; `make -C
+#    prototype/watchdog luajit-src` clones it), pinned to upstream 1ee778a4,
+#    whose LUAJIT_ENABLE_CHECKHOOK is upstream's own option (lj_record.c:691,
+#    :2953).  The checkout stays pristine: this script builds a COPY with
+#    native/luajit/oclj_features.h and the four changes in native/luajit/.
+#    Another LuaJIT commit is untested: the four patch scripts' exactly-once
+#    anchors and the behaviour gates are what refuse a tree that changed shape.
 #
 # 5. For OCLJ_VARIANT=additive only: Python 3 (python3 or python on PATH, or
 #    OCLJ_PYTHON), to regenerate LuaStateLuaJIT.java and compare it with the

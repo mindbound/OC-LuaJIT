@@ -1,0 +1,23 @@
+# build-native.sh's G3 (the LuaJIT log allowlist), its exact pipeline, on five logs: HEAD 62970a0's, this round's two Linux builds',
+# the design phase's Windows reference build's (same LuaJIT inputs; this round's own Windows log was overwritten by the
+# WSL builds, which share build/native/luajit_build.log), and a synthetic one.
+# Refused when the output is non-empty.
+== failfirst/head/luajit_build.log
+     77 -DLUAJIT_ENABLE_CHECKHOOK
+     77 -DLUAJIT_ENABLE_LUA52COMPAT
+   (end)
+== logs/linux/luajit_build-dropin.log
+   (end)
+== logs/linux/luajit_build-additive.log
+   (end)
+== C:/Users/astro/claude-tmp/oclj/r1/synth/repo/build/native/luajit_build.log
+   (end)
+== C:/Users/astro/claude-tmp/oclj/r1/fix/g3sab.log
+   (synthetic:)
+   | gcc -D LUAJIT_USE_SYSMALLOC -c x.c
+   | gcc -DLUAJIT_NO_UNWIND -DLUAJIT_TARGET=LUAJIT_ARCH_x64 -c y.c
+   | gcc -DLUAJIT_UNWIND_EXTERNAL -DLUAJIT_UNWIND_INTERNAL -c z.c
+      1 -DLUAJIT_NO_UNWIND
+      1 -DLUAJIT_UNWIND_INTERNAL
+      1 -DLUAJIT_USE_SYSMALLOC
+   (end)

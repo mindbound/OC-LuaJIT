@@ -3758,6 +3758,23 @@ object Smoke {
       |  ((viaText and viaText() == 42) and "textok" or "TEXTBROKEN") .. "/" ..
       |  #dumped
       |
+      |-- FFI LITERAL PROBE (d3).  A LuaJIT built with FFI turns `1LL` into an
+      |-- int64 cdata in the LEXER, loading ffi on demand; eris cannot persist
+      |-- cdata, so one alive at save time cost the machine its state.  Our
+      |-- native is built without FFI, and the lexer then says "malformed
+      |-- number".  PUC 5.2 refuses it too, but as the number 1 and a stray
+      |-- name ("<eof> expected near 'LL'"): the stock cell paints refused-puc.
+      |-- Loaded and DROPPED, never called: on an FFI build a live cdata would
+      |-- fail the next persist and confound every later milestone.
+      |local litRow
+      |do
+      |  local f, e = load("return 1LL", "=litprobe")
+      |  local m = tostring(e)
+      |  litRow = f and "ACCEPTED" or
+      |    (m:find("malformed number", 1, true) and "refused" or
+      |     m:find("expected near 'LL'", 1, true) and "refused-puc" or "other")
+      |end
+      |
       |-- JIT PROBE.  A compute-bound loop run from INSIDE the sandbox -- i.e.
       |-- under OC's real deadline hook, with OC's real hookInterval and the real
       |-- checkDeadline doing its work -- timed with the sandbox's own os.clock.
@@ -4177,7 +4194,7 @@ object Smoke {
       |  component.gpu.set(1, 18, stkRow .. "        ")
       |  -- repainted every tick for the same reason as the counter: boot output
       |  -- would otherwise scroll a one-shot line off the screen.
-      |  component.gpu.set(1, 16, gate .. "        ")
+      |  component.gpu.set(1, 16, gate .. " OCLJLIT=" .. litRow .. "        ")
       |  -- The suite block.  gpu.set is a DIRECT call and OC meters those per
       |  -- tick; painting twenty-odd rows every 50 ms would spend the machine's
       |  -- call budget on the scoreboard and stretch the wall time of the very
@@ -5205,7 +5222,8 @@ object Smoke {
         "; lastError=" + computer.machine.lastError)
     if (km == 0)
       die("machine.lua never built its sandbox. If the JIT is on, this is the CHECKHOOK " +
-        "symptom: rebuild LuaJIT with -DLUAJIT_ENABLE_CHECKHOOK.")
+        "symptom: rebuild with native/build-native.sh (LUAJIT_ENABLE_CHECKHOOK is set in " +
+        "native/luajit/oclj_features.h).")
 
     // The LuaState belongs to the machine's worker thread; quiesce before
     // reading it, or the guard and the kernel race on the same state.
@@ -5660,6 +5678,27 @@ object Smoke {
            else if (!gateShaped) "   <- the probe itself is broken; this run proves nothing"
            else if (bytecodeAllowed) "   <- the probe reports 'refused' even with the gate OPEN: it is not reading the setting"
            else "   <- allowBytecode=false is NOT being enforced in the sandbox"))
+
+    // --- (d3) FFI is compiled out: `1LL` is a syntax error in the sandbox --
+    // A LuaJIT built with FFI lexes 1LL/2ULL/0x10ULL/3i into cdata, loading
+    // ffi on demand (lj_lex.c:116, :127), and eris cannot persist cdata: one
+    // such literal alive at save time cost the machine its state.  The native
+    // is built without FFI (native/luajit/oclj_features.h), and the lexer then
+    // answers "malformed number".  PUC 5.2's read_numeral stops at the first
+    // character that is not a hex digit or '.', so the stock cell refuses
+    // `1LL` as the number 1 and the name LL, "<eof> expected near 'LL'"
+    // (refused-puc).  Every cell refuses, each in its own lexer's words, and
+    // each wants exactly its own.
+    val lit = parse(txtA2, "OCLJLIT")
+    val litWant = if (nativeMode == "stock") "refused-puc" else "refused"
+    milestone("d3-sandbox-ffi-literal-refused", lit == litWant,
+      "load('return 1LL') in the sandbox -> " + lit + " (want " + litWant + ")" +
+        (if (lit == litWant) ""
+         else if (lit == "<missing>") "   <- no OCLJLIT on screen -- the in-sandbox probe never ran"
+         else if (lit == "ACCEPTED") "   <- the lexer made a cdata: this native was built WITH FFI"
+         else if (lit == "refused-puc") "   <- PUC's refusal on a LuaJIT cell: this lexer is not LuaJIT's"
+         else if (lit == "refused") "   <- LuaJIT's refusal on the stock cell: this is not PUC 5.2"
+         else "   <- refused, but not by a lexer this suite knows"))
 
     // --- (k1) the deadline still fires -----------------------------------
     // The watchdog replaces the mechanism behind "too long without yielding";

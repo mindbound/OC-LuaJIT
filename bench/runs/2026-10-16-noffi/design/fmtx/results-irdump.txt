@@ -1,0 +1,180 @@
+=== ffi -jdump=iT
+---- TRACE 1 start jv-min.lua:2
+---- TRACE 1 IR
+0001    int SLOAD  #3    CI
+0002    u8  XLOAD  [0x29a35d20471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005    fun SLOAD  #0    R
+0006    tab FLOAD  0005  func.env
+0007    int FLOAD  0006  tab.hmask
+0008 >  int EQ     0007  +63 
+0009    p64 FLOAD  0006  tab.node
+0010 >  p64 HREFK  0009  "string" @52
+0011 >  tab HLOAD  0010
+0012    int FLOAD  0011  tab.hmask
+0013 >  int EQ     0012  +15 
+0014    p64 FLOAD  0011  tab.node
+0015 >  p64 HREFK  0014  "format" @8
+0016 >  fun HLOAD  0015
+0017 >  fun EQ     0016  string.format
+0018    p64 BUFHDR [0x29a35d204a8]  RESET
+0021 >  p64 CALLL  lj_strfmt_putfxint  (0018 +132116 0001)
+0022 >  str BUFSTR 0021  0018
+0023    int FLOAD  0022  str.len
+0024 >  num SLOAD  #2    T
+0025    num CONV   0023  num.int
+0026  + num ADD    0025  0024
+0027  + int ADD    0001  +1  
+0028 >  int LE     0027  +20000
+0029 ------ LOOP ------------
+0030    u8  XLOAD  [0x29a35d20471]  V
+0031    int BAND   0030  +12 
+0032 >  int EQ     0031  +0  
+0033    p64 BUFHDR [0x29a35d204a8]  RESET
+0036 >  p64 CALLL  lj_strfmt_putfxint  (0033 +132116 0027)
+0037 >  str BUFSTR 0036  0033
+0038    int FLOAD  0037  str.len
+0039    num CONV   0038  num.int
+0040  + num ADD    0039  0026
+0041  + int ADD    0027  +1  
+0042 >  int LE     0041  +20000
+0043    int PHI    0027  0041
+0044    num PHI    0026  0040
+---- TRACE 1 stop -> loop
+
+75650
+=== noffi -jdump=iT
+---- TRACE 1 start jv-min.lua:2
+---- TRACE 1 IR
+0001    int SLOAD  #3    CI
+0002    u8  XLOAD  [0x21cea7f0471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005    fun SLOAD  #0    R
+0006    tab FLOAD  0005  func.env
+0007    int FLOAD  0006  tab.hmask
+0008 >  int EQ     0007  +63 
+0009    p64 FLOAD  0006  tab.node
+0010 >  p64 HREFK  0009  "string" @62
+0011 >  tab HLOAD  0010
+0012    int FLOAD  0011  tab.hmask
+0013 >  int EQ     0012  +15 
+0014    p64 FLOAD  0011  tab.node
+0015 >  p64 HREFK  0014  "format" @10
+0016 >  fun HLOAD  0015
+0017 >  fun EQ     0016  string.format
+0018    p64 BUFHDR [0x21cea7f04a8]  RESET
+0019    num CONV   0001  num.int
+---- TRACE 1 stop -> stitch
+
+---- TRACE 2 start 1/stitch jv-min.lua:2
+---- TRACE 2 IR
+0001    u8  XLOAD  [0x21cea7f0471]  V
+0002    int BAND   0001  +12 
+0003 >  int EQ     0002  +0  
+0004 >  str SLOAD  #7    T
+0005    int FLOAD  0004  str.len
+0006 >  num SLOAD  #2    T
+0007    num CONV   0005  num.int
+0008    num ADD    0007  0006
+0009    num SLOAD  #3    I
+0010    num ADD    0009  +1  
+0011 >  num LE     0010  +20000
+---- TRACE 2 stop -> 1
+
+75650
+=== fmtx -jdump=iT
+---- TRACE 1 start jv-min.lua:2
+---- TRACE 1 IR
+0001    int SLOAD  #3    CI
+0002    u8  XLOAD  [0x1c62e580471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005    fun SLOAD  #0    R
+0006    tab FLOAD  0005  func.env
+0007    int FLOAD  0006  tab.hmask
+0008 >  int EQ     0007  +63 
+0009    p64 FLOAD  0006  tab.node
+0010 >  p64 HREFK  0009  "string" @61
+0011 >  tab HLOAD  0010
+0012    int FLOAD  0011  tab.hmask
+0013 >  int EQ     0012  +15 
+0014    p64 FLOAD  0011  tab.node
+0015 >  p64 HREFK  0014  "format" @2
+0016 >  fun HLOAD  0015
+0017 >  fun EQ     0016  string.format
+0018    p64 BUFHDR [0x1c62e5804a8]  RESET
+0019    num CONV   0001  num.int
+0022 >  p64 CALLL  lj_strfmt_putfnum_uint  (0018 +132116 0019)
+0023 >  str BUFSTR 0022  0018
+0024    int FLOAD  0023  str.len
+0025 >  num SLOAD  #2    T
+0026    num CONV   0024  num.int
+0027  + num ADD    0026  0025
+0028  + int ADD    0001  +1  
+0029 >  int LE     0028  +20000
+0030 ------ LOOP ------------
+0031    u8  XLOAD  [0x1c62e580471]  V
+0032    int BAND   0031  +12 
+0033 >  int EQ     0032  +0  
+0034    p64 BUFHDR [0x1c62e5804a8]  RESET
+0035    num CONV   0028  num.int
+0038 >  p64 CALLL  lj_strfmt_putfnum_uint  (0034 +132116 0035)
+0039 >  str BUFSTR 0038  0034
+0040    int FLOAD  0039  str.len
+0041    num CONV   0040  num.int
+0042  + num ADD    0041  0027
+0043  + int ADD    0028  +1  
+0044 >  int LE     0043  +20000
+0045    int PHI    0028  0043
+0046    num PHI    0027  0042
+---- TRACE 1 stop -> loop
+
+75650
+=== alt -jdump=iT
+---- TRACE 1 start jv-min.lua:2
+---- TRACE 1 IR
+0001    int SLOAD  #3    CI
+0002    u8  XLOAD  [0x19f8d920471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005    fun SLOAD  #0    R
+0006    tab FLOAD  0005  func.env
+0007    int FLOAD  0006  tab.hmask
+0008 >  int EQ     0007  +63 
+0009    p64 FLOAD  0006  tab.node
+0010 >  p64 HREFK  0009  "string" @37
+0011 >  tab HLOAD  0010
+0012    int FLOAD  0011  tab.hmask
+0013 >  int EQ     0012  +15 
+0014    p64 FLOAD  0011  tab.node
+0015 >  p64 HREFK  0014  "format" @8
+0016 >  fun HLOAD  0015
+0017 >  fun EQ     0016  string.format
+0018    p64 BUFHDR [0x19f8d9204a8]  RESET
+0021 >  p64 CALLL  lj_strfmt_putfxint  (0018 +132116 0001)
+0022 >  str BUFSTR 0021  0018
+0023    int FLOAD  0022  str.len
+0024 >  num SLOAD  #2    T
+0025    num CONV   0023  num.int
+0026  + num ADD    0025  0024
+0027  + int ADD    0001  +1  
+0028 >  int LE     0027  +20000
+0029 ------ LOOP ------------
+0030    u8  XLOAD  [0x19f8d920471]  V
+0031    int BAND   0030  +12 
+0032 >  int EQ     0031  +0  
+0033    p64 BUFHDR [0x19f8d9204a8]  RESET
+0036 >  p64 CALLL  lj_strfmt_putfxint  (0033 +132116 0027)
+0037 >  str BUFSTR 0036  0033
+0038    int FLOAD  0037  str.len
+0039    num CONV   0038  num.int
+0040  + num ADD    0039  0026
+0041  + int ADD    0027  +1  
+0042 >  int LE     0041  +20000
+0043    int PHI    0027  0041
+0044    num PHI    0026  0040
+---- TRACE 1 stop -> loop
+
+75650

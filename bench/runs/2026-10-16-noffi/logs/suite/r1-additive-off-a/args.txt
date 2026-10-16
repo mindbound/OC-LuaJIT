@@ -1,0 +1,1 @@
+native=additive lib=C:/Users/astro/claude-tmp/oclj/new-r1-aa0f3fa9/libdir-additive jit=off only=UNSET dispose= bundle= javasrc=

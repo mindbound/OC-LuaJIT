@@ -7,9 +7,16 @@ scratch in a year.
 Evidence: [research/os-shape-census.md](research/os-shape-census.md) and its
 follow-up measurements.
 
+**Enforced by construction since 2026-10-16.** The native is built with
+`LUAJIT_DISABLE_FFI` (`native/luajit/oclj_features.h`), so the library has
+no FFI at all. Until then "not exposed" held for the `ffi` name only:
+LuaJIT's lexer loaded FFI on demand to make a `1LL` (below).
+
 ## The decision
 
-The sandbox does not expose `ffi`, and the architecture does not `luaopen_ffi`.
+The native is built without FFI (`LUAJIT_DISABLE_FFI`, set in
+`native/luajit/oclj_features.h`): the library has no `luaopen_ffi`, so
+nothing -- the sandbox, the architecture, the lexer -- can open it.
 This is a **product** decision made deliberately up front, because deferring it
 *is* the decision: ship without FFI and adding it later breaks every existing
 save; ship with it and `cdata` is unpersistable forever.
@@ -22,15 +29,20 @@ are giving that up on purpose.
 
 ### 1. Persistence — decisive
 
-`cdata` cannot be persisted, and **the exposure is a number literal**. `1LL`
-and `2ULL` are `cdata`. So is anything `ffi.new` or `ffi.cast` returns, and so
-is a `string.buffer` object.
+`cdata` cannot be persisted, and on a LuaJIT built with FFI **the exposure is
+a number literal**: the lexer turns `1LL`, `2ULL`, `0x10ULL` and `3i` into
+`cdata`, loading the FFI library on demand to do it (`lj_lex.c:116`, `:127`),
+with no `ffi` anywhere in the environment. So is anything `ffi.new` or
+`ffi.cast` returns. (A `string.buffer` object is not `cdata`, as this note said
+until 2026-10-16: it is userdata, measured.)
 
 The failure mode is the worst one this project has: the save raises, the save
 fails, and in OpenComputers the computer comes back **switched off with its
 RAM gone**. A user writes `local mask = 1LL << 40` because they wanted a
 64-bit integer, the world saves while that value is in a slot, and they lose
-the machine.
+the machine. That was reachable on our native, from the sandbox, until
+2026-10-16. Built without FFI, `1LL` is a syntax error (`malformed number near
+'1LL'`): the program fails when it is loaded, not when the world saves.
 
 **Why `cdata` and not the other things we refuse.** Everything else on the
 refusal list is *bounded*:
@@ -122,12 +134,20 @@ which is the worst possible failure profile for a finalizer.
 
 ## Consequences to implement
 
-- The architecture must not call `luaopen_ffi`, and `ffi` must not be reachable
-  from the sandbox — including indirectly, via `require`, `package.loaded`, or
-  a `debug` upvalue walk.
-- `string.buffer` is also out: its objects are cdata.
+- Done by construction (2026-10-16): the library is built without FFI, so there
+  is no `luaopen_ffi` to call and no `ffi` to reach, by `require`,
+  `package.loaded`, a `debug` upvalue walk or the lexer. `build-native.sh`'s
+  FFI gate (`1LL` refused, `package.preload.ffi` nil, no `luaopen_ffi` in the
+  archive), `test/native/security_test.c` sections FF and BF, and harness
+  milestone `d3-sandbox-ffi-literal-refused` fail if it comes back.
+- `string.buffer` stays unexposed; whether to expose it is undecided. Its
+  objects are userdata, not cdata (measured 2026-10-16), which eris refuses by
+  value like any raw userdata (`persist_typed` in `serializer/eris_lj.c`), and
+  its FFI-only methods (`reserve`, `commit`, `ref`, `putcdata`) are compiled
+  out with FFI (`lib_buffer.c:183-237`).
 - The sandbox constraint list belongs with the other ones in
   [research/os-shape-census.md](research/os-shape-census.md); this note is the
   reasoning, that list is the checklist.
 - Document the absence in user-facing docs *with the reason*. An OS author who
   discovers it by having a machine come back switched off has already shipped.
+  Done: README.md, "Lua dialect".

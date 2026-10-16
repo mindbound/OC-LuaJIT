@@ -1,0 +1,24 @@
+== G3: feature -D lines in HEAD's luajit_build.log
+77
+== G2: -dM through HEAD's build copy
+#define LJ_GC64 1
+#define LJ_52 0
+#define LJ_HASFFI 1
+#define LJ_HASJIT 1
+(OCLJ marker lines: 0)
+== G5: nm HEAD libluajit.a
+0000000000000550 T lua_newstate
+0000000000000500 T lj_ccallback_new
+0000000000002140 T luaopen_ffi
+== %x/FFI gate, HEAD luajit.exe
+lit=ACCEPTED preload=function: 0x023d2a69a640 loaded=table: 0x023d2a6a0018 s=0/1/0 x=1/0/0 same=true
+== %x/FFI gate, unpatched no-FFI
+lit=refused preload=nil loaded=nil s=0/1/0 x=0/1/0 same=true
+== %x/FFI gate, sab1
+lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=false
+== %x/FFI gate, sab2
+lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=false
+== word in HEAD eris_lj.o
+0
+== HEAD fingerprint in eris_lj.o
+1ee778a4|LuaJIT 2.1.ROLLING|8c5a1168

@@ -41,6 +41,12 @@
  * FAIL-FIRST: against an UNPATCHED libluajit.a P2/P3/P4 fail (a head reads
  * ILOOP around the 8th-14th re-load and the run time jumps ~6x) while P1/P5/P6
  * pass; see run-penalty.sh's OCLJ_LJLIB for pointing it at another archive.
+ * That archive must have this build's feature set (native/luajit/
+ * oclj_features.h, FFI off), through the header or as
+ * -DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK -DLUAJIT_DISABLE_FFI
+ * on a pristine tree's make; otherwise THE LAYOUT GATE in main() exits 2,
+ * "proved nothing", before P1 (an FFI-on archive, as every one before
+ * 2026-10-16 was, lays out 6384 bytes to this file's 6376 on Windows x64).
  *
  * Build: see run-penalty.sh next to this file.  Exit status 0 iff every check
  * passes.
@@ -59,6 +65,12 @@
 #include "lj_jit.h"
 #include "lj_dispatch.h"
 #include "lj_bc.h"
+
+/* THE FEATURE CHANNEL (native/luajit/oclj_features.h): the headers above
+ * change with LuaJIT's feature macros, and this file reads J through L2J. */
+#ifndef OCLJ_LUAJIT_FEATURES
+#error "penalty_test.c must be compiled against native/build-native.sh's LuaJIT build copy (-I<build>/luajit-<platform>/src), whose lj_arch.h includes native/luajit/oclj_features.h"
+#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -86,8 +98,13 @@ static double now_ms(void) {
  * it too (docs/research/luajit-penalty-cache-report.md reproduces the defect
  * on upstream's lj_alloc), but how often depends on what else is allocated
  * between loads. */
+/* The first call is lua_newstate's GG_State (lj_state.c:269): main()'s
+ * layout gate compares its size with this file's. */
+static unsigned long crt_calls = 0;
+static size_t crt_first = 0;
 static void *crt_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
   (void)ud; (void)osize;
+  if (crt_calls++ == 0 && ptr == NULL) crt_first = nsize;
   if (nsize == 0) { free(ptr); return NULL; }
   return realloc(ptr, nsize);
 }
@@ -171,6 +188,19 @@ int main(int argc, char **argv) {
   }
   L = lua_newstate(crt_alloc, NULL);
   if (!L) { fprintf(stderr, "cannot create state\n"); return 2; }
+  /* THE LAYOUT GATE.  This file reads J->penalty, J->trace and J->sizetrace
+   * through L2J, whose offset moves 8 bytes with LUAJIT_DISABLE_FFI, and
+   * OCLJ_LJLIB (run-penalty.sh) can link an archive built elsewhere: if that
+   * archive laid out a different GG_State, every reading below is of the
+   * wrong words. */
+  if (crt_first != sizeof(GG_State)) {
+    fprintf(stderr, "penalty_test: proved nothing -- libluajit.a laid out a %lu-byte GG_State, "
+            "this file was compiled for %lu: a different LuaJIT feature set "
+            "(native/luajit/oclj_features.h)\n",
+            (unsigned long)crt_first, (unsigned long)sizeof(GG_State));
+    lua_close(L);
+    return 2;
+  }
   luaL_openlibs(L);
   luaL_register(L, "penalty", p_funcs);
   /* The opcode numbers, from the header the library was built with, so the

@@ -51,7 +51,9 @@ set -u
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
 
-LUAJIT="${OCLJ_LUAJIT:-$OCLJ_REPO/build/native/luajit/src/luajit.exe}"
+# build-native.sh writes luajit-<os>-<arch>/ since 2026-10-02 (run-wd.sh derives it the same way).
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Windows_NT) OCLJ_OS=windows ;; Linux) OCLJ_OS=linux ;; *) OCLJ_OS=unsupported ;; esac
+LUAJIT="${OCLJ_LUAJIT:-${OCLJ_BUILD:-$OCLJ_REPO/build/native}/luajit-$OCLJ_OS-x86_64/src/luajit.exe}"
 LUA53="${OCLJ_LUA53:-$OCLJ_REPO/bench/vendor/lua-5.3.6/src/lua.exe}"
 LUA54="${OCLJ_LUA54:-$OCLJ_REPO/bench/vendor/lua-5.4.8/src/lua.exe}"
 [ -x "$LUAJIT" ] || LUAJIT="${LUAJIT%.exe}"

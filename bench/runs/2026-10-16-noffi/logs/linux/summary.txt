@@ -1,0 +1,11 @@
+build-dropin exit=0
+build-additive exit=0
+shim exit=0 57 checks, 0 failures
+security exit=0 55 checks, 0 failures
+race exit=2 
+mem exit=0 checks=86 failures=0
+vgc exit=0 checks=47 failures=0
+wd exit=0 checks=35 failures=0
+penalty exit=0 checks=6 failures=0
+ser-test exit=0
+ser-negctl exit=0

@@ -70,6 +70,15 @@ fi
 [ -n "$OCLJ_JNI" ] && [ -f "$OCLJ_JNI/jni.h" ] || fail "OCLJ_JNI must name a JDK include dir containing jni.h"
 [ -f "$LJ/libluajit.a" ] || fail "no $LJ/libluajit.a -- run build-native.sh first"
 [ -f "$OCLJ_SHIMOBJ" ]   || fail "no $OCLJ_SHIMOBJ -- run build-native.sh first (on THIS platform)"
+# A shim object from before 2026-10-16 carries no layout gate (lj52_layout_ok)
+# and was compiled for the FFI-on GG_State; linked with an archive without
+# FFI nothing would refuse it, and it would read jit_State 8 bytes off.
+# Refuse that one pairing; a pre-gate object with its own build is fine.
+if ! grep -a -q 'LJ52 LAYOUT: refusing the state' "$OCLJ_SHIMOBJ" \
+   && ! nm "$LJ/libluajit.a" 2>/dev/null | grep -q ' T luaopen_ffi$'; then
+  fail "$OCLJ_SHIMOBJ predates the layout gate (2026-10-16) and reads the FFI-on GG_State,
+       but $LJ/libluajit.a has no FFI: point OCLJ_BUILD at the build it came from"
+fi
 [ -f "$OBJ/eris_lj.o" ]  || fail "no $OBJ/eris_lj.o -- run build-native.sh first (on THIS platform)"
 
 echo "mem_test: linking $OCLJ_SHIMOBJ ($(md5sum < "$OCLJ_SHIMOBJ" | cut -c1-32), $(wc -c < "$OCLJ_SHIMOBJ" | tr -d ' ') bytes)${OCLJ_MEMTEST_CFLAGS:+  cflags: $OCLJ_MEMTEST_CFLAGS}"

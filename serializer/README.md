@@ -15,17 +15,22 @@ an error that says so.
 
 ## Build & test
 
-Requires the pinned LuaJIT static lib built by `../prototype/watchdog`:
-
-```bash
-cd prototype/watchdog && make all CC=gcc
-```
-
-then:
+Requires `native/build-native.sh` to have run on this platform (either
+variant): the suite links that build's LuaJIT copy,
+`build/native/luajit-<os>-<arch>/src` -- the archive the shipped native
+links, with CHECKHOOK, the LuaJIT patches and the feature set of
+`native/luajit/oclj_features.h`, which `eris_lj.c` refuses to compile
+without. Then:
 
 ```bash
 cd serializer && make test CC=gcc
 ```
+
+If `build-native.sh` ran with a non-default `OCLJ_BUILD`, pass the same one:
+`make OCLJ_BUILD=<dir> test CC=gcc`.
+
+`make negctl CC=gcc` proves the fingerprint test and the layout check can
+fail (`tests/negctl-fingerprint.sh`).
 
 ## API
 
@@ -34,7 +39,7 @@ eris.persist([perms,] value)   --> binary string
 eris.unpersist([uperms,] blob) --> value
 eris.settings(name [, value])  --> previous value; nil resets to the default
 eris.diagnostics()             --> array of pending save-time diagnostics; clears it
-eris.version()                 --> version, build fingerprint, format number
+eris.version()                 --> version, build fingerprint, format number, VM-features word
 ```
 
 Settings: `spkey` (default `"__persist"`), `path`, `maxrec` (default 2000, and
@@ -67,10 +72,16 @@ The mode is per-VM, like the other settings, and the list sits beside them.
 'E' 'L' 'J' | u8 format | u8 fplen | fingerprint | value record | u32le crc32
 ```
 
-The fingerprint pins the blob to one natives build: a blob from a different
-LuaJIT commit is refused outright rather than misparsed. Numbers are canonical
-(exact integers as zigzag varints, everything else as raw IEEE bytes), so blobs
-are identical on DUALNUM (arm64) and non-DUALNUM (x64) builds.
+The fingerprint pins the blob to one natives build. It is
+`LuaJIT commit|LUAJIT_VERSION|serializer hash|VM-features word`; the word is
+derived in `eris_lj.c` from the LuaJIT macros it is compiled with, seven
+tokens in a fixed order (`ffi0.lua52.gc64.fr2.dn0.le.p64` on x64). A blob
+whose fingerprint differs is refused before its checksum is read and before
+any object is restored, and the error names the field that differs. Numbers
+are canonical (exact integers as zigzag varints, everything else as raw IEEE
+bytes), so the value encoding is the same on DUALNUM (arm64) and non-DUALNUM
+(x64) builds; the word's `dn` token still refuses a blob across that boundary,
+because restoring a thread across it is untested.
 
 Nothing in OC depends on the byte layout — persisted blobs are opaque `byte[]`
 through `SaveHandler` — so the format is ours to evolve. Any change bumps

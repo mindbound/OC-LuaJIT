@@ -1,0 +1,7 @@
+Linux x86_64
+06915c1f4aa750bf3f8c5bd9e681e521  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src/libluajit.a
+8663b1afee7e04ec7eab21867f43d507  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-linux-x86_64/eris_lj.o
+89bc1d1d09c2673e80953dfa430d8182  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-linux-x86_64/jnlua.o
+0d82916c438612fd6f13a3b2a8b989d7  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-linux-x86_64/lj52shim.o
+cb8c83734946e45f9c0736dab54b018f  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir/libjnlua52-linux-x86_64.so
+767a6c1d09cfa248515f2436387f00cd  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so

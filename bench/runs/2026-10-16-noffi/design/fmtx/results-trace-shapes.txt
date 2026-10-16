@@ -1,0 +1,49 @@
+# probe-trace.lua on three builds of the pinned tree (FFI on; no FFI unpatched; no FFI with the %x patch), re-run 2026-10-16 for this archive
+=== ffi
+LuaJIT 2.1.ROLLING  SSE3 SSE4.1 BMI2 fold cse dce fwd dse narrow loop abc sink fuse
+LOOP    int-for %02x           result=75650   T1:loop
+LOOP    int-for %5d            result=100000  T2:loop
+LOOP    int-for %X             result=75635   T3:loop
+LOOP    int-for %u             result=88894   T4:loop
+LOOP    int-for %o             result=95324   T5:loop
+LOOP    int-for %+.3i          result=109002  T6:loop
+LOOP    bit.band %04x          result=80000   T7:loop
+LOOP    byte hexdump %02x      result=40000   T8:loop
+LOOP    helper return %02x     result=75650   T9:loop
+LOOP    uuid-ish multi         result=360000  T10:loop
+LOOP    buffer putf %02x       result=75650   T11:loop
+LOOP    CTRL int-for %d        result=88894   T12:loop
+LOOP    CTRL num %02x          result=40000   T13:loop T14:loop
+LOOP    CTRL int-for %c        result=20000   T15:loop
+=== noffi
+LuaJIT 2.1.ROLLING  SSE3 SSE4.1 BMI2 fold cse dce fwd dse narrow loop abc sink fuse
+STITCH  int-for %02x           result=75650   T1:stitch T2:root
+STITCH  int-for %5d            result=100000  T3:stitch T4:root
+STITCH  int-for %X             result=75635   T5:stitch T6:root
+STITCH  int-for %u             result=88894   T7:stitch T8:root
+STITCH  int-for %o             result=95324   T9:stitch T10:root
+STITCH  int-for %+.3i          result=109002  T11:stitch T12:root
+STITCH  bit.band %04x          result=80000   T13:stitch T14:root
+STITCH  byte hexdump %02x      result=40000   T15:stitch T16:root
+STITCH  helper return %02x     result=75650   T17:stitch T18:root
+STITCH  uuid-ish multi         result=360000  T19:stitch T20:root
+STITCH  buffer putf %02x       result=75650   T21:stitch T22:root
+LOOP    CTRL int-for %d        result=88894   T23:loop
+LOOP    CTRL num %02x          result=40000   T25:loop T26:loop
+LOOP    CTRL int-for %c        result=20000   T27:loop
+=== fmtx
+LuaJIT 2.1.ROLLING  SSE3 SSE4.1 BMI2 fold cse dce fwd dse narrow loop abc sink fuse
+LOOP    int-for %02x           result=75650   T1:loop
+LOOP    int-for %5d            result=100000  T2:loop
+LOOP    int-for %X             result=75635   T3:loop
+LOOP    int-for %u             result=88894   T4:loop
+LOOP    int-for %o             result=95324   T5:loop
+LOOP    int-for %+.3i          result=109002  T6:loop
+LOOP    bit.band %04x          result=80000   T7:loop
+LOOP    byte hexdump %02x      result=40000   T8:loop
+LOOP    helper return %02x     result=75650   T9:loop
+LOOP    uuid-ish multi         result=360000  T10:loop
+LOOP    buffer putf %02x       result=75650   T11:loop
+LOOP    CTRL int-for %d        result=88894   T12:loop
+LOOP    CTRL num %02x          result=40000   T13:loop T14:loop
+LOOP    CTRL int-for %c        result=20000   T15:loop

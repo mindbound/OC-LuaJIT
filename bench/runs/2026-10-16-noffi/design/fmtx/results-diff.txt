@@ -1,0 +1,68 @@
+=== ffi
+MISMATCH %c @ nearmax at 1514: jit="\1" interp="\0"
+MISMATCH %5c @ nearmax at 1514: jit="    \1" interp="    \0"
+MISMATCH %-3c| @ nearmax at 1514: jit="\1  |" interp="\0  |"
+LuaJIT 2.1.ROLLING: 2009 cases, 3 mismatches, 0 interpreted runs that traced (must be 0)
+  err ABORT      12
+  err LOOP       2
+  err OTHER      6
+  int LOOP       510
+  k LOOP         1377
+  str LOOP       51
+  tbl LOOP       51
+exit=0
+=== noffi
+MISMATCH %c @ nearmax at 1514: jit="\1" interp="\0"
+MISMATCH %5c @ nearmax at 1514: jit="    \1" interp="    \0"
+MISMATCH %-3c| @ nearmax at 1514: jit="\1  |" interp="\0  |"
+LuaJIT 2.1.ROLLING: 2009 cases, 3 mismatches, 0 interpreted runs that traced (must be 0)
+  err ABORT      10
+  err LOOP       2
+  err OTHER      8
+  int LOOP       90
+  int STITCH     420
+  k LOOP         957
+  k STITCH       420
+  str LOOP       51
+  tbl LOOP       51
+exit=0
+=== fmtx
+MISMATCH %c @ nearmax at 1514: jit="\1" interp="\0"
+MISMATCH %5c @ nearmax at 1514: jit="    \1" interp="    \0"
+MISMATCH %-3c| @ nearmax at 1514: jit="\1  |" interp="\0  |"
+LuaJIT 2.1.ROLLING: 2009 cases, 3 mismatches, 0 interpreted runs that traced (must be 0)
+  err ABORT      11
+  err LOOP       2
+  err NONE       1
+  err OTHER      6
+  int LOOP       510
+  k LOOP         1377
+  str LOOP       51
+  tbl LOOP       51
+exit=0
+=== fmtxa
+MISMATCH %c @ nearmax at 1514: jit="\1" interp="\0"
+MISMATCH %5c @ nearmax at 1514: jit="    \1" interp="    \0"
+MISMATCH %-3c| @ nearmax at 1514: jit="\1  |" interp="\0  |"
+LuaJIT 2.1.ROLLING: 2009 cases, 3 mismatches, 0 interpreted runs that traced (must be 0)
+  err ABORT      12
+  err LOOP       2
+  err OTHER      6
+  int LOOP       510
+  k LOOP         1377
+  str LOOP       51
+  tbl LOOP       51
+exit=0
+=== alt
+MISMATCH %c @ nearmax at 1514: jit="\1" interp="\0"
+MISMATCH %5c @ nearmax at 1514: jit="    \1" interp="    \0"
+MISMATCH %-3c| @ nearmax at 1514: jit="\1  |" interp="\0  |"
+LuaJIT 2.1.ROLLING: 2009 cases, 3 mismatches, 0 interpreted runs that traced (must be 0)
+  err ABORT      12
+  err LOOP       2
+  err OTHER      6
+  int LOOP       510
+  k LOOP         1377
+  str LOOP       51
+  tbl LOOP       51
+exit=0

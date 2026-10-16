@@ -1,0 +1,9 @@
+# HEAD 62970a0's build/native artifacts (2026-10-13 19:16-19:17 build), saved 2026-10-16 before round 1's rebuild.
+# The binaries are kept out of the repo (.gitattributes * text eol=lf would rewrite them); they live in
+# C:/Users/astro/claude-tmp/oclj/head-62970a0/.  md5, bytes, file:
+8c94e8b0ab95d40918fe56ca9fa83b6a  56074  eris_lj.o
+8ccf8430cc5d3772238485b9161633c5  835854  libluajit.a
+ace486b48078bf05fff9683e1a45b03a  34259  lj52shim.o
+e5985a936e925df38287182a1c96de12  611886  luajit.exe
+efa774ae50ad6ddee19a92039f850478  22804  luajit_build.log
+# lj52shim.o is the DROPIN variant's object (the last variant built that day); the additive DLL is new-6445f2e4.

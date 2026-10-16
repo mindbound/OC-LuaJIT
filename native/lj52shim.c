@@ -1,6 +1,8 @@
 /* lj52shim.c -- implementation of the Lua 5.2 C API surface OC-JNLua needs,
- * on top of LuaJIT 2.1 (Lua 5.1 ABI) built with LUAJIT_ENABLE_LUA52COMPAT and
- * LUAJIT_ENABLE_CHECKHOOK.
+ * on top of LuaJIT 2.1 (Lua 5.1 ABI) built with the feature set in
+ * native/luajit/oclj_features.h: LUAJIT_ENABLE_LUA52COMPAT,
+ * LUAJIT_ENABLE_CHECKHOOK and LUAJIT_DISABLE_FFI.  This file must be compiled
+ * against the same set (THE FEATURE CHANNEL, THE LAYOUT GATE below).
  *
  * See lj52shim.h for the contract and for the two comment blocks that matter
  * most: THE MODE GATE and the allocator STOPGAP.
@@ -210,6 +212,8 @@ typedef struct lj52_mem {
   int           norefuse;   /* >0: charge, but never refuse -- see below     */
   long long     pending;    /* bytes moved while nobody could be told yet    */
   void         *heap;       /* this state's own lj_alloc arena; NULL = libc  */
+  size_t        gg_seen;    /* nsize of lj52_alloc's FIRST call: the GG_State */
+                            /* as libluajit.a sizes it (THE LAYOUT GATE)    */
   /* -- the accounting's C side; see docs/accounting-sync.md -- */
   long long     used;       /* every successful delta since birth, BOTH modes */
   long long     total;      /* the cap Java handed over; valid once csync     */
@@ -402,7 +406,9 @@ static void *lj52_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
                                     : (long long)nsize - (long long)osize);
 
   if (M == NULL) return lj52_libc(ptr, nsize);
-  M->mem_calls++;
+  /* The first call on a record is lua_newstate's GG_State (lj_state.c:269):
+   * lj52_newstate's layout gate compares its size with ours. */
+  if (M->mem_calls++ == 0 && ptr == NULL) M->gg_seen = nsize;
 
   /* C MODE (docs/accounting-sync.md): once the Java side has handed the cap
    * over (lj52_mem_settotal, from LuaStateLuaJIT's capped constructor and its
@@ -1076,6 +1082,16 @@ Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_ocljValueGcCounters(JNIEnv *env
 #include "lj_jit.h"
 #include "lj_alloc.h"
 #include "lj_prng.h"
+
+/* THE FEATURE CHANNEL.  The headers above change with LuaJIT's feature
+ * macros (GG_State is 6376 bytes without FFI, 6384 with), so this file must
+ * see exactly the set libluajit.a was built with.  That set lives in
+ * native/luajit/oclj_features.h, which the build copy's lj_arch.h includes
+ * (native/luajit/patch-features-include.sh); a compile against any other
+ * LuaJIT tree stops here.  lj52_newstate re-checks the size at run time. */
+#ifndef OCLJ_LUAJIT_FEATURES
+#error "lj52shim.c must be compiled against native/build-native.sh's LuaJIT build copy (-I<build>/luajit-<platform>/src), whose lj_arch.h includes native/luajit/oclj_features.h"
+#endif
 
 static void *lj52_back(lj52_mem *M, void *ptr, size_t osize, size_t nsize) {
   if (M->heap != NULL) return lj_alloc_f(M->heap, ptr, osize, nsize);
@@ -2625,6 +2641,34 @@ static int lj52_panic(lua_State *L) {
   return 0;
 }
 
+/* THE LAYOUT GATE.  lj52_alloc records the size of lua_newstate's first
+ * allocation, the GG_State as libluajit.a was compiled to lay it out
+ * (lj_state.c:269).  This file reaches jit_State through G2J/L2J
+ * (lj52_gc_flushtraces, _OCLJ_JITSTATS) and so does eris_lj.c (its trace
+ * lookup); J's offset moves 8 bytes with LUAJIT_DISABLE_FFI, and a reader
+ * compiled for the other layout takes J->freetrace|sizetrace for J->trace
+ * and dereferences it.  So all three must agree before anything here
+ * touches an internal.  build-native.sh's stage 1b proves the same at
+ * build time; this catches what a build cannot see: a serializer object or
+ * an archive from somewhere else (a hand link), or a shim object compiled
+ * from this source or later for another layout.  NOT caught: a shim object
+ * from before 2026-10-16, which carries no gate (run-mem.sh and run-vgc.sh
+ * refuse the one dangerous OCLJ_SHIMOBJ pairing), and an archive that takes
+ * no foreign allocator at all (non-GC64): its lua_newstate returns NULL
+ * without calling lj52_alloc, and the luaL_newstate fallback below runs
+ * (the roadmap's "Loose ends the allocator change turned up", item 1). */
+static int lj52_layout_ok(const lj52_mem *M) {
+  size_t mine = sizeof(GG_State), eris = eris_lj_ggsize();
+  if (M->gg_seen == mine && eris == mine) return 1;
+  fprintf(stderr, "LJ52 LAYOUT: refusing the state -- libluajit.a laid out a %lu-byte "
+          "GG_State, lj52shim.c was compiled for %lu and eris_lj.c for %lu.  Compile both "
+          "against native/build-native.sh's LuaJIT build copy (its lj_arch.h includes "
+          "native/luajit/oclj_features.h) and link that copy's libluajit.a.\n",
+          (unsigned long)M->gg_seen, (unsigned long)mine, (unsigned long)eris);
+  fflush(stderr);
+  return 0;
+}
+
 lua_State *lj52_newstate(void) {
   /* The state is born on OUR allocator, with a per-state accounting record as
    * its ud, and that pairing is never changed again -- see the memory
@@ -2648,6 +2692,15 @@ lua_State *lj52_newstate(void) {
     if (lj_prng_seed_secure(&prng)) M->heap = lj_alloc_create(&prng);
     if (M->heap != NULL) lj_alloc_setprng(M->heap, &prng);
     L = lua_newstate(lj52_alloc, M);
+    if (L != NULL && !lj52_layout_ok(M)) {
+      /* lua_close is the library's own code and sees its own layout.  NOT
+       * the luaL_newstate fallback below: that state would be read through
+       * the same wrong layout, with no record to say so. */
+      lua_close(L);
+      if (M->heap != NULL) lj_alloc_destroy(M->heap);
+      free(M);
+      return NULL;
+    }
     if (L != NULL && M->heap != NULL) lj_alloc_setprng(M->heap, &G(L)->prng);
   }
   if (!L) {
