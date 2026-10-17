@@ -1,0 +1,141 @@
+# mode=nopack pack=false
+gpt.head.text-sector | ERR attempt to call field 'unpack' (a nil value)
+gpt.head.zero-sector | ERR attempt to call field 'unpack' (a nil value)
+gpt.head.ff-sector | ERR attempt to call field 'unpack' (a nil value)
+gpt.head.real | ERR attempt to call field 'unpack' (a nil value)
+gpt.head.big-lbas | ERR attempt to call field 'unpack' (a nil value)
+gpt.head.short-91 | ERR attempt to call field 'unpack' (a nil value)
+gpt.head.nil-read | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.normal | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.attr-bit63 | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.attr-msbasic | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.attr-63-and-0 | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.attr-bit60 | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.short-80 | ERR attempt to call field 'unpack' (a nil value)
+gpt.entry.empty | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.text-sector | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.zero-disk | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.real-2-of-4 | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.attr-high-bits | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.A-lba-above-2^53 | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.entrysz-80 | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.capacity-512 | ERR attempt to call field 'unpack' (a nil value)
+gpt.scan.capacity-600 | ERR attempt to call field 'unpack' (a nil value)
+msdos.fallback.s2n.empty | OK 0
+msdos.fallback.s2n.attrib-1 | OK 16
+msdos.fallback.s2n.bps-512 | OK 512
+msdos.fallback.s2n.tnos-2880 | OK 2880
+msdos.fallback.s2n.three-bytes | OK 197121
+msdos.fallback.s2n.vsn-deadbeef | OK 3735928559
+msdos.fallback.s2n.ff4 | OK 4294967295
+msdos.fallback.n2s.512/2 | OK s:0002
+msdos.fallback.n2s.attrib/1 | OK s:10
+msdos.fallback.n2s.size/4 | OK s:40e20100
+msdos.fallback.n2s.ffff/2 | OK s:ffff
+msdos.fallback.n2s.mkdir-odd-0xFFFF0/2 | OK s:f0ff
+msdos.fallback.n2s.256/1 | OK s:00
+msdos.fallback.n2s.neg1/2 | OK s:ffff
+msdos.fallback.n2s.2^32/4 | OK s:00000000
+msdos.fallback.setFAT12-cluster2-0xFFFF | OK 2 s:ff0f s:000000ff0f000000
+msdos.fallback.setFAT12-cluster3-0xFFFF | OK 2 s:f0ff s:00000000f0ff0000
+msdos.pack.n2s.non-integral | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.Bc16 | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.Bc16-short-pads | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.Bc16-long | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.B-authok | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.B-256 | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.B-neg | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.B-float-int | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.B-float-frac | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.Bc16c16 | ERR attempt to call field 'pack' (a nil value)
+ssh.pack.Bc32 | ERR attempt to call field 'pack' (a nil value)
+passwd.pack.c16c32 | ERR attempt to call field 'pack' (a nil value)
+sshsession.unpack.c16c32 | ERR attempt to call field 'unpack' (a nil value)
+sshsession.unpack.c16c32-short | ERR attempt to call field 'unpack' (a nil value)
+ssh.unpack.c16c16 | ERR attempt to call field 'unpack' (a nil value)
+ssh.unpack.c16-iv-rest | ERR attempt to call field 'unpack' (a nil value)
+ssh.unpack.B-tag | ERR attempt to call field 'unpack' (a nil value)
+ssh.unpack.B-empty | ERR attempt to call field 'unpack' (a nil value)
+dmesg.H | ERR attempt to call field 'unpack' (a nil value)
+dmesg.R | ERR attempt to call field 'unpack' (a nil value)
+dmesg.R-len-past-end | ERR attempt to call field 'unpack' (a nil value)
+dmesg.R-no-H | ERR attempt to call field 'unpack' (a nil value)
+dmesg.D | ERR attempt to call field 'unpack' (a nil value)
+dmesg.D-empty | ERR attempt to call field 'unpack' (a nil value)
+dmesg.E | ERR attempt to call field 'unpack' (a nil value)
+dmesg.E-truncated | ERR attempt to call field 'unpack' (a nil value)
+dmesg.unknown-concat | ERR attempt to call field 'unpack' (a nil value)
+LONG.util.uuidBin-small | ERR attempt to call field 'pack' (a nil value)
+LONG.util.uuidBin-2^32 | ERR attempt to call field 'pack' (a nil value)
+LONG.util.uuidBin-2^53 | ERR attempt to call field 'pack' (a nil value)
+LONG.util.uuidBin-neg1 | ERR attempt to call field 'pack' (a nil value)
+LONG.util.uuidBin-2^63-float | ERR attempt to call field 'pack' (a nil value)
+LONG.util.uuidBin-1.5 | ERR attempt to call field 'pack' (a nil value)
+LONG.size.l | ERR attempt to call field 'packsize' (a nil value)
+LONG.size.L | ERR attempt to call field 'packsize' (a nil value)
+LONG.size.!lL | ERR attempt to call field 'packsize' (a nil value)
+LONG.unpack.<l-ff | ERR attempt to call field 'unpack' (a nil value)
+LONG.unpack.<L-2^53+1 | ERR attempt to call field 'unpack' (a nil value)
+util.tonumber-hex16 | OK 4294967295 4294967295 4294967295
+util.binUUID-real | OK s:61663364633630662d383338342d373234372d386537392d336436396438343737646534
+LONG.util.uuidBin-real | ERR attempt to call field 'pack' (a nil value)
+procfs.microcode | OK s:30783532
+opengpu.submittest.hand.0 | OK s:0000000000000000
+opengpu.submittest.hand.-0 | OK s:8000000000000000
+opengpu.submittest.hand.1 | OK s:3ff0000000000000
+opengpu.submittest.hand.-1.5 | OK s:bff8000000000000
+opengpu.submittest.hand.0.1 | OK s:3fb999999999999a
+opengpu.submittest.hand.third | OK s:3fd5555555555555
+opengpu.submittest.hand.1e308 | OK s:7fe1ccf385ebc8a0
+opengpu.submittest.hand.dblmax | OK s:7fefffffffffffff
+opengpu.submittest.hand.minnormal | OK s:0010000000000000
+opengpu.submittest.hand.maxsubnormal | OK s:0008000000000000
+opengpu.submittest.hand.minsubnormal | OK s:0000000000000001
+opengpu.submittest.hand.1e-310 | OK s:0000093445b87316
+opengpu.submittest.hand.inf | OK s:7ff0000000000000
+opengpu.submittest.hand.-inf | OK s:fff0000000000000
+opengpu.submittest.hand.nan | ERR NaN is not submittable
+opengpu.mesh3d.hand.u16.0 | OK s:0000
+opengpu.mesh3d.hand.u16.1 | OK s:0100
+opengpu.mesh3d.hand.u16.65535 | OK s:ffff
+opengpu.mesh3d.hand.u16.65536 | OK s:0000
+opengpu.mesh3d.hand.u16.-1 | OK s:ffff
+opengpu.mesh3d.hand.u16.70000 | OK s:7011
+opengpu.mesh3d.hand.u16.1.5 | OK s:0100
+opengpu.mesh3d.hand.f32.0.10000000000000001 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.-0 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.9.9999999999999994e+38 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.-9.9999999999999994e+38 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.1e-46 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.3.4028234663852886e+38 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.16777217 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.f32.nan | ERR attempt to call field 'pack' (a nil value)
+opengpu.i8.2^53 | ERR attempt to call field 'pack' (a nil value)
+opengpu.i8.-2^63 | ERR attempt to call field 'pack' (a nil value)
+opengpu.i8.2^63 | ERR attempt to call field 'pack' (a nil value)
+opengpu.i8.1.5 | ERR attempt to call field 'pack' (a nil value)
+opengpu.i8.inf | ERR attempt to call field 'pack' (a nil value)
+opengpu.i8.nan | ERR attempt to call field 'pack' (a nil value)
+opengpu.unpack.i8.2^53+1 | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.i8.2^53+3 | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.i8.max | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.i8.min | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.i8.-2^53-1 | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.I4.max | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.i4.-1 | ERR attempt to call field 'unpack' (a nil value)
+opengpu.unpack.d-roundtrip | ERR attempt to call field 'pack' (a nil value)
+opengpu.unpack.fdd | ERR attempt to call field 'unpack' (a nil value)
+opengpu.packsize.uniforms | ERR attempt to call field 'packsize' (a nil value)
+opengpu.packsize.fill | ERR attempt to call field 'packsize' (a nil value)
+opengpu.pack.fill | ERR attempt to call field 'pack' (a nil value)
+opengpu.pack.fill-h-overflow | ERR attempt to call field 'pack' (a nil value)
+opengpu.pack.ffff | ERR attempt to call field 'pack' (a nil value)
+opengpu.pack.hhhhh | ERR attempt to call field 'pack' (a nil value)
+N.nan.d-payload-roundtrip | ERR attempt to call field 'unpack' (a nil value)
+N.nan.d-negpayload-roundtrip | ERR attempt to call field 'unpack' (a nil value)
+N.nan.f-payload-roundtrip | ERR attempt to call field 'unpack' (a nil value)
+N.nan.n-type | ERR attempt to call field 'unpack' (a nil value)
+detect.string.pack~=nil | OK false
+detect.opengpu-usePack | OK false
+detect.method-call | ERR attempt to call method 'packsize' (a nil value)
+# end

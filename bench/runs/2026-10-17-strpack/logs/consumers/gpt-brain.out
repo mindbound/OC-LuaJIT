@@ -1,0 +1,16 @@
+  PASS: 17_gpt.lua registers a scanner
+string.unpack present: true; integer VM: false
+  PASS: text in sector 1: scanned as not-GPT, no error
+  PASS: zeroed drive: not GPT, no error
+  PASS: 0xFF sector 1: not GPT, no error
+  PASS: real GPT: two partitions registered
+  PASS: real GPT: p0 offset and size
+  PASS: real GPT: p2 offset and size
+  PASS: real GPT: p0 uuid via util.binUUID
+  PASS: attribute high bits: scan unchanged
+  PASS: LBA above 2^53: registered, no error
+  PASS: LBA above 2^53: offset/size as rounded doubles
+  PASS: entry size 80: refused as 5.3.6 does
+  PASS: capacity 512 (read returns nil): refused
+  PASS: capacity 600 (short read): refused
+GPT RESULT: ALL 14 TESTS PASS

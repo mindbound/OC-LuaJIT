@@ -1,0 +1,25 @@
+Calculating task graph as no cached configuration is available for tasks: help
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.34 available! Run ./gradlew updateBuildScript
+
+> Task :help
+
+Welcome to Gradle 9.3.1.
+
+To run a build, run gradlew <task> ...
+
+To see a list of available tasks, run gradlew tasks
+
+To see more detail about a task, run gradlew help --task <task>
+
+To see a list of command-line options, run gradlew --help
+
+For more detail on using Gradle, see https://docs.gradle.org/9.3.1/userguide/command_line_interface.html
+
+For troubleshooting, visit https://help.gradle.org
+
+BUILD SUCCESSFUL in 835ms
+1 actionable task: 1 executed
+Configuration cache entry stored.

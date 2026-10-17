@@ -1,0 +1,14 @@
+The deviations.txt validator's new clause (run-pack.sh): a RESID or RESID-scan class needs an id that starts "RESID".
+Main session, 2026-10-17, after the verify-tests verifier showed that a conformance DEV id (no "DEV" prefix) could be
+refiled as RESID with a wrong value and part 2 would pass.
+
+devbad.awk.sh = the validator's awk, extracted from test/native/run-pack.sh with sed (the file in this directory).
+dev-mut.txt   = test/native/pack/deviations.txt with one line changed:
+    35c35
+    < conformance|any|u maxint|DEV1
+    ---
+    > conformance|any|u maxint|RESID
+
+new validator, real deviations.txt:  (no output)  -- clean
+new validator, dev-mut.txt:          line 35, the id and the class disagree: conformance|any|u maxint|RESID
+old validator (the new clause removed by sed), dev-mut.txt:  (no output)  -- the old one let it through

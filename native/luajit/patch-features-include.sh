@@ -3,7 +3,7 @@
 # and the only one to a header: lj_arch.h includes native/luajit/
 # oclj_features.h, the one file that names OC-LuaJIT's LuaJIT feature set.
 # (The others: patch-penalty-scrub.sh, patch-fastfunc-errmem-top.sh,
-# patch-strfmt-xint-noffi.sh.)
+# patch-strfmt-xint-noffi.sh, patch-strpack-register.sh.)
 #
 #     sh native/luajit/patch-features-include.sh <in lj_arch.h> <out lj_arch.h>
 #

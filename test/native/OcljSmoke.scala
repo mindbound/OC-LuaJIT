@@ -3775,6 +3775,33 @@ object Smoke {
       |     m:find("expected near 'LL'", 1, true) and "refused-puc" or "other")
       |end
       |
+      |-- STRING.PACK PROBE (d4).  Our fork's string library carries Lua 5.3.6's
+      |-- string.pack, string.unpack and string.packsize (native/luajit/
+      |-- oclj_strpack.c, registered in LuaJIT's lib_string.c), and machine.lua
+      |-- copies all three into the sandbox's string table.  Through the JNI-
+      |-- loaded native: present, a round trip through the sandbox table AND
+      |-- the string metatable (("<i4"):pack), an I8 field of 2^63-1 rounded to
+      |-- 2^63 (decided: rounded, never refused), 'l' at 8 bytes (decided), one
+      |-- refusal by its message.  OC's stock native is PUC 5.2.4 + Eris, which
+      |-- has no string.pack: its sandbox copies nil and the cell paints absent.
+      |local packRow
+      |do
+      |  local ok, r = pcall(function()
+      |    if type(string.pack) ~= "function" then return "absent" end
+      |    local b = string.pack("<i4", -2)
+      |    local v, nx = string.unpack("<i4", b)
+      |    local big = string.unpack("<I8", string.rep(string.char(255), 7) .. string.char(127))
+      |    local okE, e = pcall(string.unpack, "<i4", "abc")
+      |    return "ok/" .. string.format("%02x%02x%02x%02x", b:byte(1, 4)) ..
+      |      "/" .. string.format("%d/%d", v, nx) ..
+      |      "/" .. tostring(("<i4"):pack(-2) == b) ..
+      |      "/" .. tostring(big == 2^63) ..
+      |      "/l" .. string.format("%d", string.packsize("l")) ..
+      |      "/" .. ((not okE and tostring(e):find("data string too short", 1, true)) and "short" or "OTHER")
+      |  end)
+      |  packRow = ok and r or ("error/" .. tostring(r):gsub("[ /]", "_"))
+      |end
+      |
       |-- JIT PROBE.  A compute-bound loop run from INSIDE the sandbox -- i.e.
       |-- under OC's real deadline hook, with OC's real hookInterval and the real
       |-- checkDeadline doing its work -- timed with the sandbox's own os.clock.
@@ -4194,7 +4221,7 @@ object Smoke {
       |  component.gpu.set(1, 18, stkRow .. "        ")
       |  -- repainted every tick for the same reason as the counter: boot output
       |  -- would otherwise scroll a one-shot line off the screen.
-      |  component.gpu.set(1, 16, gate .. " OCLJLIT=" .. litRow .. "        ")
+      |  component.gpu.set(1, 16, gate .. " OCLJLIT=" .. litRow .. " OCLJPACK=" .. packRow .. "        ")
       |  -- The suite block.  gpu.set is a DIRECT call and OC meters those per
       |  -- tick; painting twenty-odd rows every 50 ms would spend the machine's
       |  -- call budget on the scoreboard and stretch the wall time of the very
@@ -5699,6 +5726,26 @@ object Smoke {
          else if (lit == "refused-puc") "   <- PUC's refusal on a LuaJIT cell: this lexer is not LuaJIT's"
          else if (lit == "refused") "   <- LuaJIT's refusal on the stock cell: this is not PUC 5.2"
          else "   <- refused, but not by a lexer this suite knows"))
+
+    // --- (d4) string.pack in the sandbox: our fork's Lua 5.3.6 port ------
+    // native/luajit/oclj_strpack.c, registered in LuaJIT's lib_string.c, so
+    // jnlua's openlib(STRING) installs it in both natives and machine.lua
+    // copies pack, unpack and packsize into the sandbox's string table
+    // (build/native/kernel/machine.lua:946-948); ("fmt"):pack reaches the host
+    // string table through the string metatable.  The probe packs and unpacks
+    // through both, rounds an I8 field of 2^63-1 to 2^63 (decided: rounded,
+    // never refused), reads 'l' as 8 bytes (decided), and checks one refusal by
+    // its message.  OC's stock native is PUC 5.2.4 + Eris, which has no
+    // string.pack: its sandbox copies nil, and the stock cell paints "absent".
+    val pk = parse(txtA2, "OCLJPACK")
+    val pkWant = if (nativeMode == "stock") "absent" else "ok/feffffff/-2/5/true/true/l8/short"
+    milestone("d4-sandbox-string-pack", pk == pkWant,
+      "string.pack in the sandbox -> " + pk + " (want " + pkWant + ")" +
+        (if (pk == pkWant) ""
+         else if (pk == "<missing>") "   <- no OCLJPACK on screen -- the in-sandbox probe never ran"
+         else if (pk == "absent") "   <- the sandbox has no string.pack: this native's string library lacks it"
+         else if (nativeMode == "stock") "   <- the stock cell has a string.pack: this is not PUC 5.2"
+         else "   <- string.pack is there but does not behave as Lua 5.3.6's with the two decided deviations"))
 
     // --- (k1) the deadline still fires -----------------------------------
     // The watchdog replaces the mechanism behind "too long without yielding";

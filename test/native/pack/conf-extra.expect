@@ -1,0 +1,411 @@
+A j str 1 | OK s:0a00000000000000
+A d str 1 | OK s:0000000000002440
+A j str 2 | OK s:0a00000000000000
+A d str 2 | OK s:0000000000002440
+A j str 3 | OK s:0700000000000000
+A d str 3 | OK s:0000000000001c40
+A j str 4 | OK s:f9ffffffffffffff
+A d str 4 | OK s:0000000000001cc0
+A j str 5 | OK s:1000000000000000
+A d str 5 | OK s:0000000000003040
+A j str 6 | OK s:1f00000000000000
+A d str 6 | OK s:0000000000003f40
+A j str 7 | OK s:1000000000000000
+A d str 7 | OK s:0000000000003040
+A j str 8 | OK s:ffffffffffffff7f
+A d str 8 | OK s:000000000000e043
+A j str 9 | OK s:0000000000000080
+A d str 9 | OK s:000000000000e0c3
+A j str 10 | OK s:ffffffffffffffff
+A d str 10 | OK s:000000000000f0bf
+A j str 11 | OK s:ffffffffffffffff
+A d str 11 | OK s:000000000000f0bf
+A j str 12 | OK s:0100000000002000
+A d str 12 | OK s:0000000000004043
+A j str 13 | OK s:0000000000000080
+A d str 13 | OK s:000000000000e0c3
+A j str 14 | OK s:ffffffffffffff7f
+A d str 14 | OK s:000000000000e043
+A j str 15 | ERR bad argument #2 to 'F' (number has no integer representation)
+A d str 15 | OK s:000000000000e043
+A j str 16 | OK s:0000000000000080
+A d str 16 | OK s:000000000000e0c3
+A j str 17 | OK s:6400000000000000
+A d str 17 | OK s:0000000000005940
+A j str 18 | OK s:0100000000000000
+A d str 18 | OK s:000000000000f03f
+A j str 19 | ERR bad argument #2 to 'F' (number has no integer representation)
+A d str 19 | OK s:000000000000f83f
+A j str 20 | OK s:1000000000000000
+A d str 20 | OK s:0000000000003040
+A j str 21 | ERR bad argument #2 to 'F' (number has no integer representation)
+A d str 21 | OK s:000000000000f83f
+A j str 22 | OK s:0100000000000000
+A d str 22 | OK s:000000000000f03f
+A j str 23 | ERR bad argument #2 to 'F' (number has no integer representation)
+A d str 23 | OK s:000000000000e03f
+A j str 24 | OK s:0500000000000000
+A d str 24 | OK s:0000000000001440
+A j str 25 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 25 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 26 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 26 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 27 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 27 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 28 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 28 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 29 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 29 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 30 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 30 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 31 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 31 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 32 | ERR bad argument #2 to 'F' (number has no integer representation)
+A d str 32 | OK s:000000000000f07f
+A j str 33 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 33 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 34 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 34 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 35 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 35 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 36 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 36 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 37 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 37 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 38 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 38 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 39 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 39 | ERR bad argument #2 to 'F' (number expected, got string)
+A j str 40 | OK s:0100000000000000
+A d str 40 | OK s:000000000000f03f
+A j str 41 | OK s:6400000000000000
+A d str 41 | OK s:0000000000005940
+A j str 42 | OK s:0000000000000000
+A d str 42 | OK s:0000000000000000
+A j str 43 | OK s:0000000000000000
+A d str 43 | OK s:0000000000000000
+A j str 44 | ERR bad argument #2 to 'F' (number expected, got string)
+A d str 44 | ERR bad argument #2 to 'F' (number expected, got string)
+A i4 str hexmax | OK s:ffffff7f
+A i4 str hexovf | ERR bad argument #2 to 'F' (integer overflow)
+A I4 str neg | ERR bad argument #2 to 'F' (unsigned overflow)
+A j true | ERR bad argument #2 to 'F' (number expected, got boolean)
+A j table | ERR bad argument #2 to 'F' (number expected, got table)
+A j named | ERR bad argument #2 to 'F' (number expected, got MyType)
+A j badname | ERR bad argument #2 to 'F' (number expected, got table)
+A d named | ERR bad argument #2 to 'F' (number expected, got MyType)
+A z named | ERR bad argument #2 to 'F' (string expected, got MyType)
+A c1 named | ERR bad argument #2 to 'F' (string expected, got MyType)
+A s named | ERR bad argument #2 to 'F' (string expected, got MyType)
+A fmt named | ERR bad argument #1 to 'F' (string expected, got MyType)
+A fmt nil | ERR bad argument #1 to 'F' (string expected, got nil)
+A fmt none | ERR bad argument #1 to 'F' (string expected, got no value)
+A fmt number | ERR invalid format option '1'
+A fmt number2 | ERR invalid format option '4'
+A z number | OK s:313200
+A c3 number | OK s:313200
+A s1 number | OK s:022d37
+A missing 2 | ERR bad argument #3 to 'F' (number expected, got nil)
+A missing z | ERR bad argument #2 to 'F' (string expected, got nil)
+A missing d | ERR bad argument #2 to 'F' (number expected, got nil)
+A missing after pad | ERR bad argument #3 to 'F' (number expected, got nil)
+A extra args | OK s:01
+A nil arg | ERR bad argument #2 to 'F' (number expected, got nil)
+A fn arg | ERR bad argument #2 to 'F' (number expected, got function)
+A co arg | ERR bad argument #2 to 'F' (number expected, got thread)
+A u data none | ERR bad argument #2 to 'F' (string expected, got no value)
+A u data nil | ERR bad argument #2 to 'F' (string expected, got nil)
+A u data num | OK s:3132 3
+A u data named | ERR bad argument #2 to 'F' (string expected, got MyType)
+A u fmt none | ERR bad argument #1 to 'F' (string expected, got no value)
+A u pos str | OK 98 3
+A u pos strf | OK 98 3
+A u pos strhex | OK 98 3
+A u pos frac | ERR bad argument #3 to 'F' (number has no integer representation)
+A u pos bad | ERR bad argument #3 to 'F' (number expected, got string)
+A u pos named | ERR bad argument #3 to 'F' (number expected, got MyType)
+A u pos nan | ERR bad argument #3 to 'F' (number has no integer representation)
+A u pos inf | ERR bad argument #3 to 'F' (number has no integer representation)
+A u pos nil | OK 97 2
+A u pos false | ERR bad argument #3 to 'F' (number expected, got boolean)
+A ps none | ERR bad argument #1 to 'F' (string expected, got no value)
+A ps named | ERR bad argument #1 to 'F' (string expected, got MyType)
+B c max | OK 2147483639
+B c max+1 | ERR invalid format option '0'
+B c 2^31-1 | ERR invalid format option '7'
+B c big c8 | OK 2147483647
+B c big c9 | ERR bad argument #1 to 'F' (format result too large)
+B order s | ERR bad argument #1 to 'F' (format result too large)
+B order z | ERR bad argument #1 to 'F' (variable-length format)
+B order s1 | ERR bad argument #1 to 'F' (format result too large)
+B s first | ERR bad argument #1 to 'F' (variable-length format)
+B ok then s | ERR bad argument #1 to 'F' (variable-length format)
+B leading zeros | OK 4
+B many digits | ERR integral size (999999999) out of limits [1,16]
+B c digits | OK 1
+B ! align | OK 16
+B ! align 16 | OK 32
+B ! align 16 j | OK 16
+B ! X | OK 0
+B ! b X | OK 4
+B ! b X 2 | OK 3
+B ! b X d | OK 8
+B ! b Xx | OK 1
+B Xs | OK 4
+B X end | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X space | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X < | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X ! | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X X | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X c | ERR missing size for format option 'c'
+B X c1 | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X z | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+B X y | ERR invalid format option 'y'
+B X i17 | ERR integral size (17) out of limits [1,16]
+B !3 i3 | ERR bad argument #1 to 'F' (format asks for alignment not power of 2)
+B !3 i2 | OK 4
+B !5 i8 | ERR bad argument #1 to 'F' (format asks for alignment not power of 2)
+B !8 i3 | ERR bad argument #1 to 'F' (format asks for alignment not power of 2)
+B !8 i6 | ERR bad argument #1 to 'F' (format asks for alignment not power of 2)
+B i3 default | OK 4
+B !0 | ERR integral size (0) out of limits [1,16]
+B !17 | ERR integral size (17) out of limits [1,16]
+B ! | OK 16
+B i0 | ERR integral size (0) out of limits [1,16]
+B i16 | OK 16
+B s0 | ERR integral size (0) out of limits [1,16]
+B c | ERR missing size for format option 'c'
+B c0 | OK 0
+B bad | ERR invalid format option 'q'
+B bad hi | ERR invalid format option '<\200>'
+B embedded nul | OK 4
+B leading nul | OK 0
+B empty | OK 0
+B spaces | OK 0
+B all fixed | OK 91
+B endian only | OK 0
+C embedded nul | OK s:01
+C ! b i4 at 1 | OK s:0100000002000000
+C ! X then | OK s:0100000002
+C ! s4 align | OK s:01000000020000006162
+C ! s align def | OK s:010000000000000002000000000000006162
+C ! z noalign | OK s:0161620002
+C ! c noalign | OK s:01616200000000000300000000000000
+C ! x | OK s:00000000000000000300000000000000
+C ! d | OK s:01000000000000003fe0000000000000
+C ! f | OK s:010000000000003f
+C ! i16 | OK s:01000000000000000000000000000000ffffffffffffffffffffffffffffffff
+C ! I16 | OK s:01000000000000000000000000000000ffffffffffffffff0000000000000000
+C endian mix | OK s:020101020201
+C i3 | OK s:fefffffffffe
+C I3 max | OK s:ffffff
+C I3 ovf | ERR bad argument #2 to 'F' (unsigned overflow)
+C i3 min | OK s:000080
+C i3 min-1 | ERR bad argument #2 to 'F' (integer overflow)
+C i7 2^53 | OK s:00000000000020
+C i7 -2^53 | OK s:000000000000e0
+C I7 2^53 | OK s:00000000000020
+C i7 2^55 | ERR bad argument #2 to 'F' (integer overflow)
+C i7 -2^55 | OK s:00000000000080
+C I7 2^56 | ERR bad argument #2 to 'F' (unsigned overflow)
+C i8 -2^63 | OK s:0000000000000080
+C i8 2^63 | ERR bad argument #2 to 'F' (number has no integer representation)
+C I8 2^63 | ERR bad argument #2 to 'F' (number has no integer representation)
+C I8 -1 | OK s:ffffffffffffffff
+C J -2^63 | OK s:0000000000000080
+C i9 -1 | OK s:ffffffffffffffffff
+C I9 -1 | OK s:ffffffffffffffff00
+C i9 big | OK s:004000000000000000
+C i12 -2^63 | OK s:0000000000000080ffffffff
+C I16 2^62 | OK s:00000000000000004000000000000000
+C i16 -3 | OK s:fffffffffffffffffffffffffffffffd
+C b -0 | OK s:00
+C j nan | ERR bad argument #2 to 'F' (number has no integer representation)
+C j -inf | ERR bad argument #2 to 'F' (number has no integer representation)
+C B -1 | ERR bad argument #2 to 'F' (unsigned overflow)
+C B 255 | OK s:ff
+C B 256 | ERR bad argument #2 to 'F' (unsigned overflow)
+C b 127 | OK s:7f
+C b 128 | ERR bad argument #2 to 'F' (integer overflow)
+C b -128 | OK s:80
+C b -129 | ERR bad argument #2 to 'F' (integer overflow)
+C h | OK s:feffffff
+C H ovf | ERR bad argument #2 to 'F' (unsigned overflow)
+C i 2^31 | ERR bad argument #2 to 'F' (integer overflow)
+C I 2^32-1 | OK s:ffffffff
+C T | OK s:3930000000000000
+C T -1 | OK s:ffffffffffffffff
+C f max | OK s:ffff7f7f
+C f just over | OK s:0000807f
+C f over | OK s:0000807f
+C f tiny | OK s:00000000
+C f denorm | OK s:c2160100
+C f -0 | OK s:00000080
+C f nan | OK s:0000c0ff
+C f -nan | OK s:0000c07f
+C d nan | OK s:000000000000f8ff
+C d -nan | OK s:000000000000f87f
+C n | OK s:3fd5555555555555
+C d str | OK s:000000000000f83f
+C c0 a | ERR bad argument #2 to 'F' (string longer than given size)
+C c1 empty | OK s:00
+C c pad | OK s:0000000000
+C z empty | OK s:00
+C z zero end | ERR bad argument #2 to 'F' (string contains zeros)
+C s1 255 | OK 256
+C s1 256 | ERR bad argument #2 to 'F' (string length does not fit in given size)
+C s2 65535 | OK 65537
+C s2 65536 | ERR bad argument #2 to 'F' (string length does not fit in given size)
+C s3 65536 | OK 65539
+C s16 | OK s:020000000000000000000000000000006162
+C s9 big | OK s:0000000000000000026162
+C x only | OK s:000000
+C nothing | OK s:
+C big c | OK s#100008:907963251
+C big s | OK s#70004:426002980
+C big z | OK s#5001:2098805905
+C many | OK s#200:2053423220
+C bad opt mid | ERR invalid format option 'y'
+C bad opt before arg err | ERR bad argument #2 to 'F' (number expected, got string)
+C arg err before bad opt | ERR invalid format option 'y'
+C ovf before bad | ERR bad argument #2 to 'F' (integer overflow)
+C X before arg | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+C missing c | ERR missing size for format option 'c'
+D all | OK -2 70000 s:7a7a s:73 2.5 s:616263 23
+D pos len+1 | OK 4
+D pos len+2 | ERR bad argument #3 to 'F' (initial position out of string)
+D pos -3 | OK 97 2
+D pos -4 | ERR bad argument #3 to 'F' (initial position out of string)
+D pos 0 | ERR bad argument #3 to 'F' (initial position out of string)
+D pos 2^53 | ERR bad argument #3 to 'F' (initial position out of string)
+D pos -2^63 | ERR bad argument #3 to 'F' (initial position out of string)
+D pos 2^63 | ERR bad argument #3 to 'F' (number has no integer representation)
+D empty data | OK 1
+D empty z | OK s: 2
+D z at end | OK 97 s: 3
+D z mid | OK s:6162 s:6364 7
+D z unterminated then nop | ERR bad argument #2 to 'F' (data string too short)
+D z unterminated then < | ERR bad argument #2 to 'F' (data string too short)
+D z unterminated then x | ERR bad argument #2 to 'F' (data string too short)
+D z unterminated then X | ERR bad argument #2 to 'F' (data string too short)
+D z unterminated alone | OK s:616263 5
+D z nul only | OK s: 2
+D z then B | OK s:61 1 4
+D z embedded | OK s:6162 4
+D s1 | OK s:616263 5
+D s1 short | ERR bad argument #2 to 'F' (data string too short)
+D s1 exact end | ERR bad argument #2 to 'F' (data string too short)
+D s2 big | ERR bad argument #2 to 'F' (data string too short)
+D s4 be | OK s:6162 7
+D s9 | OK s:78 11
+D s9 nofit | ERR 9-byte integer does not fit into Lua Integer
+D s16 zero | OK s: 17
+D s8 wrap -8 | ERR memory allocation error: block too big
+D s8 wrap -1 | ERR memory allocation error: block too big
+D s8 wrap nontail raw | ERR memory allocation error: block too big
+D s8 2^63 | ERR bad argument #2 to 'F' (data string too short)
+D s8 2^62 | ERR bad argument #2 to 'F' (data string too short)
+D s4 4GB | ERR bad argument #2 to 'F' (data string too short)
+D s4 at pos | OK s:61 8
+D align pos | OK 4 9
+D align X | OK 1 2 6
+D align short | ERR bad argument #2 to 'F' (data string too short)
+D x | OK 1 3 4
+D x short | ERR bad argument #2 to 'F' (data string too short)
+D x at end | ERR bad argument #2 to 'F' (data string too short)
+D c0 | OK s: 1
+D c huge | ERR bad argument #2 to 'F' (data string too short)
+D i16 -1 | OK -1 17
+D I16 wrapped | OK -1 17
+D I16 nofit | ERR 16-byte integer does not fit into Lua Integer
+D i12 min | OK -9223372036854775808 13
+D i12 min bad | ERR 12-byte integer does not fit into Lua Integer
+D i9 pos | OK 1 10
+D i9 neg | OK -2 10
+D I9 > | ERR 9-byte integer does not fit into Lua Integer
+D i3 | OK -2 -2 7
+D I3 | OK 16777215 4
+D i5 min | OK -549755813888 6
+DEV1 i7 max | OK 36028797018963968 8
+DEV1 I7 max | OK 72057594037927936 8
+D j 2^53-1 | OK 9007199254740991 9
+D j -2^53 | OK -9007199254740992 9
+D J 2^63 | OK -9223372036854775808 9
+D f | OK 1 1 9
+D f nan | OK true
+D f inf | OK inf 5
+D f denorm | OK 1.4012984643248171e-45 5
+D d -0 | OK -0 9
+D n | OK 0.33333333333333331 9
+D many | OK 7001
+D short at opt 2 | ERR bad argument #2 to 'F' (data string too short)
+D bad opt after data | ERR invalid format option 'y'
+D bad opt before short | ERR invalid format option 'y'
+D short before bad opt | ERR bad argument #2 to 'F' (data string too short)
+E method ok | OK s:0201 nil nil
+E method bad self | ERR calling 'F' on bad self (format asks for alignment not power of 2)
+E method bad self X | ERR calling 'F' on bad self (invalid next option for option 'X')
+E method arg | ERR bad argument #1 to 'F' (integer overflow)
+E method luaL_error | ERR integral size (17) out of limits [1,16]
+E method unpack | OK 258 3
+E method unpack short | ERR bad argument #1 to 'F' (data string too short)
+E method unpack pos | ERR bad argument #2 to 'F' (initial position out of string)
+E method packsize | ERR calling 'F' on bad self (format asks for alignment not power of 2)
+E method packsize var | ERR calling 'F' on bad self (variable-length format)
+E global call | ERR integral size (17) out of limits [1,16]
+E global argerr | ERR bad argument #2 to 'F' (integer overflow)
+RESID-tail method bad self | ERR bad argument #1 to 'F' (format asks for alignment not power of 2)
+RESID-tail method arg | ERR bad argument #2 to 'F' (integer overflow)
+F rt j 1 | OK 0 9
+F rt i9 1 | OK 0 10
+F rt d 1 | OK 0 9
+F rt j 2 | OK 1 9
+F rt i9 2 | OK 1 10
+F rt d 2 | OK 1 9
+F rt j 3 | OK -1 9
+F rt i9 3 | OK -1 10
+F rt d 3 | OK -1 9
+F rt j 4 | OK 2147483648 9
+F rt i9 4 | OK 2147483648 10
+F rt d 4 | OK 2147483648 9
+F rt j 5 | OK -2147483648 9
+F rt i9 5 | OK -2147483648 10
+F rt d 5 | OK -2147483648 9
+F rt j 6 | OK 4503599627370496 9
+F rt i9 6 | OK 4503599627370496 10
+F rt d 6 | OK 4503599627370496 9
+F rt j 7 | OK -4503599627370496 9
+F rt i9 7 | OK -4503599627370496 10
+F rt d 7 | OK -4503599627370496 9
+F rt j 8 | OK 9007199254740992 9
+F rt i9 8 | OK 9007199254740992 10
+F rt d 8 | OK 9007199254740992 9
+F rt j 9 | OK -9007199254740992 9
+F rt i9 9 | OK -9007199254740992 10
+F rt d 9 | OK -9007199254740992 9
+F rt j 10 | OK 4611686018427387904 9
+F rt i9 10 | OK 4611686018427387904 10
+F rt d 10 | OK 4611686018427387904 9
+F rt j 11 | OK -9223372036854775808 9
+F rt i9 11 | OK -9223372036854775808 10
+F rt d 11 | OK -9223372036854775808 9
+DEV1 2^53+1 | OK 9007199254740992 9
+DEV1 2^53+3 | OK 9007199254740996 9
+DEV1 maxint | OK 9.2233720368547758e+18 9
+DEV1 J 2^64-2^10-1 | OK -1025 9
+DEV1 minint+1 | OK -9223372036854775808 9
+DEV1 I16 2^63-1 | OK 9.2233720368547758e+18 17
+DEV1 s9-like | OK 9.2233720368547758e+18 10
+DEV2 l | OK s:ffffffffffffffff
+DEV2 L | OK s:0100000000000000
+DEV2 l size | OK 8
+DEV2 !l | OK 16
+DEV2 l u | OK -1 9
+D s8 wrap abc | ERR memory allocation error: block too big
+RESID exp 2^20 | ERR bad argument #2 to 'F' (number expected, got string)
+RESID exp -2^20 | ERR bad argument #2 to 'F' (number expected, got string)
+RESID frac 2^20 | ERR bad argument #2 to 'F' (number expected, got string)
+RESID many results | ERR stack overflow (too many results)
+C numstr big | OK s:392e303037313939323534373431652b313500
+RESID numstr float | OK s:3100
+RESID nan payload | OK s:000000000000f8ff

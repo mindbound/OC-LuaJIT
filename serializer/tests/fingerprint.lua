@@ -36,9 +36,17 @@ local _, fp, _, feat = eris.version()
 ok(type(feat) == "string" and #feat > 0, "eris.version() returns the VM-features word", feat)
 feat = type(feat) == "string" and feat or ""
 ok(#feat > 0 and fp:sub(-#feat - 1) == "|" .. feat, "the word is the fingerprint's last field", fp)
-ok(feat:match("^ffi[01]%.lua5[12]%.gc[36][24]%.fr[12]%.dn[01]%.[lb]e%.p[36][24]$") ~= nil,
+ok(feat:match("^ffi[01]%.lua5[12]%.gc[36][24]%.fr[12]%.dn[01]%.[lb]e%.p[36][24]%.pack[01]$") ~= nil,
    "the word has the documented shape", feat)
 ok(#fp <= 255, "the fingerprint fits the header's u8 length", #fp)
+-- The pack token is read from oclj_features.h; string.pack comes from the
+-- archive's lib_string.c.  This host opens the archive's own string library
+-- (luaL_openlibs), so the two must agree here as they must in the DLL.
+local packtok = feat:match("%.(pack[01])$")
+ok(packtok == (type(string.pack) == "function" and type(string.unpack) == "function"
+               and type(string.packsize) == "function" and "pack1" or "pack0"),
+   "the pack token agrees with this archive's string library",
+   tostring(packtok) .. " vs string.pack " .. type(string.pack))
 
 -- A blob whose restore would CHANGE state: a __persist recipe bumps a
 -- permanent sentinel when it runs, and recipes run only after the whole body
@@ -77,10 +85,11 @@ end
 print("-- every token flipped is refused by the fingerprint, nothing restored")
 local FLIP = { ffi0 = "ffi1", ffi1 = "ffi0", lua52 = "lua51", lua51 = "lua52",
                gc64 = "gc32", gc32 = "gc64", fr2 = "fr1", fr1 = "fr2",
-               dn0 = "dn1", dn1 = "dn0", le = "be", be = "le", p64 = "p32", p32 = "p64" }
+               dn0 = "dn1", dn1 = "dn0", le = "be", be = "le", p64 = "p32", p32 = "p64",
+               pack1 = "pack0", pack0 = "pack1" }
 local toks = {}
 for t in feat:gmatch("[^.]+") do toks[#toks + 1] = t end
-ok(#toks == 7, "seven tokens", #toks)
+ok(#toks == 8, "eight tokens", #toks)
 for i = 1, #toks do
   local other = {}
   for j = 1, #toks do other[j] = toks[j] end

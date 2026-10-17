@@ -1,0 +1,7 @@
+chain r2ff-a started 23:09:01 natives=/c/Users/astro/claude-tmp/oclj/new-r1-aa0f3fa9
+  r2ff-additive-on env=[-] additive /c/Users/astro/claude-tmp/oclj/new-r1-aa0f3fa9/libdir-additive on UNSET
+r2ff-additive-on exit=1 SMOKE| CHECKS: 81   FAILURES: 1   WALL: 94.2s d4=[SMOKE| MILESTONE d4-sandbox-string-pack: FAIL -- string.pack in the sandbox -> absent (want ok/feffffff/-2/5/true/true/l8/short)   <- the sandbox has no string.pack: this native's string library lacks it]
+      SMOKE| MILESTONE d4-sandbox-string-pack: FAIL -- string.pack in the sandbox -> absent (want ok/feffffff/-2/5/true/true/l8/short)   <- the sandbox has no string.pack: this native's string library lacks it
+  r2ff-stock env=[-] stock - on UNSET
+r2ff-stock exit=0 SMOKE| CHECKS: 52   FAILURES: 0   WALL: 94.3s d4=[SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> absent (want absent)]
+chain r2ff-a finished 23:12:23

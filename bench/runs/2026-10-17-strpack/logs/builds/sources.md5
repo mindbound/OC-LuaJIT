@@ -1,0 +1,12 @@
+58f8fdbb400bcc6dda429815238c401b *native/luajit/patch-fastfunc-errmem-top.sh
+74f7ee4452ffd66e4c2336ecc4b90edf *native/luajit/patch-features-include.sh
+a2dfa0d08cce8a65c4e793e19d437a82 *native/luajit/patch-penalty-scrub.sh
+af7311cde19e559a304e1cf4c0f0df48 *native/luajit/patch-strfmt-xint-noffi.sh
+62f72e0c8efbfeb435c68df777a5630f *native/luajit/patch-strpack-register.sh
+10097c3a4f5dd74a705968bf3073ce4f *native/luajit/oclj_features.h
+d1d908864b9e7ebb3a2b3cc32df186b1 *native/luajit/oclj_strpack.c
+a55dc399fc4f6273f0368d9060b7c00b *native/lj52shim.c
+c0f8d30558c21110712fa40aeeaf433a *native/lj52shim.h
+24b34a0acbc92902e9f05543f91ce7b6 *native/build-native.sh
+a824d16fefd3ed79dedb0cc44e74be12 *serializer/eris_lj.c
+c34eccd31c0a210401643e19b3785411 *serializer/eris_lj.h

@@ -1,0 +1,35 @@
+=== -Pocljit.nativesDir=/c/Users/astro/claude-tmp/oclj/r2/gradle-ff/r1 (aa0f3fa9)
+exit=0
+=== -Pocljit.nativesDir=/c/Users/astro/claude-tmp/oclj/r2/gradle-ff/pack0 (32e1550a)
+exit=0
+(the two runs above used the 'help' task, which does not run verifyModAssets: they prove nothing; the runs below run the task itself)
+=== ./gradlew verifyModAssets -Pocljit.nativesDir=C:/Users/astro/claude-tmp/oclj/r2/gradle-ff/r1
+exit=1
+OC-LuaJIT: packaging 1 native(s): libjnluajit52-windows-x86_64.dll (723142 bytes)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyModAssets'.
+> OC-LuaJIT: libjnluajit52-windows-x86_64.dll was NOT built from the serializer in this tree without FFI and with string.pack (expected fingerprint fragment 'baf083da|ffi0.lua52....pack1': the sha1 of serializer/eris_lj.c + eris_lj.h, then the VM-features word's ffi0.lua52 and its last token pack1, native/luajit/oclj_features.h). A jar built now would pair this tree's kernel with a native from a different serializer or LuaJIT feature set. Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+=== ./gradlew verifyModAssets -Pocljit.nativesDir=C:/Users/astro/claude-tmp/oclj/r2/gradle-ff/pack0
+exit=1
+OC-LuaJIT: packaging 1 native(s): libjnluajit52-windows-x86_64.dll (732544 bytes)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyModAssets'.
+> OC-LuaJIT: libjnluajit52-windows-x86_64.dll was NOT built from the serializer in this tree without FFI and with string.pack (expected fingerprint fragment 'baf083da|ffi0.lua52....pack1': the sha1 of serializer/eris_lj.c + eris_lj.h, then the VM-features word's ffi0.lua52 and its last token pack1, native/luajit/oclj_features.h). A jar built now would pair this tree's kernel with a native from a different serializer or LuaJIT feature set. Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+=== control: ./gradlew verifyModAssets (build/native/dist)
+exit=0
+OC-LuaJIT: packaging 2 native(s): libjnluajit52-linux-x86_64.so (729456 bytes), libjnluajit52-windows-x86_64.dll (732544 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (baf083da|ffi0.lua52....pack1)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+OC-LuaJIT: packaging the patched kernel (52904 bytes)

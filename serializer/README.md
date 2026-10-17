@@ -30,7 +30,11 @@ If `build-native.sh` ran with a non-default `OCLJ_BUILD`, pass the same one:
 `make OCLJ_BUILD=<dir> test CC=gcc`.
 
 `make negctl CC=gcc` proves the fingerprint test and the layout check can
-fail (`tests/negctl-fingerprint.sh`).
+fail (`tests/negctl-fingerprint.sh`). `tests/strpack.lua` persists and
+restores a coroutine holding `string.pack`, `string.unpack` and
+`string.packsize` mid-loop: our LuaJIT's string library carries them (Lua
+5.3.6's, `native/luajit/oclj_strpack.c`), so they are permanents a blob holds
+by name.
 
 ## API
 
@@ -74,10 +78,14 @@ The mode is per-VM, like the other settings, and the list sits beside them.
 
 The fingerprint pins the blob to one natives build. It is
 `LuaJIT commit|LUAJIT_VERSION|serializer hash|VM-features word`; the word is
-derived in `eris_lj.c` from the LuaJIT macros it is compiled with, seven
-tokens in a fixed order (`ffi0.lua52.gc64.fr2.dn0.le.p64` on x64). A blob
-whose fingerprint differs is refused before its checksum is read and before
-any object is restored, and the error names the field that differs. Numbers
+derived in `eris_lj.c` from the LuaJIT macros it is compiled with, eight
+tokens in a fixed order (`ffi0.lua52.gc64.fr2.dn0.le.p64.pack1` on x64). The
+eighth, `pack`, names a library rather than a layout: `string.pack`,
+`string.unpack` and `string.packsize` are in the string library
+(`OCLJ_LIB_STRPACK` in `native/luajit/oclj_features.h`), three C functions
+within reach of `_G` and so three permanents. A blob whose fingerprint
+differs is refused before its checksum is read and before any object is
+restored, and the error names the field that differs. Numbers
 are canonical (exact integers as zigzag varints, everything else as raw IEEE
 bytes), so the value encoding is the same on DUALNUM (arm64) and non-DUALNUM
 (x64) builds; the word's `dn` token still refuses a blob across that boundary,

@@ -1,0 +1,56 @@
+# test/native/pack/deviations.txt -- the lines in which PUC Lua 5.3.6's output
+# of pack/conformance.lua and pack/conf-extra.lua differs from ours, i.e. from
+# the .expect files, each with its class.  test/native/run-pack.sh (part 2)
+# requires the set of differing lines to be EXACTLY the set listed here for
+# the host platform; and, with the decided deviations applied to the listed
+# lines of PUC's run (DEV1 lines get D1, DEV2 lines D2, RESID and RESID-scan
+# lines both), PUC's output to equal the .expect file in every line but the
+# RESID and RESID-scan ones, which must still differ.
+#   <script>|<platform: any, windows or linux>|<case id>|<class>
+#
+# DEV1, decided 2026-10-13 (D1): an unpacked integer that needs more than 53
+# bits is the nearest double of 5.3.6's exact 64-bit value, never refused.
+# Applied to PUC's run as: each integer result v is given as v + 0.0.
+# DEV2, decided 2026-10-13 (D2): 'l' and 'L' are 8 bytes on every platform;
+# PUC uses sizeof(long), 4 on Win64 and 8 on Linux, so these differ on
+# Windows only.  Applied to PUC's run as: 'l'/'L' in the case's format are
+# rewritten to 'i8'/'I8'.
+# RESID-scan: pack's own, decided (D5/D7) -- pack's converter uses LuaJIT's
+# numeral scanner, which refuses a numeral with 2^20 or more digits after the
+# radix point, leading zeros counted and trailing zeros not, decimal or hex
+# (lj_strscan.c:449-453), or an exponent of 2^20 or more (:468); 5.3.6's
+# strtod reads the first as its value and the second as inf or 0.
+# RESID: the VM, not pack -- a NaN's payload is canonicalized
+# (lua_pushnumber, lj_api.c:624-628); one C call returns at most 8000 stack
+# slots (LUAI_MAXCSTACK); LuaJIT's tostring writes 1.0 as "1"; a tail-called
+# C function loses its name and its method shift in error messages.
+# Not a line here: an over-cap pack is refused as LUA_ERRMEM "not enough
+# memory", unpositioned, after every argument check (pack_test.c PT4), where
+# 5.3.6 raises "not enough memory for buffer allocation" (positioned when
+# called non-tail from Lua; LUA_ERRMEM if its final string is what fails),
+# and can raise it before it reaches a later bad argument.
+conformance|windows|size l|DEV2
+conformance|windows|size L|DEV2
+conformance|any|u 2^53+1|DEV1
+conformance|any|u maxint|DEV1
+conf-extra|any|DEV1 i7 max|DEV1
+conf-extra|any|DEV1 I7 max|DEV1
+conf-extra|any|DEV1 2^53+1|DEV1
+conf-extra|any|DEV1 2^53+3|DEV1
+conf-extra|any|DEV1 maxint|DEV1
+conf-extra|any|DEV1 minint+1|DEV1
+conf-extra|any|DEV1 I16 2^63-1|DEV1
+conf-extra|any|DEV1 s9-like|DEV1
+conf-extra|windows|DEV2 l|DEV2
+conf-extra|windows|DEV2 L|DEV2
+conf-extra|windows|DEV2 l size|DEV2
+conf-extra|windows|DEV2 !l|DEV2
+conf-extra|windows|DEV2 l u|DEV2
+conf-extra|any|RESID exp 2^20|RESID-scan
+conf-extra|any|RESID exp -2^20|RESID-scan
+conf-extra|any|RESID frac 2^20|RESID-scan
+conf-extra|any|RESID-tail method bad self|RESID
+conf-extra|any|RESID-tail method arg|RESID
+conf-extra|any|RESID many results|RESID
+conf-extra|any|RESID numstr float|RESID
+conf-extra|any|RESID nan payload|RESID

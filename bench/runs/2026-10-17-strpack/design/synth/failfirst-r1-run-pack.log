@@ -1,0 +1,24 @@
+run-pack: build /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native (windows-x86_64); results /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native/pack-20261016T215856Z
+
+== 1. conformance on /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native/luajit-windows-x86_64/src/luajit.exe ==
+FAIL conformance: luajit.exe raised (exit 1): C:\Users\astro\claude-tmp\oclj\r2\synth\r1ff\build\native\luajit-windows-x86_64\src\luajit.exe: ...-tmp/oclj/r2/synth/repo/test/native/pack/conformance.lua:9: string.pack/unpack/packsize missing
+stack traceback:
+	[C]: in function 'error'
+	...-tmp/oclj/r2/synth/repo/test/native/pack/conformance.lu
+FAIL conf-extra: luajit.exe raised (exit 1): C:\Users\astro\claude-tmp\oclj\r2\synth\r1ff\build\native\luajit-windows-x86_64\src\luajit.exe: ...e-tmp/oclj/r2/synth/repo/test/native/pack/conf-extra.lua:13: string.pack/unpack/packsize missing
+stack traceback:
+	[C]: in function 'error'
+	...e-tmp/oclj/r2/synth/repo/test/native/pack/conf-extra.l
+
+== 2. provenance: the .expect files against PUC Lua 5.3.6 ==
+PASS conformance: PUC 5.3.6 differs from conformance.expect in exactly the 4 lines deviations.txt lists for windows
+PASS conf-extra: PUC 5.3.6 differs from conf-extra.expect in exactly the 20 lines deviations.txt lists for windows
+
+== 3. the shim path: pack_test.c ==
+
+== PT1  jnlua's opener and the string metatable ==
+FAIL PT1   string.pack/packsize/unpack after luaL_requiref("string")    0 of 3 are functions
+
+PACK TESTS: 1 checks, 1 failures (string.pack missing: nothing else to test)
+
+RUN-PACK: FAIL (results: /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native/pack-20261016T215856Z)

@@ -1,0 +1,11 @@
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|85097158|ffi0.lua52.gc64.fr2.dn0.le.p64
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- the string library carries the three, and the walk names each once
+  FAIL: string.pack, string.unpack and string.packsize are functions  -- nil/nil/nil
+
+STRPACK RESULT: 0 passed, 1 FAILED (nothing else to test)

@@ -1,0 +1,26 @@
+run-pack: build /c/Users/astro/Downloads/OC-LuaJIT/build/native (windows-x86_64); results /c/Users/astro/Downloads/OC-LuaJIT/build/native/pack-ff-r2
+
+== 1. conformance on /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe ==
+FAIL conformance: luajit.exe raised (exit 1): C:\Users\astro\Downloads\OC-LuaJIT\build\native\luajit-windows-x86_64\src\luajit.exe: ...tro/Downloads/OC-LuaJIT/test/native/pack/conformance.lua:17: string.pack/unpack/packsize missing
+stack traceback:
+	[C]: in function 'error'
+	...tro/Downloads/OC-LuaJIT/test/native/pack/conformance.lua:17: in 
+FAIL conf-extra: luajit.exe raised (exit 1): C:\Users\astro\Downloads\OC-LuaJIT\build\native\luajit-windows-x86_64\src\luajit.exe: ...stro/Downloads/OC-LuaJIT/test/native/pack/conf-extra.lua:27: string.pack/unpack/packsize missing
+stack traceback:
+	[C]: in function 'error'
+	...stro/Downloads/OC-LuaJIT/test/native/pack/conf-extra.lua:27: in 
+
+== 2. provenance: the .expect files against PUC Lua 5.3.6 ==
+PASS conformance: PUC 5.3.6 differs from conformance.expect in exactly the 4 lines deviations.txt lists for windows
+PASS conformance: with D1/D2 applied (2 DEV1 and 2 DEV2 lines), PUC 5.3.6 equals conformance.expect in every line but the 0 RESID lines, which D1/D2 do not explain
+PASS conf-extra: PUC 5.3.6 differs from conf-extra.expect in exactly the 21 lines deviations.txt lists for windows
+PASS conf-extra: with D1/D2 applied (8 DEV1 and 5 DEV2 lines), PUC 5.3.6 equals conf-extra.expect in every line but the 8 RESID lines, which D1/D2 do not explain
+
+== 3. the shim path: pack_test.c ==
+
+== PT1  jnlua's opener and the string metatable ==
+FAIL PT1   string.pack/packsize/unpack after luaL_requiref("string")    0 of 3 are functions
+
+PACK TESTS: 1 checks, 1 failures (string.pack missing: nothing else to test)
+
+RUN-PACK: FAIL (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/pack-ff-r2)

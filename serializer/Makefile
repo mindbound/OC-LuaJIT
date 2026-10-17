@@ -67,6 +67,7 @@ test: $(BIN)
 	./$(BIN) tests/contract.lua
 	./$(BIN) tests/stack-universe.lua
 	./$(BIN) tests/fingerprint.lua
+	./$(BIN) tests/strpack.lua
 	BIN=./$(BIN) sh tests/run-forin.sh
 
 # Proves fingerprint.lua and test_main.c's layout gate can fail

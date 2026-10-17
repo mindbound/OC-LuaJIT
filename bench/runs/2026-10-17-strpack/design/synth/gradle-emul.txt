@@ -1,0 +1,3 @@
+ACCEPTED  repo/build/native/dist/libjnluajit52-windows-x86_64.dll  matches=['baf083da|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1']  want=baf083da|ffi0.lua52....pack1
+REFUSED   gradle/pack0.dll  matches=['baf083da|ffi0.lua52.gc64.fr2.dn0.le.p64.pack0']  want=baf083da|ffi0.lua52....pack1
+REFUSED   C:/Users/astro/claude-tmp/oclj/r2/ref/build/native/libdir-additive/libjnluajit52-windows-x86_64.dll  matches=['85097158|ffi0.lua52.gc64.fr2.dn0.le.p64']  want=85097158|ffi0.lua52....pack1

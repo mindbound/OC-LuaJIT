@@ -616,7 +616,9 @@ int main(void) {
   /* ---------------------------------------------------------------- BF */
   section("BF  string.buffer: FFI-only methods compiled out, the rest intact");
   /* Reached the way the machine state could: _PRELOAD, no package/require
-   * (luaopen_string preregisters it, lib_string.c:686). */
+   * (luaopen_string preregisters it: lib_string.c:686 in the pinned
+   * checkout, :708 in the build copy, below patch-strpack-register.sh's
+   * block). */
   evalstr(L, "local open = debug.getregistry()._PRELOAD['string.buffer'] "
              "if type(open) ~= 'function' then return 'NO PRELOAD: ' .. type(open) end "
              "local sb = open('string.buffer') local b = sb.new() "

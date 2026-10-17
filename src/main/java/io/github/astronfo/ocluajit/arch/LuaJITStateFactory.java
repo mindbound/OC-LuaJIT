@@ -86,13 +86,27 @@ public final class LuaJITStateFactory extends LuaStateFactory {
     }
 
     /**
-     * OpenComputers' 5.2 library set, exactly.
+     * OpenComputers' 5.2 LIST of libraries, opened as its 5.2 factory opens
+     * them, over a LuaJIT that is our own fork.
      *
-     * BIT32 and not UTF8. We are a 5.2-class VM -- LuaJIT is 5.1 plus partial
-     * 5.2 compat -- machine.lua is written against that surface, and the split
-     * is not cosmetic: it is why QuickOS boots on neither us nor OpenComputers'
-     * own 5.2 native (docs/research/os-shape-census.md). Adding UTF8 here to
-     * look more capable would make us a fourth dialect that no OS targets.
+     * The list is OpenComputers': BIT32 and not UTF8. machine.lua builds the
+     * sandbox from whichever of these tables exist (`utf8 = utf8 and {...}`),
+     * so opening UTF8 here would change the sandbox's shape, not only add to
+     * it. The split is also why QuickOS boots on neither us nor OpenComputers'
+     * own 5.2 native (docs/research/os-shape-census.md); whether to add utf8
+     * is a separate decision (docs/roadmap.md, the 5.2-class row).
+     *
+     * What a library CONTAINS is ours to decide: since 2026-10-13 our LuaJIT is
+     * a fork that may take Lua 5.3 functions (docs/roadmap.md, the 5.2-class
+     * row). STRING carries Lua 5.3.6's string.pack, string.unpack and
+     * string.packsize, which the LuaJIT build registers in lib_string.c
+     * (native/luajit/patch-strpack-register.sh, native/luajit/oclj_strpack.c)
+     * and machine.lua already copies into the sandbox; TABLE and COROUTINE
+     * carry LuaJIT's own table.move and coroutine.isyieldable. There is still
+     * no integer subtype and no //. A program that tests for string.pack (or
+     * table.move, coroutine.isyieldable) finds it (Plan9k takes string.pack as
+     * its 5.3 test); one that tests for math.type, math.tointeger or utf8 does
+     * not, and one that tests _VERSION finds 5.2.
      */
     @Override
     public void openLibs(final LuaState state) {

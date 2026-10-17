@@ -1,0 +1,10 @@
+INFO util.tonumber-hex16
+  expected: OK -1 1311768467463790336 4294967295
+  got:      OK 4294967295 4294967295 4294967295
+INFO LONG.util.uuidBin-real
+  expected: OK s:0fc63daf848347728e793d69d8477de4
+  got:      OK s:00000000ffffffff00000000ffffffff
+INFO opengpu.mesh3d.hand.u16.1.5
+  expected: ERR bad argument #1 to 'F' (number has no integer representation)
+  got:      OK s:0100
+cases=185 pass=182 fail=0 info=3 missing=0 extra=0

@@ -1,0 +1,12 @@
+Linux x86_64
+PRETTY_NAME="Ubuntu 26.04.1 LTS"
+NAME="Ubuntu"
+ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+99493b4cbf27741528c421176cd8ac60  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src/libluajit.a
+ceabbd1ea39130399fdddd51441838ef  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-linux-x86_64/eris_lj.o
+89bc1d1d09c2673e80953dfa430d8182  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-linux-x86_64/jnlua.o
+0d82916c438612fd6f13a3b2a8b989d7  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/obj-linux-x86_64/lj52shim.o
+fc0577359d52d8c1d53d45430018a66e  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir/libjnlua52-linux-x86_64.so
+036165c2c526a7fa5224b05d70d7f405  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+036165c2c526a7fa5224b05d70d7f405  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/dist/libjnluajit52-linux-x86_64.so

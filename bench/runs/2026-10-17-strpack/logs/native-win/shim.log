@@ -1,0 +1,74 @@
+
+== G  state shape (5.2 registry layout, JIT, fingerprint) ==
+  PASS  _OCLJ_NATIVE fingerprint present                     luajit/LuaJIT 2.1.ROLLING
+  PASS  _OCLJ_JIT records a successful luaopen_jit           ok
+  PASS  global `jit` is the jit TABLE, not a leftover string table
+  PASS    ... and jit.status is callable                     
+  PASS    ... and the JIT is actually ON                     
+  PASS  registry[LUA_RIDX_MAINTHREAD] == main thread         
+  PASS  registry[LUA_RIDX_GLOBALS] == _G                     
+
+== A  lua_compare LUA_OPLE (the __le fix) ==
+  PASS  __le-only metatable, __le returns true  -> true      
+  PASS  __le-only metatable, __le returns false -> false     
+  PASS  __lt=true and __le=true -> true (5.1 fallback says false) 
+  PASS  LUA_OPLE fires __le once and __lt never              
+  PASS  LUA_OPLT 1 < 2                                       
+  PASS  LUA_OPEQ 1 == 2 is false                             
+  PASS  LUA_OPLE 1 <= 2 on plain numbers                     
+
+== E  lua_arith / lua_len metamethods ==
+  PASS  lua_arith LUA_OPADD fires __add                      
+  PASS  lua_arith LUA_OPUNM fires __unm (1 operand)          
+  PASS  lua_len fires __len (5.2; lua_objlen does not)       
+  PASS  lua_rawlen ignores __len                             
+
+== B  lua_load chunk-mode gate (allowBytecode) ==
+  PASS  fixture: lua_dump produced a bytecode chunk          
+  PASS  mode "t" + text     -> ACCEPT                        status=0 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=0 delta=+1
+  PASS  mode "t" + bytecode -> REJECT  (allowBytecode=false) status=3 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=3 delta=+1
+  PASS  mode "b" + text     -> REJECT  (the direction the sniffer missed) status=3 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=3 delta=+1
+  PASS  mode "b" + bytecode -> ACCEPT                        status=0 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=0 delta=+1
+  PASS  mode "bt" + text     -> ACCEPT                       status=0 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=0 delta=+1
+  PASS  mode "bt" + bytecode -> ACCEPT                       status=0 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=0 delta=+1
+  PASS  mode NULL + text      -> ACCEPT (5.2: NULL disables the check) status=0 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=0 delta=+1
+  PASS  mode NULL + bytecode  -> ACCEPT (5.2: NULL disables the check) status=0 delta=+1
+  PASS    ... stack delta is exactly +1 (5.2 contract)       status=0 delta=+1
+
+== C  the serializer's internal bytecode route stays OPEN ==
+  PASS  lua_loadx(..., "b") accepts LuaJIT bytecode          
+  PASS    ... and the loaded bytecode runs                   
+
+== D  bit32 is 5.2's unsigned bit32, not LuaJIT's signed BitOp ==
+  PASS  bit32.bnot(0)                                        4294967295
+  PASS  bit32.band(0xFFFFFFFF, 0xF0)                         240
+  PASS  bit32.bor(0x0F, 0xF0)                                255
+  PASS  bit32.bxor(0xFF, 0x0F)                               240
+  PASS  bit32.lshift(1, 31)                                  2147483648
+  PASS  bit32.rshift(0x80000000, 31)                         1
+  PASS  bit32.arshift(0x80000000, 31)                        4294967295
+  PASS  bit32.lshift(1, 32)                                  0
+  PASS  bit32.rshift(1, -1)                                  2
+  PASS  bit32.extract(0xF0, 4, 4)                            15
+  PASS  bit32.replace(0, 5, 4, 4)                            80
+  PASS  bit32.bnot(-1)                                       0
+  PASS  bit32.band(-1.0)                                     4294967295
+  PASS  bit32.band(2^32 + 7)                                 7
+  PASS  tostring(bit32.btest(1, 3))                          true
+  PASS  extract(-1) raises 5.2's 'field cannot be negative'  
+  PASS  extract(30,8) raises 'trying to access non-existent bits' 
+
+== F  lua_pushcfunction memo (5.2 light-C-function identity) ==
+  PASS  pushing the same C function twice yields EQUAL values 
+  PASS  pushing a DIFFERENT C function yields a different value 
+  PASS  warm lua_pushcfunction allocates nothing             heap grew 0 bytes over 20000 pushes
+
+57 checks, 0 failures
+SHIM TESTS: PASS

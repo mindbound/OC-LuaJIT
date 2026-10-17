@@ -1,0 +1,42 @@
+run-pack: build /c/Users/astro/Downloads/OC-LuaJIT/build/native (windows-x86_64); results /c/Users/astro/Downloads/OC-LuaJIT/build/native/pack-20261017T000048Z
+
+== 1. conformance on /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe ==
+PASS conformance: 308 cases, every line as conformance.expect says
+PASS conf-extra: 411 cases, every line as conf-extra.expect says
+
+== 2. provenance: the .expect files against PUC Lua 5.3.6 ==
+PASS conformance: PUC 5.3.6 differs from conformance.expect in exactly the 4 lines deviations.txt lists for windows
+PASS conformance: with D1/D2 applied (2 DEV1 and 2 DEV2 lines), PUC 5.3.6 equals conformance.expect in every line but the 0 RESID lines, which D1/D2 do not explain
+PASS conf-extra: PUC 5.3.6 differs from conf-extra.expect in exactly the 21 lines deviations.txt lists for windows
+PASS conf-extra: with D1/D2 applied (8 DEV1 and 5 DEV2 lines), PUC 5.3.6 equals conf-extra.expect in every line but the 8 RESID lines, which D1/D2 do not explain
+
+== 3. the shim path: pack_test.c ==
+
+== PT1  jnlua's opener and the string metatable ==
+PASS PT1   string.pack/packsize/unpack after luaL_requiref("string")    3 of 3 are functions
+PASS PT1m  ("<i4"):pack(-2) through the string metatable                1/4/feffffff
+
+== PT2  Plan9k's GPT header on a sector of text: rounded, never refused ==
+PASS PT2   unpack(GPT header, text sector) rounds every I8 field        14 values; 5 of 5 I8 fields equal the nearest double (5 need > 53 bits); next=93
+
+== PT3  the RAM cap is charged 2x the output, no more ==
+PASS PT3   a 1 MiB pack with the GC stopped charges 2x (+-2.5%)         status 0, result 1048576 bytes, charged +2.0001 MiB
+
+== PT4  past the cap: LUA_ERRMEM, and only after every argument check ==
+PASS PT4   pack('c16777216', '') under a 4 MiB margin: LUA_ERRMEM       cap = heap + 4 MiB; status 4 (LUA_ERRMEM 4) 'not enough memory'; used 0.03 MiB
+PASS PT4b  pack('c16777216 j', '', 'x'), same margin: arg #3 first      status 2 (LUA_ERRRUN 2) 'bad argument #3 to '?' (number expected, got string)'
+PASS PT5   after the refusal the state packs and unpacks (1 MB still fits) 258/ok/still/12/1000000; used 1.94 MiB of a 4.03 MiB cap
+
+== PT6  unpack's results stop at the C stack's 8000 slots, cleanly ==
+PASS PT6a  7990 bytes unpack into 7990 values and a position            7991
+PASS PT6b  9000 values are refused with 5.3.6's text                    false|stack overflow (too many results)
+
+== PT7  D4: LJ_MAX_STR bytes or more, refused before any allocation ==
+PASS PT7a  pack('c2147483392', ''): total 0x7fffff00, D4's text         status 2 (LUA_ERRRUN 2) 'not enough memory for buffer allocation'
+PASS PT7b  pack('c2147483391c1', '', ''): the same total, D4's text     status 2 (LUA_ERRRUN 2) 'not enough memory for buffer allocation'
+PASS PT7c  pack('c2147483391', ''): one byte less, refused by the cap   status 4 (LUA_ERRMEM 4) 'not enough memory'; used 0.05 MiB of a 64 MiB cap
+PASS PT7d  pack('c2000000000c2000000000', '', {}): arg #3 before D4     status 2 (LUA_ERRRUN 2) 'bad argument #3 to '?' (string expected, got table)'
+
+PACK TESTS: 13 checks, 0 failures
+
+RUN-PACK: PASS (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/pack-20261017T000048Z)

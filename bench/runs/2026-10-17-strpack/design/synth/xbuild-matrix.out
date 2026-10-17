@@ -1,0 +1,39 @@
+--- run 1
+XB WROTE host=pack perms=138 bytes=196
+XB WROTE host=nopack perms=135 bytes=112
+XB WROTE host=nopack perms=135 bytes=106
+XB WROTE host=pack perms=138 bytes=190
+A->A   XB RESTORED host=pack perms=138 sandbox.string.pack=function same=true method=true
+A->B   XB REFUSED host=nopack perms=135 -- eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0'); the blob is from a different natives build
+B->A   XB REFUSED host=pack perms=138 -- eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1'); the blob is from a different natives build
+B->B   XB RESTORED host=nopack perms=135 sandbox.string.pack=nil same=false method=false
+C1->C1 XB RESTORED host=nopack perms=135 sandbox.string.pack=nil same=false method=false
+C2->C2 XB RESTORED host=pack perms=138 sandbox.string.pack=function same=true method=true
+C2->C1 XB REFUSED host=nopack perms=135 -- eris-lj: unknown permanent (not in the perms table)
+C1->C2 XB RESTORED host=pack perms=138 sandbox.string.pack=nil same=false method=true
+--- run 2
+XB WROTE host=pack perms=138 bytes=196
+XB WROTE host=nopack perms=135 bytes=112
+XB WROTE host=nopack perms=135 bytes=106
+XB WROTE host=pack perms=138 bytes=190
+A->A   XB RESTORED host=pack perms=138 sandbox.string.pack=function same=true method=true
+A->B   XB REFUSED host=nopack perms=135 -- eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0'); the blob is from a different natives build
+B->A   XB REFUSED host=pack perms=138 -- eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1'); the blob is from a different natives build
+B->B   XB RESTORED host=nopack perms=135 sandbox.string.pack=nil same=false method=false
+C1->C1 XB RESTORED host=nopack perms=135 sandbox.string.pack=nil same=false method=false
+C2->C2 XB RESTORED host=pack perms=138 sandbox.string.pack=function same=true method=true
+C2->C1 XB REFUSED host=nopack perms=135 -- eris-lj: unknown permanent (not in the perms table)
+C1->C2 XB RESTORED host=pack perms=138 sandbox.string.pack=nil same=false method=true
+--- run 3
+XB WROTE host=pack perms=138 bytes=196
+XB WROTE host=nopack perms=135 bytes=112
+XB WROTE host=nopack perms=135 bytes=106
+XB WROTE host=pack perms=138 bytes=190
+A->A   XB RESTORED host=pack perms=138 sandbox.string.pack=function same=true method=true
+A->B   XB REFUSED host=nopack perms=135 -- eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0'); the blob is from a different natives build
+B->A   XB REFUSED host=pack perms=138 -- eris-lj: build fingerprint mismatch: VM features differs (blob 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0', this build 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1'); the blob is from a different natives build
+B->B   XB RESTORED host=nopack perms=135 sandbox.string.pack=nil same=false method=false
+C1->C1 XB RESTORED host=nopack perms=135 sandbox.string.pack=nil same=false method=false
+C2->C2 XB RESTORED host=pack perms=138 sandbox.string.pack=function same=true method=true
+C2->C1 XB REFUSED host=nopack perms=135 -- eris-lj: unknown permanent (not in the perms table)
+C1->C2 XB RESTORED host=pack perms=138 sandbox.string.pack=nil same=false method=true

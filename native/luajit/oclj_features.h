@@ -60,6 +60,22 @@
 #define LUAJIT_ENABLE_CHECKHOOK 1
 #define LUAJIT_DISABLE_FFI 1
 
+/* OUR ADDITIONS TO LuaJIT'S LIBRARIES.  Since 2026-10-13 our LuaJIT is a
+ * fork that may take Lua 5.3 functions (docs/roadmap.md, the 5.2-class
+ * row).  Each addition is named here, once: it puts new C functions within
+ * reach of _G -- new permanents in every blob -- so serializer/eris_lj.c
+ * names it in the blob fingerprint's VM-features word from this macro, and
+ * build-native.sh checks the word against what luajit.exe does.
+ *   OCLJ_LIB_STRPACK -- string.pack, string.packsize and string.unpack, Lua
+ *       5.3.6's whole format language (native/luajit/oclj_strpack.c,
+ *       registered in lib_string.c by native/luajit/
+ *       patch-strpack-register.sh).  oclj_strpack.c refuses to compile
+ *       without it.  Word token "pack1".  Two deliberate deviations from
+ *       5.3.6, both because every number is a double: an unpacked integer
+ *       beyond 2^53 is rounded to the nearest double, never refused; 'l' and
+ *       'L' are 8 bytes on every platform. */
+#define OCLJ_LIB_STRPACK 1
+
 #if defined(LUAJIT_USE_SYSMALLOC)
 #error "OC-LuaJIT (oclj_features.h): LUAJIT_USE_SYSMALLOC compiles lj_alloc out; lj52shim.c keeps every state in its own lj_alloc arena (lj52_back)"
 #endif

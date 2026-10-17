@@ -120,12 +120,20 @@
  * constants, lj_bcwrite.c:214-226), lua52 (the permanent set and the MM enum,
  * lj_obj.h:549-555), gc64/fr2 (frame layout: every stack slot number in a
  * thread record is offset by LJ_FR2), dn (DUALNUM: a canonical number
- * restores as an int or a double), le/be and p64/p32.  Seven tokens, always,
- * in this order; a restore requires an exact match.  It is derived HERE, from
- * this file's own macros, so it is true only because this file sees
- * libluajit.a's feature set: the #error under the includes above, the GG_State
- * check (eris_lj_ggsize below, compared by lj52_newstate and test_main.c), and
- * build-native.sh's check of the word against the built luajit.exe. */
+ * restores as an int or a double), le/be and p64/p32 -- and pack, the first
+ * token that names a LIBRARY rather than a layout: string.pack, string.packsize
+ * and string.unpack in the string library (oclj_features.h's OCLJ_LIB_STRPACK,
+ * our fork's Lua 5.3.6 port, native/luajit/oclj_strpack.c).  Those are three
+ * C functions within reach of _G, so three more permanents; without the token
+ * a blob that crossed the change would be checked name by name only (one saved
+ * with them fails mid-restore with "unknown permanent" on a build without
+ * them, and one saved without them restores silently with the sandbox's
+ * string.pack nil until a reboot).  Eight tokens, always, in this order; a
+ * restore requires an exact match.  It is derived HERE, from this file's own
+ * macros, so it is true only because this file sees libluajit.a's feature
+ * set: the #error under the includes above, the GG_State check (eris_lj_ggsize
+ * below, compared by lj52_newstate and test_main.c), and build-native.sh's
+ * check of the word against the built luajit.exe. */
 #if LJ_HASFFI
 #define ELJ_W_FFI "ffi1"
 #else
@@ -161,7 +169,12 @@
 #else
 #define ELJ_W_PTR "p32"
 #endif
-#define ERIS_LJ_FEATURES ELJ_W_FFI "." ELJ_W_52 "." ELJ_W_GC "." ELJ_W_FR "." ELJ_W_DN "." ELJ_W_END "." ELJ_W_PTR
+#if defined(OCLJ_LIB_STRPACK) && OCLJ_LIB_STRPACK
+#define ELJ_W_PACK "pack1"
+#else
+#define ELJ_W_PACK "pack0"
+#endif
+#define ERIS_LJ_FEATURES ELJ_W_FFI "." ELJ_W_52 "." ELJ_W_GC "." ELJ_W_FR "." ELJ_W_DN "." ELJ_W_END "." ELJ_W_PTR "." ELJ_W_PACK
 #define ERIS_LJ_FINGERPRINT ERIS_LJ_COMMIT "|" LUAJIT_VERSION "|" ERIS_LJ_SERHASH "|" ERIS_LJ_FEATURES
 /* The header stores the length in one byte.  Refuse at BUILD time: a runtime
  * check fails every persist, which the architecture answers by dropping the

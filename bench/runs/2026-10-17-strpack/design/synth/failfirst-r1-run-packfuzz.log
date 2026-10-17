@@ -1,0 +1,6 @@
+packfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native/luajit-windows-x86_64/src/luajit.exe; profile default; seeds 1..1 x 20000 cases; results /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native/packfuzz-20261016T215856Z
+seed 1: 1 -- no output from our side (exit 1): C:\Users\astro\claude-tmp\oclj\r2\synth\r1ff\build\native\luajit-windows-x86_64\src\luajit.exe: ...ude-tmp/oclj/r2/synth/repo/test/native/pack/packfuzz.lua:52: string.pack/unpack/packsize missing on side ours
+stack traceback:
+	[C]: in function 'error'
+	...ude-tmp/oclj/r2/synth/repo/test/native/pa
+PACKFUZZ FAIL (results: /c/Users/astro/claude-tmp/oclj/r2/synth/r1ff/build/native/packfuzz-20261016T215856Z)

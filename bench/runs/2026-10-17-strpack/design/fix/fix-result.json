@@ -1,0 +1,702 @@
+{
+ "reports": {
+  "A": {
+   "files_changed": [
+    "C:/Users/astro/Downloads/OC-LuaJIT/native/luajit/oclj_strpack.c",
+    "C:/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-strpack-register.sh",
+    "C:/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh"
+   ],
+   "fixes": [
+    {
+     "id": "port-D3-position",
+     "status": "done",
+     "note": "oclj_strpack.c:762 is now exactly `            { lua_pushliteral(L, \"memory allocation error: block too big\"); lua_error(L); }` (12 leading spaces, one line, no backslash). It occurs once. The comment above it (:754-758) now says why it is lua_error (lj_err.c:1129-1133, no position) and not luaL_error, citing 5.3.6's ldebug.c:653-663 isLua(ci). Of the 24 negctl-pack.sh anchors, the other 23 each still occur exactly once; KSTR54's old line now occurs 0 times, so C-neg must re-anchor it to the new line. Sanity check on my scratch luajit.exe (C-conf owns the real test): direct, non-tail and tail calls on a wrapping <s8 length now print exactly what PUC 5.3.6 prints, 'memory allocation error: block too big' with no position. The synth luajit.exe (old form) prints 'd3.lua:3: memory allocation error: block too big' for the non-tail call. The 'data string too short' case keeps its 'd3.lua:3:' position on both VMs."
+    },
+    {
+     "id": "port-strscan-fraction-residual",
+     "status": "done",
+     "note": "The comment at oclj_strpack.c:240-244 (pk_str2d) now reads: 'Left different, refused here and read by strtod (decided D5/D7): LuaJIT's scanner refuses a numeral with 2^20 or more digits after the radix point, leading zeros counted and trailing zeros not, decimal or hex (lj_strscan.c:449-453), or an exponent of 2^20 or more (:468). strtod reads the first as its value, and the second as inf or 0.' I checked this against the pinned lj_strscan.c: :447 opens the dp block, :451-453 compute ex and refuse at -STRSCAN_MAXEXP, :468 is the exponent check, and STRSCAN_MAXEXP is 1<<20 (:66)."
+    },
+    {
+     "id": "port-D4-cap-text",
+     "status": "done",
+     "note": "Comment only. A block comment at oclj_strpack.c:614-623 now says: D4's text is the one 5.3.6's luaL_Buffer raises when its allocation fails (lauxlib.c:468). Here it is reached only at LJ_MAX_STR, which no OC cap reaches. An over-cap result below that is refused by the allocation itself (lua_newuserdata or lua_pushlstring) as LUA_ERRMEM 'not enough memory', unpositioned, and only after every argument check. 5.3.6 raises its positioned buffer text, possibly before a later bad argument is reached, and LUA_ERRMEM when its final string fails. The code is unchanged: :624 `  if (total >= PK_MAXOUT)` and :625 `    luaL_error(L, \"not enough memory for buffer allocation\");` (the old trailing comments on those two lines were moved into the block). I also added one sentence to the file header's contract paragraph (:39-43) pointing to the two pack-level residuals (pk_str2d D5/D7, oclj_strpack_pack D4)."
+    },
+    {
+     "id": "B1",
+     "status": "done",
+     "note": "build-native.sh:674-681. The check is now `grep -q -E -- '-c -o lib_string[.]o lib_string[.]c[[:cntrl:]]?$'`. The comment explains the anchor and why the bare name cannot fail. I added `[[:cntrl:]]?` after reading the actual Windows logs: in my two builds AND in synth's luajit_build.log, 95 of 185 lines end in CRLF (mingw32-make echoes command lines that way), the compile line at :162 included. The reviewer's 'no CRs on Windows' was a reading of its tools. A plain `$` matched only because Git Bash's grep 3.0 drops a CR before the newline: under `grep -U`, which keeps the CR, the plain-$ form does NOT match the real log, and the new form does. The pattern still requires the line to end at 'lib_string.c', allowing only that one control character."
+    },
+    {
+     "id": "B2",
+     "status": "done",
+     "note": "The probe now prints ` jit=` .. st.loop .. '/' .. st.stitch .. '/' .. st.abort in place of ` abort=`. SP_WANT ends `hot=14000 jit=0/1/0`. The failure text says that a stitch count other than 1 means no trace was recorded in hot(), so the gate proved nothing about the JIT; that an abort count other than 0 blacklists loops; and that a loop count other than 0 means the recorder no longer stitches at the pack call (no LJLIB_REC), so re-measure. The comment above the probe now says why the stitch count is required."
+    },
+    {
+     "id": "B5",
+     "status": "done",
+     "note": "verify_patched (patch-strpack-register.sh:84-95) gets LS, the packsize line, and requires module < include < pack < packsize < unpack < lj_libdef.h. It then requires that the LAST line above LJLIB_CF(string_unpack) carrying 'LJLIB_MODULE_' is the '#define LJLIB_MODULE_string' line. Otherwise it fails with '...the last module tag above the registrations is line N (<text>), not the string module's ... -- has lib_string.c changed shape?'. I match the substring because buildvm switches module at any line containing the tag (strstr, host/buildvm_lib.c:409); this is a stricter superset of '#define LJLIB_MODULE_'. It covers the patch path and the already-patched path."
+    },
+    {
+     "id": "B6",
+     "status": "done",
+     "note": "The header (:42-48) now says: 'The patch path writes LF; an already-patched input is verified and copied as is.' It also adds three lines on the new module check. I measured it: a CRLF already-patched input is verified, rc 0, and copied byte for byte (712 CR in, 712 out). The script still has 0 backslashes, 0 tabs and 0 CR."
+    },
+    {
+     "id": "self-check",
+     "status": "done",
+     "note": "`sh -n` and `dash -n` pass on both scripts. All three files have CR=0. I scratch-built both variants from the FINAL files (md5 oclj_strpack.c d1629bbe74d724b6b525b3ed852741b8, patch-strpack-register.sh 62f72e0c8efbfeb435c68df777a5630f, build-native.sh 5ddba126060ba7442265e2464879c641) into C:/Users/astro/claude-tmp/oclj/r2/fix/A/final-add and final-drop: additive rc=0, dropin rc=0, and each build copy's oclj_strpack.c is cmp-equal to the repo file. An earlier pair of builds (b-add, b-drop) without B1's CR clause also passed."
+    }
+   ],
+   "failfirsts": [
+    {
+     "check": "B1: the lib_string.c compile-line check fails when that one line is absent from the log",
+     "command": "cd C:/Users/astro/claude-tmp/oclj/r2/fix/A/b1-run2; b1check.sh = fail() stub + the check's own two lines taken from native/build-native.sh with sed; real/luajit_build.log = b-add's log; nocompile/luajit_build.log = the same bytes with only the line ending '-c -o lib_string.o lib_string.c' removed, done in Python (diff --strip-trailing-cr shows only '162d161'; CR 95 -> 94). Run: OCLJ_BUILD=$PWD/real sh b1check.sh; OCLJ_BUILD=$PWD/nocompile sh b1check.sh; then grep -U (keeps the CR) on the real log with the new form and with a plain $.",
+     "output": "real: 'PASS: compile line found ...' rc=0. nocompile: 'FAIL: lib_string.c never reached the compiler command line (log: .../nocompile/luajit_build.log)' rc=1. Old check (grep -q -F 'lib_string.c') on nocompile: matches (it cannot fail; buildvm's lines :134-142 name lib_string.c). grep -U with the new form on the real log: PASS rc=0. grep -U with a plain '$' anchor: NOT matched, so a grep that keeps the CR would have refused a good build. dropin log: PASS rc=0."
+    },
+    {
+     "check": "B2: the string.pack gate's comparison fails when no trace is recorded in hot()",
+     "command": "cd C:/Users/astro/claude-tmp/oclj/r2/fix/A/b2; probe.lua = the build's own strpack.lua (b-add); eval SP_WANT from native/build-native.sh; run luajit.exe probe.lua 8 times, then luajit.exe -joff probe.lua and luajit.exe -e 'jit.off()' probe.lua, comparing with [ \"$SP\" = \"$SP_WANT\" ]. Control: the old print and old SP_WANT under -joff.",
+     "output": "JIT on: 8/8 runs PASS with 'hot=14000 jit=0/1/0' (dropin luajit.exe 3/3 the same). -joff: '... hot=14000 jit=0/0/0', gate FAIL. jit.off(): '... jit=0/0/0', gate FAIL. Old gate under -joff: PASS, which is the hole being closed."
+    },
+    {
+     "check": "B5: a lib_string.c with a second module define between '#define LJLIB_MODULE_string' and the anchor is refused (rc 1, no output); the pristine file still patches",
+     "command": "cd C:/Users/astro/claude-tmp/oclj/r2/fix/A/b5; split.c = pristine (CRLF) + '#define LJLIB_MODULE_string_method' + LJLIB_CF(string_method_foo) stub above the anchor (line 672); split2.c = '#define LJLIB_MODULE_other' at line 33; ap-split.c = the patched output with LJLIB_MODULE_other at 33; ap-order.c = patched output with the packsize/unpack tags swapped. Ran sh (and dash) native/luajit/patch-strpack-register.sh <in> <out> with the new script, and the old script (orig/) as control.",
+     "output": "NEW pristine.c: 'registers ... (22 lines above the lj_libdef.h include, of 712); verified by content and diff' rc=0, byte-identical to the OLD script's output (and to dash's). OLD split.c: rc=0 'verified by content and diff' (the hole). NEW split.c: 'patch-strpack-register.sh: out-split.c.tmp.1541: the last module tag above the registrations is line 672 (#define LJLIB_MODULE_string_method), not the string module's '#define LJLIB_MODULE_string' at line 32, so buildvm would register the three in that module -- has lib_string.c changed shape?' rc=1, no out-split.c and no .tmp left. split2.c: the same with line 33, rc=1, no output. dash on split.c: rc=1, no output. In place (IN==OUT) on split.c: rc=1, file unchanged (md5 89f40afb...), no tmp. Already-patched ap-split.c: rc=1, no output. Already-patched clean output: rc=0, copied identical. ap-order.c: 'the block is out of order (module 32, include 675, pack 677, packsize 687, unpack 682, lj_libdef.h 694)' rc=1, no output (the new packsize order clause can fail)."
+    },
+    {
+     "check": "Anchor counter (the stub that runs negctl-pack.sh's own arm calls) can report a count other than 1",
+     "command": "sh C:/Users/astro/claude-tmp/oclj/r2/fix/A/anchors.sh <file> (an arm() stub that counts each OLD line with awk ENVIRON, as negctl's sabotage() matches; the arm calls are sed-extracted from test/native/negctl-pack.sh), run on orig/oclj_strpack.c and on the new file",
+     "output": "original: all 24 anchors count 1. New file: 23 count 1; KSTR54 counts 0 (its line was the D3 line, replaced as required). The new D3 line counts 1, at :762."
+    }
+   ],
+   "selfcheck": "sh -n and dash -n pass on native/build-native.sh and native/luajit/patch-strpack-register.sh. All three owned files have CR=0, and the patch script has 0 backslashes and 0 tabs. Final scratch builds from the final files: C:/Users/astro/claude-tmp/oclj/r2/fix/A/final-add (OCLJ_VARIANT=additive, rc=0) and C:/Users/astro/claude-tmp/oclj/r2/fix/A/final-drop (dropin, rc=0). Gate lines, identical in both: 'patch-strpack-register.sh: lib_string.c  registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 712); verified by content and diff'; '[build]     lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)'; '[build]     oclj_strpack.c -Wall -Wextra warnings = 0'; '[build]     string.pack gate: fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 jit=0/1/0'. The other gates are unchanged and pass: '-dM: OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1'; 'FFI / integer-format gate: lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=true'; 'FOREIGN-ALLOC-OK GG=6376'; the negative arm 'GG-LAYOUT-MISMATCH lib=6376 tu=6384'; 'VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1 (luajit.exe agrees ...)'. Each build copy's oclj_strpack.c is cmp-equal to the repo file. Not run, per the rules: negctl-pack.sh, run-pack.sh, the fuzzer, gradle, smoke. Linux was not built or measured: the B1 pattern also matches an LF-only log, and the B2 0/1/0 figure is Windows-measured (the FFI gate already requires an exact 0/1/0 on both platforms).",
+   "deviations": [
+    "B1: the pattern is `-c -o lib_string[.]o lib_string[.]c[[:cntrl:]]?$` rather than the suggested `...lib_string[.]c$`. Following the task's 'check the actual log', I found that the Windows log (mine, and synth's too) ends the compile line in CRLF, 95 CR in 185 lines. The plain-$ form passes only through Git Bash grep 3.0's CR dropping, and fails under `grep -U` on a good build. The pattern stays exact: the line must end at lib_string.c, optionally followed by that one control character.",
+    "B5: the module check counts lines containing 'LJLIB_MODULE_' anywhere, not only '#define LJLIB_MODULE_' lines. buildvm switches module at any line carrying the tag (strstr, buildvm_lib.c:409), so this is a stricter superset of the specified check. The bound is the last registration, LJLIB_CF(string_unpack), which covers the whole block on both paths. I also added string_packsize to the order check (LP < LS < LU), because the already-patched path never checked its position; a fail-first is recorded.",
+    "Comment additions beyond the minimum, all in my files and with no anchor line touched: the D3 comment now says why lua_error is used (cites checked: ldebug.c:653-663 in 5.3.6, lj_err.c:1129-1133 pinned); the file header names the two pack-level residuals (D5/D7 scanner, D4 memory); the B2 failure text explains the abort and loop counts as well as the stitch count."
+   ],
+   "values_for_others": "For C-neg, KSTR54's new anchor (oclj_strpack.c:762, occurs once): `            { lua_pushliteral(L, \"memory allocation error: block too big\"); lua_error(L); }` (12 spaces). No other of the 24 anchors changed; the other 23 each occur once. Possible anchors for the new arms, at their current lines in the final file (md5 d1629bbe74d724b6b525b3ed852741b8, 788 lines). D4 off-by-one: :624 `  if (total >= PK_MAXOUT)` (that exact line, no trailing comment). D4 text: :625 `    luaL_error(L, \"not enough memory for buffer allocation\");`. D6WIDE: :686 `        luaL_error(L, \"%d-byte integer does not fit into Lua Integer\", size);`. D1 push (REFUSE53/ROUNDDOWN anchor, unchanged): :728 `        lua_pushnumber(L, (lua_Number)res);  /* LJ: D1, the nearest double */`.\n\nFor C-conf: in a non-tail call, ours and PUC 5.3.6 now print the identical unpositioned 'memory allocation error: block too big'. The old luaL_error form (synth luajit.exe) prints 'd3.lua:3: memory allocation error: block too big'. Probe: C:/Users/astro/claude-tmp/oclj/r2/fix/A/d3/d3.lua. Scratch luajit.exe with the new form: C:/Users/astro/claude-tmp/oclj/r2/fix/A/final-add/build/native/luajit-windows-x86_64/src/luajit.exe.\n\nFor D (docs), the residual wording in oclj_strpack.c: 'LuaJIT's scanner refuses a numeral with 2^20 or more digits after the radix point, leading zeros counted and trailing zeros not, decimal or hex (lj_strscan.c:449-453), or an exponent of 2^20 or more (:468). strtod reads the first as its value, and the second as inf or 0.' It is the exponent's VALUE (2^20 or more, either sign), not its digit count. The README item 'exponent digits' in fixes.md docs-2 should say 'an exponent of 2^20 or more'. D4 wording: an over-cap result is refused as LUA_ERRMEM 'not enough memory', unpositioned, after every argument check; D4's own text is reached only at LJ_MAX_STR.\n\nFor the main session: the build's string.pack gate line is now '... hot=14000 jit=0/1/0', replacing '... hot=14000 abort=0'. The Windows luajit_build.log has CRLF on 95 of its 185 lines, including every gcc compile line; synth's log is the same. Any other review claim of 'log has no CRs' was a reading through Git Bash grep 3.0, which drops a CR before the newline. Scratch artifacts are under C:/Users/astro/claude-tmp/oclj/r2/fix/A/ (orig/ holds the three pre-edit files; b1-run2/, b2/, b5/, d3/ hold the fail-first inputs and outputs)."
+  },
+  "B": {
+   "files_changed": [
+    "C:/Users/astro/Downloads/OC-LuaJIT/serializer/tests/strpack.lua"
+   ],
+   "fixes": [
+    {
+     "id": "B3",
+     "status": "done",
+     "note": "build_perms now returns perms, uperms, cand (comment says why only cand can show a second name: uperms keeps one name per value by construction). The alias check counts entries of cand whose value is P, U or S, requires n == 3, and on failure prints the names it found."
+    },
+    {
+     "id": "B4",
+     "status": "done",
+     "note": "Added a new check right after the type check: debug.getinfo(f,'S').what == 'C' for P, U and S, printing what/what/what on failure. The old check 6 (persist with {} perms) is replaced by an isolated refusal on the same suspended coroutine: for EACH of the three, a copy of the full perms with only that one entry removed must be refused with 'cannot persist a C function by value'. The check also requires okp (the full-perms persist just above succeeded), so the outcome flips on exactly one perms entry. The comment notes that {} perms would refuse any suspended coroutine. I made this per-function rather than a single persist with all three removed; see deviations. I measured the comment's two claims myself (C:/Users/astro/claude-tmp/oclj/r2/fix/B/failfirst/run1/claims.out). A coroutine that never touches pack is refused with {} perms and persists with full perms. Removing only coroutine.yield from the full perms also refuses it, so the frame does reach yield."
+    },
+    {
+     "id": "count/labels",
+     "status": "done",
+     "note": "There are now 11 checks, in this order: 1 functions, 2 C functions (new), 3 perms names, 4 no alias (now counts cand), 5 suspended mid-loop, 6 persists, 7 isolated refusal (replaces the old {} check), 8 restores, 9 upvalues, 10 resumed result, 11 unknown permanent. The file never had a fixed count line: its result line counts at run time and now prints 'ALL 11 TESTS PASS'. I added no hard-coded count to the header. The header comment and the first section's print line now describe the C-function and isolated-refusal checks. LF only, CR count 0, 172 lines, 7880 bytes."
+    }
+   ],
+   "failfirsts": [
+    {
+     "check": "(a) alias check (B3): a copy of strpack.lua with one of the three also reachable under a second name, a string.* field that sorts after the real one",
+     "command": "cd /c/Users/astro/claude-tmp/oclj/r2/fix/B/serializer && ./erislj_test.exe ../failfirst/alias-field.new.lua ; ./erislj_test.exe ../failfirst/alias-field.old.lua   (the copies are made by C:/Users/astro/claude-tmp/oclj/r2/fix/B/failfirst/mk.py, which prepends 'string.pack2 = string.pack' to the new file and to the original)",
+     "output": "new: '  FAIL: no alias: each of the three has exactly one name  -- 4: _G.string.pack _G.string.pack2 _G.string.packsize _G.string.unpack' / 'STRPACK RESULT: 10 passed, 1 FAILED' rc=1. Original file under the same alias: 'STRPACK RESULT: ALL 10 TESTS PASS' rc=0."
+    },
+    {
+     "check": "(a') alias check: a global second name, rawset(_G,'zz_unpack',string.unpack)",
+     "command": "cd /c/Users/astro/claude-tmp/oclj/r2/fix/B/serializer && ./erislj_test.exe ../failfirst/alias-global.new.lua ; ./erislj_test.exe ../failfirst/alias-global.old.lua",
+     "output": "new: '  FAIL: no alias: each of the three has exactly one name  -- 4: _G.string.pack _G.string.packsize _G.string.unpack _G.zz_unpack' / '10 passed, 1 FAILED' rc=1. Original: 'ALL 10 TESTS PASS' rc=0."
+    },
+    {
+     "check": "(b) C-function check and isolated refusal (B4): pure-Lua stand-ins for all three (return 'rec' / return 1,2,3,'',5 / return 14)",
+     "command": "cd /c/Users/astro/claude-tmp/oclj/r2/fix/B/serializer && ./erislj_test.exe ../failfirst/standins.new.lua ; ./erislj_test.exe ../failfirst/standins.old.lua",
+     "output": "new: '  FAIL: they are C functions (debug.getinfo(f, 'S').what == 'C')  -- Lua/Lua/Lua' and '  FAIL: with perms naming all but one of the three, the same coroutine is refused, for each (C functions)  -- persisted | persisted | persisted' / 'STRPACK RESULT: 9 passed, 2 FAILED' rc=2. Original: 'ALL 10 TESTS PASS' rc=0."
+    },
+    {
+     "check": "(c) one pure-Lua stand-in only (string.pack returns a fixed record precomputed with the real pack; unpack and packsize stay real)",
+     "command": "cd /c/Users/astro/claude-tmp/oclj/r2/fix/B/serializer && ./erislj_test.exe ../failfirst/standin-pack-only.new.lua ; ./erislj_test.exe ../failfirst/standin-pack-only.old.lua",
+     "output": "new: '  FAIL: they are C functions ...  -- Lua/C/C' and '  FAIL: with perms naming all but one of the three ...  -- persisted | eris-lj: cannot persist a C function by value; put it in the perms table | eris-lj: cannot persist a C function by value; put it in the perms table' / '9 passed, 2 FAILED' rc=2. Original: 'ALL 10 TESTS PASS' rc=0."
+    },
+    {
+     "check": "Why per-function: the literal single persist with all three removed (a copy of the new file with the loop changed to one persist minus P, U and S, made by C:/Users/astro/claude-tmp/oclj/r2/fix/B/failfirst/mk2.py)",
+     "command": "cd /c/Users/astro/claude-tmp/oclj/r2/fix/B/serializer && ./erislj_test.exe ../failfirst/minus3.base.lua ; ./erislj_test.exe ../failfirst/minus3.standin-pack-only.lua ; ./erislj_test.exe ../failfirst/minus3.standins.lua",
+     "output": "base: 'ALL 11 TESTS PASS'. Pack-only stand-in: only '  FAIL: they are C functions ...  -- Lua/C/C', '10 passed, 1 FAILED'. The minus-three refusal still passes because unpack and packsize are C. All three stand-ins: both checks fail, refusal detail 'persisted'. So the minus-three form does not isolate each function; the per-function form does (case c)."
+    },
+    {
+     "check": "(d) a Lua wrapper around the real C pack: the refusal still passes (the wrapper's upvalue is a C function), but the getinfo check catches it",
+     "command": "cd /c/Users/astro/claude-tmp/oclj/r2/fix/B/serializer && ./erislj_test.exe ../failfirst/wrapper-pack.new.lua ; ./erislj_test.exe ../failfirst/wrapper-pack.old.lua",
+     "output": "new: '  FAIL: they are C functions (debug.getinfo(f, 'S').what == 'C')  -- Lua/C/C' / '10 passed, 1 FAILED' rc=1. Original: 'ALL 10 TESTS PASS' rc=0. Both new checks are needed, as the skeptic's better_fix said."
+    }
+   ],
+   "selfcheck": "Ran in a scratch copy, C:/Users/astro/claude-tmp/oclj/r2/fix/B/serializer: a copy of the repo's serializer/ with erislj_test.exe removed so it rebuilds, and the final strpack.lua, which cmp confirms identical to the repo file. It was built against C:/Users/astro/claude-tmp/oclj/r2/fix/B/build/native/luajit-windows-x86_64, a copy of synth/repo/build/native's archive dir. Command: PATH=/c/Users/astro/claude-tmp/oclj/bin:$PATH make OCLJ_BUILD=/c/Users/astro/claude-tmp/oclj/r2/fix/B/build/native CC=gcc test. Result: make rc=0, about 11 s. Lines: M1 RESULT: ALL 82 TESTS PASS; M2 RESULT: ALL 56 TESTS PASS; M3 RESULT: ALL 79 TESTS PASS; contract ran (make continued); stack-universe FAILS: 0; FINGERPRINT RESULT: ALL 18 TESTS PASS; STRPACK RESULT: ALL 11 TESTS PASS; FOR-IN RESULT: all cases exact across every pad. Harness fingerprint: serializer hash baf083da, word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1, GG_State 6376. Full log: C:/Users/astro/claude-tmp/oclj/r2/fix/B/selfcheck/make-test.out. Fail-first logs: C:/Users/astro/claude-tmp/oclj/r2/fix/B/failfirst/run1/*.out. Diff against the original: C:/Users/astro/claude-tmp/oclj/r2/fix/B/strpack.diff (original kept at C:/Users/astro/claude-tmp/oclj/r2/fix/B/strpack.orig.lua). Final repo file: CR 0, LF only, no tabs. No build or run inside the repo's serializer/. No git commands. No other repo file touched.",
+   "deviations": [
+    "B4's isolated refusal is per-function, not a single persist with all three removed. For each of P, U and S, the same coroutine is persisted with the full perms minus only that one entry, and all three must be refused. It is strictly stronger: each per-function refusal implies the all-three refusal. Measured reason: the literal all-three form passes when only one of the three is a pure-Lua stand-in, because the other two are still C (failfirst minus3.standin-pack-only: only the getinfo check fails). The per-function form fails there too. The check also requires the full-perms persist (okp) to have succeeded, so the refusal is tied to exactly one perms entry.",
+    "I added no fixed count line to the file. It never had one: its result line counts at run time. A hard-coded count in a comment would only go stale, and a skipped check always comes with a recorded failure here. The new total is 11."
+   ],
+   "values_for_others": "For D and the main session: serializer/tests/strpack.lua now has 11 checks; make test prints 'STRPACK RESULT: ALL 11 TESTS PASS' (it was 10). serializer/README.md currently gives no count. Any doc that says 'STRPACK RESULT: ALL 10 TESTS PASS' or 'strpack.lua (10 checks)' should say 11; design.md:168/173/190/230/295 say 10. Docs that describe the checks should no longer say 'is refused without the perms (C functions)'. Suggested wording: 'the three are C functions (debug.getinfo what == C); the _G walk offers one name each (counted over every offered name, so a second name fails); a coroutine holding them as upvalues, frozen between a pack and its unpack, persists, and with perms naming everything but any one of the three it is refused, for each; restored, it holds this state's own functions and resumes to the uninterrupted result; restored where the names are unknown, it is refused unknown permanent.'"
+  },
+  "D": {
+   "files_changed": [
+    "C:/Users/astro/Downloads/OC-LuaJIT/README.md",
+    "C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md",
+    "C:/Users/astro/Downloads/OC-LuaJIT/docs/research/wd-blind-spots.md",
+    "C:/Users/astro/Downloads/OC-LuaJIT/src/main/java/io/github/astronfo/ocluajit/arch/LuaJITStateFactory.java"
+   ],
+   "fixes": [
+    {
+     "id": "docs-1",
+     "status": "done",
+     "note": "wd-blind-spots: 1c has a new bullet on the VM-wide class. string.format %d/%f, math.max/min, string.char and pack all scan the whole of each numeric string argument, k reaches about 8000 through table.unpack, nothing is superlinear (STRSCAN_MAXDIG 800, lj_strscan.c:63), and the hard abort is the backstop. 1g now has separate memory, time and mitigation bullets. Time is O(format + output + the lengths of string arguments to numeric options), read in both walks, with up to FOUR scans per walk for a float numeral (see deviations). I added row 15 to the final table and a pointer to it in row 3, because row 3 called string.format 'sub-second'. Roadmap row 205: 'like string.rep' is gone, replaced by one sentence saying the same. Every figure is measured: pack with 7999 references to one 10^6-byte numeric string took 7.0-7.8 s over four runs (the review's 6.978 and 7.067, my 7.776 and 7.543); string.format('%d') with the same arguments 1.7-2.1 s; at k=1000 math.max/min, string.char, %f and %d each took about 0.17 s; pack at k=1000 took 0.8 s against PUC's 0.16 s; a float numeral given to 'd' took 2.2 s against PUC's 1.1 s. Logs are run-1.txt, run-2.txt and run-3.txt in C:/Users/astro/claude-tmp/oclj/r2/fix/D/argscan/. OC's 5 s timeout is OpenComputers-GTNH application.conf:132."
+    },
+    {
+     "id": "docs-2",
+     "status": "done",
+     "note": "README Lua-dialect section is now two paragraphs. Paragraph 1: 5.3.6's results and errors apart from the two decided deviations and what the VM decides. D2's cause no longer mentions doubles: l/L are 8 bytes so that a format means the same bytes on every server. Paragraph 2 lists every residual item: NaN payloads; ~8000 results; c/s/z formatting with the string.pack('z', 100000000000000) example; 2^20 fraction digits (trailing zeros aside) or an exponent of 2^20 or more, refused because pack's converter uses LuaJIT's scanner; an over-cap result refused as 'not enough memory' after every argument check; function names and method argument numbers are LuaJIT's for every library function. Roadmap row 207: 'except the two decided deviations and the VM residuals below', and the residual list is completed with the same items in more detail. I checked each example with C:/Users/astro/claude-tmp/oclj/r2/fix/D/claims.lua on synth luajit.exe and PUC 5.3.6; output in claims.out."
+    },
+    {
+     "id": "docs-3",
+     "status": "done",
+     "note": "README smoke row now reads: '`string.pack` is in the sandbox and behaves as our Lua 5.3.6 port, with its two decided deviations'. The '81 checks' figure is unchanged (docs-4 verdict: section 9.3 already covers it)."
+    },
+    {
+     "id": "docs-4",
+     "status": "done",
+     "note": "Row 207: the 1,000,000-case figure is replaced by the bare token @@FUZZCAMPAIGN@@: '`test/native/run-packfuzz.sh` (differential against PUC 5.3.6; @@FUZZCAMPAIGN@@)'."
+    },
+    {
+     "id": "docs-5",
+     "status": "done",
+     "note": "Added 'above 512 bytes' (512 bytes or less goes in a C array and only the final string is charged) in wd 1g, roadmap 205 and roadmap 207. Source: oclj_strpack.c PK_STACKBUF 512 and 'o.cap <= sizeof(sbuf)'."
+    },
+    {
+     "id": "docs-6",
+     "status": "done",
+     "note": "After my factory edit (+1 line) the final numbers are: openLibs through state.pop(8) at LuaJITStateFactory.java:112-121 (HEAD :98-107), BIT32 at :114 (HEAD :100). The review's :111-120/:113 was before my edit. Row 146 status 2026-10-17 now says ':100 above (BIT32) is now :114'; row 205 says ':98-107 above is now :112-121'. I also added a one-sentence 'Status 2026-10-17' to row 148, which the review lists as carrying the same stale :98-107 (see deviations). Rows 62 (:48) and 225 (:44-46) sit above the changed hunk and are unaffected."
+    },
+    {
+     "id": "docs-7",
+     "status": "done",
+     "note": "Factory comment now reads: 'There is still no integer subtype and no //. A program that tests for string.pack (or table.move, coroutine.isyieldable) finds it (Plan9k takes string.pack as its 5.3 test); one that tests for math.type, math.tointeger or utf8 does not, and one that tests _VERSION finds 5.2.' Confirmed on synth luajit.exe: string.pack, table.move and coroutine.isyieldable are functions; math.type, math.tointeger and utf8 are nil."
+    },
+    {
+     "id": "C1",
+     "status": "done",
+     "note": "README, one sentence: a program that feature-tests string.pack now takes its 5.3 path; Plan9k's FAT driver does, and inherits a bug in that path that it also has on OC's Lua 5.3 arch (FAT12 mkdir raises 'unsigned overflow' on an odd free cluster, after the directory entry is written). Row 207 has the detail under a '**Feature tests:**' block, with lines checked in OpenComputers-GTNH f83bd95 loot/plan9k: msdosfs.lua:23 (if string.pack), :158 (lshift(data,4) packed '<I2'), :1087-:1100 in makeDirectory (:1033), bin/mount.msdos.lua:22 (FAT12). Before this round the bit32 fallback silently truncated to the intended 16 bits. PUC 5.3.6 raises the same (consumers out-4/ref536-win64.out:40 and ref536-lp64.out:40). Measurement cited as r2 synth/consumers/final.out:40 against :57. Row 146 also gets a short pointer."
+    },
+    {
+     "id": "C2",
+     "status": "done",
+     "note": "README: the nearest double is of the 64-bit integer 5.3.6 computes, and unsigned 8-byte formats (I8, J, L, T) wrap to a negative integer exactly as in 5.3.6 before rounding, so eight ff bytes unpack as -1. Row 207 gets the same clause. Measured with claims.lua: I8, J, T and L of ff x8 give -1 here; I8, J and T give -1 on PUC Win64."
+    },
+    {
+     "id": "port-D4-cap-text (wording)",
+     "status": "done",
+     "note": "README: an over-cap result is refused as 'not enough memory', after every argument check. Row 207, precise version: LUA_ERRMEM 'not enough memory', unpositioned, after every argument check. 5.3.6 instead raises a runtime 'not enough memory for buffer allocation' (positioned when called non-tail; LUA_ERRMEM if its final string fails) and can do so before reaching a later bad argument. D4's text is raised here only at LJ_MAX_STR, which no OC cap reaches."
+    },
+    {
+     "id": "port-strscan-fraction-residual (wording)",
+     "status": "done",
+     "note": "Row 207 uses the skeptic's exact wording: 2^20 or more digits after the radix point, leading zeros counted and trailing zeros not, decimal or hex (lj_strscan.c:449-453), or an exponent of 2^20 or more (:468); strtod reads the first as its value and the second as inf or 0. Both lines checked against the pinned 1ee778a4 lj_strscan.c. The README carries a short form."
+    },
+    {
+     "id": "T9 (wording)",
+     "status": "done",
+     "note": "README and row 207 describe the scanner refusals as pack-level: pack's converter uses LuaJIT's numeral scanner (decided D5). Row 207 cites 'the `RESID-scan` lines of `test/native/pack/deviations.txt`', which assumes C-conf's T9 relabel lands as specified."
+    },
+    {
+     "id": "serializer/README.md strpack count",
+     "status": "done",
+     "note": "No change needed. serializer/README.md gives no check count for tests/strpack.lua, and neither do README.md or roadmap row 207, so there is nowhere for @@STRPACKCOUNT@@ to go. The README's description (persists and restores a coroutine holding the three mid-loop, as by-name permanents) is still true of B's edited file."
+    }
+   ],
+   "failfirsts": [
+    {
+     "check": "The roadmap patch script (C:/Users/astro/claude-tmp/oclj/r2/fix/D/edit_roadmap.py) pins each row by line number plus prefix and requires each old string exactly once. It must refuse an input whose anchor text changed, and leave that file untouched.",
+     "command": "cp roadmap.before.md roadmap.neg.md; python -I -c \"...replace('(24 sabotages, each caught)','(25 sabotages, each caught)',1)...\"; python -I edit_roadmap.py roadmap.neg.md; echo rc=$?; cmp roadmap.neg.md <(sed 's/(24 sabotages, each caught)/(25 sabotages, each caught)/' roadmap.before.md)",
+     "output": "AssertionError: ('row', 205, 'count', 0, '`test/native/negctl-pack.sh` (24 sabotages, each caught).')\nneg rc=1\nneg file untouched"
+    },
+    {
+     "check": "The same script on an unmutated copy applies, and the repo result equals the tested copy byte for byte.",
+     "command": "python -I edit_roadmap.py roadmap.try.md; cmp repo/docs/roadmap.md roadmap.before.md && python -I edit_roadmap.py repo/docs/roadmap.md && cmp repo/docs/roadmap.md roadmap.try.md",
+     "output": "applied 15 edits to .../roadmap.try.md\nCR0\napplied 15 edits to C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md\nrepo == tested copy"
+    }
+   ],
+   "selfcheck": "All four changed files have 0 CRs by byte count and are LF UTF-8. git diff hunks: README +6 -2; wd-blind-spots +12 -1; roadmap: 6 changed rows (122, 146, 148, 196, 205, 207), where 148 is the one new to this round; factory comment +1 line net against the round-2 target. After my edit, openLibs..pop(8) is at :112-121 and BIT32 at :114 (git HEAD had :98-107 and :100). The only placeholders in my files are all in docs/roadmap.md: @@FUZZCAMPAIGN@@ x1, @@NEGCTLARMS@@ x2, @@CONFCASES@@ x1. A grep finds no leftovers of 'same results', 'like `string.rep`', '1,000,000', 'behaves as Lua 5.3.6' or 'tests for a 5.3 FUNCTION' in my files. claims.lua on synth luajit.exe vs PUC 5.3.6 confirms each example:\\n- z 1e14: '1e+14' vs '100000000000000'\\n- I8/J/T of ff x8: -1 on both\\n- size l: 8 vs 4\\n- tail method: '#2 to ?' vs '#1 to pack'\\n- pcall(string.unpack): '?' vs 'string.unpack'\\n- fraction and exponent 2^20: refused here, packed by PUC\\n- presence: string.pack, table.move and coroutine.isyieldable exist; math.type, math.tointeger and utf8 are nil\\nTiming runs are unpinned and order-of-magnitude only: no pinned timing was claimed, and I did not check whether Minecraft was running. I compiled nothing and ran no repo suite: my edits are docs plus one Java comment.",
+   "deviations": [
+    "docs-1: I wrote 'up to four linear scans per walk for a float numeral', not the 'three' in fixes.md. Reading oclj_strpack.c, a float numeral string goes through pk_str2int (leading-space loop and digits), pk_str2d's refusal loop up to '.', x or n, pk_str2d's leading-whitespace skip before the 0b check, and then lua_tonumberx's full scan. That is four passes over the leading part of the string. Measured: 1000 arguments of 10^6 spaces plus '1.5' given to 'd' took 2.2 s, against 0.8 s for '1' given to 'i1' (run-3.txt).",
+    "docs-1: I added row 15 to wd-blind-spots section 6's final table and a pointer in row 3, which fixes.md did not list. Row 3 called string.format 'sub-second', and that contradicts the new 1c bullet. The severity I gave row 15, 'Medium (bounded, but past OC's 5 s timeout)', is my own judgment.",
+    "docs-6: I also put a one-sentence 'Status 2026-10-17' on roadmap row 148. fixes.md names only rows 146 and 205, but the review's docs-6 claim lists 148 as carrying the same stale LuaJITStateFactory.java:98-107.",
+    "I added placeholders beyond @@FUZZCAMPAIGN@@: @@NEGCTLARMS@@ (row 205 and row 207, which said 24; C-neg adds 4 arms, so presumably 28 after the main session's full sweep) and @@CONFCASES@@ (row 207, which said '308 + 409'; C-conf adds conf-extra cases, so presumably '308 + 411'). C-neg and C-conf had not started when I finished, so I could not know these numbers, and leaving 24 and 409 would have been knowingly stale. This follows the @@STRPACKCOUNT@@ convention.",
+    "docs-2: the README says deviations.txt 'lists the cases that show them, apart from the over-cap refusal, which `test/native/pack_test.c` checks', not plainly 'deviations.txt lists them'. No one was assigned to add the over-cap item to deviations.txt; PT4 is what checks it.",
+    "docs-9: not applied. It is not in fixes.md, and the skeptic refuted it (optional clarity only).",
+    "serializer/README.md: not changed (no count there to update)."
+   ],
+   "values_for_others": "MAIN SESSION: replace these placeholders in C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md (grep '@@'):\n- @@FUZZCAMPAIGN@@ x1 (row 207): the 50-seed campaign figure, e.g. '0 mismatches in 5,000,000 random cases over 50 seeds on 2026-10-17'.\n- @@NEGCTLARMS@@ x2 (rows 205 and 207): negctl-pack.sh's measured arm count, presumably 28.\n- @@CONFCASES@@ x1 (row 207): 'conformance N + conf-extra N' from C-conf, presumably '308 + 411'.\n\nFactory cites after my edit: LuaJITStateFactory.java openLibs..pop(8) = :112-121, BIT32 = :114. Row 207 also cites 'the `RESID-scan` lines of `test/native/pack/deviations.txt`', which depends on C-conf's T9 relabel using exactly that label. Row 207's pack_test.c description ('jnlua's opener, Plan9k's GPT header on a text sector, the cap's charge and refusal, the C-stack limit') does not yet mention C-neg's PT7 (D4) or the PT4 ordering check; add them if C-neg lands them. B's strpack.lua count belongs nowhere in my files: no doc states one.\n\nMeasurements behind the docs-1 figures:\n- C:/Users/astro/claude-tmp/oclj/r2/fix/D/argscan/run-1.txt and run-2.txt: pack with k=7999 of a 10^6-byte numeric string took 7.776 s and 7.543 s; format %d 2.105 s and 2.104 s; at k=1000, pack 0.835 s against PUC's 0.167 s, and math.max/min, string.char, %f and %d about 0.17 s each.\n- run-3.txt: a float numeral given to 'd' took 2.2 s here and 1.1 s on PUC.\n- Claims probe: C:/Users/astro/claude-tmp/oclj/r2/fix/D/claims.lua, output in claims.out."
+  },
+  "C-fuzz": {
+   "files_changed": [
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack/packfuzz-cmp.lua",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack/packfuzz.lua",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-packfuzz.sh"
+   ],
+   "fixes": [
+    {
+     "id": "T1",
+     "status": "done",
+     "note": "Followed the skeptic's better_fix. run-packfuzz.sh: once the reference run has succeeded, `[ \"$orc\" -ne 0 ] && crc=1` (the crc==0 guard is gone). It also prints 'seed N: our side exited <rc>: <stderr head>', and for a 1 with no 'MISMATCH classes' section it prints the head of the cmp file. packfuzz-cmp.lua: ours is now read with fo:read('L') through readours(), so a last line with no newline is flagged 'cut'. A new crash() records ONE CRASH at the puc line ours never reached, then drains fp and runs meta() on its '#' lines, so the puc #end is still found. It covers three shapes: ours at EOF on a case line ('ends before case X'), ours at EOF on a meta line, i.e. the old desync die(2) ('ends before its #cov line'), and a cut line ('ends mid-line at case X / its #end line'). Small additions inside T1's scope: 'no cases compared' does not fire once a crash is recorded; a summary line 'ours ended early: N puc case line(s) from the CRASH on were not compared'; the crashlisted scan is replaced by the crashed flag. The header's exit-1 and exit-2 text is updated. Every other instrument verdict is unchanged; the regression table is under failfirsts."
+    },
+    {
+     "id": "T4",
+     "status": "done",
+     "note": "hostile_arg's numeric branch now gives r==6 -> pick(SAFE_STR) and r==7 -> pick(COERCE_STR). The skeptic measured the same 10%/10% split as chance(50) inside r<=7; this version has NO extra PRNG draw, so the stream stays aligned. At seed 1 exactly 379 k_bad pack lines change, and they are EXACT on canon. k_coerce and the coerce profile are unchanged and stay the separate documenting profile. Comments updated in packfuzz.lua: the profile header, the COERCE_STR comment and the k_coerce comment. Measured: tonumber differs between the VMs for all but three of the 18 strings (18446744073709551615, 1e15 and 0x1P-1074 agree). Also updated the profile paragraph in the run-packfuzz.sh header: the default run now gates D5. The coerce/limits 'exactly one class each' claim is re-measured today and marked as not code-checked. NEW DEFAULT-RUN COUNTS, seed 1 x 20000, on build2 (the working tree, oclj_strpack.c md5 d1629bbe74d724b6b525b3ed852741b8): 'seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0'. These are identical to before, because the draw count did not change. LJCOERCE (sabotage applied by hand to a copy) is now caught by the default run: MISMATCH 71 in 10 classes, rc 1."
+    }
+   ],
+   "failfirsts": [
+    {
+     "check": "T1 comparator, case (a): ours cut at a case boundary (head -n 2000 of a seed-1 x 2000 ours file)",
+     "command": "lua-5.3.6/src/lua.exe <cmp> runs/t1/puc.txt runs/t1/ours-a-caseboundary.txt 3   (dir C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz; old cmp = orig/pack/packfuzz-cmp.lua, new = the repo file)",
+     "output": "OLD rc=2: '[1] CRASH | ours output ends before case 1014u' then 'packfuzz-cmp: the puc run did not finish (no #end line): the reference or the generator failed'. NEW rc=1: 'ours ended early: 1663 puc case line(s) from the CRASH on were not compared', '[1] CRASH | ours output ends before case 1014u'."
+    },
+    {
+     "check": "T1 comparator, case (b): ours cut mid-line (37 bytes into line 2001, which is 56 bytes long)",
+     "command": "lua.exe <cmp> runs/t1/puc.txt runs/t1/ours-b-midline.txt 3",
+     "output": "OLD rc=2: 'packfuzz-cmp: unparseable line:'. NEW rc=1: '[1] CRASH | ours output ends mid-line at case 1014u'; ours example '1014u|un|unpack|f=LB d=s9:01000000000   (no newline: the ours file was cut here)'."
+    },
+    {
+     "check": "T1 comparator, case (c): ours cut before its meta lines (last 3 lines #cov/#ops/#end removed)",
+     "command": "lua.exe <cmp> runs/t1/puc.txt runs/t1/ours-c-nometa.txt 3",
+     "output": "OLD rc=2: \"packfuzz-cmp: desync: puc has meta line '#cov ok-option-chars ...', ours has 'nil'\". NEW rc=1: '[1] CRASH | ours output ends before its #cov line', 'first MISMATCH at its #cov line'."
+    },
+    {
+     "check": "T1 comparator, extra shapes",
+     "command": "lua.exe <cmp> runs/t1/puc.txt runs/t1/ours-{d-covonly,e-beginonly,f-midend}.txt 3",
+     "output": "d (only #cov kept): OLD rc=2 desync on '#ops', NEW rc=1 'CRASH | ours output ends before its #ops line'. e (only the #begin line): OLD rc=2 'no cases compared', NEW rc=1 'CRASH | ours output ends before case e1'. f (cut inside the #end line): OLD rc=0, i.e. the old comparator PASSED a truncated file; NEW rc=1 'CRASH | ours output ends mid-line at its #end line'."
+    },
+    {
+     "check": "T1 comparator regression: other verdicts unchanged",
+     "command": "lua.exe <new cmp> on the clean pair and on built variants (runs/t1/x1..x6)",
+     "output": "clean pair rc=0; injected MISMATCH (line 1500 result) rc=1; desync mid-file (desc changed) rc=2 'desync (the generator drew different cases...)'; puc without #end rc=2 'puc file ended before ours'; ours with an extra case line rc=2 'desync: puc has meta line'; files swapped rc=2 'first file is not side=puc'; puc cut mid-line rc=2 'unparseable line'."
+    },
+    {
+     "check": "T1 driver end-to-end: a fake luajit.exe runs the real one, cuts ours and exits 139 (fakes a/b/c = case boundary / mid-line / before meta)",
+     "command": "OCLJ_BUILD=C-fuzz/fake/<v> OCLJ_PACKFUZZ_CASES=2000 OCLJ_PACKFUZZ_OUT=C-fuzz/runs/e2e/<v>-<which> sh <run-packfuzz.sh>  (old = orig/ layout; hybrid = new driver + OLD comparator; new = the repo files)",
+     "output": "OLD: a, b and c all rc=2 'PACKFUZZ PROVED NOTHING' (a: 'the puc run did not finish'; b: 'unparseable line'; c: desync on #cov). HYBRID (driver fix alone): a, b, c all rc=1 'PACKFUZZ FAIL', 'seed 1: our side exited 139'. NEW: a, b, c rc=1 with 'CRASH | ours output ends before case 1014u' / 'ends mid-line at case 1014u' / 'ends before its #cov line'. Fakes d/e cut the file the same way but exit 0, so only the comparator can catch them: OLD rc=2, NEW rc=1 CRASH. Fake f exits 3 with a complete file: OLD 1, NEW 1."
+    },
+    {
+     "check": "T4: the new default draw catches LJCOERCE, and the old one was blind",
+     "command": "LJCOERCE built by hand into a copy: cp -rp build2/native/luajit-windows-x86_64 ljc2/build/native/; awk exact-line replace of '    if (pk_str2int(s, len, pi)) return 1;' (asserted once, rc 0) in the copy's own src/oclj_strpack.c; make -C <copy>/src BUILDMODE=static XCFLAGS= Q= -j4. Then OCLJ_BUILD=ljc2/build/native sh run-packfuzz.sh (old and new)",
+     "output": "OLD scripts, seed 1 x 20000: 'seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0', PACKFUZZ PASS (blind). NEW: 'seed 1: 1 -- lines 33953: EXACT 32678, DEVIATION 1204, SECONDARY 0, MISMATCH 71', 10 classes, PACKFUZZ FAIL rc=1. At negctl's size, 2000 cases: OLD MISMATCH 0, rc 0; NEW 'MISMATCH 10', 5 classes, rc 1. Edges only (OCLJ_PACKFUZZ_CASES=0), NEW: 'lines 236 ... MISMATCH 0', so the fixed edges alone do NOT catch LJCOERCE."
+    },
+    {
+     "check": "T4 canon: still MISMATCH 0",
+     "command": "OCLJ_BUILD=C-fuzz/build2/native sh test/native/run-packfuzz.sh (also on C-fuzz/build/native and the review's synth/repo/build/native, with OUT in my scratch); seeds 2..6; long seed 2000 x 300; coerce and limits seed 1 x 20000",
+     "output": "build2, build and synth/repo all give 'seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0', PASS. Seeds 2-6: MISMATCH 0 each (e.g. seed 2: lines 34017, EXACT 32851, DEVIATION 1166). long seed 2000: lines 722, MISMATCH 0. coerce: exactly 1 class '[1070] pack | ok/ok: value 1 str vs str' rc 1. limits: exactly 1 class '[10896] unpack | puc ok | ours err stack overflow (too many results)' rc 1."
+    }
+   ],
+   "selfcheck": "Both Lua files parse under PUC 5.3.6 and under the scratch luajit.exe. `sh -n test/native/run-packfuzz.sh` is ok. CR count is 0 in all three files, by bytes. Final md5s: packfuzz.lua a7fd3b9affb85e658b939261480d73b1, packfuzz-cmp.lua 333726b68ea2cc4c8b720ff1d60d8423, run-packfuzz.sh f1b54109cb50e052fab7263c77cce9c2.\n\nScratch builds, all under C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz/:\n- build/native: an early build that has A's OLD D3 line.\n- build2/native: the current working tree, oclj_strpack.c md5 d1629bbe74d724b6b525b3ed852741b8, gate line 'jit=0/1/0'.\n- ljc/ and ljc2/: LJCOERCE copies of those two.\n\nFinal runs with the final scripts:\n- build2 default seed 1: PASS with MISMATCH 0, counts unchanged.\n- ljc2 default: FAIL, MISMATCH 71.\n- Fakes a-e end to end: all rc=1 with a CRASH class.\n\nAll outputs are under C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz/runs/, with the originals in C-fuzz/orig/. Nothing was written under the repo's build/ or serializer/, or into synth/repo/build (every run set OCLJ_PACKFUZZ_OUT to my scratch). I did not run the full negctl sweep or the campaign.",
+   "deviations": [
+    "Rule breach: I ran one git command by mistake, `git diff --stat -- <my three files>`, read-only. It printed nothing because the files are untracked. I ran no other git command.",
+    "How T4 is implemented: r==6 gives SAFE_STR and r==7 gives COERCE_STR, rather than the skeptic's `if chance(50)` inside r<=7. The proportions are the same, 10% each, but there is no extra PRNG draw. The rest of the stream stays aligned, so the seed-1 line counts are identical to before, and only the 379 k_bad lines that now carry a COERCE_STR change.",
+    "I left k_coerce and the coerce profile unchanged. I read 'keep k_coerce's r==3 branch as the separate documenting profile' as: keep the coerce profile as it is. I did not split r==3 into a new profile.",
+    "Small additions inside T1's scope, not listed in fixes.md:\n- 'no cases compared' (exit 2) is skipped once a CRASH is recorded.\n- A summary line counts the puc lines that were not compared.\n- run-packfuzz.sh prints our exit code and stderr head.\n- For a 1 with no MISMATCH-classes section, run-packfuzz.sh prints the head of the cmp file.",
+    "Not changed, outside T1/T4:\n- The comparator still lets a coverage hole or an unfinished reference (exit 2) override a MISMATCH (exit 1).\n- An ours file that dies inside its #begin line still makes the comparator exit 2 ('missing #begin line': the sides cannot be verified). The driver still turns that into 1 via orc. It is practically unreachable, because the first flush happens at line 64 or when the buffer fills."
+   ],
+   "values_for_others": "DEFAULT RUN, seed 1 x 20000, after T4: 'seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0'. This is identical to before T4, so design.md:291 and any quote of these numbers stay right.\n\nFor C-neg and the main session:\n- negctl-pack.sh:35 says 'its ~240 fixed edge cases catch every arm the fuzzer catches at all'. After T4 that is FALSE for LJCOERCE. The fuzzer now catches LJCOERCE only through random k_bad cases: edges only gives MISMATCH 0. At NEGCTL_FUZZ_CASES=2000, seed 1, it catches it with MISMATCH 10.\n- The LJCOERCE arm should now read 'caught by conf-extra + fuzzer'. design.md:187 ('20 of 24 arms (not ORDER54, NONAME, LJCOERCE, DOUBLEBUF)') would become 21 of 24 for the default fuzzer. I measured only LJCOERCE, not the other three.\n- After T1, a crashing arm reads as caught (run-packfuzz.sh exits 1), not as 'a suite proved nothing'.\n- run-packfuzz.sh now prints one extra line, 'seed N: our side exited <rc>: ...', whenever our side exits nonzero.\n\nFor D (docs):\n- coerce and limits still give exactly one MISMATCH class each, measured 2026-10-17 at seed 1 x 20000: coerce [1070] 'pack | ok/ok: value 1 str vs str'; limits [10896] 'unpack | puc ok | ours err stack overflow (too many results)'.\n- The default fuzz run now gates D5 (string-to-number inside pack).\n- For LJCOERCE builds: old fuzzer blind (MISMATCH 0); new fuzzer at 20000 cases gives MISMATCH 71.\n\nPaths:\n- Scratch build of the current tree: C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz/build2/native\n- LJCOERCE copy: C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz/ljc2/build/native\n- Fake crashing builds: C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz/fake/{a..f}\n- Comparator test pairs: C:/Users/astro/claude-tmp/oclj/r2/fix/C-fuzz/runs/t1"
+  },
+  "C-conf": {
+   "files_changed": [
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack/conf-extra.lua",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack/conf-extra.expect",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack/conformance.lua",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack/deviations.txt",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-pack.sh"
+   ],
+   "fixes": [
+    {
+     "id": "scratch-build",
+     "status": "done",
+     "note": "Additive build of the working tree, with A's oclj_strpack.c (md5 d1629bbe74d724b6b525b3ed852741b8), into C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/b-new/build/native: rc=0 in 18 s. For the old-form control I copied that tree to C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/old-d3/build/native, put back only the line `            luaL_error(L, \"memory allocation error: block too big\");` (awk, one occurrence, diff shows only :762), and rebuilt lib_string.o, libluajit.a and luajit.exe with negctl's make line."
+    },
+    {
+     "id": "port-D3-position test",
+     "status": "done",
+     "note": "conf-extra.lua :343-348. New helper rawcase() (:96-101) prints the pcall message raw, without norm(). The new case is `rawcase(\"D s8 wrap nontail raw\", function() local a = U(\"<s8\", (\"\\255\"):rep(8) .. \"x\"); return a end)`, a non-tail call inside a Lua function. Its comment cites ldebug.c:653-663. Its .expect line is `D s8 wrap nontail raw | ERR memory allocation error: block too big`. PUC 5.3.6 prints exactly that (part 2: it is not a listed line and PUC agrees). The old luaL_error build prints it with a '...conf-extra.lua:348: ' prefix (fail-first below). Probe on all three VMs: C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/probe/d3frac2.lua. New build and PUC give the unpositioned text for non-tail, direct and tail calls. synth luajit.exe gives 'd3frac2.lua:2: memory allocation error: block too big' for the non-tail call. 'data string too short' keeps its position on every VM."
+    },
+    {
+     "id": "port-strscan-fraction-residual test",
+     "status": "done",
+     "note": "conf-extra.lua :439 `case(\"RESID frac 2^20\", P, \"j\", \"0.\" .. (\"0\"):rep(2^20) .. \"1\")`. It sits right after the two RESID exp cases, under a new RESID-scan comment (:430-436) that cites lj_strscan.c:468 and :449-453 (the lines A checked against the pinned source). Ours: `ERR bad argument #2 to 'F' (number expected, got string)`. PUC: `OK s:0000000000000000`, in 0.002 s by os.clock. The ('1'):rep form is not used."
+    },
+    {
+     "id": "regenerate .expect",
+     "status": "done",
+     "note": "I regenerated both files from b-new's luajit.exe (tr -d CR). conformance.expect is byte-identical to the repo file and was not changed (308 lines). conf-extra.expect has 411 lines (was 409), md5 b12a4189e42c7c3e526f12584d19610e. The full diff against the original is two added lines: `304a305 > D s8 wrap nontail raw | ERR memory allocation error: block too big` and `405a407 > RESID frac 2^20 | ERR bad argument #2 to 'F' (number expected, got string)`. I regenerated again after my last script edit: both outputs are cmp-equal to the repo files."
+    },
+    {
+     "id": "deviations.txt new ids",
+     "status": "done",
+     "note": "Added `conf-extra|any|RESID frac 2^20|RESID-scan`. The D3 raw case agrees with PUC, so it is not listed. Windows now lists 4 conformance lines and 21 conf-extra lines (was 20). Linux lists 2 and 16; that is derived from the platform column, since I had no Linux PUC to run. The D2 rows stay windows-only: size l, size L and the 5 DEV2 conf-extra rows."
+    },
+    {
+     "id": "T9",
+     "status": "done",
+     "note": "deviations.txt now has a 4th field, the class: DEV1, DEV2, RESID or RESID-scan. The two 'RESID exp' rows and the new frac row are RESID-scan. A RESID-scan header paragraph says these are pack's own (its converter uses LuaJIT's numeral scanner, decided D5/D7), and gives the exact wording: 2^20 or more digits after the radix point, leading zeros counted and trailing zeros not, decimal or hex (lj_strscan.c:449-453), or an exponent of 2^20 or more (:468); strtod reads the first as its value and the second as inf or 0. The other 5 RESID rows stay under 'RESID: the VM, not pack', with the scanner item removed from that list. conf-extra.lua's header and its RESID section comments now say the same."
+    },
+    {
+     "id": "T3",
+     "status": "done",
+     "note": "Both scripts take an optional file argument of `<class>|<id>` lines, read with io.lines. They apply D1 to DEV1 lines (each result that is a math.type integer becomes v + 0.0, then goes through num()) and D2 to DEV2 lines (the case's P/U/S format has l/L rewritten to i8/I8, and the argument count is kept). In part 2, run-pack.sh writes $OUT/<s>.dev-classes.txt from deviations.txt for this script and platform, runs PUC a second time with it, and requires ids_differing(expect, puc-dev) to equal exactly the listed RESID/RESID-scan ids. It keeps the existing id-set check. Measured: the raw and deviation-applied PUC outputs differ in exactly the 13 conf-extra DEV lines and the 4 conformance lines, and in nothing else. New PASS lines: 'PASS conformance: with D1/D2 applied (2 DEV1 and 2 DEV2 lines), PUC 5.3.6 equals conformance.expect in every line but the 0 RESID lines, which D1/D2 do not explain' and 'PASS conf-extra: with D1/D2 applied (8 DEV1 and 5 DEV2 lines), PUC 5.3.6 equals conf-extra.expect in every line but the 8 RESID lines, which D1/D2 do not explain'. On a failure it lists the ids and prints each want/PUC line pair, plus PUC's stderr if there is any. Additions (see deviations): RESID rows get both D1 and D2 and must still differ, and deviations.txt is validated."
+    },
+    {
+     "id": "T6",
+     "status": "done",
+     "note": "conf-extra.lua :12-17 now says most negctl sabotages are caught by this suite alone, but not all: DOUBLEBUF (only what is charged to the RAM cap) and D4OFFBY1 (only a result of exactly LJ_MAX_STR bytes; this suite packs nothing that large) are caught by pack_test.c instead (PT3, PT7). It says negctl's summary names the suite that caught each arm. There is no count. Sources: round 1's DOUBLEBUF log (review T6), and C-neg's selected-arm run C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/negctl-new-final.log, which shows 'D4OFFBY1 ... caught by PT7a,PT7b' and D6WIDE/JUNS/TIESAWAY/KSTR54 caught by conformance and conf-extra. conformance.lua :96 now reads 'l/L: 8 bytes on every platform (D2); 5.3.6 uses sizeof(long), 4 on Win64'. :172-174 says 'u 2^53+1' and 'u maxint' diverge by design (D1), and 'u minint' (-2^63) and 'u J 2^64-2' (-2) are exact in a double and match."
+    },
+    {
+     "id": "T8",
+     "status": "done",
+     "note": "Part 3's setup failures now go through fail3(): the build failure, the warning check, and pack_test exiting 2. fail3 prints 'PACK TEST SETUP FAIL: ...' to stderr. If bad is not 0 it prints 'RUN-PACK: FAIL (part 3 could not run: <problem>; results: ...)' and exits 1; otherwise it exits 2 as before. The header's exit-status text says so. The fail() calls before part 1 are unchanged."
+    },
+    {
+     "id": "Linux rows",
+     "status": "done",
+     "note": "The platform column is unchanged in meaning: D2 lines are windows-only, everything else is any. On Linux the dev-classes file has no DEV2 rows, and PUC's l is 8 there, so the D2 rewrite is not needed. Not run on Linux."
+    },
+    {
+     "id": "self-check",
+     "status": "done",
+     "note": "run-pack.sh against the scratch build, with PUC present, exits 0. Summary lines: 'PASS conformance: 308 cases', 'PASS conf-extra: 411 cases', 'PASS conformance: PUC 5.3.6 differs ... exactly the 4 lines ... windows', the conformance D1/D2 line (2 DEV1, 2 DEV2, 0 RESID), 'PASS conf-extra: ... exactly the 21 lines ... windows', the conf-extra D1/D2 line (8 DEV1, 5 DEV2, 8 RESID), 'PACK TESTS: 13 checks, 0 failures' (C-neg's current pack_test.c, md5 114131124b60e9325f2ea455dc462e1e), 'RUN-PACK: PASS'. Run with POSIX-style OCLJ_BUILD and OCLJ_PACK_OUT paths, so MSYS path conversion of the class-file argument is exercised; every .err file is 0 bytes. Without PUC (OCLJ_LUA53=/c/nonexistent/lua.exe): part 1 passes, part 2 SKIPPED, rc 0."
+    }
+   ],
+   "failfirsts": [
+    {
+     "check": "D3 raw case fails against the old luaL_error form",
+     "command": "sh C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/ff/ff-d3.sh with FF=C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/ff-final: a scratch copy of the repo's run-pack.sh and pack/ run against old-d3/build/native (the same tree with only the D3 line reverted to luaL_error)",
+     "output": "rc=1. 'FAIL conf-extra: 1 of 411 lines differ from conf-extra.expect': want '< D s8 wrap nontail raw | ERR memory allocation error: block too big', got '> D s8 wrap nontail raw | ERR ...x/C-conf/ff-final/d3-old/test/native/pack/conf-extra.lua:348: memory allocation error: block too big'. Every other conformance/conf-extra line passes, including 'D s8 wrap -1' (direct pcall), as the review said. Part 2 passes on the same files: PUC has no position. On b-new (the new line) the same files pass with rc 0."
+    },
+    {
+     "check": "T3: a DEV1 line changed to a refusal fails part 2 (the old part 2 passed it)",
+     "command": "ff-t3.sh: conf-extra.expect copy with 'DEV1 2^53+1 | OK 9007199254740992 9' -> 'DEV1 2^53+1 | ERR 8-byte integer does not fit into a Lua number' (awk ENVIRON swap, one occurrence), run by orig/run-pack.sh with the orig scripts and by the new run-pack.sh with the new scripts",
+     "output": "OLD: 'PASS conf-extra: PUC 5.3.6 differs from conf-extra.expect in exactly the 20 lines deviations.txt lists for windows' (the hole; only part 1 failed). NEW: 'FAIL conf-extra: with D1/D2 applied, PUC 5.3.6 differs from conf-extra.expect outside the RESID lines, or D1/D2 explain a RESID line / differ, not RESID: DEV1 2^53+1 / want: DEV1 2^53+1 | ERR 8-byte integer does not fit into a Lua number / PUC: DEV1 2^53+1 | OK 9007199254740992 9', rc=1"
+    },
+    {
+     "check": "T3: a wrong rounding (2^53+3 -> 2^53+2) fails part 2",
+     "command": "ff-t3.sh: 'DEV1 2^53+3 | OK 9007199254740996 9' -> '... OK 9007199254740994 9', old and new run-pack.sh",
+     "output": "OLD part 2: 'PASS conf-extra: ... exactly the 20 lines'. NEW part 2: 'FAIL conf-extra: with D1/D2 applied ... differ, not RESID: DEV1 2^53+3 / want: ...994 9 / PUC: ...996 9', rc=1"
+    },
+    {
+     "check": "T3: a wrong DEV2 line (7 bytes) fails part 2",
+     "command": "ff-t3.sh: 'DEV2 l | OK s:ffffffffffffffff' -> 'DEV2 l | OK s:ffffffffffffff', old and new run-pack.sh",
+     "output": "OLD part 2: PASS (20 lines). NEW part 2: 'FAIL ... differ, not RESID: DEV2 l / want: DEV2 l | OK s:ffffffffffffff / PUC: DEV2 l | OK s:ffffffffffffffff', rc=1"
+    },
+    {
+     "check": "deviations.txt class column and the frac row: each mutation must fail part 2",
+     "command": "ff-class.sh: deviations.txt copies, new run-pack.sh, the real b-new build",
+     "output": "frac row dropped: rc=1, part 2a 'differ but not listed: RESID frac 2^20' and part 2b 'differ, not RESID: RESID frac 2^20'. 'u 2^53+1|DEV1' -> '|RESID': rc=1, 'RESID, but D1/D2 explain: u 2^53+1'. 'size l|DEV2' -> '|DEV1': rc=1, 'differ, not RESID: size l (want 8, PUC 4)'. 'DEV1 2^53+3|DEV1' -> '|DEV2': rc=1, 'FAIL deviations: line 39, the id and the class disagree' plus part 2b. Frac '|RESID-scan' -> '|DEV1': rc=1, 'line 51, the id and the class disagree'. Three-field row: rc=1, 'line 56, not 4 fields'. Class 'RESID-vm': rc=1, 'line 54, unknown class'. Validator on the real file: empty. Blank and whitespace-only lines are skipped; 'conf-extra|any|junk' gives 'not 4 fields'."
+    },
+    {
+     "check": "T8: a part-1 FAIL takes precedence over part 3's exit-2 setup problems",
+     "command": "ff-t8.sh: CC=ff/cc-warn.sh (prints one 'warning:' line, then runs gcc) and CC=ff/cc-exit2.sh (builds a stub pack_test that returns 2), each with conformance.expect 'opt b | OK s:64' -> 's:65' (part-1 FAIL) and without, on the old and the new run-pack.sh",
+     "output": "OLD: rc=2 in all four cases, including with 'FAIL conformance: 1 of 308 lines differ' recorded (the reviewer's finding). NEW with the part-1 FAIL: rc=1 and 'RUN-PACK: FAIL (part 3 could not run: pack_test.c must compile warning-clean; results: ...)', and rc=1 'RUN-PACK: FAIL (part 3 could not run: pack_test exited 2; ...)'. NEW clean (control): rc=2 for both, so setup problems alone still mean proved nothing."
+    }
+   ],
+   "selfcheck": "sh -n and dash -n pass on test/native/run-pack.sh. All six owned files have CR=0 and no tabs. Final md5s: conformance.lua 649c3ed9156b6c3359de4ed82a5144e5, conf-extra.lua 6ac4c47bb1f715291198586937d83a39, conformance.expect 542149d1bc40f468df472d012ea17b2e (unchanged), conf-extra.expect b12a4189e42c7c3e526f12584d19610e, deviations.txt de23c0f6ed3301f93bcc53f4994dda2f, run-pack.sh ae30fce27f0cdbfbd3c09029b7755bd0. Scratch build: C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/b-new (additive, rc=0, from oclj_strpack.c d1629bbe...). Final run-pack.sh run (log C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/rp-final3.log, results /c/Users/astro/claude-tmp/oclj/r2/fix/C-conf/rp-final3) exits 0. It reports conformance 308 and conf-extra 411; provenance on Windows 4 and 21 lines; the D1/D2 content checks with 2 DEV1/2 DEV2/0 RESID and 8 DEV1/5 DEV2/8 RESID; PACK TESTS 13 checks, 0 failures; RUN-PACK: PASS. The no-PUC run gives SKIPPED and rc 0. After my last edit, every fail-first was re-run against the final files under a fresh root, C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/ff-final/all.out. The earlier runs are kept in C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/ff/ and C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/rp-*; none was cleared. The pre-edit copies are in C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/orig/. Not run, per the rules: negctl-pack.sh, run-packfuzz.sh, gradle, smoke. Linux was not built or run.",
+   "deviations": [
+    "deviations.txt has a 4th field, `<script>|<platform>|<id>|<class>`, class DEV1, DEV2, RESID or RESID-scan. T3 needs a class for each listed id, and conformance's ids carry no DEV prefix. T9's relabel is this column. Only run-pack.sh parses the file (grep over the repo). run-pack.sh validates every row, with or without PUC: 4 fields, a known script, platform and class, and an id starting 'DEV1 ', 'DEV2 ' or 'RESID' must carry that class. A bad row prints 'FAIL deviations: ...' (exit 1).",
+    "T3 is stricter than 'RESID unconstrained'. RESID and RESID-scan rows get both D1 and D2 in the deviation-applied run and must still differ, so a line that D1/D2 explain cannot be filed as RESID (fail-first: 'u 2^53+1|RESID' is refused). Each DEV row is also checked under its own class: a DEV2 row labelled DEV1 fails. The RESID rows' content stays unconstrained.",
+    "The new fraction case is 'RESID frac 2^20': prefix RESID, class RESID-scan. It sits beside the two 'RESID exp' ids, which could not be renamed to 'RESID-scan ...' without changing existing .expect lines.",
+    "deviations.txt's header gets one prose paragraph (no case id) on the over-cap refusal: LUA_ERRMEM 'not enough memory', unpositioned, after every argument check, against 5.3.6's runtime 'not enough memory for buffer allocation'. This follows the port-D4-cap-text skeptic's better_fix, which names the RESID header. fixes.md assigned that finding's other text to A and D.",
+    "T6 names D4OFFBY1 as a second suite-external catch (PT7). This comes from C-neg's selected-arm log, not from my own measurement. No count is given.",
+    "pack_test exiting 2 now also prints 'PACK TEST SETUP FAIL: pack_test exited 2' on stderr (through fail3), after the existing 'PACK TEST PROVED NOTHING' line."
+   ],
+   "values_for_others": "For D (docs) and the contract counts: conformance 308 cases (unchanged), conf-extra 411 (was 409). Part 2 provenance on Windows: 4 and 21 listed lines (was 4 and 20). On Linux it would be 2 and 16; that is derived, not measured. conf-extra's listed rows on Windows are 8 DEV1, 5 DEV2, 3 RESID-scan (RESID exp 2^20, RESID exp -2^20, RESID frac 2^20) and 5 RESID (2 RESID-tail, many results, numstr float, nan payload). Part 2 now prints four PASS lines, two per script: the id-set line, then 'with D1/D2 applied (N DEV1 and M DEV2 lines), PUC 5.3.6 equals <s>.expect in every line but the K RESID lines, which D1/D2 do not explain'. deviations.txt's format is `<script>|<platform>|<id>|<class>`, so 'the RESID-scan lines of deviations.txt' (roadmap) is literally true. A docs or design quote of '10 checks'-style counts for run-pack: PACK TESTS is now 13 (C-neg's pack_test.c). For C-neg and the main session: conf-extra's 'D s8 wrap nontail raw' catches a D3 line reverted to luaL_error, which the old suite could not see. negctl-pack.sh's caught-by parser can show a new label 'deviations' only if deviations.txt itself is malformed, which a sabotage arm never touches. run-pack.sh writes new files in its results dir: <s>.dev-classes.txt, <s>.resid-ids.txt, <s>.puc-dev.txt/.err, <s>.dev-diff-ids.txt. The exit status is now 1, not 2, when part 1 or 2 FAILed and part 3 then could not run. Scratch: build C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/b-new/build/native; old-D3 control build C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/old-d3/build/native; fail-first scripts in C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/ff/ (lib.sh, ff-d3.sh, ff-t3.sh, ff-class.sh, ff-t8.sh, cc-warn.sh, cc-exit2.sh), with outputs in C:/Users/astro/claude-tmp/oclj/r2/fix/C-conf/ff-final/all.out."
+  },
+  "C-neg": {
+   "files_changed": [
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/pack_test.c",
+    "C:/Users/astro/Downloads/OC-LuaJIT/test/native/negctl-pack.sh"
+   ],
+   "fixes": [
+    {
+     "id": "T2 (PT7, D4)",
+     "status": "done",
+     "note": "pack_test.c has a new PT7 block after PT6. It runs under the 64 MiB cap (lj52_mem_settotal is re-asserted) and makes its calls through a new helper, packst(), which uses lua_pcall the way PT4 calls pack. PT7a: pack('c2147483392','') gives LUA_ERRRUN with the exact text 'not enough memory for buffer allocation'. PT7b: pack('c2147483391c1','','') gives the same. PT7c: pack('c2147483391','') gives LUA_ERRMEM with the exact text 'not enough memory'. PT7d: pack('c2000000000c2000000000','',{}) gives LUA_ERRRUN, a message starting 'bad argument #3 ' and containing '(string expected, got table)'. The measured text is \"bad argument #3 to '?' (string expected, got table)\". Note: c2147483392 is itself a total of 0x7fffff00 == LJ_MAX_STR (lj_def.h:49,54), so PT7a is a boundary case too, not only PT7b. I checked by reading that nothing large is allocated. In PT7a and PT7b, D4 (oclj_strpack.c:624-625) raises before lua_newuserdata (:629). In PT7d, pass 1 raises at arg 3 before D4. In PT7c, lua_newuserdata (lj_api.c:752, size <= LJ_MAX_UDATA) reaches lj_mem_newgco, which calls lj52_alloc. In C mode lj52_alloc returns NULL at lj52shim.c:431-438 because delta > total - used + credit + lend. The credit is at most G (512 KiB) + KSLICE (16 KiB) (:1482-1483, :1576-1588), and the lend is at most 4 KiB past the top (:1620). That return comes before lj52_back (:440), the only call that reaches the system allocator. lj_mem_newgco then raises lj_err_mem (lj_gc.c:885-889). Measured: used is 0.05 MiB after PT7c. The header documents PT7."
+    },
+    {
+     "id": "T7 (PT4 reworded + ordering check)",
+     "status": "done",
+     "note": "The PT4 header now says what the check proves: refused as LUA_ERRMEM 'not enough memory', not D4's text, and not a crash. It also says that write order cannot be observed from here; PT3's 2x charge and the code carry that. The section banner is now 'past the cap: LUA_ERRMEM, and only after every argument check' and the check label is '...: LUA_ERRMEM'. New PT4b, in PT4's block under the same heap+4 MiB margin: pack('c16777216 j','','x') must give LUA_ERRRUN with a message starting 'bad argument #3 ' and containing '(number expected, got string)'. Measured: \"bad argument #3 to '?' (number expected, got string)\", status 2. PT4's exact check (st == LUA_ERRMEM, msg == 'not enough memory') is unchanged."
+    },
+    {
+     "id": "T5 (new arms D6WIDE, JUNS, TIESAWAY, D4)",
+     "status": "done",
+     "note": "Four arms were added after DOUBLEBUF. Each anchor occurs exactly once (asserted by sabotage(), and counted by a stub over the arm calls). D6WIDE: `        luaL_error(L, \"%d-byte integer does not fit into Lua Integer\", size);` (:686) becomes `(void)L;`. JUNS: the D1 push line (:728) becomes the unsigned push for Kuint with size >= PK_SZINT. TIESAWAY: the D1 push line becomes ties-away for 2^53 < res < 2^62 (the reviewer's definition). D4OFFBY1: `  if (total >= PK_MAXOUT)` (:624) becomes `>`. The header now says 'There are 28 sabotage arms, then the unregistered arm'. It describes what each new arm isolates. It adds memory-safety reasoning for D6WIDE (it skips a refusal of bytes the general check has already bounded) and for D4OFFBY1 (lua_newuserdata admits 0x7fffff00 at lj_api.c:752, the 64 MiB cap refuses it before the system allocator, and no case packs that total on luajit.exe, where the fuzzer keeps pack's c at 2^20 or less). The fuzz edge-case claim now carries the new measurement."
+    },
+    {
+     "id": "KSTR54 re-anchor",
+     "status": "done",
+     "note": "The anchor is now A's D3 line, exactly: `            { lua_pushliteral(L, \"memory allocation error: block too big\"); lua_error(L); }` (12 spaces, oclj_strpack.c:762, occurs once). The replacement is unchanged. No other of the 24 original anchors changed: the counter shows all 28 anchors at count 1 on the final oclj_strpack.c (md5 d1629bbe74d724b6b525b3ed852741b8). KSTR54 is still caught, by conformance, conf-extra and the fuzzer."
+    },
+    {
+     "id": "arm selection (OCLJ_NEGCTL_ARMS)",
+     "status": "done",
+     "note": "OCLJ_NEGCTL_ARMS is new. Left empty (the default), every arm runs, exactly as before, and the final PASS line is the original text. Otherwise it takes a space- or comma-separated list. canon always runs as the positive control, and unregistered runs only when named. All arm calls now sit inside armlist(). A listing pass (LISTONLY=1) collects the names, and the selection is checked against them BEFORE the work dir is created or the tree is copied, so an unknown name, or a value with no name in it, exits 2 having written nothing. The WORK/copy block moved below that check. A selected run prints '[negctl-pack] OCLJ_NEGCTL_ARMS: ... -- not the full sweep' and ends with 'NEGCTL-PACK: PASS FOR THE SELECTED ARMS ONLY (selected: ...)' or 'NEGCTL-PACK: FAIL (selected arms only: ...)'. The unregistered block is wrapped in `if wanted unregistered` and re-indented."
+    },
+    {
+     "id": "run new arms + canon",
+     "status": "done",
+     "note": "Command: OCLJ_NEGCTL_ARMS='D6WIDE JUNS TIESAWAY D4OFFBY1 KSTR54', OCLJ_BUILD set to my scratch build. rc=0 in 15 s. canon PASS (both suites pass). KSTR54, D6WIDE, JUNS and TIESAWAY were each caught by conformance, conf-extra and the fuzzer. D4OFFBY1 was caught by PT7a and PT7b only (run-pack 1, packfuzz 0). Its PT7a and PT7b came back as status 4 'not enough memory', i.e. the cap refused the 0x7fffff00 block. Final run on the final bytes: C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/negctl-new-final.log (results .../build/native/negctl-pack/20261016T233138Z-1346). The full 28-arm sweep was NOT run."
+    }
+   ],
+   "failfirsts": [
+    {
+     "check": "PT7a/PT7b catch D4's off-by-one (the D4OFFBY1 arm)",
+     "command": "OCLJ_NEGCTL_ARMS='D6WIDE,JUNS,TIESAWAY,D4OFFBY1,KSTR54' OCLJ_REPO=<repo> OCLJ_BUILD=C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/build/native sh C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/snap/test/native/negctl-pack.sh",
+     "output": "D4OFFBY1: run-pack 1, packfuzz 0 -- PASS (caught by PT7a,PT7b). Its run-pack.log: \"FAIL PT7a  pack('c2147483392', ''): total 0x7fffff00, D4's text  status 4 (LUA_ERRRUN 2) 'not enough memory'\" and the same for PT7b. PT7c and PT7d PASS. 'PACK TESTS: 13 checks, 2 failures'."
+    },
+    {
+     "check": "Without PT7 (the round-2 base pack_test.c), D4OFFBY1 is NOT caught, so PT7 is what catches it, and the selected run's NOT CAUGHT path works",
+     "command": "OCLJ_NEGCTL_ARMS=D4OFFBY1 ... sh C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/snap-oldpt/test/native/negctl-pack.sh (snapshot = the same, but with synth/target's pack_test.c)",
+     "output": "rc=1. 'canon: run-pack 0, packfuzz 0 -- PASS'; 'D4OFFBY1: run-pack 0, packfuzz 0 -- FAIL (NOT CAUGHT)'; 'NEGCTL-PACK: FAIL (selected arms only: D4OFFBY1; ...)'"
+    },
+    {
+     "check": "PT7a/PT7b check D4's text (a text change fails them)",
+     "command": "sh C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/variant.sh D4TEXT '    luaL_error(L, \"not enough memory for buffer allocation\");' '    luaL_error(L, \"not enough memory\");  /* VARIANT D4TEXT */' (copy of the scratch LuaJIT tree, one line replaced, lib_string.o and the archive rebuilt; only pack_test.c runs, linked as run-pack part 3)",
+     "output": "pack_test rc=1: \"FAIL PT7a ... status 2 (LUA_ERRRUN 2) 'not enough memory'\", \"FAIL PT7b ... status 2 ... 'not enough memory'\"; PT4, PT4b, PT7c, PT7d PASS; 'PACK TESTS: 13 checks, 2 failures'"
+    },
+    {
+     "check": "PT7d fails when D4 is checked before the argument checks",
+     "command": "sh variant.sh EARLYD4 '    totalsize += (uint64_t)ntoalign + (uint64_t)size;' '<same> if (o == NULL && totalsize >= PK_MAXOUT) luaL_error(L, \"not enough memory for buffer allocation\");  /* VARIANT EARLYD4 */'",
+     "output": "pack_test rc=1: \"FAIL PT7d  pack('c2000000000c2000000000', '', {}): arg #3 before D4  status 2 (LUA_ERRRUN 2) 'not enough memory for buffer allocation'\"; PT7a, PT7b, PT7c, PT4, PT4b PASS; '13 checks, 1 failures'"
+    },
+    {
+     "check": "PT4b fails when pack allocates before every argument is checked (as 5.3.6's growing buffer does)",
+     "command": "sh variant.sh EARLYALLOC '    totalsize += (uint64_t)ntoalign + (uint64_t)size;' '<same> if (o == NULL && size > PK_STACKBUF) (void)lua_newuserdata(L, (size_t)size);  /* VARIANT EARLYALLOC */'",
+     "output": "pack_test rc=1: \"FAIL PT4b  pack('c16777216 j', '', 'x'), same margin: arg #3 first  status 4 (LUA_ERRRUN 2) 'not enough memory'\"; also FAIL PT7a, PT7b, PT7d (status 4); PT4 and PT7c PASS; '13 checks, 5 failures'"
+    },
+    {
+     "check": "PT4 (reworded: LUA_ERRMEM, not D4's text) and PT7c (one byte below the boundary is LUA_ERRMEM) can fail",
+     "command": "sh variant.sh D4LOW '  if (total >= PK_MAXOUT)' '  if (total >= (uint64_t)16777216)  /* VARIANT D4LOW */'",
+     "output": "pack_test rc=1: \"FAIL PT4  ... status 2 (LUA_ERRMEM 4) 'not enough memory for buffer allocation'\" and \"FAIL PT7c ... status 2 (LUA_ERRMEM 4) 'not enough memory for buffer allocation'\"; PT4b, PT7a, PT7b, PT7d PASS; '13 checks, 2 failures'. (Round 1 never made PT4 fail; this does.)"
+    },
+    {
+     "check": "OCLJ_NEGCTL_ARMS refuses a name that is no arm, and a value naming nothing, before writing anything",
+     "command": "OCLJ_NEGCTL_ARMS='D6WIDE TIESAWYA' | ',' | 'canon,unregistered,nope' ... sh snap/test/native/negctl-pack.sh; then ls $OCLJ_BUILD/negctl-pack",
+     "output": "\"NEGCTL-PACK SETUP FAIL: OCLJ_NEGCTL_ARMS names 'TIESAWYA', which is no arm (arms: canon LONG4 ... D4OFFBY1 unregistered)\" rc=2; \"NEGCTL-PACK SETUP FAIL: OCLJ_NEGCTL_ARMS is set but names no arm\" rc=2; 'nope' rc=2. Afterwards ls reports 'No such file or directory' for build/native/negctl-pack: no work dir was created."
+    },
+    {
+     "check": "The anchor counter (a stub arm() that counts each OLD line the way sabotage() matches it, eval'ing the script's own armlist) can report a count other than 1",
+     "command": "sh C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/anchors.sh native/luajit/oclj_strpack.c test/native/negctl-pack.sh; then the same on the base negctl's arm calls (old-armlist.sh)",
+     "output": "New script: 28 arms, every one count 1 ('arms: 28, count!=1: 0'). Base script on the new C file: '0 KSTR54' (A's D3 edit removed the old anchor line)."
+    }
+   ],
+   "selfcheck": "Scratch build: C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/build/native (additive, rc=0, 16.6 s). Its oclj_strpack.c is cmp-equal to the repo file (md5 d1629bbe74d724b6b525b3ed852741b8). Gate lines: '[build]     lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)', '[build]     oclj_strpack.c -Wall -Wextra warnings = 0', '[build]     string.pack gate: fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 jit=0/1/0'.\n\nrun-pack.sh (the repo's, still identical to the base at that moment) with the new pack_test.c on that build: rc=0. PASS conformance 308, PASS conf-extra 409. Provenance: 4 and 20 lines, as listed for windows. pack_test compiled warning-clean under -Wall -Wextra (part 3 refuses warnings) and printed 'PACK TESTS: 13 checks, 0 failures'; PT4b and PT7a-d all PASS. Log: C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/rp-canon-1.log.\n\nThe selected negctl runs (new arms plus canon and KSTR54) went against a SNAPSHOT: C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/snap/test/native holds my two final files (cmp-equal to the repo) and the round-2 base copies (synth/target) of run-pack.sh, run-packfuzz.sh and pack/*, with OCLJ_REPO set to the real repo. I did this because C-conf and C-fuzz were mid-edit. At the end every one of their files except conformance.expect differed from the base. Final run: rc=0, 'NEGCTL-PACK: PASS FOR THE SELECTED ARMS ONLY (selected: D6WIDE JUNS TIESAWAY D4OFFBY1 KSTR54; canon passes; each selected sabotage is caught; ...)'.\n\nA DRY run of the default (no selection) path: a scratch copy of negctl-pack.sh with rebuild and runsuites stubbed, while sabotage() and the unregistered make ran for real. It visited canon, all 28 arms and unregistered, and ended with the original 'NEGCTL-PACK: PASS (canon passes; every sabotage is caught; ...)' line. It proves the control flow only, not the suites. A dry selection of ' unregistered , JUNS' ran only canon, JUNS and unregistered.\n\nsh -n and dash -n pass on negctl-pack.sh. Both files have CR=0 and no 0x08 bytes. Final md5: negctl-pack.sh 0483af2ec8ba4339ee7c8cbc06945c95 (306 lines), pack_test.c 114131124b60e9325f2ea455dc462e1e (344 lines).\n\nNot run, per the rules: the full negctl sweep, negative-control.sh, smoke, gradle, the fuzz campaign. Linux was not built or measured. Nothing in the two files is platform-specific beyond what was there before: PT7 uses the shim cap, and the D4OFFBY1 anchor is platform-neutral.",
+   "deviations": [
+    "The D4 arm is named D4OFFBY1 (the reviewer's name, after what it breaks, like the other arms), not 'D4'. I chose the off-by-one (`>` for `>=`) over a text change: the text is already covered by PT7a and PT7b, measured with the D4TEXT variant, and the off-by-one is the one only the boundary case can see.",
+    "Selection semantics: canon always runs, even when it is not named, because a caught arm means nothing without the positive control in the same run. unregistered runs only when named. An unknown name exits 2. To make that check happen before anything is copied, I wrapped the arm calls in armlist() and moved the WORK/copy block below the selection check. The default run's behaviour and its final PASS line are unchanged.",
+    "The negctl runs used a snapshot of the round-2 BASE suites (synth/target run-pack.sh, run-packfuzz.sh, pack/*) plus my two final files, not the live repo test/native, because C-conf and C-fuzz were editing those files during my work. The main session's full sweep will exercise the final combination.",
+    "PT7a's input c2147483392 is itself exactly LJ_MAX_STR (0x7fffff00), so PT7a, like PT7b, catches the off-by-one (measured). The review described only c2147483391c1 as the boundary.",
+    "Additions beyond the list, all in my files. PT7 re-asserts the 64 MiB cap before its calls (redundant after PT5, but explicit). PT7c's detail prints 'used' after the refusal without asserting it, following the T7 skeptic's point that it proves nothing about order. I added three more scratch-only fail-first variants (EARLYD4, EARLYALLOC, D4LOW) so that every new or changed pack_test check (PT4, PT4b, PT7a-d) has a recorded failure. I extended the header's fuzz-edge claim with my measurement for the new arms (NEGCTL_FUZZ_CASES=0 and 2000)."
+   ],
+   "values_for_others": "For C-conf (T6), measured against the base conformance.lua and conf-extra.lua with A's oclj_strpack.c. conf-extra.lua catches each of the 4 value arms: D6WIDE, JUNS, TIESAWAY, and the re-anchored KSTR54; conformance.lua catches the same 4. D4OFFBY1 is caught ONLY by pack_test.c PT7a and PT7b (run-pack 1, packfuzz 0). With the earlier 23-of-24 figure, conf-extra.lua alone catches 26 of the 28 sabotages; DOUBLEBUF (PT3) and D4OFFBY1 (PT7a/PT7b) are caught by pack_test.c. Re-check this if your conf-extra edits remove the 'nofit', 'J -1' or '2^53+1' cases.\n\nThe diff lines that caught each arm. D6WIDE: 'u i9 nofit', 'u I9 nofit' plus 4 conf-extra lines. JUNS: 'u J -1', 'u J 2^64-2' plus 3 conf-extra lines. TIESAWAY: 'u 2^53+1' and 'DEV1 2^53+1'. KSTR54: 'u s8 huge' and 3 conf-extra lines including 'D s8 wrap -8' and 'D s8 wrap -1'.\n\nFor D and the main session. pack_test.c now has 13 checks (it had 8): PT1, PT1m, PT2, PT3, PT4, PT4b, PT5, PT6a, PT6b, PT7a, PT7b, PT7c, PT7d. run-pack part 3 ends 'PACK TESTS: 13 checks, 0 failures'. negctl-pack.sh now has 28 sabotage arms, plus canon and unregistered, so 30 runs at about 2.5 s each on Windows; the full sweep should take roughly 75 s. A default run with OCLJ_NEGCTL_ARMS unset is the full sweep, with the same final line as before. New env var: OCLJ_NEGCTL_ARMS (space- or comma-separated; canon always runs).\n\nFuzzer figures for the new arms, base fuzzer, seed 1. At 2000 cases the MISMATCH counts are D6WIDE 80, JUNS 98, TIESAWAY 15, KSTR54 57, D4OFFBY1 0; canon gives 3662 lines, EXACT 3523, DEVIATION 139, MISMATCH 0. At 0 random cases (236 lines) they are 3, 4, 4, 7, and 0 for D4OFFBY1. Caveat for the main session: the header's claim 'its ~240 fixed edge cases catch every arm the fuzzer catches at all' was measured with the BASE fuzzer. C-fuzz's T4 (COERCE_STR in the default hostile_arg) may make LJCOERCE fuzzer-caught through random cases only, which would make that sentence false. Re-measure with NEGCTL_FUZZ_CASES=0 OCLJ_NEGCTL_ARMS=LJCOERCE after C-fuzz lands.\n\nScratch artifacts, all under C:/Users/astro/claude-tmp/oclj/r2/fix/C-neg/: the build at build/native; snapshots snap/ and snap-oldpt/; variant.sh and the var-*/ fail-first builds; anchors.sh; logs negctl-new-1.log, negctl-new-fuzz0.log, negctl-oldpt-d4.log, negctl-new-final.log, rp-canon-1.log, dry-default.log, dry-sel.log."
+  }
+ },
+ "verdicts": {
+  "plumbing": {
+   "summary": "Verify-plumbing (implementers A and B): every fix id is done as fixes.md requires, and every fail-first I re-ran reproduces. I found no breakage. All four owned files have CR=0, and their backslash and tab counts are unchanged from the synth targets, so no backslashes were eaten. The repo md5s match A's report and did not change while I worked. No stray files were left in the repo.\n\nScratch builds of the working tree, in C:/Users/astro/claude-tmp/oclj/r2/fix/verify-plumbing/{drop,add}: dropin rc=0 (16.5 s), then additive rc=0 (17.2 s). Gate lines, identical in both:\n- 'patch-strpack-register.sh: lib_string.c  registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 712); verified by content and diff'\n- 'lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)'\n- '-dM: OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1'\n- 'oclj_strpack.c -Wall -Wextra warnings = 0'\n- 'FFI / integer-format gate: lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=true'\n- 'string.pack gate: fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 jit=0/1/0'\n- 'FOREIGN-ALLOC-OK GG=6376'\n- negative arm 'GG-LAYOUT-MISMATCH lib=6376 tu=6384'\n- 'VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1'\n\nScratch serializer make test (a copy of repo serializer/ with its binaries removed, built against my additive build), rc=0 in about 10 s: M1 82, M2 56, M3 79, CONTRACT all pass, stack-universe FAILS: 0, FINGERPRINT 18, STRPACK RESULT: ALL 11 TESTS PASS, FOR-IN exact. Fingerprint hash baf083da, GG_State 6376.\n\nThe target conformance.lua (308 lines) and conf-extra.lua (409 lines) run on my new luajit.exe are byte-identical to the target .expect files, so the D3 change breaks no existing case.\n\nIssues: three low-severity wording points (the B2 failure text, and two comments in oclj_strpack.c). There are also two notes on things outside A's and B's files. First, the repo's negctl-pack.sh KSTR54 anchor matches 0 lines until C-neg re-anchors it. Second, the contract design.md still quotes the old gate line and the old count of 10. Not measured: Linux. A LF-only copy of the log passes B1's pattern; B2's 0/1/0 was measured only on Windows.",
+   "confirmed": [
+    "port-D3-position: oclj_strpack.c:762 is exactly the prescribed one-line `{ lua_pushliteral(...); lua_error(L); }` (12 spaces, no backslash, occurs once). My own probe (verify-plumbing/d3/d3v.lua) has five wrap cases: direct, non-tail, tail, method, and nested in a table constructor. All five print 'memory allocation error: block too big' with no position on my new luajit.exe, identical to PUC 5.3.6. The synth luajit.exe (old luaL_error form) prints 'd3v.lua:4:', ':6:' and ':7:' prefixes for the non-tail, method and nested cases. Comment cites checked: lj_err.c:1129-1133 is lua_error, which calls lj_err_run; ldebug.c:653-663 is luaG_runerror with the isLua(ci) test; lmem.c:68 is luaM_toobig.",
+    "Anchors: the arm calls taken from the target negctl-pack.sh, counted on the repo oclj_strpack.c with negctl's own whole-line ENVIRON match (verify-plumbing/anchors/count.sh). 23 of the 24 count exactly 1; KSTR54 counts 0, as required. On the target file all 24 count 1.",
+    "port-strscan-fraction-residual: the comment at oclj_strpack.c:240-244 matches the skeptic's better_fix. Cites checked against the pinned 1ee778a4: lj_strscan.c:66 (STRSCAN_MAXEXP 1<<20), :451-453 (fraction count with trailing zeros skipped, refused at -2^20), :468 (exponent value). Measured with verify-plumbing/d3/scan.lua. Ours refuses '0.'+2^20 zeros+'1' given to 'j', the hex fraction of the same length, '1e1048576' and '1e-1048576'. Ours accepts 2^20-1 fraction digits, also when 9 trailing zeros follow, '1e1048575', and an exponent with 30 leading zeros. PUC packs all of them (fraction to its value, exponent to inf or 0) in 0.04 s.",
+    "port-D4-cap-text: the comment block at :614-623 is accurate. lauxlib.c:468 is resizebox's luaL_error. The refusal paths named (lua_newuserdata, lua_pushlstring) match the code. Code unchanged: `if (total >= PK_MAXOUT)` / `luaL_error(L, \"not enough memory for buffer allocation\");`.",
+    "B1: the pattern `-c -o lib_string[.]o lib_string[.]c[[:cntrl:]]?$` was run as the two lines sed-extracted from build-native.sh:681-682 (verify-plumbing/b1). Results: PASS on the real log; FAIL with the compile line removed; PASS on an LF-only copy (the Linux shape); FAIL when the object name differs; FAIL when another source follows lib_string.c. The old `grep -F 'lib_string.c'` passes all five. Raw bytes: line 162 ends in CR in both my logs and in synth's (95 CR lines of 185), so A's CR correction is right and the skeptic's '0 CR' was wrong. Under grep -U, the plain-$ form does not match the good log; the new form does. The comment's Makefile claim holds: TARGET_DYNCC is '@:' for static builds (Makefile:601-619), and only :720's static line is echoed.",
+    "B2: SP_WANT was eval'd from build-native.sh and run against the build's own strpack.lua. JIT on: 10/10 PASS at 'jit=0/1/0' (dropin luajit.exe 3/3). FAIL with -joff (0/0/0), with -e 'jit.off()' (0/0/0), and with the JIT on but -Ohotloop=5000 so no trace is recorded in hot() (0/0/0). Also FAIL with -Ominstitch=1000 (0/0/6 aborts), -Omaxtrace=1 (0/34/0) and -Ohotexit=1 -Ohotloop=1 (0/2/0). The gate can fail on each of its three counts.",
+    "B5: run on synthetic inputs built from the pristine CRLF lib_string.c (verify-plumbing/b5). Patch path: split-method (a second module define plus a function above the anchor), split-early (a define at :33) and split-comment (the tag in a comment, which buildvm still honours, buildvm_lib.c:409-420) each give rc=1, no output and no tmp left. The old script gives rc=0 on all three. A tag below the anchor still patches. Pristine output is byte-identical between the new and old scripts and equals my build's patched lib_string.c. Already-patched path: ap-split, ap-tagbetween (a tag between packsize and unpack) and ap-order (packsize/unpack swapped) each give rc=1 with no output under sh and dash; the old script gives rc=0 on all three. In-place runs (IN==OUT) leave the file unchanged with no tmp. sh -n and dash -n pass on both scripts.",
+    "B6: the header says 'The patch path writes LF; an already-patched input is verified and copied as is.' Measured: a CRLF already-patched input gives rc=0 and is copied byte for byte (712 CR in, 712 out). The script still has 0 backslashes, 0 tabs and 0 CR.",
+    "A self-check: reproduced independently. Both variants build with rc=0, and the gate lines are listed in the summary.",
+    "B3: check 4 counts cand. My own variants, run against both the new and the target file: an alias that sorts after the real name (string.unpack_alias) fails with '4: _G.string.pack _G.string.packsize _G.string.unpack _G.string.unpack_alias'. A global alias rawset(_G,'zz_ps',string.packsize) fails with '4: ... _G.zz_ps'. The old file passes both ('ALL 10 TESTS PASS').",
+    "B4: three variants. (1) Pure-Lua stand-ins for all three fail both new checks: 'Lua/Lua/Lua' and 'persisted | persisted | persisted'. (2) A Lua wrapper around the real C unpack fails only the getinfo check ('C/Lua/C'), which shows both checks are needed. (3) A packsize-only stand-in fails both, and the refusal list shows only the third entry persisting. The old file passes all three variants. The per-function refusal also requires okp.",
+    "B count/labels: 11 checks, and the result line counts at run time ('STRPACK RESULT: ALL 11 TESTS PASS'). The header and the section print line describe the new checks. CR 0, LF only, no tabs, backslash count unchanged (3)."
+   ],
+   "issues": [
+    {
+     "severity": "low",
+     "file": "native/build-native.sh",
+     "line": "896-897",
+     "problem": "The B2 failure text says 'a stitch count other than 1 means no trace was recorded in hot()'. That is true only for 0. A count above 1 means traces WERE recorded: re-recorded, flushed, or a side exit went hot. The gate fails correctly on such a count but gives the wrong diagnosis. The wording came verbatim from fixes.md's B2 item, so this is a spec imprecision the implementer followed.",
+     "evidence": "Run in verify-plumbing/b2 with the build's own strpack.lua on my additive luajit.exe. -Omaxtrace=1 prints 'hot=14000 jit=0/34/0'. -Ohotexit=1 -Ohotloop=1 prints 'jit=0/2/0'. Both fail the gate, and traces were recorded in both. Only -joff, jit.off() and -Ohotloop=5000 give the 0/0/0 that the text describes.",
+     "fix": "Change the text to: 'a stitch count of 0 means no trace was recorded in hot(), so the gate proved nothing about the JIT; a count above 1 means the trace was re-recorded (flushed, or a side exit went hot)'. Keep the abort and loop sentences."
+    },
+    {
+     "severity": "low",
+     "file": "native/luajit/oclj_strpack.c",
+     "line": "622",
+     "problem": "The D4 comment says that in 5.3.6 'a refused growth raises the buffer text (positioned)'. 5.3.6's luaL_error adds a position only when the caller is a Lua function. A direct pcall(string.pack, ...) gets the text with no position.",
+     "evidence": "The skeptic's port-D4-cap-text evidence (review/verify-port/caphost.c with caphost-puc.exe): direct pcall(string.pack,'c16777216','') gives 'not enough memory for buffer allocation' with no position; the non-tail call gives 'cap.lua:4: not enough memory for buffer allocation'. The review's better_fix says 'positioned when called non-tail from Lua'.",
+     "fix": "Change '(positioned)' to '(positioned when a Lua function is the caller)'."
+    },
+    {
+     "severity": "low",
+     "file": "native/luajit/oclj_strpack.c",
+     "line": "41-43",
+     "problem": "A's addition to the header (beyond the minimum) tags the over-cap LUA_ERRMEM refusal '(D4)'. Contract D4 covers only results of LJ_MAX_STR or more and their buffer text. The review's better_fix puts the over-cap status/text/order residual in D7 and \u00a712.5. The tag points a reader at the wrong decision.",
+     "evidence": "The header reads 'oclj_strpack_pack refuses an over-cap result as LUA_ERRMEM, after every argument check (D4).' design.md:102 (D4): 'A result of LJ_MAX_STR or more ... not enough memory for buffer allocation'. The port-D4-cap-text better_fix: 'Put this in D7/\u00a712.5, the README residual list and the RESID header'.",
+     "fix": "Write '(a residual, D7; D4 is the LJ_MAX_STR text)', or drop the parenthesis."
+    },
+    {
+     "severity": "low",
+     "file": "test/native/negctl-pack.sh",
+     "line": "196-197",
+     "problem": "Outside A's and B's files: after A's required D3 edit, the repo's negctl-pack.sh KSTR54 anchor matches 0 lines. At verification time C-neg had not re-anchored it (mtime 02:05, still 25 arms). A negctl-pack.sh run before C-neg's edit lands reports 'KSTR54: BROKEN ARM -- its anchor line does not occur exactly once'.",
+     "evidence": "verify-plumbing/anchors/count.sh on the repo's current arm calls (arms-repo-now.sh) against the repo oclj_strpack.c gives 'KSTR54 count=0'; every other arm counts 1. A's new anchor text is oclj_strpack.c:762 `            { lua_pushliteral(L, \"memory allocation error: block too big\"); lua_error(L); }`.",
+     "fix": "C-neg re-anchors KSTR54 to that exact line, as fixes.md requires. The main session should confirm the count is 1 before the full sweep."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/claude-tmp/oclj/r2/synth/design.md",
+     "line": "87, 150, 168, 173, 279, 295",
+     "problem": "Outside the repo: the contract still quotes the old gate line 'hot=14000 abort=0' (:87, :150, :279) and says strpack.lua has 10 checks / 'STRPACK RESULT: ALL 10 TESTS PASS' (:168, :173, :295). No repo file quotes either; I grepped the working tree, excluding build/, prototype/ and bench/.",
+     "evidence": "grep of design.md. The new values, measured here: build line 'string.pack gate: ... hot=14000 jit=0/1/0', and make test 'STRPACK RESULT: ALL 11 TESTS PASS'.",
+     "fix": "The main session should update the contract's quotes and the commit draft to 'jit=0/1/0' and 11 checks."
+    }
+   ]
+  },
+  "tests": {
+   "summary": "I checked every fix in my scope (C-fuzz T1 and T4; C-conf's D3 raw case, frac RESID case, .expect regeneration, deviations, T9, T3, T6, T8 and Linux rows; C-neg's T2, T7, T5, KSTR54 re-anchor and arm selection). Each one is done as fixes.md asks. I re-ran every fail-first independently against my own scratch build of the working tree (C:/Users/astro/claude-tmp/oclj/r2/fix/verify-tests/b1/build/native, additive, rc 0, gate line 'jit=0/1/0'), and each one fails as claimed.\n\nOn that build:\n- run-pack.sh exits 0: conformance 308, conf-extra 411, provenance 4 and 21 lines, both D1/D2 content lines PASS (2 DEV1/2 DEV2/0 RESID; 8 DEV1/5 DEV2/8 RESID), PACK TESTS 13 checks, 0 failures.\n- The default run-packfuzz.sh gives 'seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0', PASS.\n- All 28 negctl anchors occur exactly once, counted by the script's own sabotage() match over its own armlist(). The counter does fail on a duplicated line, and the old KSTR54 anchor now counts 0.\n- I ran a selected negctl run (D6WIDE JUNS TIESAWAY D4OFFBY1 KSTR54 LJCOERCE) on the FINAL combination of all three implementers' suites, which C-neg never ran: rc 0, canon PASS, every arm caught. D4OFFBY1 is caught only by PT7a and PT7b.\n\nThe repo files are byte-identical to the md5s the implementers reported. CR count is 0, there are no 0x08 bytes and no tabs. A backslash audit of every diff finds no eaten backslash. sh -n and dash -n pass, both Lua files parse on PUC and LuaJIT, and my runs wrote nothing into the repo.\n\nTwo problems remain:\n- **(medium)** negctl-pack.sh's header still says the fuzzer's fixed edge cases catch every arm the fuzzer catches. After T4 that is false for LJCOERCE, which only the random cases catch.\n- **(low)** run-pack.sh's header overclaims what part 2 protects: a RESID line's content can still drift.\n\nThe contract design.md also has counts the fixes made stale (outside the repo; for the main session).\n\nAll logs are in C:/Users/astro/claude-tmp/oclj/r2/fix/verify-tests/.",
+   "confirmed": [
+    "C-fuzz T1 (driver): run-packfuzz.sh:129 is `[ \"$orc\" -ne 0 ] && crc=1`, run after the reference has succeeded. End to end with my own fake builds that run the real luajit.exe and then exit 139 (e2e/*.log). Cut at a case boundary: old scripts rc=2 'PACKFUZZ PROVED NOTHING', new rc=1 'CRASH | ours output ends before case 1014u'. Cut before the meta lines: old rc=2 (desync on #cov), new rc=1 'ends before its #cov line'. Complete file with exit 139: old 1, new 1.",
+    "C-fuzz T1 (comparator): seed-1 x 2000 pair from my build, new comparator against the old one (t1/*.out). (a) case boundary: old 2, new 1 CRASH. (b) mid-line: old 2 'unparseable', new 1 'ends mid-line at case 1014u'. (c) no meta: old 2 desync, new 1. Only #cov kept: old 2, new 1. Only #begin: old 2 'no cases compared', new 1. Cut inside #end: OLD rc=0 (it passed a truncated file), new 1. Clean pair: new rc 0. Reading the code confirms fo:read('L'), the drain of fp through meta(), and lo==nil checked before the meta branch.",
+    "C-fuzz T4: hostile_arg now has r==6 -> SAFE_STR and r==7 -> COERCE_STR, still one draw, so the stream stays aligned. PUC generator output for old vs new packfuzz.lua at seed 1 x 20000: 379 changed lines, all 'bad|pack' random cases; the 236 edges are unchanged. Default run on canon: MISMATCH 0, counts identical to before (33953/32749/1204). The LJCOERCE arm's own build at 20000 cases: NEW 'MISMATCH 71' in 10 classes, rc 1; the OLD scripts on the same build give MISMATCH 0, PASS. coerce and limits are still exactly one class each, [1070] and [10896]. The COERCE_STR comment 'tonumber differs for all but three' holds by tostring (coerce-tonumber.lua: 18446744073709551615, 1e15 and 0x1P-1074 agree; -0 and -2^63 differ in sign and subtype).",
+    "C-conf port-D3-position test: I built my own old-form copy (only line 762 back to luaL_error; ff-d3/). conf-extra on it differs in exactly one line: 'D s8 wrap nontail raw | ERR ...conf-extra.lua:348: memory allocation error: block too big'. The new build equals conf-extra.expect. PUC prints the unpositioned text (rp-1/conf-extra.puc.txt:305), and part 2 passes with the line unlisted.",
+    "C-conf port-strscan-fraction-residual test: 'RESID frac 2^20' (P, 'j', '0.'..('0'):rep(2^20)..'1'). PUC gives 'OK s:0000000000000000', ours refuses. It is listed as conf-extra|any|...|RESID-scan. With the row dropped, part 2 fails both ways (ff-conf-1/t3-frac-dropped).",
+    "C-conf regenerated .expect: conformance.expect is byte-identical to the target. conf-extra.expect differs from the target only by the two new lines (diffs/conf-extra.expect.diff).",
+    "C-conf T9: deviations.txt has a 4th field, the class. The RESID-scan rows are the two exp rows plus frac. The header uses the skeptic's exact wording (lj_strscan.c:449-453 and :468, both verified against the pinned source), with strtod reading the fraction as its value. The other RESID rows stay under 'the VM, not pack'.",
+    "C-conf T3: I re-ran the fail-firsts on scratch copies (ff-conf.sh, ff-conf-1.out). A DEV1 line changed to a refusal and 2^53+3 changed to ...994 each FAIL part 2b, listing want/PUC pairs, rc 1. So does a conformance 'u maxint' change. A DEV2 row labelled DEV1, an id/class prefix mismatch, a 3-field row, an unknown class, and 'u maxint' refiled as RESID all FAIL (ff-conf2-1.out). PUC raw vs deviation-applied differ in exactly 13 conf-extra and 4 conformance lines. It also passes with Windows-style paths, and it says SKIPPED with rc 0 without PUC.",
+    "C-conf T6: conf-extra.lua's header claim (caught alone by most arms; DOUBLEBUF by PT3 and D4OFFBY1 by PT7) matches the synth final negctl log (23 of 24 by conf-extra), my selected runs (D6WIDE, JUNS, TIESAWAY, KSTR54, LJCOERCE, ORDER54 and NONAME caught by conf-extra; D4OFFBY1 only by PT7a,PT7b; DOUBLEBUF only by PT3), and the conformance.lua :96 and :172-174 corrections.",
+    "C-conf T8: my own CC wrapper (cc-warn.sh) with a part-1 FAIL gives rc=1 'RUN-PACK: FAIL (part 3 could not run: pack_test.c must compile warning-clean; ...)'. Without the part-1 FAIL it gives rc=2 (ff-conf-1/t8-*).",
+    "C-conf Linux rows: by reading, D2 rows stay windows-only and everything else is any, so Linux would list 2 and 16. Derived, not run.",
+    "C-neg T2/PT7: all four PASS on my build with the exact texts and statuses. Re-ran variants (variant.sh, var-*.out): D4TEXT fails PT7a,b. EARLYD4 fails PT7d only. EARLYALLOC fails PT4b, PT7a, PT7b and PT7d. D4LOW fails PT4 and PT7c. The D4OFFBY1 arm fails PT7a,b with status 4. By reading lj52shim.c:431-438, the refusal returns before lj52_back; lj_api.c:752 is cited correctly.",
+    "C-neg T7: PT4's header, banner and label are reworded. PT4b passes on canon and fails under EARLYALLOC.",
+    "C-neg T5: 28 arms; my anchor counter (anchors.sh, which evals the script's own armlist) gives every anchor count 1 and exactly one changed line per arm. On the final suites the new arms are caught: D6WIDE, JUNS and TIESAWAY by conformance, conf-extra and the fuzzer (fuzz MISMATCH 80/98/15 at 2000, 3/4/4 at 0 cases); D4OFFBY1 only by PT7a,PT7b (fuzz 0). The header's parenthetical about the four newest is accurate.",
+    "C-neg KSTR54 re-anchor: the anchor is A's exact line 762 and is caught by conformance, conf-extra (including the new raw case) and the fuzzer.",
+    "C-neg OCLJ_NEGCTL_ARMS: comma or space lists work. Bad names ('TIESAWYA', ',', 'nope') exit 2 before any work dir is created (checked by ls). The selected run ends 'PASS FOR THE SELECTED ARMS ONLY'. The default path's final PASS/FAIL lines are unchanged by reading."
+   ],
+   "issues": [
+    {
+     "severity": "medium",
+     "file": "test/native/negctl-pack.sh",
+     "line": "55-58",
+     "problem": "The header still says 'its ~240 fixed edge cases catch every arm the fuzzer catches at all'. After C-fuzz's T4 this is false. LJCOERCE is now caught by the fuzzer only through random k_bad cases, never by the fixed edges, so someone who believes the comment and sets NEGCTL_FUZZ_CASES=0 loses the fuzzer's catch of LJCOERCE. The contract repeats the claim (design.md:109, D11) and the old fuzzer figure (design.md:187, '20 of 24 arms (not ORDER54, NONAME, LJCOERCE, DOUBLEBUF)').",
+     "evidence": "Final repo suites on my build:\n- negctl-sel-1.log: 'LJCOERCE: run-pack 1, packfuzz 1 -- PASS (caught by conf-extra + fuzzer)', fuzz 'lines 3662 ... MISMATCH 10'.\n- negctl-ljc-fuzz0.log (NEGCTL_FUZZ_CASES=0 OCLJ_NEGCTL_ARMS=LJCOERCE): 'LJCOERCE 1 0 PASS (caught by conf-extra)', fuzz 'lines 236: EXACT 228, DEVIATION 8, SECONDARY 0, MISMATCH 0'.\n- negctl-blind3.log: ORDER54, NONAME and DOUBLEBUF are still fuzz MISMATCH 0 at 2000.\nSo the default fuzzer now catches 24 of 28 arms: all but ORDER54, NONAME, DOUBLEBUF and D4OFFBY1.",
+     "fix": "Reword lines 56-58, for example: 'its ~240 fixed edge cases catch every arm the fuzzer catches, except LJCOERCE, which only the random cases' hostile string arguments reach (2026-10-17: MISMATCH 0 at 0 random cases, 10 at 2000); D4OFFBY1 the fuzzer never catches'. Main session: update design.md D11 (:109) and \u00a76 (:187, 24 of 28, not ORDER54, NONAME, DOUBLEBUF, D4OFFBY1)."
+    },
+    {
+     "severity": "low",
+     "file": "test/native/run-pack.sh",
+     "line": "21-25",
+     "problem": "Part 2's header says '...so no .expect line can drift from 5.3.6 unnoticed, a listed DEV line included, and no line D1 or D2 explains can be filed as RESID'. Neither part holds. A RESID line's content is unconstrained, as fixes.md intended, so it can drift and only the circular part 1 notices. And a conformance DEV id, which carries no 'DEV' prefix, can be refiled as RESID together with a wrong value, and part 2 passes.",
+     "evidence": "ff-conf-1.out, scratch copies of the final run-pack.sh and pack/:\n- t3-resid-drift: conf-extra.expect 'RESID exp 2^20 | OK s:anything'. Both conf-extra part-2 lines PASS ('exactly the 21 lines' and 'with D1/D2 applied ... 8 RESID lines'); only part 1 FAILs.\n- t3-dev-to-resid: conformance.expect 'u 2^53+1 | OK 9007199254740994 9' plus deviations row 'conformance|any|u 2^53+1|RESID'. Part 2 PASS ('1 DEV1 and 2 DEV2 lines ... the 1 RESID lines'); only part 1 FAILs.",
+     "fix": "Narrow the prose: 'no .expect line but a listed RESID one can drift from 5.3.6 unnoticed'. Close the relabel route in the deviations.txt validator: also refuse a RESID or RESID-scan class on an id that does not start with 'RESID' (one more clause in the devbad awk; every current RESID row already has a RESID-prefixed id, so nothing breaks). Prove the new clause can fail with the t3-dev-to-resid mutation."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/claude-tmp/oclj/r2/synth/design.md (contract, not a repo file)",
+     "line": "109, 184, 187, 204, 290",
+     "problem": "The fixes left the contract's test figures stale. It says conf-extra has 409 cases and catches 23 of 24 arms, that provenance is 'exactly the 20 lines', 'PACK TESTS: 8 checks', that Linux part 2 wants 2 and 15, and that the fuzzer catches 20 of 24.",
+     "evidence": "Measured today on the final tree:\n- rp-1.log: 'PASS conf-extra: 411 cases', 'exactly the 21 lines deviations.txt lists for windows', 'PACK TESTS: 13 checks, 0 failures'.\n- conf-extra alone catches 26 of 28 arms (all but DOUBLEBUF, caught by PT3, and D4OFFBY1, caught by PT7a/PT7b).\n- The fuzzer at 2000 cases catches 24 of 28.\n- Linux would be 2 and 16 (derived from the platform column, not run).",
+     "fix": "Main session: update those design.md lines with the values above. A docs owner citing the contract should take the values from here."
+    }
+   ]
+  },
+  "docs": {
+   "summary": "Implementer D's doc fixes are done and correct. I checked every sentence D added or changed against the source, the logs, or a re-run. The factory cites (:112-121 for openLibs..pop(8), :114 for BIT32) are correct, and so are the lj_strscan.c cites (:63, :449-453, :468 at 1ee778a4), OC application.conf:132 (timeout 5.0, in both GTNH f83bd95 and ocelot-brain) and the Plan9k cites (msdosfs.lua:23, :158, :1087-:1100 with setFATEntry at :1100; mount.msdos.lua:22 calls fat.proxy(file, 12)). All four changed files have 0 CRs, are valid UTF-8, end with LF and keep their backslash counts (roadmap 4/4, others 0). Only lines 146, 148, 205 and 207 differ from the target roadmap. No other repo doc or script cites LuaJITStateFactory lines or the edited text. serializer/README.md is unchanged and states no count, so leaving it alone is right.\n\nI re-ran three things. (1) The roadmap script's fail-first: a mutated anchor gives rc=1 and leaves the file untouched; the clean copy gives 15 edits, identical to D's roadmap.try.md. (2) claims.lua on A's final-add luajit.exe and on PUC 5.3.6: every example holds (z of 100000000000000 gives '1e+14' against '100000000000000'; I8/J/T of ff x8 give -1 on both; l is 8 against 4; frac and exp 2^20 refused here and packed by PUC; presence matches the factory comment). (3) The cheap k=1000 timings: pack 0.807 s against PUC 0.159 s; math.max/min, string.char, %f and %d 0.15-0.16 s; a float numeral given to 'd' 2.29 s against PUC 1.09 s.\n\nI confirmed D's 'four scans per walk' by reading the code (pk_str2int, pk_str2d's refusal loop, its whitespace skip, then lua_tonumberx), so that deviation from fixes.md is correct.\n\nRemaining placeholders, all in docs/roadmap.md and nowhere else in the tracked or untracked repo files: @@FUZZCAMPAIGN@@ x1 (row 207), @@CONFCASES@@ x1 (row 207), @@NEGCTLARMS@@ x2 (rows 205 and 207).\n\nThe issues below are mostly for the main session: a scratch-path evidence cite, and small wording gaps in the README residual list. None is a false technical claim.",
+   "confirmed": [
+    "docs-1: wd 1c has the new VM-wide bullet and 1g has separate memory/time/mitigation bullets; row 15 was added and row 3 points to it; roadmap 205 no longer says 'like string.rep'. Every figure traces to a log: pack 7.0-7.8 s over four runs (6.978 and 7.067 in the review, 7.776 and 7.543 in run-1/run-2); format 1.7-2.1 s (1.695, 1.764, 2.105, 2.104); 0.17 s and 0.8 s against 0.16 s (run-1/run-2); 2.2 s against 1.1 s (run-3). I reproduced the k=1000 figures on A's final-add build. STRSCAN_MAXDIG is at lj_strscan.c:63 and LUAI_MAXCSTACK is 8000 (luaconf.h:92).",
+    "docs-1 deviation 'up to four scans per walk' is correct: oclj_strpack.c:210 (pk_str2int's whitespace loop), :251-255 (pk_str2d's refusal loop), :257 (its whitespace skip) and :260 (lua_tonumberx) each read the leading part of a float numeral.",
+    "docs-2: README is two paragraphs; the D2 cause no longer mentions doubles; all residual items are present. Roadmap 207 says 'and the VM residuals below' and has the completed list. The probe confirms '?' for a direct pcall, and the lost name and method shift for a tail call.",
+    "docs-3: README smoke row reads 'behaves as our Lua 5.3.6 port, with its two decided deviations'.",
+    "docs-4: row 207 carries exactly the token @@FUZZCAMPAIGN@@, and '1,000,000' appears nowhere in D's files.",
+    "docs-5: 'above 512 bytes' is in wd 1g, roadmap 205 and roadmap 207, matching oclj_strpack.c:118 (PK_STACKBUF 512) and :629 (o.cap <= sizeof(sbuf)).",
+    "docs-6: rows 146 (:100 is now :114), 205 and 148 (:98-107 is now :112-121) are correct for the working-tree factory (openLibs :112, BIT32 :114, pop(8) :121). Rows 62 (:48) and 225 (:44-46) sit above the diff hunks (git diff -U0 shows @@ -89 and @@ -91), so they are unaffected.",
+    "docs-7: the factory comment changes by +1 line against the target; the presence claims hold on A's final-add luajit.exe (string.pack, table.move and coroutine.isyieldable are functions; math.type, math.tointeger and utf8 are nil).",
+    "C1: msdosfs.lua:23 is 'if string.pack then'; :158 packs lshift(data,4)+band(...,0xF) through number2string(...,2), which is string.pack('<I2'); makeDirectory (:1033) writes the entry at :1087/:1095, zeroes the cluster at :1099 and calls setFATEntry(...,0xFFFF) at :1100; the bit32 fallback number2string (:40-46) truncates to 16 bits. final.out:40 shows ERR unsigned overflow, :57 shows OK f0ff, and PUC consumers/out-4/ref536-win64.out:40 and ref536-lp64.out:40 show the same ERR.",
+    "C2: the README and row 207 wrap clauses are correct (re-run: I8, J, T and L of ff x8 give -1 here; I8, J and T give -1 on PUC Win64, where L is 4 bytes).",
+    "port-D4-cap-text wording in row 207 matches the skeptic's precise version and the code comment at oclj_strpack.c:614-623. pack_test.c PT4/PT4b/PT7 now exist and back 'after every argument check'.",
+    "port-strscan-fraction-residual wording in row 207 matches the skeptic exactly, and the lines check against the pinned lj_strscan.c (:449-453 decimal-point handling with the ex <= -STRSCAN_MAXEXP refusal at :453; :468 the exponent check).",
+    "T9 wording in row 207: 'the RESID-scan lines of deviations.txt' now resolves, because C-conf's in-progress deviations.txt has a 4th class column with three RESID-scan lines (exp 2^20, exp -2^20, frac 2^20).",
+    "serializer/README.md: no change needed. It gives no check count; repo grep finds no 'STRPACK RESULT' or 'strpack.lua (N' outside strpack.lua itself.",
+    "Fail-first re-run: edit_roadmap.py on a copy with '(24 sabotages' changed to '(25' gives AssertionError row 205 count 0, rc=1, and the file is byte-identical to before; on the clean copy it applies 15 edits and the output equals D/roadmap.try.md.",
+    "Integrity: 0 CRs, valid UTF-8, trailing LF, no control bytes, backslash counts match the target, no leftover 'same results', 'like `string.rep`', '1,000,000', 'behaves as Lua 5.3.6' or 'tests for a 5.3 FUNCTION'."
+   ],
+   "issues": [
+    {
+     "severity": "medium",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md",
+     "line": "207",
+     "problem": "Row 207's Feature-tests block cites a scratch file as its evidence, which no reader of the repo can open. It is the same class of defect as docs-4, which this round fixed. fixes.md C1 told D to cite it, so D followed the list; the main session has to fix it.",
+     "evidence": "Row 207: 'measured by round 2's consumer run (r2 `synth/consumers/final.out:40`, against the fallback path at `:57`)'. The file exists only at C:/Users/astro/claude-tmp/oclj/r2/synth/consumers/final.out. A grep of the repo docs finds no other claude-tmp or synth/ cite, so nothing else in the repo does this, and the row's own evidence line points at bench/runs/2026-10-17-strpack/.",
+     "fix": "Main session: copy synth/consumers/final.out and consumers/out-4/{ref536-win64,ref536-lp64,proto-nopack}.out into bench/runs/2026-10-17-strpack/ (e.g. logs/consumers/), then re-cite as `bench/runs/2026-10-17-strpack/.../final.out:40` against `:57`, with the PUC lines at ref536-*.out:40."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md",
+     "line": "205, 207",
+     "problem": "Placeholders still in the repo, to be replaced by the main session from measured runs: @@NEGCTLARMS@@ x2 (rows 205 and 207), @@CONFCASES@@ x1 (row 207), @@FUZZCAMPAIGN@@ x1 (row 207). No other @@...@@ token is in any tracked or untracked repo file.",
+     "evidence": "grep over git ls-files plus untracked files finds docs/roadmap.md: @@CONFCASES@@ 1, @@FUZZCAMPAIGN@@ 1, @@NEGCTLARMS@@ 2. The current tree suggests these values, all unconfirmed by a run: negctl-pack.sh header 'There are 28 sabotage arms'; conformance.expect 308 lines and conf-extra.expect 411 lines (C-conf still editing at 02:31).",
+     "fix": "Replace each from the main session's own logs: NEGCTLARMS from the full negctl-pack sweep, CONFCASES as e.g. '308 + 411' from run-pack.sh, FUZZCAMPAIGN as the 50-seed campaign line."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/README.md",
+     "line": "24-26",
+     "problem": "The README counts the scanner refusal among 'what the VM decides' and opens with 'apart from two decided deviations and what the VM decides'. But the refusal is a pack decision (D5), and deviations.txt now says so. So the README still invites the T9 misreading that pack has exactly two decided differences. fixes.md's own docs-2 text put it in the VM list, so D followed the list.",
+     "evidence": "README: 'What the VM decides stays LuaJIT's: ... numerals with 2^20 or more digits after the point ... which pack refuses because its converter uses LuaJIT's numeral scanner'. C-conf's deviations.txt header: 'RESID-scan: pack's own, decided (D5/D7)'. Roadmap 207 does say '(decided D5)'.",
+     "fix": "Say e.g. '...which pack refuses because its converter uses LuaJIT's numeral scanner (a decision of the port, D5)', or move that item out of the VM list."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/README.md",
+     "line": "26 (also docs/roadmap.md:207)",
+     "problem": "The error-message residual is incomplete, and 'deviations.txt lists the cases that show them' overstates one item. (a) A tail-called library function also loses the position prefix, which neither the README, row 207 nor deviations.txt mentions. (b) No deviations.txt line shows a function-name difference: the suites rewrite every name to 'F', so the RESID-tail lines show only the argument-number shift, and the direct-pcall '?' has no line.",
+     "evidence": "My probe C:/Users/astro/claude-tmp/oclj/r2/fix/verify-docs/names.lua. Tail method: ours \"bad argument #2 to '?' (integer overflow)\", PUC \"names.lua:4: bad argument #1 to 'pack' (integer overflow)\". Direct pcall: ours '?', PUC 'string.pack'. Non-tail calls match. conf-extra.expect:357 is 'RESID-tail method arg | ERR bad argument #2 to 'F' ...'.",
+     "fix": "README and row 207: 'function names, positions and method argument numbers in error messages (a tail call loses all three)'. Say deviations.txt lists cases for all but the names (normalised away) and the over-cap refusal (pack_test.c)."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/README.md",
+     "line": "24",
+     "problem": "The deviations sentence reads 'The deviations: A; [5.3.6's own unsigned wrap]. And l/L ...', so a reader may count the wrap, which is 5.3.6 behaviour, as a deviation. 'never refused' also sits unqualified, although an I9..I16 field that does not fit 64 bits is refused, as in 5.3.6. Row 207 states that qualifier; the README does not.",
+     "evidence": "README: 'comes back as the nearest double of the 64-bit integer 5.3.6 computes, never refused (...); unsigned 8-byte formats (`I8`, `J`, `L`, `T`) wrap to a negative integer exactly as in 5.3.6 before that rounding, so eight `ff` bytes unpack as -1. And `l`/`L` are 8 bytes ...'. Row 207: 'what 5.3.6 itself refuses, an I9..I16 field that does not fit 64 bits, stays refused'.",
+     "fix": "Make the wrap a parenthetical inside D1 ('...of the 64-bit integer 5.3.6 computes (unsigned 8-byte formats wrap to negative first, as in 5.3.6: eight ff bytes are -1)'). Replace 'never refused' with 'refused only where 5.3.6 refuses'."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md",
+     "line": "207",
+     "problem": "The Tests description of pack_test.c predates C-neg's additions, which have now landed in the working tree: PT4b (argument errors come before the cap refusal) and PT7 (D4 at LJ_MAX_STR). D flagged this in values_for_others.",
+     "evidence": "Row 207: '`pack_test.c` through the shim: jnlua's opener, Plan9k's GPT header on a text sector, the cap's charge and refusal, the C-stack limit'. pack_test.c:24-42 (header), :285 (PT4b), :315-335 (PT7a-d).",
+     "fix": "Main session, once C-neg's arms are confirmed: add 'the argument checks before the refusal, D4 at LJ_MAX_STR'."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/claude-tmp/oclj/r2/fix/D/roadmap.try.md",
+     "line": "207",
+     "problem": "D's second fail-first says 'repo == tested copy', but that is no longer true. The repo roadmap was hand-edited after the scripted run, and the report does not record the edit. The end state matches the report's placeholder list, so only the provenance claim is stale.",
+     "evidence": "cmp D/roadmap.try.md against the repo docs/roadmap.md: differ at char 254873, line 207. try.md has '(308 + @@CONFEXTRACASES@@ conformance cases', the repo has '(@@CONFCASES@@ conformance cases'. Timestamps: try.md 02:19:56, repo 02:22:15. My clean re-run of edit_roadmap.py also gives try.md, not the repo file.",
+     "fix": "Record the hand edit, or fold it into edit_roadmap.py and re-run it from roadmap.before.md so the repo again equals the tested output."
+    },
+    {
+     "severity": "low",
+     "file": "C:/Users/astro/Downloads/OC-LuaJIT/docs/research/wd-blind-spots.md",
+     "line": "29, 47",
+     "problem": "Two nits. 1c's heading still says 'memory/bitfield-bounded', while its new bullet says time grows with numeric string arguments (1g's heading was updated). 1g's 'It is the VM-wide class of 1c ..., read twice' implies the double read explains the gap. It does not: the measured gap is about 4-5x (pack 0.8 s against PUC pack 0.16 s and format 0.16 s at k=1000), and two reads account for only 2x. Nothing stated is false.",
+     "evidence": "wd:29 '### 1c. `string.format` \u2014 memory/bitfield-bounded'. My re-run (verify-docs/runs-1/argscan.txt): pack 0.807 s, format 0.155 s, PUC pack 0.159 s, all at L=1e6, k=1000.",
+     "fix": "Optional: add 'time grows with numeric string arguments' to the 1c heading. Drop 'read twice' as an explanation, or add 'and each scan is slower than 5.3.6's (0.8 s for two walks against PUC's 0.16 s for one)'."
+    }
+   ]
+  }
+ }
+}

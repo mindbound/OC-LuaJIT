@@ -2,21 +2,27 @@
 # tests/negctl-fingerprint.sh -- PROVE that tests/fingerprint.lua and
 # test_main.c's layout gate have teeth.  Run from serializer/ as
 # `make negctl`, after native/build-native.sh has built this platform's
-# LuaJIT copy.  Two sabotaged builds, each required to fail EXACTLY as
+# LuaJIT copy.  Three sabotaged builds, each required to fail EXACTLY as
 # expected:
 #
 #   nocompare  eris_lj.c with the fingerprint compare's verdict thrown away
 #              (one line, anchored, asserted to occur exactly once).
-#              fingerprint.lua must exit 9 with exactly these failures: the
-#              seven token flips, the three-field fingerprint, and the
+#              fingerprint.lua must exit 10 with exactly these failures: the
+#              eight token flips, the three-field fingerprint, and the
 #              CRC-order case -- every refusal the test exists to see.
+#   packword   the real eris_lj.c compiled against a copy of the build copy's
+#              headers whose oclj_features.h lacks '#define OCLJ_LIB_STRPACK
+#              1', linked with the real archive, whose string library has
+#              string.pack: its word says pack0.  fingerprint.lua must exit 1
+#              with exactly one failure, the pack token's agreement with the
+#              string library.
 #   layout     the real eris_lj.c compiled against a copy of the build
 #              copy's headers whose oclj_features.h lacks
 #              '#define LUAJIT_DISABLE_FFI 1'.  The binary must exit 3 with
 #              "LAYOUT MISMATCH" before it runs a single test.
 #
 # The copies and logs go to a fresh directory under $OCLJ_BUILD; nothing in
-# serializer/ is written.  Exit 0 iff both arms fail exactly as expected;
+# serializer/ is written.  Exit 0 iff all three arms fail exactly as expected;
 # 2 if the control itself could not be set up.
 set -u
 : "${LJSRC:?run this through make negctl (LJSRC is the LuaJIT build copy's src)}"
@@ -28,7 +34,7 @@ fail() { echo "NEGCTL-FINGERPRINT SETUP FAIL: $*" >&2; exit 2; }
 [ -f "$LJSRC/oclj_features.h" ] || fail "no $LJSRC/oclj_features.h -- $LJSRC is not build-native.sh's build copy"
 [ -f eris_lj.c ] && [ -f test_main.c ] && [ -f tests/fingerprint.lua ] || fail "run from serializer/"
 WORK=$OCLJ_BUILD/negctl-fingerprint/$(date +%Y%m%d-%H%M%S)-$$
-mkdir -p "$WORK/nocompare" "$WORK/layout/inc" || fail "cannot create $WORK"
+mkdir -p "$WORK/nocompare" "$WORK/packword/inc" "$WORK/layout/inc" || fail "cannot create $WORK"
 echo "[negctl-fingerprint] work dir $WORK"
 
 bad=0
@@ -57,12 +63,32 @@ ntok=$(grep -c '^  FAIL: token ' "$d/run.log")
 nthree=$(grep -c '^  FAIL: a three-field fingerprint' "$d/run.log")
 ncrc=$(grep -c '^  FAIL: a mismatched fingerprint is named even when the CRC is also wrong' "$d/run.log")
 nall=$(grep -c '^  FAIL: ' "$d/run.log")
-echo "[negctl-fingerprint] nocompare: exit $st (want 9); FAIL lines $nall (want 9): token $ntok (7), three-field $nthree (1), crc-order $ncrc (1)"
-if [ "$st" = 9 ] && [ "$nall" = 9 ] && [ "$ntok" = 7 ] && [ "$nthree" = 1 ] && [ "$ncrc" = 1 ]; then
+echo "[negctl-fingerprint] nocompare: exit $st (want 10); FAIL lines $nall (want 10): token $ntok (8), three-field $nthree (1), crc-order $ncrc (1)"
+if [ "$st" = 10 ] && [ "$nall" = 10 ] && [ "$ntok" = 8 ] && [ "$nthree" = 1 ] && [ "$ncrc" = 1 ]; then
   verdict 0 "a serializer that ignores the fingerprint is caught by fingerprint.lua"
 else
   sed 's/^/  | /' "$d/run.log"
   verdict 1 "a serializer that ignores the fingerprint is caught by fingerprint.lua"
+fi
+
+# --- packword ----------------------------------------------------------------
+d=$WORK/packword
+cp "$LJSRC"/*.h "$d/inc/" || fail "packword: cannot copy $LJSRC/*.h"
+grep -qx '#define OCLJ_LIB_STRPACK 1' "$LJSRC/oclj_features.h" \
+  || fail "packword: oclj_features.h does not say '#define OCLJ_LIB_STRPACK 1'; this arm toggles exactly that line -- revisit it"
+grep -vx '#define OCLJ_LIB_STRPACK 1' "$LJSRC/oclj_features.h" > "$d/inc/oclj_features.h"
+cmp -s "$LJSRC/oclj_features.h" "$d/inc/oclj_features.h" && fail "packword: the header toggle did not take"
+build "$d" "$d/inc" eris_lj.c
+"$d/erislj_test" tests/fingerprint.lua > "$d/run.log" 2>&1
+st=$?
+nagree=$(grep -c '^  FAIL: the pack token agrees with this archive' "$d/run.log")
+nall=$(grep -c '^  FAIL: ' "$d/run.log")
+echo "[negctl-fingerprint] packword: exit $st (want 1); FAIL lines $nall (want 1): pack-token agreement $nagree (1)"
+if [ "$st" = 1 ] && [ "$nall" = 1 ] && [ "$nagree" = 1 ]; then
+  verdict 0 "a serializer whose word misnames the string library is caught by fingerprint.lua"
+else
+  sed 's/^/  | /' "$d/run.log"
+  verdict 1 "a serializer whose word misnames the string library is caught by fingerprint.lua"
 fi
 
 # --- layout ------------------------------------------------------------------
@@ -83,5 +109,5 @@ else
   verdict 1 "eris_lj.c compiled for another LuaJIT layout is refused before any test runs"
 fi
 
-[ "$bad" = 0 ] && echo "NEGCTL-FINGERPRINT: PASS (both sabotages caught)" || echo "NEGCTL-FINGERPRINT: FAIL"
+[ "$bad" = 0 ] && echo "NEGCTL-FINGERPRINT: PASS (all three sabotages caught)" || echo "NEGCTL-FINGERPRINT: FAIL"
 exit "$bad"

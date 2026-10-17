@@ -1,0 +1,7 @@
+packfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; profile long; seeds 2000..2004 x 300 cases; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/packfuzz-campaign-long5
+seed 2000: 0 -- lines 722: EXACT 699, DEVIATION 23, SECONDARY 0, MISMATCH 0
+seed 2001: 0 -- lines 706: EXACT 687, DEVIATION 19, SECONDARY 0, MISMATCH 0
+seed 2002: 0 -- lines 692: EXACT 664, DEVIATION 28, SECONDARY 0, MISMATCH 0
+seed 2003: 0 -- lines 710: EXACT 686, DEVIATION 24, SECONDARY 0, MISMATCH 0
+seed 2004: 0 -- lines 711: EXACT 686, DEVIATION 25, SECONDARY 0, MISMATCH 0
+PACKFUZZ PASS (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/packfuzz-campaign-long5)

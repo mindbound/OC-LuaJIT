@@ -1,0 +1,12 @@
+  PASS: 17_gpt.lua registers a scanner
+string.unpack present: false; integer VM: false
+  FAIL: text in sector 1: scanned as not-GPT, no error  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: zeroed drive: not GPT, no error  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: 0xFF sector 1: not GPT, no error  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: real GPT: two partitions registered  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: attribute high bits: scan unchanged  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: LBA above 2^53: registered, no error  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: entry size 80: refused as 5.3.6 does  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: capacity 512 (read returns nil): refused  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+  FAIL: capacity 600 (short read): refused  -- 17_gpt.lua:12: attempt to call field 'unpack' (a nil value)
+GPT RESULT: 1 passed, 9 FAILED

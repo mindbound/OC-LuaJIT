@@ -1,0 +1,3 @@
+jit true: pack 119 ns, unpack 40 ns, format(control) 60 ns per call
+jit off: pack 119 ns, unpack 40 ns, format(control) 60 ns per call
+jit puc: pack 99 ns, unpack 53 ns, format(control) 191 ns per call

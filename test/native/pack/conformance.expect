@@ -1,0 +1,308 @@
+i1<+1 | OK s:01
+i1<-1 | OK s:ff
+I1<max | OK s:ff
+i1<min | OK s:80
+i1<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I1<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i2<+1 | OK s:0100
+i2<-1 | OK s:ffff
+I2<max | OK s:ffff
+i2<min | OK s:0080
+i2<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I2<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i3<+1 | OK s:010000
+i3<-1 | OK s:ffffff
+I3<max | OK s:ffffff
+i3<min | OK s:000080
+i3<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I3<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i4<+1 | OK s:01000000
+i4<-1 | OK s:ffffffff
+I4<max | OK s:ffffffff
+i4<min | OK s:00000080
+i4<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I4<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i5<+1 | OK s:0100000000
+i5<-1 | OK s:ffffffffff
+I5<max | OK s:ffffffffff
+i5<min | OK s:0000000080
+i5<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I5<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i6<+1 | OK s:010000000000
+i6<-1 | OK s:ffffffffffff
+I6<max | OK s:ffffffffffff
+i6<min | OK s:000000000080
+i6<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I6<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i7<+1 | OK s:01000000000000
+i7<-1 | OK s:ffffffffffffff
+I7<max | OK s:00000000000010
+i7<min | OK s:000000000000f0
+i7<ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I7<ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i8<+1 | OK s:0100000000000000
+i8<-1 | OK s:ffffffffffffffff
+I8<max | OK s:0000000000001000
+i8<min | OK s:000000000000f0ff
+i8<ovf+ | OK s:0000000000000040
+I8<ovf- | OK s:ffffffffffffffff
+i9<+1 | OK s:010000000000000000
+i9<-1 | OK s:ffffffffffffffffff
+I9<max | OK s:000000000000100000
+i9<min | OK s:000000000000f0ffff
+i9<ovf+ | OK s:000000000000004000
+I9<ovf- | OK s:ffffffffffffffff00
+i10<+1 | OK s:01000000000000000000
+i10<-1 | OK s:ffffffffffffffffffff
+I10<max | OK s:00000000000010000000
+i10<min | OK s:000000000000f0ffffff
+i10<ovf+ | OK s:00000000000000400000
+I10<ovf- | OK s:ffffffffffffffff0000
+i11<+1 | OK s:0100000000000000000000
+i11<-1 | OK s:ffffffffffffffffffffff
+I11<max | OK s:0000000000001000000000
+i11<min | OK s:000000000000f0ffffffff
+i11<ovf+ | OK s:0000000000000040000000
+I11<ovf- | OK s:ffffffffffffffff000000
+i12<+1 | OK s:010000000000000000000000
+i12<-1 | OK s:ffffffffffffffffffffffff
+I12<max | OK s:000000000000100000000000
+i12<min | OK s:000000000000f0ffffffffff
+i12<ovf+ | OK s:000000000000004000000000
+I12<ovf- | OK s:ffffffffffffffff00000000
+i13<+1 | OK s:01000000000000000000000000
+i13<-1 | OK s:ffffffffffffffffffffffffff
+I13<max | OK s:00000000000010000000000000
+i13<min | OK s:000000000000f0ffffffffffff
+i13<ovf+ | OK s:00000000000000400000000000
+I13<ovf- | OK s:ffffffffffffffff0000000000
+i14<+1 | OK s:0100000000000000000000000000
+i14<-1 | OK s:ffffffffffffffffffffffffffff
+I14<max | OK s:0000000000001000000000000000
+i14<min | OK s:000000000000f0ffffffffffffff
+i14<ovf+ | OK s:0000000000000040000000000000
+I14<ovf- | OK s:ffffffffffffffff000000000000
+i15<+1 | OK s:010000000000000000000000000000
+i15<-1 | OK s:ffffffffffffffffffffffffffffff
+I15<max | OK s:000000000000100000000000000000
+i15<min | OK s:000000000000f0ffffffffffffffff
+i15<ovf+ | OK s:000000000000004000000000000000
+I15<ovf- | OK s:ffffffffffffffff00000000000000
+i16<+1 | OK s:01000000000000000000000000000000
+i16<-1 | OK s:ffffffffffffffffffffffffffffffff
+I16<max | OK s:00000000000010000000000000000000
+i16<min | OK s:000000000000f0ffffffffffffffffff
+i16<ovf+ | OK s:00000000000000400000000000000000
+I16<ovf- | OK s:ffffffffffffffff0000000000000000
+i1>+1 | OK s:01
+i1>-1 | OK s:ff
+I1>max | OK s:ff
+i1>min | OK s:80
+i1>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I1>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i2>+1 | OK s:0001
+i2>-1 | OK s:ffff
+I2>max | OK s:ffff
+i2>min | OK s:8000
+i2>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I2>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i3>+1 | OK s:000001
+i3>-1 | OK s:ffffff
+I3>max | OK s:ffffff
+i3>min | OK s:800000
+i3>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I3>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i4>+1 | OK s:00000001
+i4>-1 | OK s:ffffffff
+I4>max | OK s:ffffffff
+i4>min | OK s:80000000
+i4>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I4>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i5>+1 | OK s:0000000001
+i5>-1 | OK s:ffffffffff
+I5>max | OK s:ffffffffff
+i5>min | OK s:8000000000
+i5>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I5>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i6>+1 | OK s:000000000001
+i6>-1 | OK s:ffffffffffff
+I6>max | OK s:ffffffffffff
+i6>min | OK s:800000000000
+i6>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I6>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i7>+1 | OK s:00000000000001
+i7>-1 | OK s:ffffffffffffff
+I7>max | OK s:10000000000000
+i7>min | OK s:f0000000000000
+i7>ovf+ | ERR bad argument #2 to 'F' (integer overflow)
+I7>ovf- | ERR bad argument #2 to 'F' (unsigned overflow)
+i8>+1 | OK s:0000000000000001
+i8>-1 | OK s:ffffffffffffffff
+I8>max | OK s:0010000000000000
+i8>min | OK s:fff0000000000000
+i8>ovf+ | OK s:4000000000000000
+I8>ovf- | OK s:ffffffffffffffff
+i9>+1 | OK s:000000000000000001
+i9>-1 | OK s:ffffffffffffffffff
+I9>max | OK s:000010000000000000
+i9>min | OK s:fffff0000000000000
+i9>ovf+ | OK s:004000000000000000
+I9>ovf- | OK s:00ffffffffffffffff
+i10>+1 | OK s:00000000000000000001
+i10>-1 | OK s:ffffffffffffffffffff
+I10>max | OK s:00000010000000000000
+i10>min | OK s:fffffff0000000000000
+i10>ovf+ | OK s:00004000000000000000
+I10>ovf- | OK s:0000ffffffffffffffff
+i11>+1 | OK s:0000000000000000000001
+i11>-1 | OK s:ffffffffffffffffffffff
+I11>max | OK s:0000000010000000000000
+i11>min | OK s:fffffffff0000000000000
+i11>ovf+ | OK s:0000004000000000000000
+I11>ovf- | OK s:000000ffffffffffffffff
+i12>+1 | OK s:000000000000000000000001
+i12>-1 | OK s:ffffffffffffffffffffffff
+I12>max | OK s:000000000010000000000000
+i12>min | OK s:fffffffffff0000000000000
+i12>ovf+ | OK s:000000004000000000000000
+I12>ovf- | OK s:00000000ffffffffffffffff
+i13>+1 | OK s:00000000000000000000000001
+i13>-1 | OK s:ffffffffffffffffffffffffff
+I13>max | OK s:00000000000010000000000000
+i13>min | OK s:fffffffffffff0000000000000
+i13>ovf+ | OK s:00000000004000000000000000
+I13>ovf- | OK s:0000000000ffffffffffffffff
+i14>+1 | OK s:0000000000000000000000000001
+i14>-1 | OK s:ffffffffffffffffffffffffffff
+I14>max | OK s:0000000000000010000000000000
+i14>min | OK s:fffffffffffffff0000000000000
+i14>ovf+ | OK s:0000000000004000000000000000
+I14>ovf- | OK s:000000000000ffffffffffffffff
+i15>+1 | OK s:000000000000000000000000000001
+i15>-1 | OK s:ffffffffffffffffffffffffffffff
+I15>max | OK s:000000000000000010000000000000
+i15>min | OK s:fffffffffffffffff0000000000000
+i15>ovf+ | OK s:000000000000004000000000000000
+I15>ovf- | OK s:00000000000000ffffffffffffffff
+i16>+1 | OK s:00000000000000000000000000000001
+i16>-1 | OK s:ffffffffffffffffffffffffffffffff
+I16>max | OK s:00000000000000000010000000000000
+i16>min | OK s:fffffffffffffffffff0000000000000
+i16>ovf+ | OK s:00000000000000004000000000000000
+I16>ovf- | OK s:0000000000000000ffffffffffffffff
+opt b | OK s:64
+size b | OK 1
+opt B | OK s:64
+size B | OK 1
+opt h | OK s:6400
+size h | OK 2
+opt H | OK s:6400
+size H | OK 2
+opt i | OK s:64000000
+size i | OK 4
+opt I | OK s:64000000
+size I | OK 4
+opt j | OK s:6400000000000000
+size j | OK 8
+opt J | OK s:6400000000000000
+size J | OK 8
+opt T | OK s:6400000000000000
+size T | OK 8
+size l | OK 8
+size L | OK 8
+nonint | ERR bad argument #2 to 'F' (number has no integer representation)
+strnum | OK s:0a000000
+strhex | OK s:10000000
+strbad | ERR bad argument #2 to 'F' (number expected, got string)
+nan | ERR bad argument #2 to 'F' (number has no integer representation)
+inf | ERR bad argument #2 to 'F' (number has no integer representation)
+2^63 | ERR bad argument #2 to 'F' (number has no integer representation)
+-2^63 | OK s:0000000000000080
+2^62 | OK s:0000000000000040
+2^53+2 | OK s:0200000000002000
+J -1 | OK s:ffffffffffffffff
+i16 -2 | OK s:feffffffffffffffffffffffffffffff
+f 0 | OK s:00000000
+d 0 | OK s:0000000000000000
+n 0 | OK s:0000000000000000
+f -0 | OK s:00000080
+d -0 | OK s:8000000000000000
+n -0 | OK s:0000000000000080
+f 1.5 | OK s:0000c03f
+d 1.5 | OK s:3ff8000000000000
+n 1.5 | OK s:000000000000f83f
+f -2.25 | OK s:000010c0
+d -2.25 | OK s:c002000000000000
+n -2.25 | OK s:00000000000002c0
+f 0.33333333333333331 | OK s:abaaaa3e
+d 0.33333333333333331 | OK s:3fd5555555555555
+n 0.33333333333333331 | OK s:555555555555d53f
+f 1.0000000000000001e+300 | OK s:0000807f
+d 1.0000000000000001e+300 | OK s:7e37e43c8800759c
+n 1.0000000000000001e+300 | OK s:9c7500883ce4377e
+f 4.9406564584124654e-324 | OK s:00000000
+d 4.9406564584124654e-324 | OK s:0000000000000001
+n 4.9406564584124654e-324 | OK s:0100000000000000
+f inf | OK s:0000807f
+d inf | OK s:7ff0000000000000
+n inf | OK s:000000000000f07f
+f -inf | OK s:000080ff
+d -inf | OK s:fff0000000000000
+n -inf | OK s:000000000000f0ff
+f nan rt | OK true
+f round | OK 0.10000000149011612 5
+f ovf | OK inf 5
+z | OK s:68656c6c6f00
+z zero | ERR bad argument #2 to 'F' (string contains zeros)
+s1 | OK s:026869
+s1 long | ERR bad argument #2 to 'F' (string length does not fit in given size)
+s2 255 | OK 257
+s | OK s:0300000000000000616263
+c5 | OK s:6162000000
+c2 long | ERR bad argument #2 to 'F' (string longer than given size)
+c miss | ERR missing size for format option 'c'
+c0 | OK s:
+align !4 | OK s:0100000002000000
+align !8 d | OK s:0100000000000000000000000000f83f
+align X | OK s:0100000002
+X bad | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+X end | ERR bad argument #1 to 'F' (invalid next option for option 'X')
+!3 | ERR bad argument #1 to 'F' (format asks for alignment not power of 2)
+! default | OK 16
+x | OK s:01000002
+spaces | OK s:01000001
+= native | OK s:0100
+bad opt | ERR invalid format option 'y'
+i0 | ERR integral size (0) out of limits [1,16]
+i17 | ERR integral size (17) out of limits [1,16]
+packsize s | ERR bad argument #1 to 'F' (variable-length format)
+packsize z | ERR bad argument #1 to 'F' (variable-length format)
+packsize big | ERR invalid format option '7'
+missing arg | ERR bad argument #2 to 'F' (number expected, got nil)
+u all | OK -2 70000 s:7a7a s:73 2.5 s:616263 23
+u pos3 | OK 70000 7
+u neg | OK s:616263 23
+u pos0 | ERR bad argument #3 to 'F' (initial position out of string)
+u farneg | ERR bad argument #3 to 'F' (initial position out of string)
+u beyond | ERR bad argument #3 to 'F' (initial position out of string)
+u atend | ERR bad argument #2 to 'F' (data string too short)
+u atend none | OK 23
+u short | ERR bad argument #2 to 'F' (data string too short)
+u z unterminated | OK s:616263 5
+u z then c | ERR bad argument #2 to 'F' (data string too short)
+u s too long | ERR bad argument #2 to 'F' (data string too short)
+u s8 huge | ERR memory allocation error: block too big
+u s4 big | ERR bad argument #2 to 'F' (data string too short)
+u i9 fit | OK -5 10
+u i9 nofit | ERR 9-byte integer does not fit into Lua Integer
+u I9 nofit | ERR 9-byte integer does not fit into Lua Integer
+u j small | OK 123456789 9
+u J -1 | OK -1 9
+u 2^53 | OK 9007199254740992 9
+u 2^60 | OK 1152921504606846976 9
+u 2^53+1 | OK 9007199254740992 9
+u maxint | OK 9.2233720368547758e+18 9
+u minint | OK -9223372036854775808 9
+u J 2^64-2 | OK -2 9
+u T | OK 4096 9
+method | OK s:0201

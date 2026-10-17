@@ -772,13 +772,14 @@ object OCLuaJITStateFactory extends LuaStateFactory {
     maxMemory.fold(new LuaStateLuaJIT())(new LuaStateLuaJIT(_))
 
   /**
-    * OpenComputers' 5.2 library set, exactly.
-    *
-    * BIT32 and not UTF8: we are a 5.2-class VM (LuaJIT is 5.1 plus partial 5.2
-    * compat), machine.lua is written against that surface, and the split is not
-    * cosmetic -- it is why QuickOS boots on neither us nor OC's own 5.2 native
-    * (docs/research/os-shape-census.md).  Diverging here would make us a fourth
-    * dialect nobody's OS targets.
+    * OpenComputers' 5.2 LIST of libraries, as the mod's LuaJITStateFactory
+    * opens it: BIT32 and not UTF8, because machine.lua builds the sandbox from
+    * whichever tables exist (and the split is why QuickOS boots on neither us
+    * nor OC's own 5.2 native, docs/research/os-shape-census.md).  The libraries
+    * themselves are our fork's: since 2026-10-13 it may take Lua 5.3 functions,
+    * and STRING carries Lua 5.3.6's string.pack/unpack/packsize, registered by
+    * the LuaJIT build (native/luajit/patch-strpack-register.sh).  Keep this
+    * list equal to LuaJITStateFactory.openLibs.
     */
   override protected def openLibs(state: jnlua.LuaState): Unit = {
     state.openLib(jnlua.LuaState.Library.BASE)

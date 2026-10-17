@@ -1,0 +1,7 @@
+c33d49d1e26887f0013c65e1aa14f52d *build/native/luajit-windows-x86_64/src/luajit.exe
+7bd7faf24ac393d6212eff04f5ba0411 *bench/vendor/lua-5.3.6/src/lua.exe
+6ac4c47bb1f715291198586937d83a39 *test/native/pack/conf-extra.lua
+649c3ed9156b6c3359de4ed82a5144e5 *test/native/pack/conformance.lua
+333726b68ea2cc4c8b720ff1d60d8423 *test/native/pack/packfuzz-cmp.lua
+a7fd3b9affb85e658b939261480d73b1 *test/native/pack/packfuzz.lua
+f1b54109cb50e052fab7263c77cce9c2 *test/native/run-packfuzz.sh

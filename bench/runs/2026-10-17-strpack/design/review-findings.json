@@ -1,0 +1,620 @@
+{
+ "results": [
+  {
+   "key": "port",
+   "review": {
+    "findings": [
+     {
+      "id": "port-D3-position",
+      "severity": "medium",
+      "file": "native/luajit/oclj_strpack.c",
+      "line": "743",
+      "claim": "D3's wrap error does not carry 5.3.6's text. The port raises it with luaL_error, and LuaJIT's luaL_error adds the caller's 'chunk:line: ' prefix. 5.3.6 raises it from luaM_toobig through luaG_runerror, which adds a position only when the running function is a Lua function. Here the running function is the C function str_unpack, so 5.3.6 never adds a prefix. So for any non-tail call from Lua code, ours reads 'x.lua:N: memory allocation error: block too big' and PUC reads 'memory allocation error: block too big'. This contradicts design.md D3 ('Same text as 5.3.6') and \u00a72. No test can see it: every normaliser strips '^[^:]*:%d+: ' (conformance.lua norm, conf-extra.lua:41, packfuzz.lua:133), and the cases call through pcall(f, ...) directly, where neither VM adds a position.",
+      "evidence": "MEASURED. Probe C:/Users/astro/claude-tmp/oclj/r2/review/port/d3pos.lua, case 4: pcall(function() local a = string.unpack('<s8', ('\\255'):rep(8)..'x'); return a end). luajit.exe prints 'false  d3pos.lua:5: memory allocation error: block too big'; PUC lua.exe prints 'false  memory allocation error: block too big'. The same shows in probes/p1.lua, case 's8 wrap nontail': it is the only non-residual line in diff p1.puc.txt p1.lj.txt. READ: lstrlib.c:1517-1519 -> lstring.c:204 -> lmem.c:68-69 luaM_toobig -> ldebug.c:653-663, where 'if (isLua(ci))' alone adds the position. Port side: oclj_strpack.c:741-744. Fix proven: fixproof/host.c, linked against synth/repo/build/native/.../libluajit.a. The luaL_error form prints 't.lua:1: memory allocation error: block too big'. The lua_pushliteral+lua_error form prints 'memory allocation error: block too big', exactly PUC's text.",
+      "failure_scenario": "A user runs local ok, e = pcall(function() local s = string.unpack('<s8', data) ... end) on a sector whose s8 length prefix has its top bit set. On OC's Lua 5.3, e is 'memory allocation error: block too big'; on OC-LuaJIT, e is 'machine:NN: memory allocation error: block too big'. Code that compares e exactly, or a differential test that does not strip positions, sees the difference. Every repo test strips positions, so a regression in this text's position also goes undetected.",
+      "suggested_fix": "At oclj_strpack.c:743, replace luaL_error(L, \"memory allocation error: block too big\"); with { lua_pushliteral(L, \"memory allocation error: block too big\"); lua_error(L); }. lua_error goes to lj_err_run, which adds no location. Update the KSTR54 anchor in test/native/negctl-pack.sh:196-197, because that line is its exact anchor. Add a conf-extra case that does not run its result through norm() and calls unpack non-tail inside a Lua function, for example by returning the raw pcall message as an OK value. Then the .expect file and the PUC provenance pin the unprefixed text."
+     },
+     {
+      "id": "port-strscan-fraction-residual",
+      "severity": "low",
+      "file": "native/luajit/oclj_strpack.c",
+      "line": "231-238",
+      "claim": "The D5 residual is described too narrowly. The pk_str2d comment, design.md D5 and \u00a712.5, and the RESID header of deviations.txt all say only 'a decimal exponent of 2^20 or more' differs. Of the two cited LuaJIT lines, lj_strscan.c:453 is not an exponent check. It refuses any numeral with 2^20 or more significant digits after the radix point, with no exponent written. strtod, and so 5.3.6, accepts such numerals. So a second undocumented class of string arguments is refused by our pack but accepted by PUC 5.3.6.",
+      "evidence": "MEASURED with probes/p2.lua (run as a background task, then stopped while PUC was still working on the 2^20-digit case). pack('<d', '0.' .. ('1'):rep(2^20)): luajit.exe gives 'bad argument #2 to '?' (number expected, got string)'; PUC gives OK 1cc7711cc771bc3f. With ('1'):rep(2^20-1), luajit.exe gives 1cc7711cc771bc3f; PUC was not re-run on it (the probe was stopped). pack('<j', '0.' .. ('0'):rep(2^20) .. '1') is also refused by ours. READ: lj_strscan.c:450-454 computes ex as minus the number of fraction digits after trailing zeros are skipped, then 'if (ex <= -STRSCAN_MAXEXP) return STRSCAN_ERROR'. That runs before any 'e'/'p' is parsed and applies to hex fractions too. Line 468 is the real exponent check.",
+      "failure_scenario": "string.pack('<d', s) or string.pack('j', s), where s is a decimal string with at least 1048576 significant fraction digits and no exponent. 5.3.6 packs it (to 0.111... or 0); ours raises 'number expected, got string'. This is practically harmless (a 1 MiB numeral), but the residual list claims to be complete, and the code comment cites :453 for the wrong reason.",
+      "suggested_fix": "Reword the comment at oclj_strpack.c:235-238, design D5 and \u00a712.5, and the RESID paragraph of deviations.txt to say: 'a numeral whose decimal exponent, or whose count of significant digits after the point, is 2^20 or more (lj_strscan.c:453 digits, :468 exponent)'. Optionally add a RESID case to conf-extra; it needs a ~1 MiB string, and PUC's strtod is slow on it, so keep it out of the default suite."
+     },
+     {
+      "id": "port-D4-cap-text",
+      "severity": "low",
+      "file": "native/luajit/oclj_strpack.c",
+      "line": "608-614",
+      "claim": "D4 picked 'not enough memory for buffer allocation' because it is 'the text 5.3.6 raises under OC's cap'. The port uses that text only for results of LJ_MAX_STR or more. Below LJ_MAX_STR, a result that exceeds the RAM cap fails inside lua_newuserdata with LUA_ERRMEM and 'not enough memory', unpositioned. 5.3.6 under a refusing allocator fails in resizebox with LUA_ERRRUN and '<pos>: not enough memory for buffer allocation'. For the over-cap case actually seen in OC, the status and text differ from 5.3.6. Separately, the port runs all argument checks before allocating, while 5.3.6 can fail on memory mid-walk before reaching a later argument error. design.md D7 and \u00a712.5 list only memory-error 'thresholds' as a residual, not this text, status and order difference.",
+      "evidence": "MEASURED by the contract's own log, synth/logs/final-20261017-011016/run-pack.log:24: PT4 pack('c16777216','') under the cap gives 'status 4 (LUA_ERRMEM 4) 'not enough memory''. READ: lauxlib.c:459-468 (resizebox: allocf returns NULL -> luaL_error 'not enough memory for buffer allocation', a runtime error with position), reached from luaL_prepbuffsize for the 16 MiB addlstring. Port: oclj_strpack.c:608-614. My own probe p4.lua (luajit only) confirms that exactly LJ_MAX_STR ('c2147483392') gives 'p4.lua:1: not enough memory for buffer allocation' with no allocation.",
+      "failure_scenario": "In OC, pcall(string.pack, 'c4000000', '') on a machine with less than 8 MB free returns false, 'not enough memory' (ERRMEM) on OC-LuaJIT. On OC's Lua 5.3 it returns false, '...: not enough memory for buffer allocation'. pack('c4000000 i4', '', {}) under the cap raises the argument-#3 type error here but a memory error on 5.3.6.",
+      "suggested_fix": "Documentation only; do not emulate this. In D7, \u00a712.5, the README and the deviations.txt RESID header, state that over-cap pack refusals are LUA_ERRMEM 'not enough memory' (5.3.6: runtime 'not enough memory for buffer allocation'), and that argument errors take precedence over the memory refusal. Also narrow D4's 'Why' to 'the text 5.3.6's luaL_Buffer uses when its allocation fails'."
+     }
+    ],
+    "clean_areas": [
+     "Format language, line by line beside lstrlib.c:1180-1286 (read): getnum/getnumlimit (the 214748363 digit cutoff, the [1,16] limits, '!' default 8 = offsetof cD on Win64), getoption for every option b B h H l L j J T i[n] I[n] f d n s[n] c[n] z x X, spaces and < > = !, and getdetails (X takes its alignment from the next option; X at the end of the format or before a NUL errors; Xc/X with size 0 errors; align<=1 or Kchar means no padding; the clamp to maxalign comes BEFORE the power-of-2 test; ntoalign formula). All identical apart from pk_peek's bound. A NUL inside the format ends it, as in 5.3.6.",
+     "Non-printable option text (read and measured): 5.3.6 prints <\\NNN> for bytes outside 0x20-0x7e using the signed-char value cast back to unsigned, and the port prints the same, including through X (probes/p1.lua: bytes 1, 31, 127, 128, 200 and 255 are identical on both VMs).",
+     "pack (read): the nil mark is pushed after the arg-1 check and before the walk; integer/unsigned overflow checks only below 8 bytes; I9-I16 sign extension; Kchar/Kstring/Kzstr checks (memchr is the same as strlen==len, because LuaJIT strings are NUL-terminated); padding and Kpaddalign do not consume an argument. Pass 1 makes every check in 5.3.6's walk order; the only order differences are memory-related (finding port-D4-cap-text).",
+     "Two-pass memory safety (read): every write goes through pk_room, which bounds it against cap-n before writing (Kint/Kuint size, Kfloat 4/8, Kchar size with len<=size re-checked in pass 2, Kstring size+len, Kzstr len+1, x 1, padding ntoalign). The o.n!=o.cap check catches a short write. Pass 2 allocates nothing, because pass 1 already converted every number given to c/s/z to a string in place, and lua_tonumberx and lua_tolstring on a string are pure. The total is uint64 and below 2^63, so it cannot wrap. o.cap < LJ_MAX_STR = LJ_MAX_UDATA, so the (MSize) cast in lua_newuserdata is safe. The userdata sits at L->top-1 while lua_pushlstring's lj_gc_check runs (lj_api.c:638-645, 748-758), so it stays anchored. The sbuf path holds 512 bytes or fewer. No TValue pointers are held across lj_gc_check (which may move the stack); fmt and data point into anchored GC strings. D4 boundary measured: 'c2147483392' (=LJ_MAX_STR) is refused before allocation.",
+     "No user code runs mid-walk (read): lua_tolstring does not call __tostring (lj_api.c:493-510), lua_tonumberx calls no metamethods, and luaL_getmetafield is raw (lj_api.c:852-863). The only possible raise during a conversion is a memory error in pass 1, before anything is written. Note, not a defect: a __gc finalizer that runs inside an lj_gc_check could replace the format's stack slot only through debug.setlocal, and then fmt would dangle. That is the same exposure as PUC 5.3.6's str_pack, and OC's sandbox debug table has no setlocal (oc 1.12.58 machine.lua:1001-1030; getlocal returns only the name).",
+     "unpack (read and measured): 5.3.6's overflow-safe general check is kept verbatim. pos can reach ld+1 only after an unterminated z, and every later option, including a nop, then fails 'data string too short' as in 5.3.6. Kchar, Kint, Kfloat and the Kstring header are read only after pos+ntoalign+size<=ld. The s payload is read only when len<=ld-pos-size, and neither subtraction can underflow. z uses memchr bounded by ld-pos. pk_unpackint reads str[0..size-1] only. Init-position rules (0, negative, far-negative, ld+1, ld+2, INT64_MIN, strings, fractions, nan) match posrelat and the 'pos <= ld' check. luaL_checkstack(L,2) runs every iteration, and the 8000-slot residual is LuaJIT's lua_checkstack (lj_api.c:102-115). pack's own pushes (nil, udata, result, error-message slots) fit within the LUA_MINSTACK slots the VM guarantees.",
+     "packsize (read): 'format result too large' is checked before 'variable-length format', as in 5.3.6. The MAXSIZE - size arithmetic is the same and cannot wrap. Xs does not trigger variable-length, as in 5.3.6.",
+     "D1/D6 (read and measured): pk_unpackint is 5.3.6's unpackint over uint64. The int64 result (J and I8 wrap, for example ff x8 = -1) is converted with (lua_Number)int64 (cvtsi2sd, round-to-nearest-even). I9-I16 fields whose extra bytes are not a sign extension still raise '%d-byte integer does not fit into Lua Integer' (p1: 'u i16 neg nofit', 'u >I9 nofit', 'u >s9 nofit' identical to PUC).",
+     "D2 (read): l/L = 8 (PK_SZINT), which also gives 8-byte alignment under '!'. PUC Win64 differs only there.",
+     "D3 logic (read): the inputs that raise 'block too big' are exactly those for which 5.3.6's sum pos+len+size wraps, and every wrapped sum passes 5.3.6's test because pos+size<=ld. Non-wrapping over-long lengths give 'data string too short' (arg 2), and the 16-byte fit error comes first, as in 5.3.6. Only the position prefix differs (finding port-D3-position).",
+     "D5 coercion (read beside lobject.c:250-343, lvm.c:94-117 and lj_strscan.c:375-530; measured on 64 strings in probes/p1.lua for j, d and init-position, all identical except the documented 2^20-exponent residual, '0e99999999'): pk_str2int is l_str2int, with hex wrapping modulo 2^64, the decimal overflow cutoff MAXBY10/MAXLASTD+neg, and an embedded NUL failing. pk_str2d's first-of-.xXnN rule is strpbrk's. Every inf/nan spelling LuaJIT accepts contains n/N before any of '.xX', so all are refused. The 0b check mirrors LuaJIT's own whitespace/sign/0b order. LuaJIT's u/l/LL/i suffixes are refused under STRSCAN_OPT_TONUM. A NUL after the first '.xX' is refused by lj_strscan_scan ('p < pe'). pk_flt2int is mode-0 luaV_tointeger. Over-int64 decimals fall back to floats ('-9223372036854775809' packs as INT64_MIN in both). A string integer given to f/d is cast to float, so '-0' gives +0.0 as in 5.3.6.",
+     "Error texts, argument numbers and positions (measured with probes/p3.lua, non-tail calls, full messages including positions): integral size, missing size for 'c', invalid next option for X, alignment not power of 2, variable-length format, initial position out of string, data string too short, string contains zeros, string longer than given size, string length does not fit, unsigned overflow, integer overflow, no integer representation, 16-byte does not fit, invalid format option, type errors with __name (and a non-string __name ignored), method-call argument shift. All identical to PUC 5.3.6 except the documented 8000-slot residual.",
+     "API discipline (read and grep): no lua_Integer, lua_Unsigned, luaL_checkinteger, luaL_optinteger, lua_tointeger or lua_pushinteger is used, and no internal lj_* function is called. The shim's macro renames (lj52shim.h) do not reach this file's translation unit, which is LuaJIT's lib_string.c. The registration stubs in the patched lib_string.c:672-690 are trivial wrappers placed before lj_libdef.h. The target differs from port/src/lj53pack.c only by the #error guards, the size_t==uint64 assert, LJ_MAX_STR with '>=' (corrected from the prototype's '>'), the D3 two-comparison hunk and the registration removal (normalised diff in review/port/t.norm.c vs p.norm.c).",
+     "Undefined-behaviour review (read): every shift is below 64 (the Kstring shift is short-circuited for size>=8, the Kint/Kuint shifts apply only for size<8); pk_u2s avoids implementation-defined casts; the float conversions are the same as PUC's; pk_copywithendian copies by index and avoids 5.3.6's pointer to one before dest."
+    ]
+   },
+   "verdicts": [
+    {
+     "id": "port-D3-position",
+     "verdict": "confirmed",
+     "reasoning": "I could not refute it. On the PUC side, lstrlib.c:1516-1519 checks 'pos + len + size <= ld', which wraps, so lua_pushlstring reaches luaS_newlstr (lstring.c:204, 'l >= MAX_SIZE - sizeof(TString)'). That calls luaM_toobig (lmem.c:68-69), and luaG_runerror (ldebug.c:653-663) adds source:line only 'if (isLua(ci))'. Here ci is the C function str_unpack, so PUC never adds a position. On the port side, target oclj_strpack.c:741-743 raises with luaL_error. LuaJIT's luaL_error (lj_err.c:1154-1162) goes through lj_err_callermsg, which adds the Lua caller's position. lua_error (lj_err.c:1129-1133) goes to lj_err_run, which adds none. The difference shows only for a non-tail call from a Lua function. A direct pcall(string.unpack, ...) and a tail call match on both VMs, so every repo case, which calls through pcall(f, ...) and strips '^[^:]*:%d+: ' anyway, is blind to it. That makes design.md D3 ('Same text as 5.3.6') and the commit draft line ('still raises 5.3.6's text') false for the ordinary non-tail call. The fix is right: lua_pushliteral plus lua_error gives the unprefixed text, and I proved it by building against the synth libluajit.a. KSTR54's anchor in negctl-pack.sh:196-197 is that exact line, so it must change with the fix, as the finding says. A conf-extra case that returns the raw pcall message as a value, from a non-tail call inside a Lua function, would let the .expect file and the PUC provenance pin the text.",
+     "evidence": "MEASURED in C:/Users/astro/claude-tmp/oclj/r2/review/verify-port/d3.lua. The non-tail case is pcall(function() local a,b = string.unpack('<s8', ('\\255'):rep(8)..'x'); return a,b end). synth luajit.exe prints 'd3.lua:2: memory allocation error: block too big'. PUC 5.3.6 lua.exe prints 'memory allocation error: block too big'. The direct pcall(string.unpack, ...) and tail-call cases print the same unprefixed text on both VMs. The neighbouring 'data string too short' cases match exactly on both, position included, because both use luaL_argerror/luaL_error. Fix proof: verify-port/host.c, built with gcc against synth/repo/build/native/luajit-windows-x86_64/src/libluajit.a. A non-tail call to the luaL_error form gives 't.lua:1: memory allocation error: block too big'; the lua_pushliteral+lua_error form gives 'memory allocation error: block too big'. READ: target oclj_strpack.c:741-744; design.md:101 (D3) and the commit draft at design.md ~346; negctl-pack.sh:195-197 (KSTR54 anchor); conf-extra.lua:39-45 and packfuzz.lua:131-137 (normalisers strip the prefix).",
+     "fix_ok": true,
+     "better_fix": "As suggested, on one line with no backslash so the sabotage anchor stays simple: '            { lua_pushliteral(L, \"memory allocation error: block too big\"); lua_error(L); }'. Re-anchor KSTR54 to that line. Add one conf-extra case that calls unpack non-tail inside a Lua function and records the raw message unnormalised, then regenerate conf-extra.expect. PUC provenance then pins the unprefixed text, and re-adding a position (for example by reverting to luaL_error) becomes a visible diff. Prove the case can fail by running it once against the current luaL_error form."
+    },
+    {
+     "id": "port-strscan-fraction-residual",
+     "verdict": "confirmed",
+     "reasoning": "In the pristine source, lj_strscan.c:450-453 sets ex = dp-(p-1), minus the number of characters after the radix point once trailing zeros are dropped. It then returns STRSCAN_ERROR if ex <= -STRSCAN_MAXEXP (1<<20, :66). This runs before any exponent is parsed, and before the hex '*4'. :468 is the only real exponent check. So the pk_str2d comment (target oclj_strpack.c:235-238) cites :453 for the wrong reason, and the RESID header (deviations.txt:13-15), design D5/D7 (lines 103, 105) and \u00a712.5 (line 381) list only 'an exponent of 2^20 or more'. PUC 5.3.6 converts with strtod and accepts these numerals; I measured it. One correction to the finding: the trigger is not 'significant' digits. Leading zeros after the point count too, because the leading-zero loop at :414-425 leaves dp at the '.' and ex spans them. '0.' .. ('0'):rep(2^20) .. '1' has one significant digit and is still refused. The finding's proposed wording would therefore mis-describe its own third case. Practical impact is negligible (1 MiB numerals), so low severity is right.",
+     "evidence": "MEASURED in C:/Users/astro/claude-tmp/oclj/r2/review/verify-port/fr.lua. synth luajit.exe: pack('<d', '0.'..('1'):rep(2^20)) gives \"bad argument #2 to '?' (number expected, got string)\"; with ('1'):rep(2^20-1) it gives OK 1cc7711cc771bc3f; with ('1'):rep(2^20-1)..('0'):rep(5) it gives OK, so trailing zeros are not counted. pack('<j', '0.'..('0'):rep(2^20)..'1') is refused, while ('1'):rep(2^20)..'.5' gives OK inf. PUC lua.exe: pack('<d', '0.'..('1'):rep(2^20)) gives OK 1cc7711cc771bc3f after 68 s. pack('<j', '0.'..('0'):rep(2^20)..'1') gives OK 0000000000000000 in 0.04 s. READ: lj_strscan.c:66, :414-425, :449-455, :460-470; target oclj_strpack.c:231-238; deviations.txt:11-16; design.md:103, 105, 381.",
+     "fix_ok": false,
+     "better_fix": "Use exact wording in the comment at oclj_strpack.c:235-238, in D5/D7 and \u00a712.5, in the RESID header and in the README: 'LuaJIT's scanner refuses a numeral with 2^20 or more digits after the radix point, leading zeros counted and trailing zeros not, decimal or hex (lj_strscan.c:449-453), or an exponent of 2^20 or more (:468). strtod reads the first as its value, and the second as inf or 0.' The RESID header's 'where strtod reads inf or 0' is wrong for the fraction class, so fix it too. A RESID test case is cheap: '0.'..('0'):rep(2^20)..'1' given to 'j' takes 0.04 s on PUC (packs 0) and is refused here, so it can go in the default conf-extra suite. Avoid the '1'-digits form, which takes PUC's strtod about 68 s. Adding the case means one more conf-extra|any|RESID line in deviations.txt and an updated count in design \u00a76/\u00a77."
+    },
+    {
+     "id": "port-D4-cap-text",
+     "verdict": "confirmed",
+     "reasoning": "Reading: target oclj_strpack.c:607-614 refuses with 'not enough memory for buffer allocation' only when total >= PK_MAXOUT (LJ_MAX_STR, about 2 GiB). Below that, an over-cap result fails in lua_newuserdata (or the final lua_pushlstring) as LuaJIT's LUA_ERRMEM 'not enough memory', without a position. pass 1 (pk_walk with o==NULL) checks every argument before anything is allocated. In PUC 5.3.6, str_pack grows a luaL_Buffer while it walks the arguments. When the allocator refuses, resizebox (lauxlib.c:459-468) raises luaL_error 'not enough memory for buffer allocation', a runtime error positioned at a non-tail Lua caller, and it happens before later arguments are checked. I reproduced all of this with the same refusing allocator (an OC/jnlua-style limit) linked against both VMs. The contract's own PT4 log line shows the port's side through the real shim. design.md D4's 'Why' ('the text 5.3.6 raises under OC's cap') is misleading: the port raises that text only at about 2 GiB, which OC's cap never reaches. \u00a712.5/D7 name only 'memory-error thresholds' and say nothing about the different status, text and argument-check order. Emulating 5.3.6 here is not worth it, because thresholds already differ by design, so a documentation fix is the right scope.",
+     "evidence": "MEASURED in C:/Users/astro/claude-tmp/oclj/r2/review/verify-port/caphost.c (lua_newstate with a limiting allocator, cap = heap after a full GC + 4 MiB) running cap.lua. caphost-puc.exe, linked against bench/vendor/lua-5.3.6/src/liblua.a: direct pcall(string.pack,'c16777216','') gives 'not enough memory for buffer allocation'; non-tail gives 'cap.lua:4: not enough memory for buffer allocation'; pcall(string.pack,'c16777216 i4','',{}) gives 'not enough memory for buffer allocation'. caphost-lj.exe, linked against synth libluajit.a: 'not enough memory', 'not enough memory', and \"bad argument #3 to '?' (number expected, got table)\". synth logs/final-20261017-011016/run-pack.log PT4 shows \"status 4 (LUA_ERRMEM 4) 'not enough memory'\" through the shim. verify-port/p4.lua: 'c2147483392' non-tail gives 'p4.lua:1: not enough memory for buffer allocation'. READ: lauxlib.c:459-468 and 498-520; target oclj_strpack.c:597-617; design.md:83 (F10), 102 (D4), 105 (D7), 381 (\u00a712.5).",
+     "fix_ok": true,
+     "better_fix": "Documentation only, as suggested, with one precision: an over-cap pack is refused as LUA_ERRMEM 'not enough memory' (from the scratch userdata or the result string), unpositioned. 5.3.6 raises a runtime error, 'not enough memory for buffer allocation' (positioned when called non-tail from Lua), or LUA_ERRMEM when its final string fails. Every argument error comes before the refusal here, while 5.3.6 can fail on memory before it reaches a later bad argument. Put this in D7/\u00a712.5, the README residual list and the RESID header (prose only, no case id), and narrow D4's Why to 'the text 5.3.6's luaL_Buffer raises when its allocation fails; here only at LJ_MAX_STR, which no OC cap reaches'."
+    }
+   ]
+  },
+  {
+   "key": "build",
+   "review": {
+    "findings": [
+     {
+      "id": "B1",
+      "severity": "low",
+      "file": "native/build-native.sh (target)",
+      "line": "674-675",
+      "claim": "The new check \"lib_string.c never reached the compiler command line\" cannot fail. Its pattern is the bare substring 'lib_string.c', and with Q= the log always prints buildvm's five command lines, each of which lists every LJLIB_C file, lib_string.c included. The check names a compile step, but what it actually tests is that buildvm ran.",
+      "evidence": "[M] synth/repo/build/native/luajit_build.log has lib_string.c at :132, :135, :140, :141 and :142 (host/buildvm.exe -m bcdef/ffdef/libdef/recdef/vmdef ... lib_string.c ...). The real compile line is :162. I removed every line naming lib_string.o from a copy of the log (review/build/warn/log-no-libstring-compile.txt, 0 such lines left), and `grep -q -F 'lib_string.c'` still matches. The contract's fail-firsts (synth/logs/gatecheck.log) include nothing for this check, for the lib_string.o -nt check, or for the new LuaJIT-log warning grep at :684. On the warning grep I measured that it can fail: a copy of oclj_strpack.c with one unused variable, compiled inside the patched lib_string.c with LuaJIT's exact flags, prints 'oclj_strpack.c:624:7: warning: unused variable' after 'In file included from lib_string.c:675', and the :684 regex matches it.",
+      "failure_scenario": "A build in which lib_string.c's own compile line never appears in the log, or appears in a form the -nt check does not cover, still passes this assertion. In practice make clean, the -nt check, FFDEF x3 and the functional string.pack gate back it up, so the cost is a gate whose stated meaning is false. It is not a hole in the build.",
+      "suggested_fix": "Anchor the check on the compile line itself, for example `grep -qE -- '-c -o lib_string[.]o lib_string[.]c$' \"$OCLJ_BUILD/luajit_build.log\"` (strip CR first on Windows if needed). Optionally record a fail-first on a log copy with that line removed."
+     },
+     {
+      "id": "B2",
+      "severity": "low",
+      "file": "native/build-native.sh (target)",
+      "line": "833-885 (853-870, 874)",
+      "claim": "The string.pack gate's JIT part passes when no trace runs at all. The probe counts st.loop and st.stitch but prints only hot= and abort=, and both read the same (14000, 0) with the JIT off. The comment at :837-839 says the gate shows 'a hot loop of pack calls that the JIT stitches around without aborting', but nothing it prints proves a stitch happened. The FFI gate in the same script prints loop/stitch/abort (s=0/1/0, :807) for exactly this reason: ':815-816 ... the trace detector did not see the stitch ... so this gate proved nothing.'",
+      "evidence": "[M] I ran synth/repo/build/native/luajit-windows-x86_64/src/luajit.exe on a copy of the build's strpack.lua. With the JIT on and with -joff, the output is byte-identical to SP_WANT, 'fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 abort=0', so the gate passes both times. I added st.loop and st.stitch to the print: JIT on gives 'hot=14000 abort=0 loop=0 stitch=1', -joff gives 'loop=0 stitch=0'.",
+      "failure_scenario": "Suppose jit.attach stops delivering events, or a later change keeps the recorder from ever starting a trace in hot(). The gate would still print abort=0 and pass, so the JIT behaviour the design cites at F12/\u00a77 would no longer be checked. The hot= field cannot tell compiled from interpreted either: it is 14000 both ways.",
+      "suggested_fix": "Print the counts the probe already keeps, for example 'jit=' .. st.loop .. '/' .. st.stitch .. '/' .. st.abort, and require the measured 'jit=0/1/0', as the noffi gate requires s=0/1/0. Add a failure line for the case where the detector saw no stitch."
+     },
+     {
+      "id": "B3",
+      "severity": "low",
+      "file": "serializer/tests/strpack.lua (target)",
+      "line": "61-65",
+      "claim": "Check 3, \"no alias: each of the three has exactly one name\", cannot fail. It counts the entries of uperms whose value is P, U or S, but build_perms (:41-43) adds a value to uperms only the first time it sees that value. So uperms holds at most one name per value by construction, and the count is 3 whenever check 2 passes. Aliases are recorded only in `cand`, which the check never reads.",
+      "evidence": "[M] I copied strpack.lua and erislj_test.exe (synth/repo/serializer) to review/build/sp/. A wrapper that first sets string.pack2 = string.pack and rawset(_G, 'zz_pack_alias', string.pack), then dofile('strpack.lua'), prints 'STRPACK RESULT: ALL 10 TESTS PASS' (rc 0), although string.pack then has three names.",
+      "failure_scenario": "An alias for any of the three that sorts after its canonical name (a later string.* field or a later global) goes unnoticed, so the design's '\u00a75 the _G walk names them once each' is not actually tested.",
+      "suggested_fix": "Count names in `cand`, not `uperms`: `for _, e in ipairs(cand) do if e[1] == P or e[1] == U or e[1] == S then n = n + 1 end end; ok(n == 3, ...)`. This needs build_perms to return cand as well."
+     },
+     {
+      "id": "B4",
+      "severity": "low",
+      "file": "serializer/tests/strpack.lua (target)",
+      "line": "96-98",
+      "claim": "Check 6, \"without the perms the same coroutine is refused (they are C functions)\", does not test what its label (and design \u00a75, 'is refused without the perms (C functions)') says. eris.persist({}, co) is refused for any suspended coroutine: it hits C functions that have nothing to do with pack, such as the yield frame and the closure's environment. The whole file also passes when the three are pure-Lua functions.",
+      "evidence": "[M] In review/build/sp/: (a) a coroutine that never touches pack, `function(n) for i=1,n do coroutine.yield(i) end end`, persisted with {} perms fails with 'eris-lj: cannot persist a C function by value; put it in the perms table', the same text the check looks for. (b) Replacing string.pack/unpack/packsize with pure-Lua stand-ins that reach no C function (return \"rec\" / return 1,2,3,\"\",5 / return 14), then dofile('strpack.lua'), prints 'STRPACK RESULT: ALL 10 TESTS PASS'.",
+      "failure_scenario": "If the three were not C functions (or not the archive's), check 6 and the file as a whole would still pass. The C-function property the label asserts is never isolated.",
+      "suggested_fix": "Either relabel the check (refusal without perms is generic) or isolate it. For example, persist a coroutine whose only C-function references are the three, with a perms table that names everything else, and require the refusal. Or use debug.getinfo(P, 'S').what == 'C' (and likewise for U and S) as an explicit check."
+     },
+     {
+      "id": "B5",
+      "severity": "low",
+      "file": "native/luajit/patch-strpack-register.sh (target)",
+      "line": "77-85 (and header :28-30)",
+      "claim": "The order check does not prove what its comment says: ':82 the string module's own'. It checks only that the first '#define LJLIB_MODULE_string' line comes before the block. It does not check that no other LJLIB_MODULE_ line sits between that define and the block. LuaJIT's own lib_buffer.c has exactly that shape: two modules (buffer_method at :54, buffer at :285) sharing one lj_libdef.h include (:349). On an upstream lib_string.c of that shape the script exits 0 with 'verified by content and diff', and buildvm registers the three in the second module. The build's FFDEF x3 gate also passes on such a file.",
+      "evidence": "[M] In review/build/pt/ I took the pristine lib_string.c and inserted '#define LJLIB_MODULE_string_method' plus one LJLIB_CF above the anchor. patch-strpack-register.sh returns rc 0, '... registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 720); verified by content and diff'. synth's host/buildvm.exe -m libdef on the output lists lj_cf_string_pack/packsize/unpack under '#ifdef LJLIB_MODULE_string_method', and FFDEF names stay string_pack etc. [S] buildvm_lib.c:111-127 and :26-35: the registered name keeps its 'string_' prefix, so string.pack would be nil, and only the luajit.exe gate (fn=nil/nil/nil) would stop the build. The other refusals all hold [M]: anchor absent, anchor twice, anchor with trailing space, an existing string_pack* tag, missing module define, no final newline, each rc 1 with no output written.",
+      "failure_scenario": "Upstream LuaJIT splits lib_string.c into string + a method module sharing one lj_libdef.h, as lib_buffer.c does. The patch script reports success and produces a lib_string.c that registers the three in the wrong table. The build still fails, but late, at the functional gate, with a message that blames the registration not reaching the archive rather than the shape change.",
+      "suggested_fix": "In verify_patched, require that the last '#define LJLIB_MODULE_' line before LP is exactly '#define LJLIB_MODULE_string'. For example, take the line number of the last `grep -n '^#define LJLIB_MODULE_'` below LP and compare it with LM. Report 'has lib_string.c changed shape?' otherwise."
+     },
+     {
+      "id": "B6",
+      "severity": "low",
+      "file": "native/luajit/patch-strpack-register.sh (target)",
+      "line": "42-43 vs 89-96",
+      "claim": "The header says 'CRLF is stripped; the output is LF', but the already-patched path copies its input byte for byte. A CRLF patched input therefore yields a CRLF output with rc 0. On Git Bash this passes because Git Bash's grep 3.0 strips CR for -x. On Linux grep the -x counts would instead refuse the file. build-native.sh never takes this path (it asserts the marker is absent after the pristine re-copy), so this is a documentation inaccuracy only.",
+      "evidence": "[M] review/build/pt: ap-crlf.c (patched output with CRLF added) run as `sh patch-strpack-register.sh ap-crlf.c ap-crlf-out.c` prints 'already registers ... (verified) -- unchanged', rc 0, and the output is the CRLF input copied. `printf 'a\\r\\n' | grep -c -x a` prints 1 on this Git Bash.",
+      "failure_scenario": "Someone using the script by hand on an already-patched CRLF file gets CRLF output, contrary to the header. On Linux the same input is refused rather than verified.",
+      "suggested_fix": "Either say 'the patch path writes LF; an already-patched input is copied as is', or run the verify/copy path through the same CR-stripping awk the patch path uses."
+     }
+    ],
+    "clean_areas": [
+     "Targets and the scratch repo [M]: all 11 files in my dimension match the manifest md5s. synth/repo carries exactly the targets, and the build copy's oclj_strpack.c equals the target. The serializer hash baf083da reproduces (sha1 of the target eris_lj.c + the unchanged eris_lj.h). No CR in any target. sh -n and dash -n pass on build-native.sh, negctl-fingerprint.sh and the patch script.",
+     "patch-strpack-register.sh patch path [M]: the pristine CRLF and LF inputs give byte-identical output, equal to the synth build copy's lib_string.c, under both bash and dash (/usr/bin/dash). The output has 712 lines and 22 added, with the include at :675 directly above the anchor. The anchor-count, existing-tag, line-count, diff and tag-count checks all refuse malformed input with no output written (temp file removed by the EXIT trap). The only gap is the second-module shape (B5).",
+     "buildvm [S][M]: buildvm reads the stubs as LJLIB_CF tags in the string module, before the lj_libdef.h include, and the inserted comment carries no LJLIB_ text. lj_libdef.h lists lj_cf_string_pack/packsize/unpack after string_format, with init names pack/packsize/unpack. FFDEF lines 92-94 give builtin#91-93. FFDEF count goes 181 -> 184; FF_NUM_ASMFUNC stays 57 (an LJLIB_CF adds no ASM fast function); the max ffid is 185 < 256 (uint8_t ffid). With no LJLIB_REC, the recdef entries are 0 (recff_nyi), padded by libdef_rec at the next REC. Repo code uses ffids only symbolically (FF_next_N, FF_C).",
+     "Including a .c file into lib_string.c [M]: no identifier in oclj_strpack.c is a macro that exists only in lib_string.c's context (checked with gcc -dM before the include point vs standalone: 0 collisions). All statics and macros are pk_/PK_/oclj_strpack_ prefixed and none collides. The file is included once, so it needs no include guard. The synth -Wall LuaJIT log has 0 compiler warnings (only LuaJIT's two git-version notices), and the -Wall -Wextra wgate count is 0. The wgate deletes its .o before compiling, so a failed compile cannot leave a stale object behind.",
+     "-dM gate, FFDEF gate, stage-4 word check [M via synth/logs/gatecheck.log and the build logs]: all are unconditional and run on every build of both variants. Round 1's headers fail -dM, and round 1's lj_ffdef.h counts 0/0/0. The OBS and WORD case patterns are anchored, and the token test uses dot delimiters. The stage-4 check fails in both directions: shipped eris pack1 vs round 1's luajit.exe, and a pack0 eris vs the round-2 luajit.exe.",
+     "Fingerprint derivation [S][M]: eris_lj.c's ELJ_W_PACK and the archive's registration both read the same $LJ/oclj_features.h. oclj_strpack.c #errors unless OCLJ_LIB_STRPACK == 1, so an archive with pack implies the macro, and build-native.sh asserts the reverse (patch present, FFDEF x3, fn=function x3). eris built pack1 against a pack0 archive is caught by stage 4 in build-native.sh and by fingerprint.lua in the serializer test host. fingerprint.lua's new check compares against type(string.pack/unpack/packsize) at run time in a luaL_openlibs host, not against a constant. The packword arm (exit 1, exactly the agreement failure; synth/logs/final-*/ser-negctl.log) proves the pack0-word direction. The reverse direction is symmetric code, measured only at stage 4. fingerprint.lua has 18 checks and nocompare 10 failures, consistent.",
+     "Gradle regex [M with Kotlin stdlib 2.2.21's own kotlin.text.Regex from Java; Regex.escape gives \\\\Q...\\\\E]: it accepts the shipped word. It refuses pack0, the round-1 word (no token), pack10, pack1x, '...pack1.bit1', ffi1 and another hash. By design it checks only the fragment and the suffix, so it also accepts words with missing or foreign middle tokens ('ffi0.lua52.pack1', gc32/p32/be) and 'pack0.pack1'; build-native.sh's stage 4 checks the middle. Note: a round-3 token appended after pack1 will be refused until gradle's endsWith is updated.",
+     "Makefile, README, oclj_features.h and patch-features-include.sh hunks are exactly as design \u00a74.3/\u00a75 describes: one test line (tab recipe), docs, the define plus its comment, and the header comment.",
+     "Linux portability of the new shell lines [S + dash]: POSIX sh only. They use grep -c -x -F, grep -E, cmp -s, [ -nt ], quoted heredocs with no backslashes, and the LJEXE luajit/luajit.exe fallback; no new date -r. GNU diff --strip-trailing-cr is required, as in round 1's patch scripts. The Linux/WSL build itself was not run, by the contract's own account."
+    ]
+   },
+   "verdicts": [
+    {
+     "id": "B1",
+     "verdict": "confirmed",
+     "reasoning": "The check at build-native.sh:674 is `grep -q -F 'lib_string.c'` over the whole LuaJIT log. The script runs `make -C $LJ clean` before every build (:640), and that deletes lj_ffdef.h, lj_libdef.h and the other generated headers. So any make that succeeds also runs buildvm, and with Q= the log prints buildvm's five command lines, each naming lib_string.c. After a successful make the check cannot fail, so its message, 'never reached the compiler command line', says something it does not test. The sibling checks are fine: the log names lj_err.c and lj_ffrecord.c only on their compile lines (:147, :155). gatecheck.log has no fail-first for this check: its sections (a) to (f) cover the luajit.exe gate, FFDEF, -dM, the word, the marker #error and -Wextra. As the finding itself says, make clean, the -nt check, FFDEF x3 and the functional gate still cover the build. The cost is a gate whose stated meaning is false.",
+     "evidence": "[M] Copied synth/repo/build/native/luajit_build.log to review/verify-build/log.txt. It has 0 CR bytes. lib_string.c appears at :132, :135, :140, :141, :142 (host/buildvm.exe -m bcdef/ffdef/libdef/recdef/vmdef ... lib_string.c ...) and at :162 (gcc ... -c -o lib_string.o lib_string.c). After `grep -v -F 'lib_string.o'` (0 such lines left), `grep -q -F 'lib_string.c'` still matches, so the current check passes. The suggested pattern `-c -o lib_string[.]o lib_string[.]c$` matches the real log and fails on the stripped copy. [R] target build-native.sh:640 (make clean), :643-645 (Q= make), :674-675 (the check); synth/logs/gatecheck.log has no fail-first for it.",
+     "fix_ok": true,
+     "better_fix": "The fix is right as given. On Windows the log has no CRs, and BUILDMODE=static makes TARGET_DYNCC '@:', so the only echoed compile line ends '-c -o lib_string.o lib_string.c'. Also record a fail-first on a log copy with that line removed."
+    },
+    {
+     "id": "B2",
+     "verdict": "confirmed",
+     "reasoning": "The probe counts st.loop and st.stitch but prints only hot= and abort= (:870). The expected string SP_WANT (:874) requires only those two. With the JIT off both read 14000 and 0, so the gate passes without any trace. The comment at :837-839 claims more than the gate checks. One mitigation the finding does not mention: the FFI gate (:807) runs earlier in the same build, on the same luajit.exe, and requires s=0/1/0. Under -joff it reads s=0/0/0 and fails, so the first failure scenario (jit.attach stops delivering events) is already caught before the pack gate. What remains is the case where no trace runs in hot() itself. The pack gate cannot see that case, and the suggested fix closes it.",
+     "evidence": "[M] On a copy of synth/repo/build/native/strpack.lua (review/verify-build/sp-gate.lua), synth's luajit.exe prints exactly SP_WANT both with the JIT on and with -joff. With loop and stitch added to the print (sp-gate2.lua): JIT on gives 'abort=0 loop=0 stitch=1', the same in 5 of 5 runs; -joff gives 'abort=0 loop=0 stitch=0'. The build's noffi.lua under -joff prints 's=0/0/0 x=0/0/0', so the FFI gate would fail. [R] target build-native.sh:853-870, :874, :884-885, :807, :815-816.",
+     "fix_ok": true,
+     "better_fix": "The fix is right: print loop/stitch/abort and require 0/1/0, which was stable on Windows here. Add a failure line saying that a stitch other than 1 means no trace was recorded in hot(), so the gate proved nothing. Linux was not measured. The FFI gate already requires an exact 0/1/0 there, which suggests the count is stable on Linux too."
+    },
+    {
+     "id": "B3",
+     "verdict": "confirmed",
+     "reasoning": "build_perms (:41-43) writes uperms[name] = value only the first time a value is seen. uperms therefore holds at most one name per value, and the count at :63 equals 3 whenever all three values are reachable. That is exactly the condition under which check 2 (:58) passes. Aliases go only into `cand`, which the check never reads, so check 3 cannot fail on its own. Functionally an alias that sorts after the canonical name is harmless, because the first name wins. The label 'no alias: each of the three has exactly one name' and design \u00a75 nevertheless claim a property that is not tested.",
+     "evidence": "[M] Copied erislj_test.exe and strpack.lua from synth/repo/serializer to review/verify-build/sp; the strpack.lua copy is identical to the target. Baseline: 'ALL 10 TESTS PASS'. A wrapper sets string.pack2 = string.pack, rawset(_G,'zz_pack_alias',string.pack) and string.zunpack = string.unpack, then dofile('strpack.lua'): still 'ALL 10 TESTS PASS'. Counting names in a cand-style walk (candcount.lua) gives 3 without an alias and 4 with string.pack2 added, so the suggested fix can tell the two apart. [R] target strpack.lua:41-44, :61-65.",
+     "fix_ok": true,
+     "better_fix": ""
+    },
+    {
+     "id": "B4",
+     "verdict": "confirmed",
+     "reasoning": "eris.persist({}, co) is refused for any suspended coroutine, because the frame and the closure's environment (_G, which holds coroutine.yield and others) reach C functions. Check 6 at :96-98 therefore does not isolate the three, and the parenthetical '(they are C functions)' is untested. Pure-Lua stand-ins for the three pass all 10 checks. In isolation they behave differently: a perms table that names everything except the three refuses the real ones and accepts the stand-ins. The isolating variant of the suggested fix therefore works, as does the debug.getinfo().what == 'C' check.",
+     "evidence": "[M] In review/verify-build/sp: (a) generic.lua, a coroutine `for i=1,n do coroutine.yield(i) end` persisted with {}, prints 'false  eris-lj: cannot persist a C function by value; put it in the perms table'. (b) purelua.lua replaces string.pack/unpack/packsize with Lua functions and then runs dofile('strpack.lua'): 'STRPACK RESULT: ALL 10 TESTS PASS'. (c) iso.lua builds the full perms, deletes the three entries, and persists a coroutine holding the three as upvalues. With the real functions: what=C C C, and the persist is refused with 'cannot persist a C function by value'. With the stand-ins: what=Lua Lua Lua, and the persist succeeds (true, a blob starting ELJ). [R] target strpack.lua:94-98, design.md:168.",
+     "fix_ok": true,
+     "better_fix": "Do both. Add ok(debug.getinfo(P,'S').what=='C' and ... for U and S). Then replace check 6 with a persist whose perms name everything except the three, and require the refusal. That was measured to refuse the real functions and to accept pure-Lua stand-ins."
+    },
+    {
+     "id": "B5",
+     "verdict": "confirmed",
+     "reasoning": "verify_patched (:76-85) checks only that exactly one line equals '#define LJLIB_MODULE_string' (a -x match, which '#define LJLIB_MODULE_string_method' does not satisfy) and that this line comes before the block. Nothing rejects a second module define between them. buildvm_lib.c:26-35 strips the module-name prefix only when the function name starts with modname + '_'. In a module named string_method, 'string_pack' keeps its full name, so string.pack would be nil. lib_buffer.c (:54, :285, :349) shows that LuaJIT already uses this two-module shape. The scenario needs a re-pin to an upstream lib_string.c of that shape, and the build would still fail later, at the luajit.exe gate (fn=nil/nil/nil). The script's own purpose, though, is to refuse a lib_string.c that has changed shape, and here it reports success.",
+     "evidence": "[M] In review/verify-build/pt: pristine lib_string.c plus '#define LJLIB_MODULE_string_method' and an LJLIB_CF(string_method_foo) inserted above the anchor. The target patch-strpack-register.sh reports 'registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 719); verified by content and diff', rc=0. synth's host/buildvm.exe -m libdef on the output places lj_cf_string_pack/packsize/unpack under '#ifdef LJLIB_MODULE_string_method'. -m ffdef still emits FFDEF(string_pack), FFDEF(string_packsize) and FFDEF(string_unpack) once each, so the FFDEF x3 gate would pass. The suggested check (the last '^#define LJLIB_MODULE_' line before LP) returns '32:#define LJLIB_MODULE_string' on the normal output and '672:#define LJLIB_MODULE_string_method' on the split one. [R] target patch-strpack-register.sh:76-85; pristine buildvm_lib.c:26-35, lib_buffer.c:54/285/349.",
+     "fix_ok": true,
+     "better_fix": ""
+    },
+    {
+     "id": "B6",
+     "verdict": "confirmed",
+     "reasoning": "The header (:42-43) says 'CRLF is stripped; the output is LF'. The already-patched path (:89-96), however, verifies the input and copies it byte for byte with cp. A CRLF input that is already patched therefore yields CRLF output with rc 0 on this Git Bash, whose grep 3.0 ignores the trailing CR for -x. The Linux behaviour (refusal, because -x does not match 'LJLIB_CF(string_pack)\\r') is read from the source, not measured. build-native.sh never takes this path: it re-copies the pristine file and asserts the marker is absent (:625-627) before running the script. This is a documentation inaccuracy only.",
+     "evidence": "[M] review/verify-build/pt: ap.c is the patched pristine file (0 CR). ap-crlf.c is ap.c with a CR added before every LF (712 CR). Running `sh patch-strpack-register.sh ap-crlf.c ap-crlf-out.c` prints 'already registers string.pack/packsize/unpack (verified) -- unchanged', rc=0. cmp shows the output identical to the input, still with 712 CR. `printf 'a\\r\\n' | grep -c -x a` prints 1, and grep --version is GNU grep 3.0. [R] target patch-strpack-register.sh:42-43, :57, :89-96; build-native.sh:622-628.",
+     "fix_ok": true,
+     "better_fix": "The simplest fix is to reword the header: 'the patch path writes LF; an already-patched input is verified and copied as is'. If the behaviour should instead be uniform, strip CR into a temp file before the already-patched check, and verify and copy that file, so Linux and Git Bash agree."
+    }
+   ]
+  },
+  {
+   "key": "tests",
+   "review": {
+    "findings": [
+     {
+      "id": "T1",
+      "severity": "medium",
+      "file": "test/native/pack/packfuzz-cmp.lua",
+      "line": "103-111, 181, 198 (with run-packfuzz.sh:118-129)",
+      "claim": "[measured] If our side crashes partway through a run, the comparator exits 2 ('the puc run did not finish ... the reference or the generator failed') when its contract says exit 1. run-packfuzz.sh then reports 'PACKFUZZ PROVED NOTHING' (exit 2) where it should report a FAIL. The cause: at the CRASH line the loop `break`s before it reads PUC's #cov/#end lines, so pm['end'] is still nil when :181 checks it and :198 dies with 2. If our output stops right after the last case line, :99 dies with 2 as a 'desync' instead.",
+      "evidence": "packfuzz-cmp.lua:25 promises 'exit 1 MISMATCH, or the ours file ended early (crash)', and run-packfuzz.sh:47 promises '1 = a MISMATCH, a crash'. Synthetic pair S17 (ours file ends one case early): the comparator lists '[1] CRASH | ours output ends before case 2u' and then exits rc=2 with 'the puc run did not finish'. End-to-end test with a fake luajit.exe that runs the real one, cuts the ours file to 5000 lines and exits 139 (C:/Users/astro/claude-tmp/oclj/r2/review/tests/fakebuild): 'seed 1: 2 -- lines 4999: ... MISMATCH 1', 'CRASH | ours output ends before case 2811p', 'the puc run did not finish (no #end line)', 'PACKFUZZ PROVED NOTHING', rc=2. run-packfuzz.sh:120 only sets crc=1 when crc is 0, so a nonzero exit from our side never overrides the 2.",
+      "failure_scenario": "A memory-safety regression in oclj_strpack.c makes luajit.exe segfault at fuzz case N > 64, after the first flush. The run is classified 'proved nothing' and the message blames the reference, so someone may rerun it as instrument flakiness. In negctl-pack.sh a crashing arm would read 'FAIL (a suite proved nothing)' rather than 'caught'. In a multi-seed campaign the crash seed counts as any2 and is reported as exit 2, not 1.",
+      "suggested_fix": "After the CRASH break, read the rest of fp for meta lines (for l in fp:lines() do if l:sub(1,1)=='#' then meta(l, pm) end end). Treat 'puc has a meta line, ours is at EOF' (:99) as a CRASH, not a desync. In run-packfuzz.sh, when the reference run succeeded, set crc=1 whenever orc != 0 (not only when crc is 0)."
+     },
+     {
+      "id": "T2",
+      "severity": "medium",
+      "file": "test/native/pack_test.c (missing coverage); native/luajit/oclj_strpack.c:608-609",
+      "line": "oclj_strpack.c:608",
+      "claim": "[measured] Contract decision D4 is checked by no test and no negctl arm. D4 says a pack result of LJ_MAX_STR or more is refused after the checks and before any allocation, with 'not enough memory for buffer allocation'. No pack call in conformance.lua, conf-extra.lua, packfuzz.lua or pack_test.c reaches a total of 2^31 or more.",
+      "evidence": "The text 'buffer allocation' appears in no target file except oclj_strpack.c. Every large 'c' count in the tests goes to packsize or unpack, never pack: conf-extra.lua:117-125 and :308, conformance.lua:114, packfuzz.lua:781, :833-834, :907. packfuzz.lua:600 capc caps pack's 'c' at 2^20 by design. I built a review-only arm D4OFFBY1 (`if (total > PK_MAXOUT)`) the way negctl-pack.sh builds its arms (C:/Users/astro/claude-tmp/oclj/r2/review/tests/myarms.sh). Result: 'run-pack (PUC absent) rc=0, packfuzz rc=0', i.e. not caught. What D4 does today, measured: pack('c2000000000c2000000000','','') and pack('c2147483392','') both give 'not enough memory for buffer allocation', and pack('c2000000000c2000000000','',{}) gives 'bad argument #3 ... got table' (the checks come first).",
+      "failure_scenario": "An edit makes D4 an off-by-one (`>`), changes its text, or moves it after lua_newuserdata. Any of these ships green. With the check removed, a 4 GB pack on luajit.exe (no cap) would attempt the allocation and then hit lj_str_new's 'string length overflow', which is not 5.3.6's text. No suite would notice.",
+      "suggested_fix": "Add a PT7 to pack_test.c (no PUC run, so PUC's 2-4 GB allocation is never triggered) under the 64 MiB cap. pack('c2147483392','') must give D4's text with status LUA_ERRRUN. pack('c2147483391c1','','') must give D4's text (the boundary). pack('c2147483391','') must give LUA_ERRMEM 'not enough memory' (one below the boundary: refused by the cap, not by D4). pack('c2000000000c2000000000','',{}) must give the arg #3 error (checks before D4). Then add a negctl arm on line 608 (D4OFFBY1 or a text change)."
+     },
+     {
+      "id": "T3",
+      "severity": "low",
+      "file": "test/native/run-pack.sh",
+      "line": "14-20, 126-140",
+      "claim": "[measured] Part 2 (provenance) checks only that the lines deviations.txt lists DIFFER from PUC. It does not check that they differ the way D1 and D2 decide. The content of the 24 listed lines (Windows; 17 on Linux) is therefore frozen only by part 1, and part 1 is this build's own output. The header's 'so an .expect file cannot drift from 5.3.6 unnoticed' and 'PUC Lua 5.3.6's output with the decided deviations applied' have no mechanism behind them for those lines.",
+      "evidence": "I edited a copy of conf-extra.expect: 'DEV1 2^53+1 | ERR 8-byte integer does not fit into a Lua number' (a refusal, which D1 forbids), 'DEV1 2^53+3 | OK 9007199254740994 9' (truncation) and 'RESID exp 2^20 | OK s:anything'. Part 2 on that copy printed 'PASS conf-extra: PUC 5.3.6 differs from conf-extra.expect in exactly the 20 lines deviations.txt lists for windows'. Only part 1 failed, because the real build disagrees. I checked every listed value by hand and today's are right: 2^53+1 to ...992, 2^53+3 to ...996, i7/I7 max to 2^55/2^56, maxint/I16/s9-like to 2^63, minint+1 to -2^63, DEV2 8-byte forms. Without PUC, the only check of D1 values in run-pack.sh is PT2 (5 GPT fields, none a tie). A ties-away bug is still caught today, but only because the current .expect is right: review arm TIESAWAY failed 'u 2^53+1' and 'DEV1 2^53+1'.",
+      "failure_scenario": "Someone refreshes the .expect files from a build with a ties-away or truncating rounding bug, or one that refuses D1 lines. Part 1 then passes (it is circular), part 2 passes (the lines still differ from PUC), and run-pack.sh is green wherever no fuzz is run.",
+      "suggested_fix": "In part 2, check the listed lines against their decided values. For DEV1 ids, take PUC's integer, round it with v + 0.0 and render it as num() does; require equality. For DEV2 ids, run the PUC side with 'l' rewritten to 'i8' (packfuzz.lua's sidefmt) and require equality. Leave only RESID ids unconstrained."
+     },
+     {
+      "id": "T4",
+      "severity": "low",
+      "file": "test/native/pack/packfuzz.lua",
+      "line": "223-232, 806-813, 927",
+      "claim": "[measured] The fuzzer gives no gated evidence for D5 (5.3.6's string-to-number rules inside pack). The default profile never generates the strings where LuaJIT and 5.3.6 disagree. The coerce profile, which does, also contains the expected-mismatch class (numbers given to c/s/z), so it always exits 1, and a D5 regression would only add a second class that nothing checks.",
+      "evidence": "In the default profile, hostile_arg draws only SAFE_STR (:223): decimals of at most 2^53 and small hex. COERCE_STR (:229) is used only by k_coerce (:806), which mixes in r==3, numbers given to z/s1/c20/<s4 (:812). The final negctl-pack.log shows 'LJCOERCE 1 0 PASS (caught by conf-extra)': the fuzzer is blind to that arm. My coerce run (3000 cases) printed 'MISMATCH classes (1): [155] pack | ok/ok: value 1 str vs str' and exited 1, the same as it would with D5 broken.",
+      "failure_scenario": "A change to pk_str2int or pk_str2d that conf-extra's 44 fixed strings happen not to cover, such as a different hex-wrap edge or a decimal just above 2^63, would be visible to the fuzzer only in coerce output that is never gated.",
+      "suggested_fix": "Move k_coerce's r==3 branch into its own profile (for example coerce-num), so that `coerce` is expected to exit 0 and can be run as a gate. Alternatively, let packfuzz-cmp.lua accept one declared expected class per profile and fail on any other."
+     },
+     {
+      "id": "T5",
+      "severity": "low",
+      "file": "test/native/negctl-pack.sh",
+      "line": "134-207",
+      "claim": "[measured] negctl-pack.sh has no arm for several decided behaviours: D6's refusal half (I9..I16 fields whose extra bytes are not a sign extension stay refused), D6's wrapping (J/I8 of ff x8 is -1), D6's ties-to-even (ROUNDDOWN covers only the rounding direction), and D4 (see T2). The suites do catch the D6 cases, so these are gaps in the proof, not in the tests.",
+      "evidence": "I built review-only arms from oclj_strpack.c with negctl's method (myarms.sh). D6WIDE (line 671 luaL_error replaced by (void)L): run-pack rc=1, failing 'u i9 nofit', 'u I9 nofit', 'D s9 nofit', 'D I16 nofit', 'D i12 min bad'; fuzz 80 MISMATCH. JUNS (line 713, J/I8 pushed unsigned): rc=1, failing 'u J -1', 'u J 2^64-2', 'D I16 wrapped', 'D J 2^63'; fuzz 98 MISMATCH. TIESAWAY (line 713): rc=1, failing 'u 2^53+1' and 'DEV1 2^53+1'; fuzz 15 MISMATCH. All three are memory-safe (each computes a different value or skips a refusal).",
+      "failure_scenario": "If a later edit to the .expect files or the scripts drops the 'nofit' or 'J -1' cases, nothing shows that D6's halves are still protected.",
+      "suggested_fix": "Add D6WIDE, JUNS and TIESAWAY (the anchors above, each exactly once) and a D4 arm to negctl-pack.sh."
+     },
+     {
+      "id": "T6",
+      "severity": "low",
+      "file": "test/native/pack/conf-extra.lua",
+      "line": "10-11",
+      "claim": "[read] Two comments in the test scripts are not supported by the evidence. conf-extra.lua:10-11 says it 'is the suite that catches every sabotage in test/native/negctl-pack.sh on its own'. It does not: DOUBLEBUF is caught only by PT3. The contract's D10 rationale repeats the claim and contradicts its own section 6 table ('23 of 24 arms (all but DOUBLEBUF)'). Separately, conformance.lua:63 ('l/L: platform-sized (4 on Win64); both VMs here are Win64 builds') is stale under D2, and conformance.lua:139 says four cases diverge by design when only two do ('u minint' and 'u J 2^64-2' match PUC).",
+      "evidence": "synth/logs/final-20261017-011016/negctl-pack.log: 'DOUBLEBUF 1 0 PASS (caught by PT3)'. That arm's run-pack.log has only 'FAIL PT3 ... charged +3.0001 MiB'; conf-extra passed. The deviations.txt conformance rows are 'size l', 'size L', 'u 2^53+1' and 'u maxint' only.",
+      "failure_scenario": "A maintainer trusts the comment and trims pack_test.c, believing conf-extra alone proves every arm. DOUBLEBUF, the 2x memory claim, would then go unproven.",
+      "suggested_fix": "Change the comment to '23 of the 24 sabotages (DOUBLEBUF needs pack_test.c PT3)', correct D10's wording, and update conformance.lua:63 and :139."
+     },
+     {
+      "id": "T7",
+      "severity": "low",
+      "file": "test/native/pack_test.c",
+      "line": "24-25, 221-234",
+      "claim": "[read] PT4's stated claim, 'LUA_ERRMEM before any byte is written', cannot be observed by the check. The check passes for any implementation whose final string goes through lj52_alloc. That includes a scratch block taken outside the cap and fully written, followed by a capped lua_pushlstring that is refused. No arm or fail-first has ever made PT4 fail: round 1 stops at PT1, and all 24 arms pass PT4.",
+      "evidence": "The check is st == LUA_ERRMEM && msg == 'not enough memory'. That the refusal comes first is shown only by reading oclj_strpack.c:605-616 (the D4 check, then lua_newuserdata, then pass 2) together with PT3's 2.0x charge. The 'used %.2f MiB' after the refusal is printed but not asserted.",
+      "failure_scenario": "A regression moves the scratch to malloc and also loses the charge. PT3 would catch it (1.0x), but PT4 by itself would keep passing while its title claims something it never tested.",
+      "suggested_fix": "Reword PT4 to what it proves ('refused as LUA_ERRMEM, not D4's text, not a crash'), and assert that lj52_mem_used after the refusal is back within a small margin of base."
+     },
+     {
+      "id": "T8",
+      "severity": "low",
+      "file": "test/native/run-pack.sh",
+      "line": "150-167",
+      "claim": "[read] run-pack.sh exits 2 ('proved nothing') when part 3 cannot build or pack_test exits 2, even if part 1 or part 2 has already recorded a real FAIL. The more severe verdict is downgraded. run-packfuzz.sh does the opposite and lets 1 take precedence (its :51, :128-129).",
+      "evidence": "`fail()` at :155 and :158 and the `2)` branch at :165 call exit 2 without consulting $bad. negctl-pack.sh:123 turns RP=2 into 'FAIL (a suite proved nothing)'.",
+      "failure_scenario": "On a new toolchain (for example Linux with a newer gcc) pack_test.c emits one -Wextra warning, so part 3 calls fail(). A conformance FAIL already recorded in part 1 is then reported as an instrument failure.",
+      "suggested_fix": "Before exiting 2 from part 3, check bad: if a check already failed, print the part-3 setup problem and exit 1."
+     },
+     {
+      "id": "T9",
+      "severity": "low",
+      "file": "test/native/pack/deviations.txt",
+      "line": "11-15, 31-32",
+      "claim": "[read+measured] deviations.txt files every RESID row under 'the VM, not pack'. The two 'RESID exp \u00b12^20' rows, however, are pack's own argument conversion: oclj_strpack.c pk_str2d chooses LuaJIT's scanner (lua_tonumberx) as contract D5 decided. string.pack('<d','1e2000000') raises 'number expected, got string' where 5.3.6 packs inf, which is observable pack behaviour beyond the user's two deviations. The other RESID rows are genuinely VM-level; I confirmed RESID-tail with string.rep, whose tail call on LuaJIT also gives 'bad argument #2 to '?''.",
+      "evidence": "PUC vs .expect diff: 'RESID exp 2^20 | OK s:000000000000f07f' vs 'ERR bad argument #2 to 'F' (number expected, got string)'. oclj_strpack.c:230-255 (pk_str2d calls lua_tonumberx).",
+      "failure_scenario": "A reader of deviations.txt or the README concludes that pack itself has exactly two deviations, when in fact a third observable pack-level difference was decided (D5).",
+      "suggested_fix": "Label these two rows 'RESID-scan: pack's converter uses LuaJIT's numeral scanner (decided D5)', or implement the 2^20+ exponent case to strtod's result inside pk_str2d."
+     }
+    ],
+    "clean_areas": [
+     "run-pack.sh against a copy of synth/repo/build/native [measured]: exit 0; conformance 308 and conf-extra 409 exact; part 2 has exactly the 4 and 20 Windows lines; PACK TESTS 8/0. With PUC absent, part 2 prints SKIPPED and the run exits 0, as the header states (:21, :31). The final 'RUN-PACK: PASS' line does not repeat that part 2 was skipped.",
+     "run-packfuzz.sh default on the copy [measured]: 3.4 s; 33953 lines; EXACT 32749, DEVIATION 1204, MISMATCH 0, identical to the contract. Without PUC it exits 2 by design.",
+     "The .expect files vs PUC 5.3.6 [measured]: no line differs from PUC without being listed. Every deviations.txt row is one of the 4 conformance D1/D2 rows, DEV1, DEV2, RESID or RESID-tail. Case ids are unique in both files. I checked every DEV1/DEV2 value by hand: nearest double, ties to even, and 8-byte l/L. RESID-tail is VM-level (LuaJIT's own string.rep tail call loses the name and method shift the same way).",
+     "packfuzz-cmp.lua's DEVIATION/SECONDARY rules [measured, 16 constructed line pairs]: truncation, wrong sign, refusal instead of rounding, rounding a value below 2^53, ties-away, a wrong next position, an extra value, two R tokens with one wrong, accepting a D6-refused wide field, a different error text and a different argument number all classify as MISMATCH. Correct rounding classifies as DEVIATION. SECONDARY happens only after a pack-line MISMATCH, which already fails the run. R tokens are emitted only for |v| > 2^53, with the reference rounding computed on PUC by v + 0.0.",
+     "Generator power [measured, seed 1 default]: 1545 R tokens, 178 exact ties, 712 where truncation differs from nearest. It produces '!' with non-power-of-2 n (216 alignment errors), X with 27 ops plus the bad-next forms (211 errors), i16/I16 negatives, s1..s16, z with an embedded NUL (137 'contains zeros'), positions <=0 and >#s+1 (451 refusals), endianness switches and alignment interplay. Never generated: D4, D5's divergent strings outside coerce, non-string formats, method calls, LUA_ERRMEM. conf-extra covers all of these except D4.",
+     "negctl-pack.sh [measured+read]: all 24 anchors occur exactly once in the target oclj_strpack.c (awk count). The canon arm passes (final log 0/0, and my rerun of both suites on the same bytes). Every arm changes a decided or 5.3.6-required behaviour. All are memory-safe by reading; KSTR536 relies on lj_str_new's `lenx-1 < LJ_MAX_STR-1` guard before hashing (pristine lj_str.c:317). A sabotage file is not refused for being identical to canon, but every NEW line differs from its anchor. The rebuild deletes lib_string.o first, so the include is recompiled.",
+     "pack_test.c [read+log]: PT1/PT1m prove the opener and metatable path. PT2 checks D1 independently of PUC (nearest double computed in C; caught REFUSE53 and ROUNDDOWN). PT3's 1.95-2.05 MiB window catches both a buffer growing on the Lua stack (>=3x) and a scratch outside the cap (~1x); DOUBLEBUF gave +3.0001. PT5 caught PASS2. PT6a/b are measured.",
+     "Linux [read only, not run]: the runners are POSIX sh; .exe is stripped for PUC and absent from the luajit path; JNI_MD and TEST_EXTRA match the existing run.sh/run-security.sh link lines. The deviations rows give 2 and 15 lines on Linux, as section 9.3 says. negctl uses the same XCFLAGS=PICFLAG as build-native.sh:270/643.",
+     "security_test.c's one comment [read]: pristine lib_string.c:686 and the build copy's :708 are both the lj_lib_prereg('string.buffer') line.",
+     "Line endings [read]: the repo .gitattributes has '* text eol=lf'; every new test file is pure printable ASCII, so no CR or NUL can be normalised away."
+    ]
+   },
+   "verdicts": [
+    {
+     "id": "T1",
+     "verdict": "confirmed",
+     "reasoning": "The comparator breaks out of its loop at the CRASH line (packfuzz-cmp.lua:103-111) before reading PUC's trailing #cov/#ops/#end lines. pm['end'] is therefore nil, :181 sets unfinished, and :198 exits 2 with a message that blames the reference. If ours stops right after its last case line, :99 dies with 2 as a 'desync'. run-packfuzz.sh:120 promotes only crc 0 to 1, so the 2 survives, and :129 prints PROVED NOTHING. That contradicts packfuzz-cmp.lua:25 and run-packfuzz.sh:47, which both promise exit 1 for a crash. negctl-pack.sh:123-124 would label a crashing arm 'a suite proved nothing'. The suggested fix is incomplete. packfuzz.lua:629 flushes every 64 lines, and stdio also flushes whenever its buffer fills, so a real segfault can leave a partial last line. With fewer than 4 pipes, :114 dies 2 ('unparseable'). With a cut desc, :116 dies 2 ('desync'). The two comparator edits would not cover either case.",
+     "evidence": "Measured in C:/Users/astro/claude-tmp/oclj/r2/review/verify-tests/t1. A real seed-1 run (2000 cases) compared cleanly (0 MISMATCH). Then ours was cut: head -2000 gave '[1] CRASH | ours output ends before case 1014u' followed by 'packfuzz-cmp: the puc run did not finish (no #end line)', cmprc=2. head -3663 (cut right after the last case line) gave 'desync: puc has meta line '#cov ...', ours has 'nil'', cmprc=2. End to end in verify-tests/e2e: a fake luajit.exe runs the real one, keeps 2000 lines and exits 139. run-packfuzz.sh (copy) printed 'seed 1: 2 -- ... MISMATCH 1', 'CRASH | ours output ends before case 1014u', 'PACKFUZZ PROVED NOTHING', rc=2.",
+     "fix_ok": false,
+     "better_fix": "Fix the verdict in run-packfuzz.sh first. The reference run has already succeeded by :112, so after the compare write `[ \"$orc\" -ne 0 ] && crc=1` (drop the `[ \"$crc\" -eq 0 ]` guard). This alone turns every crash shape into 1: a cut at a case boundary, at EOF before the meta lines, or mid-line. Then make the comparator's message honest: (a) after the CRASH break, drain fp and run meta() on its '#' lines; (b) at :99, when lo is nil, record a CRASH instead of dying 2; (c) read ours with fo:read('L'), which works under PUC 5.3. A final line with no trailing newline, or one that cannot be parsed or desyncs only at EOF, is then a CRASH, not die(2)."
+    },
+    {
+     "id": "T2",
+     "verdict": "confirmed",
+     "reasoning": "D4 (design.md:102; oclj_strpack.c:608-609) is untested. No target file other than oclj_strpack.c contains 'buffer allocation'. Every 'c' count above 2^31 in the suites goes to packsize or unpack, and packfuzz.lua:600-607 (capc) deliberately keeps pack's 'c' at or below 2^20, because PUC would allocate. An off-by-one (`>`) is visible only at total == 0x7fffff00 exactly, which no test packs. A text change, or moving the check after lua_newuserdata, would also pass every suite. One detail of the failure scenario is wrong but does not change the finding: with D4 removed, a total above 0x7fffff00 hits lua_newuserdata's LJ_MAX_UDATA check first ('userdata length overflow', lj_api.c:752-753, lj_errmsg.h:15). Only a total of exactly 0x7fffff00 would reach the allocator and lj_str_new.",
+     "evidence": "Read: grep of 'buffer allocation' over synth/target finds only oclj_strpack.c. Large-c grep: conformance.lua:114 and conf-extra.lua:117-125 and :308 are all packsize or unpack; packfuzz.lua:833-834 and :907 likewise. Measured on synth/repo luajit.exe: pack('c2000000000c2000000000','','') -> 'not enough memory for buffer allocation'; pack('c2147483392','') -> the same; pack('c2147483391c1','','') -> the same; pack('c2000000000c2000000000','',{}) -> 'bad argument #3 ... got table'. No allocation is made in any of these. LJ_MAX_STR == LJ_MAX_UDATA == 0x7fffff00 (lj_def.h:54,56).",
+     "fix_ok": true,
+     "better_fix": "As suggested. Run PT7 under pack_test.c's 64 MiB cap so the c2147483391 case is refused by lj52_alloc and never actually allocates. The boundary case c2147483391c1 (total == 0x7fffff00) is the one that catches the `>` off-by-one and a move after lua_newuserdata: either gives LUA_ERRMEM 'not enough memory' instead of D4's LUA_ERRRUN text. Add the negctl D4 arm only together with PT7, or negctl-pack.sh will (correctly) fail."
+    },
+    {
+     "id": "T3",
+     "verdict": "confirmed",
+     "reasoning": "run-pack.sh part 2 (:126-140) compares only the set of ids where PUC differs from the .expect file against deviations.txt. A listed line can hold any value, as long as it still differs from PUC. Part 1 compares the build with the .expect, which is circular when the .expect was refreshed from that same build. The header's 'so an .expect file cannot drift from 5.3.6 unnoticed' (:20) and 'PUC Lua 5.3.6's output with the decided deviations applied' (:14-15) therefore have no mechanism behind them for the 24 Windows (17 Linux) listed lines. I reproduced it: a refusal for DEV1 2^53+1 (which D1 forbids) and a wrong rounding for DEV1 2^53+3 both pass part 2.",
+     "evidence": "Measured in C:/Users/astro/claude-tmp/oclj/r2/review/verify-tests/t3. I copied conf-extra.expect to mod.expect with 'DEV1 2^53+1 | ERR 8-byte integer does not fit into a Lua number' and 'DEV1 2^53+3 | OK 9007199254740994 9', then ran part 2's exact ids_differing and awk logic against PUC 5.3.6's output. Result: 'conf-extra.expect: part2 PASS (20)' and 'mod.expect: part2 PASS (20)'.",
+     "fix_ok": true,
+     "better_fix": "As suggested. For DEV1 ids, the PUC side computes v + 0.0 (an int64-to-double cast, round to nearest even), and the result is rendered with the scripts' own num(). For DEV2 ids, rerun the case on PUC with l/L rewritten to i8/I8 (packfuzz.lua's sidefmt). The simplest place for this is a mode in conf-extra.lua/conformance.lua under PUC that emits the deviation-applied line, so that part 2 compares whole lines and leaves only the RESID ids unconstrained."
+    },
+    {
+     "id": "T4",
+     "verdict": "confirmed",
+     "reasoning": "The default profile's hostile_arg (packfuzz.lua:388-393) draws only SAFE_STR (:223). COERCE_STR (:229) is used only by k_coerce (:806-816), and its r==3 branch (numbers given to z/s1/c20/<s4) mismatches by design, so `coerce` always exits 1. run-packfuzz.sh:33-36 claims 'exactly one class each', but no code checks that. I measured that the default fuzzer is blind to LJCOERCE. The reviewer's alternative fix (one declared class per profile) is weak. A D5 regression on pack of an integer option lands in the same class key, 'pack | ok/ok: value 1 str vs str', as the expected numbers-to-strings mismatch: under LJCOERCE that class grew from 155 to 360. A narrow D5 regression could therefore hide entirely inside the declared class.",
+     "evidence": "Measured in C:/Users/astro/claude-tmp/oclj/r2/review/verify-tests. Canonical coerce run, 3000 cases: one class, '[155] pack | ok/ok: value 1 str vs str', rc=1. I built an LJCOERCE luajit in verify-tests/ljc (negctl's anchor, oclj_strpack.c:272). Coerce profile: 5 classes, the shared one now [360]. Default profile, 20000 cases: 'MISMATCH 0' (blind). With COERCE_STR drawn in default's hostile_arg (verify-tests/t4, r<=7 branch: 50% COERCE_STR): canon 'MISMATCH 0', rc 0; LJCOERCE 'MISMATCH 84' in 10 classes, rc=1. negctl-pack.log: 'LJCOERCE 1 0 PASS (caught by conf-extra)'.",
+     "fix_ok": false,
+     "better_fix": "Draw COERCE_STR in the default profile's hostile_arg as well as SAFE_STR. pack and unpack convert by 5.3.6's rules (D5), so these strings match today: 20000 default cases with them give 0 MISMATCH on canon, and the change makes the gated default run catch LJCOERCE (84 MISMATCH). Keep k_coerce's r==3 branch as a separate documenting profile, and drop the 'one declared class' idea: that class key collides with D5 regressions."
+    },
+    {
+     "id": "T5",
+     "verdict": "confirmed",
+     "reasoning": "The negctl-pack.sh arm list (:134-207) has no arm on pk_unpackint's refusal (oclj_strpack.c:671). ROUNDDOWN and REFUSE53 are the only arms at :713, and neither isolates ties-to-even (ROUNDDOWN also changes non-ties) or J/I8 wrapping. There is no D4 arm. I16NEG and U32 sabotage pack, not unpack. The suites do catch D6WIDE. So, as the finding itself says, this is a gap in the proof, not in the tests.",
+     "evidence": "Read: negctl-pack.sh:134-207 (24 arms, none anchored on line 671 or isolating ties-to-even or J wrapping). Measured: I built D6WIDE (line 671 replaced by `(void)L;`) in verify-tests/ljc. Diffs against the .expect files: 'u i9 nofit', 'u I9 nofit', 'D s9 nofit', 'D I16 nofit', 'D i12 min bad', 'D I9 >' all change from ERR to OK. The reviewer's myarms.sh definitions (TIESAWAY, JUNS, D6WIDE, D4OFFBY1) each anchor one exact line.",
+     "fix_ok": true,
+     "better_fix": "As suggested, with one ordering constraint: the D4 arm will be NOT CAUGHT, and fail negctl, until T2's PT7 (including the c2147483391c1 boundary) lands."
+    },
+    {
+     "id": "T6",
+     "verdict": "confirmed",
+     "reasoning": "conf-extra.lua:10-11 says it catches every negctl sabotage on its own, but DOUBLEBUF passes conf-extra and is caught only by PT3. design.md D10 (:108) repeats the claim, while its own \u00a76 table (:184) says '23 of 24 arms (all but DOUBLEBUF)'. conformance.lua:63 ('l/L: platform-sized (4 on Win64)') is stale under D2, where ours is 8. conformance.lua:139 heads four cases 'a double cannot hold ... expected to diverge'. Two of them, 'u minint' (-2^63, exact in a double) and 'u J 2^64-2' (-2), match PUC, and deviations.txt lists only 'u 2^53+1' and 'u maxint'.",
+     "evidence": "Read: the DOUBLEBUF arm's run-pack.log (synth/repo/build/native/negctl-pack/20261016T221127Z-2514/DOUBLEBUF) has 'PASS conf-extra: 409 cases' and 'FAIL PT3 ... charged +3.0001 MiB'. Measured: PUC conformance.lua prints 'u minint | OK -9223372036854775808 9' and 'u J 2^64-2 | OK -2 9', identical to conformance.expect. deviations.txt:17-20 lists only size l, size L, u 2^53+1 and u maxint for conformance.",
+     "fix_ok": true
+    },
+    {
+     "id": "T7",
+     "verdict": "confirmed",
+     "reasoning": "PT4 checks only st == LUA_ERRMEM and msg == 'not enough memory' (pack_test.c:233). The 'before any byte is written' in its header (:24-25, :221) cannot be seen by that check. An implementation that fills an uncharged scratch block and is then refused at a capped lua_pushlstring would pass PT4 too (PT3's 2x charge would catch that one, not PT4). In all 25 negctl arm logs PT4 passes; the unregistered arm stops at PT1. The suggested extra assertion (lj52_mem_used back near base after the refusal) does no harm, but it tests something else: an uncharged scratch also leaves 'used' near base. So it does not make 'before it writes' observable either.",
+     "evidence": "Read: pack_test.c:221-234. The 'used %.2f MiB' value is printed, not asserted. Measured: grep over negctl-pack/20261016T221127Z-2514/*/run-pack.log finds 25 'PASS PT4' and 0 'FAIL PT4'.",
+     "fix_ok": true,
+     "better_fix": "Reword PT4 to what it checks. If an ordering check is wanted, test the observable part of D4's 'after the checks, before any allocation': under the same 4 MiB margin, pack('c16777216 j', '', 'x') must raise 'bad argument #3 ... number expected, got string' (LUA_ERRRUN), not LUA_ERRMEM. That shows every check runs before the allocation. Leave the write-order claim to PT3 and the code."
+    },
+    {
+     "id": "T8",
+     "verdict": "confirmed",
+     "reasoning": "Part 3's fail() calls (run-pack.sh:155, :158) and its `2)` branch (:165) exit 2 without consulting $bad. A part-1 or part-2 FAIL that is already recorded is then reported as 'proved nothing'. run-packfuzz.sh lets 1 take precedence (:128-129); run-pack.sh does the opposite.",
+     "evidence": "Measured in C:/Users/astro/claude-tmp/oclj/r2/review/verify-tests/t8. On a copy of run-pack.sh, I changed one conformance.expect line and pointed CC at a wrapper that prints 'warning:' and then runs gcc. Output: 'FAIL conformance: 1 of 308 lines differ ...', then 'PACK TEST SETUP FAIL: pack_test.c must compile warning-clean', rc=2.",
+     "fix_ok": true
+    },
+    {
+     "id": "T9",
+     "verdict": "confirmed",
+     "reasoning": "The two 'RESID exp \u00b12^20' rows are observable at pack's own interface. pk_str2d (oclj_strpack.c:230-255) is pack's converter. It already overrides LuaJIT's scanner for inf/nan/0b to match 5.3.6, but deliberately leaves the 2^20 exponent to lua_tonumberx. deviations.txt:11-16 files it under 'the VM, not pack', and design D7 (:105) calls it 'not deviations of pack'. Yet string.pack('<d','1e2000000') raises where 5.3.6 packs inf, and '<j' with '1e-2000000' raises where 5.3.6 packs 0. That is a third pack-level difference beyond D1 and D2, against README:24's 'the same results and the same errors'. The contract did decide it (D5/D7), so this is a labelling and documentation defect, not an undisclosed bug. A fix inside pk_str2d is feasible (huge exponent: mantissa zero gives 0, otherwise \u00b1inf or \u00b10).",
+     "evidence": "Measured: PUC 5.3.6 pack('<d','1e2000000') -> true 000000000000f07f; pack('<d','1e-2000000') -> true, 8 bytes. Ours (synth/repo luajit.exe) -> 'bad argument #2 to '?' (number expected, got string)' for both. Read: oclj_strpack.c:228-255 (pk_str2d calls lua_tonumberx after its own inf/nan/0b refusals); conf-extra.lua:379-380; deviations.txt:11-16, :31-32; design.md:103, :105; README.md:24.",
+     "fix_ok": true,
+     "better_fix": "Relabel the two rows as pack-level ('RESID-scan: pack's converter uses LuaJIT's scanner, decided D5/D7'), correct D7's 'not deviations of pack' for this item, and qualify README:24. Alternatively, make pk_str2d return strtod's result when the decimal exponent is 2^20 or more: 0 when the mantissa is zero, otherwise \u00b1inf for a positive exponent and \u00b10 for a negative one. Account for mantissa digit counts only when the string is over 1 MB. That would make the rows exact and move them out of deviations.txt."
+    }
+   ]
+  },
+  {
+   "key": "docs",
+   "review": {
+    "findings": [
+     {
+      "id": "docs-1",
+      "severity": "medium",
+      "file": "docs/research/wd-blind-spots.md",
+      "line": "46-49 (target 1g); also docs/roadmap.md:205 status 2026-10-17",
+      "claim": "wd-blind-spots 1g says pack's runtime is at most O(format + output), so at most O(mem cap), and calls it 'Mitigation: none needed beyond the cap. Same class as 1b and 1d'. Roadmap row 205 repeats this as 'bounded by the RAM cap like string.rep'. Both are false for time. pack scans every string it is given for an integer or float option in full, and does so in both passes. One string can be passed thousands of times, so CPU time is O(k x L) while memory and output stay O(k + L).",
+      "evidence": "[S] pk_walk calls pk_checkint for each integer option (oclj_strpack.c:512, :523) in pass 1 (:607) and again in pass 2 (:615). For a string argument, pk_tonum (:272) runs pk_str2int, whose whitespace loops (:206, :225) cover the whole string; a float string also goes through pk_str2d (:245-254). [M] I ran review/docs/argscan.lua on synth/repo luajit.exe. It does string.pack(('i1'):rep(k), s, s, ...) with s = (' '):rep(L)..'1'. L=1e6, k=7999: one call took 6.978 s in C for a 7999-byte output, about 3.2 MB heap. L=4e6, k=4000: 14.660 s. Time grows linearly in k (k=1000 0.816 s, k=2000 1.638 s). Controls: L=0, k=7999 took 0.000 s; L=1e6, k=1 took 0.001 s. With the same arguments, LuaJIT's own string.format('%d'...) took 1.695 s and 3.211 s, so this class already exists and 1c misses it too. PUC 5.3.6's pack at k=1000 took 0.158 s against our 0.816 s.",
+      "failure_scenario": "A sandbox program builds one 1 MB numeric string and calls string.pack(('i1'):rep(7999), table.unpack(t)) with t holding 7999 references to it. That is about 7 s inside one C function with no hook. It is past OC's 5 s timeout, and the soft abort cannot fire. The doc says no mitigation beyond the cap is needed, so the hard abort is the only thing that stops it, and the doc does not say so.",
+      "suggested_fix": "Rewrite 1g's pack bound as O(format + output + sum of the lengths of string arguments to numeric options, read twice). Note that k reaches about 8000 through table.unpack. Classify it with string.format's numeric string conversion (and fix 1c the same way), name the hard abort as the backstop, and correct roadmap row 205's 'bounded by the RAM cap like string.rep'. Optional code change: convert numeric string arguments once in pass 1 and reuse the values in pass 2, which halves the cost but keeps the class."
+     },
+     {
+      "id": "docs-2",
+      "severity": "medium",
+      "file": "README.md",
+      "line": "24 (target); also docs/roadmap.md:207 new [x] row 'What:'; design.md section 11 commit message",
+      "claim": "The README's new Lua-dialect paragraph says pack has 'the same results and the same errors' as 5.3.6 with exactly 'two deliberate differences'. The commit message says '5.3.6's results and errors -- text, argument number, order -- with two decided deviations'. The roadmap [x] row makes the same claim and then lists only three of the five VM-residual classes. The evidence shows more differences, including a different ARGUMENT NUMBER. design.md D7 says the residuals are documented in the README; they are not. The README also gives 'Every number is still a double' as the cause of D2, but 'l'/'L' being 8 bytes has nothing to do with doubles.",
+      "evidence": "[S] target deviations.txt lists 7 RESID ids: NaN payload, many results, numstr float, two 2^20 exponents, and two tail-call messages. [M] meth.lua: pcall(function() return ('<i2'):pack(70000) end) gives 'bad argument #2 to '?'' on ours and 'bad argument #1 to 'pack'' on PUC 5.3.6; pcall(string.unpack,'<i4','abc') gives '?' on ours and 'string.unpack' on PUC. [M] logs/fuzz-campaign-1.log coerce profile: one MISMATCH class, numbers given to c/s/z ('1e+14' against '100000000000000'). [S] conformance.lua:32-33 rewrites every function name to 'F' before comparing, so the suites never compare names. The [x] row's list leaves out the 2^20 exponents and the tail-call naming and argument shift.",
+      "failure_scenario": "A reader of the README, or of the commit, believes a program sees identical error texts and identical pack output for numbers given to string options. It does not, for example string.pack('z', 1e14), or a tail-called method whose error reports #2 instead of #1.",
+      "suggested_fix": "Add one README sentence: 'What the VM decides stays LuaJIT's: NaN payloads, at most 8000 results per call, numbers given to c/s/z formatted by LuaJIT, decimal exponents of 2^20 or more, and function names and method argument numbers in error messages (test/native/pack/deviations.txt, RESID).' Complete the roadmap row's list. Make the commit message say 'with two decided deviations and the VM's own residuals (deviations.txt RESID)'. Drop the causal 'which makes' for D2."
+     },
+     {
+      "id": "docs-3",
+      "severity": "low",
+      "file": "README.md",
+      "line": "13 (target)",
+      "claim": "The smoke-suite row says the harness establishes that 'string.pack is in the sandbox and behaves as Lua 5.3.6's'. d4 actually asserts the two deliberate deviations: I8 2^63-1 rounds to 2^63, and 'l' is 8 bytes. PUC 5.3.6 itself would fail d4.",
+      "evidence": "[M] The probe Lua, extracted from target OcljSmoke.scala:3787-3803, is byte-identical to synth/d4/probe.lua. It prints ok/feffffff/-2/5/true/true/l8/short on the round-2 luajit.exe, absent on round 1's, and ok/feffffff/-2/5/true/false/l4/short on bench/vendor/lua-5.3.6/src/lua.exe. pkWant (OcljSmoke.scala:5741) is the first string.",
+      "failure_scenario": "A reader takes d4 as a 5.3.6 conformance check. It is a smoke check of our port with its two deviations, and real 5.3.6 behaviour would fail it.",
+      "suggested_fix": "Reword to: '`string.pack` is in the sandbox and behaves as our Lua 5.3.6 port, with its two decided deviations'."
+     },
+     {
+      "id": "docs-4",
+      "severity": "low",
+      "file": "docs/roadmap.md",
+      "line": "207 (new [x] row, Tests)",
+      "claim": "The row says '0 mismatches in 1,000,000 random cases over 10 seeds on 2026-10-17' and names its evidence as bench/runs/2026-10-17-strpack/. That 1M run exists only in synth scratch. Section 9.3 tells the main session to run a different campaign into the evidence directory: seeds 1000-1049 x 100 000, which is 5,000,000 cases. The figure will not match the evidence it cites. README.md:13 likewise states '81 checks, 0 failures (2026-10-17, JIT on)' as a measurement before any harness run.",
+      "evidence": "[M] synth/logs/fuzz-campaign-1.log: 'seeds 101..110 x 100000 cases', ten seeds with 'MISMATCH 0', PACKFUZZ PASS, results under synth/repo/build/native. design.md section 9.3 campaign: OCLJ_PACKFUZZ_SEED=1000 OCLJ_PACKFUZZ_SEEDS=50 OCLJ_PACKFUZZ_CASES=100000. design.md header: 'Not run anywhere yet: the harness'. The predicted counts themselves are consistent: round 1 measured 80/67/78/74/51/80/80 (bench/runs/2026-10-16-noffi/logs/suite/*/run.log), and d4 adds one unconditional milestone().",
+      "failure_scenario": "The commit lands with a roadmap figure that no file in the named evidence directory shows, or with a README count that was predicted rather than measured if the 9.3 fix-up step is skipped.",
+      "suggested_fix": "Either copy fuzz-campaign-1.log into bench/runs/2026-10-17-strpack/ and cite it, or replace the figure with the main session's 50-seed result. Treat README.md:13's '81' as a value to confirm, as 9.3 says."
+     },
+     {
+      "id": "docs-5",
+      "severity": "low",
+      "file": "docs/research/wd-blind-spots.md",
+      "line": "47 (target 1g pack bullet); docs/roadmap.md:205; design.md section 11",
+      "claim": "Three places say the output is 'one exact-size block the RAM cap charges first' or 'before anything is written': the commit message, roadmap 205, and wd 1g ('a userdata through g->allocf'). For results of 512 bytes or less the block is a C stack array, which the cap never charges. Only the final lua_pushlstring is charged.",
+      "evidence": "[S] oclj_strpack.c:113-114 (PK_STACKBUF 512) and :614 'o.b = o.cap <= sizeof(sbuf) ? sbuf : lua_newuserdata(...)'. The file's own header (:55-57) states it correctly.",
+      "failure_scenario": "No memory-safety consequence: 512 bytes is fixed. The doc and commit statement is simply untrue for every small pack call.",
+      "suggested_fix": "Add 'above 512 bytes' (or 'results over 512 bytes are built in...') in 1g, roadmap 205 and the commit message."
+     },
+     {
+      "id": "docs-6",
+      "severity": "low",
+      "file": "docs/roadmap.md",
+      "line": "146, 148, 205 (existing cites left stale by this round)",
+      "claim": "This round's factory comment moves openLibs. The roadmap still cites `LuaJITStateFactory.java:98-107` (rows 148, 205) and `LuaJITStateFactory.java:100` (row 146, BIT32). In the target those are :111-120 and :113. Row 205's 2026-10-17 status carefully updates the lib_string.c cite this round moved (:685-686 to :707-708) but not these.",
+      "evidence": "[S] target LuaJITStateFactory.java:111 'public void openLibs', :113 BIT32. Working tree :98 and :100. grep of target roadmap: ':98-107' x2 and ':100' x1. The :685-686 to :707-708 shift was confirmed on the pristine and build-copy lib_string.c.",
+      "failure_scenario": "A reader following row 205's 'openLibs opens no FFI and no PACKAGE library (LuaJITStateFactory.java:98-107)' lands in the middle of the new comment.",
+      "suggested_fix": "Add to the 2026-10-17 status of rows 146 and 205: 'The LuaJITStateFactory.java:98-107 / :100 above are now :111-120 / :113.'"
+     },
+     {
+      "id": "docs-7",
+      "severity": "low",
+      "file": "src/main/java/io/github/astronfo/ocluajit/arch/LuaJITStateFactory.java",
+      "line": "105-108 (target)",
+      "claim": "The comment says 'a program that tests for a 5.3 FUNCTION finds it'. That is false as a general statement: math.type, math.tointeger, math.maxinteger and every utf8 function are absent.",
+      "evidence": "[M] On the round-2 luajit.exe, `print(utf8, math.type, math.tointeger, math.maxinteger)` prints nil nil nil nil. Roadmap row 146's own new status lists them as 'Still absent'.",
+      "failure_scenario": "A maintainer reads the comment as a general guarantee of 5.3 function presence.",
+      "suggested_fix": "Change to 'a program that tests for string.pack (or table.move, coroutine.isyieldable) finds it'."
+     },
+     {
+      "id": "docs-8",
+      "severity": "low",
+      "file": "C:/Users/astro/claude-tmp/oclj/r2/synth/design.md",
+      "line": "section 6 last paragraph; D10",
+      "claim": "Two contract statements contradict the evidence and the contract's own tables, and would be wrong if copied into the bench README. (a) Section 6 says conf-extra has '6 DEV1 and 5 DEV2 ids and 9 RESID ids'; deviations.txt has 8 DEV1 and 7 RESID (the total of 20 is right, and the contract's own list in parentheses names 7). (b) D10 says conf-extra 'is the only suite that catches every sabotage alone'; it misses DOUBLEBUF, which only PT3 catches.",
+      "evidence": "[M] grep -c on target deviations.txt: 8 'conf-extra|any|DEV1' and 7 'conf-extra|any|RESID'. [M] final-20261017-011016/negctl-pack.log: 'DOUBLEBUF 1 0 PASS (caught by PT3)'. The section 6 table itself says '23 of 24 arms (all but DOUBLEBUF)'.",
+      "failure_scenario": "The main session writes the round's bench README from section 6 and D10 and records wrong counts and a false coverage claim.",
+      "suggested_fix": "Change to '8 DEV1, 5 DEV2, 7 RESID', and in D10 say 'catches 23 of 24 alone (DOUBLEBUF needs PT3)'."
+     },
+     {
+      "id": "docs-9",
+      "severity": "low",
+      "file": "docs/roadmap.md",
+      "line": "146 (status 2026-10-17, tonumber paragraph)",
+      "claim": "'so the same program gives different results on Windows and Linux servers' sits right after '(measured 2026-10-17)', but the Linux half was not measured. Nothing ran on Linux this round; the claim is inferred from the source.",
+      "evidence": "[M] Windows: tonumber('0123456789abcdef',16) gives 4294967295 on ours and 81985529216486895 on PUC 5.3.6. [S] lib_base.c:301-307 uses strtoul with unsigned long. design.md section 0: 'Not run anywhere yet: ... anything on Linux'.",
+      "failure_scenario": "A reader cites the Windows/Linux divergence as measured.",
+      "suggested_fix": "Change to '... (Windows measured 2026-10-17; on Linux, where unsigned long is 64 bits, the source reads the full value: inferred, not run)'."
+     }
+    ],
+    "clean_areas": [
+     "d4 probe, measured and read. The Lua extracted from target OcljSmoke.scala:3787-3803 is byte-identical to synth/d4/probe.lua. It prints ok/feffffff/-2/5/true/true/l8/short on synth/repo luajit.exe, absent on r1ff luajit.exe, and ok/.../true/false/l4/short on PUC 5.3.6. The probe sits in the autorun that OpenOS runs through shell.execute, so `string` is machine.lua's sandbox table (build/native/kernel/machine.lua:930-949; ocelot-brain stock kernel :901). Its first statement tests sandbox string.pack, and unpack/packsize are also called through the sandbox table, so a sandbox missing any of the three paints absent or error/..., never a pass. ('<i4'):pack reaches the host table through the string metatable, which machine.lua does not alter. The probe stores no C function in a persisted upvalue. Row 16 at about 105 characters fits the Tier-3 160-column screen; parse() stops at a space.",
+     "Per-arm d4 expectations are right, and d4 sits on d3's unconditional path (milestone() always counts). additive JIT on: paints ok/... and passes, 81. dropin: ok/... (OC's 5.2 factory opens STRING through jnlua's requiref and does not touch string), 68. additive JIT off: ok/..., 79. sieve (additive, only=sieve; it ran d3 in round 1): ok/..., 75. stock (PUC 5.2.4 + Eris, OC's kernel copies nil): absent, which pkWant expects, 52. disposeoff: ok/..., 81. bundleoff: ok/... and d4 passes, 81 with its 3 expected failures. All are +1 over round 1's measured 80/67/78/74/51/80/80. Fail-first on round 1's natives: the additive and dropin arms paint absent and fail; stock passes. The probe mirrors round 1's d3 construction.",
+     "README.md:13 '81' agrees with design section 9.3's prediction for additive JIT on (unmeasured; see docs-4).",
+     "NOTICE: LuaJIT 'Used in' correctly names oclj_features.h and all five changed files: lj_func.c, lj_err.c, lj_ffrecord.c, lj_arch.h, lib_string.c (build-native.sh copy and patch steps). The Lua 5.3.6 notice (1994-2020) is present and byte-identical to bench/vendor/lua-5.3.6/src/lua.h's closing block. The attribution to lstrlib.c, lauxlib.c, lobject.c and lvm.c matches oclj_strpack.c's cites. The source file header points to NOTICE.",
+     "OcljArch.scala and LuaJITStateFactory.java comments: the openLibs lists are equal to each other and to ocelot-brain's 5.2 factory (LuaStateFactory.scala:52-61). machine.lua guards `utf8 = utf8 and {` (:1078) and bit32 (:1010). table.move and coroutine.isyieldable exist (measured) and are copied (:927, :959). The target harness compiles (synth/logs/scalac-target.log: javac rc=0, scalac rc=0, 0 errors).",
+     "Roadmap hunks are append-only on rows 122, 146, 196 and 205, plus the new [x] row 207 under v1 (checked by prefix). Measured or verified: the lib_string.c :685-686 to :707-708 shift (pristine 690 lines, build copy 712); the 135 to 138 permanents and the 3-run cross-build matrix (logs/xbuild-matrix.out); the packword arm (ser-negctl.log); 24 sabotages each caught (negctl-pack.log); 308 + 409 cases and the 4/20 provenance lines (run-pack.log); the Plan9k cites 17_gpt.lua:12, 10_procfs.lua:110, msdosfs.lua:23 and 01_util.lua:66-71; _VERSION at machine.lua:857; utf8, math.type, math.tointeger, math.maxinteger and // absent on luajit.exe; tonumber 4294967295 on ours against 81985529216486895 on PUC; lj52shim.h:94 lua_Unsigned is unsigned int.",
+     "wd-blind-spots 1g memory bound holds: the 2x peak (PT3 +2.0001 MiB), the LUA_ERRMEM refusal before writing (PT4/PT5), and the LJ_MAX_STR refusal (oclj_strpack.c:608). The unpack and packsize time bounds hold by reading: the format walk is bounded by fe, reads by the 5.3.6 check (:700-702) or the rewritten s check (:741-745), z uses memchr bounded by ld, and results are capped by luaL_checkstack. 'No hook fires inside' is correct. Only pack's time bound fails (docs-1).",
+     "Commit message (design section 11), checked against the final chain logs: five LuaJIT patches; the gate lines (FFDEF x3, -Wall -Wextra = 0, the string.pack gate, 'luajit.exe agrees ... pack1'); the fingerprint string; 'every crossing refused at the header' (matrix A->B, B->A); hash 85097158 to baf083da; fingerprint.lua 18; negctl-pack 24 plus unregistered. The exceptions are the RESID and block wording in docs-2 and docs-5. The gradle claim rests on the Python emulation and is not compiled; design.md flags this as [I].",
+     "Scratch repo synth/repo matches every target file in this dimension byte for byte, and the manifest md5s match. The one hunk the contract does not describe is wd-blind-spots.md's final line, which loses a stray CR: harmless."
+    ]
+   },
+   "verdicts": [
+    {
+     "id": "docs-1",
+     "verdict": "confirmed",
+     "reasoning": "The source leaves no doubt and I reproduced the timing. pk_walk runs twice, at oclj_strpack.c:615 (pass 1) and :624 (pass 2). Each integer option calls pk_checkint, which calls pk_tonum. For a string argument, pk_str2int's leading-whitespace loop and trailing loop cover the whole string. A float string also goes through pk_str2d's scan and then lua_tonumberx. So CPU time is O(k x L) while memory and output stay O(k + L). wd-blind-spots 1g (target :45-49) says 'Runtime <= O(format + output) <= O(mem cap)', 'none needed beyond the cap' and 'Same class as 1b and 1d'. Roadmap 205 says 'bounded by the RAM cap like string.rep'. For time, both are false. With k capped near 8000 by the C stack, one could argue O(8000 x cap) is still technically O(cap), but the bound the doc actually writes, O(format + output), is false. The class is not unique to pack: string.format('%d') shows it too (1.76 s), and so does any LuaJIT C function that converts a numeric string. PUC 5.3.6 has it as well, in one pass. Ours is about 5x slower than PUC here.",
+     "evidence": "[M] In review/verify-docs/, argscan.lua (copied from review/docs/) on synth/repo luajit.exe gave: L=0 k=7999: pack 0.000 s. L=1e6 k=1: 0.000 s. L=1e6 k=1000: pack 0.806 s, format 0.157 s, 3.0 MB. k=2000: pack 1.611 s. k=7999: pack 7.067 s, format 1.764 s, memMB=3.2, out=7999. PUC 5.3.6 at k=1000: pack 0.155 s. [S] oclj_strpack.c:204-228 (pk_str2int loops), :245-254 (pk_str2d), :262-275 (pk_tonum), :512/:523 (pk_checkint in the int and uint cases), :615 and :624 (the two pk_walk calls). Target wd-blind-spots.md:45 and :49. Target roadmap.md:205 says 'bounded by the RAM cap like `string.rep`'.",
+     "fix_ok": true,
+     "better_fix": "Do the doc fix as proposed, but classify it as a VM-wide residual rather than something specific to pack. Any C function that converts a long numeric string argument (string.format %d/%f, math.max/min, string.char, pack) costs O(sum of argument string lengths) per call, with k up to about 8000 through table.unpack. pack reads each such string in both passes, up to three scans per pass for a float numeral. Name the hard abort as the backstop in 1c and 1g, and drop 'like string.rep' from roadmap 205. The optional convert-once-in-pass-1 change only halves the constant. It needs a k-sized scratch array, and it must keep 5.3.6's error order, which pass 1 already fixes."
+    },
+    {
+     "id": "docs-2",
+     "verdict": "confirmed",
+     "reasoning": "The README target :24 says pack has 'the same results and the same errors' and then gives exactly two differences. The commit message (design.md:343-345) explicitly names 'text, argument number, order'. Measured on both VMs: a tail-called method reports a different argument number and function name, and pcall(string.unpack, ...) names '?' instead of 'string.unpack'. An integer-valued number given to 'z' formats differently. The README has no mention of NaN, 8000, or residuals, yet design.md D7 (:105) says the residuals are documented in the README. Roadmap row 207 lists only three classes and leaves out the 2^20 exponents and the tail-call name and argument shift (deviations.txt lists 7 RESID ids). 'Every number is still a double, which makes two deliberate differences' wrongly gives doubles as the cause of D2 ('l'=8). One flaw in the finding: its example string.pack('z', 1e14) is identical on both VMs, because 1e14 is a float in 5.3.6 too. The real case is an integer-valued argument such as 100000000000000.",
+     "evidence": "[M] meth.lua and m2.lua in review/verify-docs/. Ours: 'bad argument #2 to '?' (integer overflow)' for pcall(function() return ('<i2'):pack(70000) end). PUC: 'meth.lua:3: bad argument #1 to 'pack' (integer overflow)'. pcall(string.unpack,'<i4','abc'): ours 'bad argument #2 to '?'', PUC 'bad argument #2 to 'string.unpack''. string.pack('z',100000000000000): ours '1e+14', PUC '100000000000000'. string.pack('z',1e14): '1e+14' on BOTH. [S] grep -i 'nan|8000|residual|RESID' on target README.md: no match. Target deviations.txt holds 7 conf-extra RESID lines. Target roadmap.md:207: 'What the VM decides stays: NaN payloads ..., 8000 stack slots, numbers given to c/s/z' (3 classes). design.md:105 (D7) says 'documented (deviations.txt RESID, README, roadmap)'.",
+     "fix_ok": true,
+     "better_fix": "Use the proposed README sentence, but give the number-formatting example as an integer-valued argument (string.pack('z', 100000000000000) gives '1e+14' here and '100000000000000' in 5.3.6), not 1e14. Say that names and method argument numbers in error messages are LuaJIT's for every library function, not only pack. Complete roadmap 207's list (the 2^20 exponents, the tail-call name and argument shift). Qualify the commit message's 'text, argument number, order' with 'apart from the VM residuals in deviations.txt RESID'. Reword the D2 cause, for example: 'Every number is still a double, so an unpacked integer beyond 2^53 is the nearest double; and l/L are 8 bytes on every platform'."
+    },
+    {
+     "id": "docs-3",
+     "verdict": "confirmed",
+     "reasoning": "The probe Lua in target OcljSmoke.scala:3787-3803 asserts big == 2^63 (D1 rounding) and packsize('l') == 8 (D2). pkWant (:5741) is 'ok/feffffff/-2/5/true/true/l8/short'. PUC 5.3.6 gives true/false/l4, so real 5.3.6 behaviour would fail d4. On Linux PUC, 'l' is 8 but the big == 2^63 check still fails, because 5.3.6 returns the integer 2^63-1. The harness's own failure text (:5749) already says 'Lua 5.3.6's with the two decided deviations'. The README row (target :13) leaves that qualifier out.",
+     "evidence": "[M] synth/d4/probe.lua copied to review/verify-docs/. Round-2 luajit.exe: ok/feffffff/-2/5/true/true/l8/short. bench/vendor/lua-5.3.6/src/lua.exe: ok/feffffff/-2/5/true/false/l4/short. Round 1's synth/r1ff luajit.exe: absent. [S] target OcljSmoke.scala:5741 pkWant, :5749 failure text, target README.md:13.",
+     "fix_ok": true,
+     "better_fix": ""
+    },
+    {
+     "id": "docs-4",
+     "verdict": "confirmed",
+     "reasoning": "Roadmap row 207 cites '0 mismatches in 1,000,000 random cases over 10 seeds on 2026-10-17' and 'Evidence: bench/runs/2026-10-17-strpack/'. That run is synth/logs/fuzz-campaign-1.log, seeds 101..110 x 100000, with results under synth/repo/build/native. design.md section 9 tells the main session to record its own runs in the evidence directory, and its 9.3 campaign is seeds 1000-1049 x 100000, which is 5,000,000 cases. Nothing in section 9 copies the synth log or updates the roadmap figure. So the figure will not appear in the directory the row cites. The README '81 checks' half is NOT a new defect: 9.3 (design.md:308) already says to fix README.md:13 to the measured figure.",
+     "evidence": "[M] synth/logs/fuzz-campaign-1.log line 2: 'seeds 101..110 x 100000 cases; results .../synth/repo/build/native/packfuzz-20261016T220032Z', ten 'MISMATCH 0' seed lines, 'PACKFUZZ PASS'. [S] design.md:259 (record everything in bench/runs/2026-10-17-strpack/), :292 (OCLJ_PACKFUZZ_SEED=1000 SEEDS=50 CASES=100000), :308 (fix README:13 if it differs). Target roadmap.md:207.",
+     "fix_ok": true,
+     "better_fix": "Limit this to the roadmap row. Either copy synth/logs/fuzz-campaign-1.log into bench/runs/2026-10-17-strpack/logs/ and cite it, or have 9.3 replace the figure with the 50-seed campaign's count (5,000,000 cases over 50 seeds). The README '81' needs no change beyond what 9.3 already says."
+    },
+    {
+     "id": "docs-5",
+     "verdict": "confirmed",
+     "reasoning": "pack builds results of 512 bytes or less in a C stack array (oclj_strpack.c:114 PK_STACKBUF 512, :598 char sbuf[PK_STACKBUF], :614 'o.b = o.cap <= sizeof(sbuf) ? sbuf : lua_newuserdata(...)'). For those results the RAM cap charges no block before writing; only the final lua_pushlstring is charged. wd 1g (target :45: 'a userdata through g->allocf, so the cap charges it ... before any byte is written'), roadmap 205 and 207 ('one exact-size block the cap charges before anything is written') and the commit message (design.md:342) state it with no size qualifier. The file's own header (:55-57) states it correctly. No safety consequence. Minor: the wd line is :45, not :47.",
+     "evidence": "[S] target oclj_strpack.c:55-57, :114, :598, :614. Target wd-blind-spots.md:45. Target roadmap.md:205 and :207. design.md:342.",
+     "fix_ok": true,
+     "better_fix": "Add 'above 512 bytes' (or 'results over 512 bytes are built in a userdata ...') in wd 1g, roadmap 205 and 207, and the commit message."
+    },
+    {
+     "id": "docs-6",
+     "verdict": "confirmed",
+     "reasoning": "The target factory inserts comment lines above openLibs. openLibs moves from working-tree :98 to target :111, and BIT32 from :100 to :113. The target roadmap still cites LuaJITStateFactory.java:98-107 (rows 148 and 205) and :100 (row 146). In the target, those lines are inside the new comment. Row 205's 2026-10-17 status updates the lib_string.c cite but not these. The cites at :48 and :44-46 (rows 62 and 225) are above the changed hunk and are unaffected. Row 146's :91-95 cites refer to the old 'fourth dialect' text, and its 10-17 status already says the comment changed.",
+     "evidence": "[S] diff of the working-tree vs target LuaJITStateFactory.java: hunks 89c89,90 and 91,95c92,108 (+14 lines). Target :111 'public void openLibs', :113 BIT32. Working tree :98 and :100. grep -o on target roadmap.md: :148 and :205 'LuaJITStateFactory.java:98-107', :146 'LuaJITStateFactory.java:100'.",
+     "fix_ok": true,
+     "better_fix": ""
+    },
+    {
+     "id": "docs-7",
+     "verdict": "confirmed",
+     "reasoning": "The target factory comment (:107-108) says 'a program that tests for a 5.3 FUNCTION finds it'. The same comment already excludes utf8. But math.type, math.tointeger and math.ult are 5.3 functions that OC's own kernel copies into the sandbox's math table (machine.lua:1004-1006), and on this VM they are nil. A program probing them does not find them. Roadmap 146's new status lists them as 'Still absent'.",
+     "evidence": "[M] Round-2 luajit.exe: print(utf8, math.type, math.tointeger, math.maxinteger, math.ult, table.move, coroutine.isyieldable, string.pack) prints nil nil nil nil nil function builtin#33 builtin#91. [S] build/native/kernel/machine.lua:1004-1006 (tointeger = math.tointeger, type = math.type, ult = math.ult). Target LuaJITStateFactory.java:107-108.",
+     "fix_ok": true,
+     "better_fix": "'a program that tests for string.pack (or table.move, coroutine.isyieldable) finds it; one that tests for math.type, math.tointeger or utf8 does not, and one that tests _VERSION finds 5.2.'"
+    },
+    {
+     "id": "docs-8",
+     "verdict": "confirmed",
+     "reasoning": "(a) design.md:196 says '6 DEV1 and 5 DEV2 ... and 9 RESID'. The target deviations.txt has 8 DEV1, 5 DEV2 and 7 RESID. The contract's own parenthesis names 7 RESID cases. (b) D10 (design.md:108) says conf-extra 'is the only suite that catches every sabotage alone'. design.md's section 6 table and the final negctl log show DOUBLEBUF caught only by PT3. The finding understates the problem: the false claim is not only in the contract. It is shipped in a repo TARGET, test/native/pack/conf-extra.lua:10-11: 'This is the suite that catches every sabotage in test/native/negctl-pack.sh on its own (2026-10-17).'",
+     "evidence": "[M] grep -c '^conf-extra|[a-z]*|DEV1' = 8, DEV2 = 5, RESID = 7 on target deviations.txt. synth/logs/final-20261017-011016/negctl-pack.log:26 '[negctl-pack] DOUBLEBUF: run-pack 1, packfuzz 0 -- PASS (caught by PT3)'. [S] design.md:184, :108, :196. Target conf-extra.lua:10-11.",
+     "fix_ok": true,
+     "better_fix": "Also correct the shipped target test/native/pack/conf-extra.lua:10-11, for example: 'This suite alone catches 23 of the 24 sabotages in test/native/negctl-pack.sh; DOUBLEBUF, a memory-only sabotage, is caught by pack_test.c PT3.' A comment-only edit does not change conf-extra.expect. In design.md, write '8 DEV1, 5 DEV2, 7 RESID', and in D10 'catches 23 of 24 alone (DOUBLEBUF needs PT3)'."
+    },
+    {
+     "id": "docs-9",
+     "verdict": "refuted",
+     "reasoning": "The sentence is true, and the 'measured' tag scopes to what was measured. '(measured 2026-10-17)' directly follows the Windows comparison with PUC 5.3.6, which was measured. The Windows/Linux divergence follows with 'so', as a consequence, and the source settles it. Pristine lib_base.c declares 'unsigned long ul' and calls strtoul. unsigned long is 32 bits on Win64 (saturates at 4294967295) and 64 bits on LP64 Linux (reads the full value, then rounds to the double 8.1985529216487e+16). Either way the two servers give different results. Nothing false is stated, and the scope of the measurement tag is a wording preference, not a defect the evidence contradicts.",
+     "evidence": "[S] prototype/watchdog/luajit/src/lib_base.c:301 'unsigned long ul;' and :307 'ul = strtoul(p, &ep, base);'. [M] Round-2 Windows result as quoted in target roadmap.md:146. No Linux run exists (design.md:9), which the sentence does not claim.",
+     "fix_ok": true,
+     "better_fix": "Optional clarity only: '(Windows measured 2026-10-17; Linux follows from the source, where unsigned long is 64 bits)'."
+    }
+   ]
+  }
+ ],
+ "critic": {
+  "findings": [
+   {
+    "id": "C1",
+    "severity": "medium",
+    "file": "C:/Users/astro/claude-tmp/oclj/r2/synth/design.md (F13, \u00a712); target README.md / docs/roadmap.md",
+    "line": "design.md:89 (F13), :375-386 (\u00a712)",
+    "claim": "The consumers investigator measured user-visible behaviour changes that shipping pack causes on our arch. The contract, the README and roadmap targets, and the designer's summary to the user all leave them out. The main one is a Plan9k regression. Today Plan9k's msdosfs uses its bit32 fallback on our VM, because string.pack is nil. Once pack exists it switches to 5.3's path (msdosfs.lua:23). On that path, mkdir on FAT12 (mount.msdos.lua:22 always mounts FAT12) with an ODD free cluster raises 'unsigned overflow' in setFATEntry12 (msdosfs.lua:158 packs bit32.lshift(0xFFFF,4)+low as '<I2'). That happens AFTER the directory entry is written (:1087/:1095) and the cluster zeroed (:1098-1099), so the image is left with an entry whose cluster is still free in the FAT. The owner's OpenGPU in-game tests also switch paths: mesh3d.lua:111-118, u16 >= 65536 or < 0 now raises instead of wrapping; submittest.lua:103-110, NaN now packs instead of raising. The investigator also found a real bug there: the hand IEEE encoder halves subnormals.",
+    "evidence": "[measured, by the consumers run on the FINAL round-2 luajit.exe] synth/consumers/final.out:40 'msdos.pack.setFAT12-cluster3-0xFFFF | ERR bad argument #2 to 'F' (unsigned overflow)' vs :57 'msdos.fallback...cluster3 | OK 2 s:f0ff'; consumers/out-4/proto-nopack.out:40 (HEAD simulation) OK f0ff; ref536-win64.out:40 shows PUC 5.3.6 raises the same, so this is 5.3.6 behaviour inherited, not a port defect. [read] Plan9k (ocelot-brain loot) msdosfs.lua:23, :141-158, :1087-1100, bin/mount.msdos.lua:22; opengpu-docs/ingame/mesh3d.lua:111-118, submittest.lua:103-130. The investigator's own result (journal, consumers findings [4](2), [5], recommendation [5]) flags these. `grep -i 'msdos|FAT12|OpenGPU|mesh3d|submittest'` over design.md and every target returns nothing about them. F13 reports only '182 pass, 0 fail', which is measured against the 5.3.6 reference, so the change from HEAD to round 2 is invisible there.",
+    "failure_scenario": "The user ships round 2 believing Plan9k only gains (F1/F13: the GPT scan now works). A Plan9k player on an OC-LuaJIT machine mounts a FAT12 image and runs mkdir. It worked before this build; now it errors on every odd free cluster and leaves a directory entry pointing at a cluster the FAT still marks free, so a later allocation can cross-link it. The owner's own OpenGPU tests change behaviour (raise instead of wrap; NaN accepted) without warning.",
+    "suggested_fix": "Add a \u00a712 risk and a roadmap/README line saying that string.pack moves Plan9k's msdosfs (and any feature-detecting program) onto its 5.3 path, which inherits Plan9k's FAT12 mkdir bug (identical on OC's Lua 5.3 arch). Carry the consumers note for the owner into the summary: the OpenGPU path switches and the submittest subnormal bug. Keep the Plan9k harness boot (\u00a79.4) and add a FAT12 mkdir to it."
+   },
+   {
+    "id": "C2",
+    "severity": "low",
+    "file": "C:/Users/astro/claude-tmp/oclj/r2/synth/design.md (D6); target README.md:24",
+    "line": "design.md:104; README.md:24",
+    "claim": "D6 decides two readings of the user's 'unpack ROUNDS integers above 2^53', and says it is 'Flagged for the user in the summary'. The summary flags only the I9..I16-refusal half. The other half is not flagged: unsigned 8-byte fields (I8, J, L, T) wrap to a NEGATIVE int64 as 5.3.6's lua_Integer does, so ff x8 is -1 and bit 63 alone gives -2^63. Read literally for an unsigned format, the user's text gives the nearest double of the unsigned value, about 1.8446744073709552e19. The README sentence ('an unpacked integer that needs more than 53 bits comes back as the nearest double instead of exactly') implies that too. The roadmap row 207 wording ('nearest double of 5.3.6's exact 64-bit value') is accurate; the README and the flag are not.",
+    "evidence": "[measured] scratch build luajit.exe: string.unpack('<I8', ('\\255'):rep(8)) = -1; ('<J', 7x00 .. 0x80) = -9.2233720368547758e+18. PUC 5.3.6: -1 and -9223372036854775808 (review/completeness/uns.lua). [read] design.md:104 D6 '(64-bit, wrapping like lua_Integer: J of ff x8 is -1) ... Flagged for the user in the summary'. The designer's final result in the journal (wf_1ec6be12-070, last entry) says only: 'One reading of your decision for you to confirm: an unpacked field wider than 64 bits (I9-I16 that doesn't fit) stays refused'. Consumers finding [9](b): GPT attribute bit 63 unpacks negative.",
+    "failure_scenario": "A player, or the user, reads the README and unpacks an unsigned 64-bit field such as a GPT attribute or a 64-bit counter with '<I8'. They expect a large positive double and get a negative number. The user never saw this reading of decision 3 put to them.",
+    "suggested_fix": "Extend the D6 flag in the summary to the signed-wrap reading. In the README's D1 sentence, add that unsigned 8-byte formats wrap to negative exactly as in 5.3.6 before rounding."
+   },
+   {
+    "id": "C3",
+    "severity": "low",
+    "file": "C:/Users/astro/claude-tmp/oclj/r2/synth/design.md (\u00a79.2-9.3)",
+    "line": "design.md:285, :289-295",
+    "claim": "The main-session plan rebuilds the Linux .so with pack (\u00a79.2), and gradle packages it. But \u00a79.3 requires none of the existing native suites, and not the serializer `make test`, on Linux. Only 'Windows native' suites are listed, and Linux appears only as run-pack.sh's part-2 line counts. Round 1 ran its native suites and the serializer on Linux. This round changes the Linux archive (patched lib_string.c, all later builtins renumbered +3), so the only Linux evidence for the shipped .so would be build-native.sh's own gates.",
+    "evidence": "[read] design.md:289 '**Windows native**, against the build last run'; :290 Linux mentioned only for part 2; :295 serializer, no platform. build.gradle.kts:41-42 nativesDir default build/native/dist, :215 from(nativesDir). [measured] ls build/native/dist: libjnluajit52-linux-x86_64.so (Oct 16 23:26, round 1) next to the DLL, so gradle checks and ships both. Memory note noffi-round1: 'Native suites pass on Windows and Linux ... pass on Linux for the first time'. \u00a712.1: no Linux build, run-pack.sh or fuzz this round.",
+    "failure_scenario": "The main session follows \u00a79: it rebuilds the .so on WSL, sees the build gates pass, runs gradle, and ships a Linux native on which shim, security, mem, vgc, wd, penalty, race, pack_test (cap path) and the serializer were never run against the new archive.",
+    "suggested_fix": "Add to \u00a79.3: on WSL, after the additive .so build, the seven native suites, run-pack.sh (parts 1 and 3 need no PUC), and `make -C serializer test negctl`, with the round-1 counts expected."
+   }
+  ],
+  "clean_areas": [
+   "JIT stitching, measured on the scratch build's luajit.exe (review/completeness/jitprobe.lua). Hot loops of unpack (6 results), ('fmt'):pack/unpack through the metatable, select('#', unpack(...)), {unpack(...)} (TSETM) and pcall(unpack) with errors give identical results with the JIT on and off. Traces really stitch at the new builtins (k1 root:1 stitch:1, k5 root:1 stitch:2); the TSETM/select/pcall shapes end with a return link, and there are 0 aborts. So the build gate's claim (B2) is true, even though the gate itself does not prove it.",
+   "CHECKHOOK path, measured (hookprobe.lua; CHECKHOOK is asserted in effect by build-native.sh:745-761). The same pack/unpack loops with a count hook armed (traces exit on entry), after it is cleared, and with a hook that raises mid-loop (caught by pcall) give identical sums, with JIT on and with -joff. pack is a C function (BC_FUNCC), so no hook fires inside it and the next Lua instruction takes the hook. That is the same class as string.rep and string.find; docs-1 covers the time bound.",
+   "Time inside one C call, read: LuaJIT's decimal scanner caps significant digits at STRSCAN_MAXDIG=800 (lj_strscan.c:63, :191) and every scan is linear. pk_str2int and pk_str2d are linear. So docs-1's O(k x L) is the whole extent and nothing is superlinear.",
+   "Eris and the renumbered builtins, read. eris_lj.c persists C functions only by perms value (:1771, :1829). Its only ffid comparisons are FF_C and FF_next_N, which come before string_format (lib_base.c:77 static-asserts FF_next == FF_next_N, FFDEF(next) is lj_ffdef.h:5, string_pack is :92). Prototypes and bytecode carry no ffids. The shim and the native tests use no FF_ ids. The renumbering therefore touches no persisted state, and the hash bump refuses old blobs anyway.",
+   "OC and jnlua paths that open or copy the string library, read. ocelot-brain LuaStateFactory.scala:361-428 never touches `string` after openLibs. The kernel copies the three (build/native/kernel/machine.lua:946-948), and neither OC's GTNH machine.lua nor ocelot-brain's handles the string metatable (grep). lj52shim.h has no luaopen_string rename (:361-367 declare only requiref/coroutine/bit32/eris). OC's Java and Scala code never names the string global. PersistenceAPI's walk (PersistenceAPI.scala:34-88) names each of the three once; note that its sortWith result is discarded, so the order is lua_next order, but pack has no alias.",
+   "Dropin: the same archive, the same opener, and OC's own walk; nothing variant-specific in the new code.",
+   "Linux portability of the C, read: PK_STACKBUF is a fixed 512, not LUAL_BUFFERSIZE (8192 on glibc), so the C-stack vs userdata split is identical. PK_SZINT and MAXALIGN are 8 on both. -Wextra classes (sign-compare, implicit-fallthrough, type-limits) are not triggered. The patch script's pristine path strips CR in awk before matching, and verifies only on its LF output.",
+   "Coercion of hex floats and boundary decimals, measured (hexf.lua, 14 strings including 0x1p-1075, 2.4703282292062327e-324, 1.7976931348623159e308): byte-identical on PUC 5.3.6 and ours.",
+   "Scratch evidence provenance: diff -rq of the working tree against synth/repo (excluding build/scratch) differs in exactly the 31 targets, so the contract's runs were built from the current tree plus the targets.",
+   "User decisions 1-4 and 6 (memory fork-extension-decisions-2026-10-13) are all delivered: the 5.3 additions, rows 146/205 and the factory comment updated, rounding, l/L=8, and the fingerprint token by the designer's own judgment. Nothing is built beyond the decisions except the designer-closed D3/D4/D5/D13, each consistent with 'everything else matches 5.3.6' or harness-only."
+  ]
+ }
+}

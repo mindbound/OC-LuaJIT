@@ -1,0 +1,21 @@
+serializer hash baf083da
+--- (a) the string.pack gate (strpack.lua) on each luajit.exe
+  R2: PASS  (fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 abort=0)
+  R1: FAIL  (fn=nil/nil/nil)
+--- (b) FFDEF x3 in lj_ffdef.h
+  R2: counts 1 1 1
+  R1: counts 0 0 0
+--- (c) -dM through -I$LJ: OCLJ_LIB_STRPACK 1
+  R2: PASS
+  R1: FAIL
+--- (d) the word check, both directions
+  shipped eris (pack1) + R2 luajit.exe: PASS word 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1' agrees (ffi0 lua52 fr2 le pack1)
+  shipped eris (pack1) + R1 luajit.exe: FAIL word 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1' vs luajit.exe 'ffi0 lua52 fr2 le pack0' (token pack0)
+  eris without the marker (pack0) + R2 luajit.exe: FAIL word 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0' vs luajit.exe 'ffi0 lua52 fr2 le pack1' (token pack1)
+  eris without the marker (pack0) + R1 luajit.exe: PASS word 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack0' agrees (ffi0 lua52 fr2 le pack0)
+--- (e) oclj_strpack.c without the marker
+  rc=1 error: #error "oclj_strpack.c: native/luajit/oclj_features.h does not say OCLJ_LIB_STRPACK 1, so serializer/eris_lj.c would not name this library in the blob fingerprint"
+  against round 1's headers: rc=1 error: #error "oclj_strpack.c: native/luajit/oclj_features.h does not say OCLJ_LIB_STRPACK 1, so serializer/eris_lj.c would not name this library in the blob fingerprint"
+--- (f) the -Wall -Wextra gate can count
+  sabotaged copy: warnings = 1
+  real file: warnings = 0

@@ -1,0 +1,4 @@
+== /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+GLIBC_2.38
+== /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir/libjnlua52-linux-x86_64.so
+GLIBC_2.38

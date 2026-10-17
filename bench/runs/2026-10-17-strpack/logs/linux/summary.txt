@@ -1,0 +1,13 @@
+build-dropin exit=0
+build-additive exit=0
+shim exit=0 SHIM TESTS: PASS
+security exit=0 SECURITY TESTS: PASS
+race exit=2 
+mem exit=0 checks=86 failures=0
+vgc exit=0 checks=47 failures=0
+wd exit=0 checks=35 failures=0
+penalty exit=0 checks=6 failures=0
+run-pack exit=0 RUN-PACK: PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/pack-20261017T002523Z)
+run-packfuzz exit=0 seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0 PACKFUZZ PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/packfuzz-20261017T002524Z) 
+ser-test exit=0 M1 RESULT: ALL 82 TESTS PASS M2 RESULT: ALL 56 TESTS PASS M3 RESULT: ALL 79 TESTS PASS FINGERPRINT RESULT: ALL 18 TESTS PASS STRPACK RESULT: ALL 11 TESTS PASS FOR-IN RESULT: all cases exact across every pad 
+ser-negctl exit=0 NEGCTL-FINGERPRINT: PASS (all three sabotages caught)

@@ -135,23 +135,31 @@ val verifyModAssets by tasks.registering {
         // feature set (native/luajit/oclj_features.h): ffi0, FFI compiled out,
         // and lua52, LUA52COMPAT on.  So the fragment is "<hash>|ffi0.lua52.",
         // and a native built with FFI, or from another serializer, is refused.
+        // Since 2026-10-17 the word's last token names our fork's string.pack
+        // (OCLJ_LIB_STRPACK in oclj_features.h): the word that follows the
+        // fragment must end in ".pack1", so a native whose string library lacks
+        // string.pack/unpack/packsize is refused too.
         if (ours.isNotEmpty() && serC.isFile && serH.isFile) {
             val md = MessageDigest.getInstance("SHA-1")
             md.update(serC.readBytes())
             md.update(serH.readBytes())
             val want = md.digest().joinToString("") { b -> "%02x".format(b) }.take(8) + "|ffi0.lua52."
-            val stale = ours.filter { f -> !String(f.readBytes(), Charsets.ISO_8859_1).contains(want) }
+            val word = Regex(Regex.escape(want) + "[a-z0-9.]*")
+            val stale = ours.filter { f ->
+                word.findAll(String(f.readBytes(), Charsets.ISO_8859_1)).none { m -> m.value.endsWith(".pack1") }
+            }
             if (stale.isNotEmpty()) {
                 throw GradleException(
                     "OC-LuaJIT: " + stale.joinToString { it.name } + " was NOT built from the " +
-                        "serializer in this tree without FFI (expected fingerprint fragment '" + want + "': " +
-                        "the sha1 of serializer/eris_lj.c + eris_lj.h, then the VM-features word's " +
-                        "ffi0.lua52, native/luajit/oclj_features.h). A jar built now would pair this " +
-                        "tree's kernel with a native from a different serializer or LuaJIT feature set. " +
+                        "serializer in this tree without FFI and with string.pack (expected fingerprint " +
+                        "fragment '" + want + "...pack1': the sha1 of serializer/eris_lj.c + eris_lj.h, " +
+                        "then the VM-features word's ffi0.lua52 and its last token pack1, " +
+                        "native/luajit/oclj_features.h). A jar built now would pair this tree's kernel " +
+                        "with a native from a different serializer or LuaJIT feature set. " +
                         "Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh"
                 )
             }
-            logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (" + want + ")")
+            logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (" + want + "...pack1)")
         }
 
         // THE NATIVE MUST BACK THE CLASS IN THIS TREE.  LuaStateLuaJIT declares four

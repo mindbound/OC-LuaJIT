@@ -1,0 +1,17 @@
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|85097158|ffi0.lua52.gc64.fr2.dn0.le.p64
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- the VM-features word
+  FAIL: the word has the documented shape  -- ffi0.lua52.gc64.fr2.dn0.le.p64
+  FAIL: the pack token agrees with this archive's string library  -- nil vs string.pack nil
+-- control: the surgery itself is sound
+-- every token flipped is refused by the fingerprint, nothing restored
+  FAIL: eight tokens  -- 7
+-- a fingerprint WITHOUT the word (the pre-word layout) is refused
+-- the refusal precedes the checksum
+
+FINGERPRINT RESULT: 14 passed, 3 FAILED

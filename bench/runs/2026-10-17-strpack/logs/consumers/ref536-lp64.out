@@ -1,0 +1,187 @@
+# mode=lp64 pack=true
+gpt.head.text-sector | OK s:5468652071756963 s:6b206272 544110447 544763750 8367813887758639219 2340036040240162152 7307182892602847076 7070769489686917408 s:726f776e20666f78206a756d7073206f 2334386829831333238 2038063468 1735353376 1750343726 93
+gpt.head.zero-sector | OK s:0000000000000000 s:00000000 0 0 0 0 0 0 s:00000000000000000000000000000000 0 0 0 0 93
+gpt.head.ff-sector | OK s:ffffffffffffffff s:ffffffff 4294967295 4294967295 -1 -1 -1 -1 s:ffffffffffffffffffffffffffffffff -1 4294967295 4294967295 4294967295 93
+gpt.head.real | OK s:4546492050415254 s:00000100 92 305441741 1 8191 34 8158 s:0123456789abcdeffedcba9876543210 2 4 128 195948557 93
+gpt.head.big-lbas | OK s:4546492050415254 s:00000100 92 305441741 9007199254740993 -9223372036854775808 -1 9223372036854775807 s:0123456789abcdeffedcba9876543210 9007199254740995 4 128 195948557 93
+gpt.head.short-91 | ERR bad argument #2 to 'F' (data string too short)
+gpt.head.nil-read | ERR bad argument #2 to 'F' (string expected, got nil)
+gpt.entry.normal | OK s:af3dc60f838472478e793d69d8477de4 s:00112233445566778899aabbccddeeff 2048 4095 0 s:640061007400610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 129
+gpt.entry.attr-bit63 | OK s:af3dc60f838472478e793d69d8477de4 s:00112233445566778899aabbccddeeff 2048 4095 -9223372036854775808 s:780000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 129
+gpt.entry.attr-msbasic | OK s:af3dc60f838472478e793d69d8477de4 s:00112233445566778899aabbccddeeff 2048 4095 -3458764513820540928 s:780000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 129
+gpt.entry.attr-63-and-0 | OK s:af3dc60f838472478e793d69d8477de4 s:00112233445566778899aabbccddeeff 2048 4095 -9223372036854775807 s:780000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 129
+gpt.entry.attr-bit60 | OK s:af3dc60f838472478e793d69d8477de4 s:00112233445566778899aabbccddeeff 2048 4095 1152921504606846976 s:780000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 129
+gpt.entry.short-80 | ERR bad argument #2 to 'F' (data string too short)
+gpt.entry.empty | OK s:00000000000000000000000000000000 s:00000000000000000000000000000000 0 0 0 s:000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 129
+gpt.scan.text-sector | OK n=0
+gpt.scan.zero-disk | OK n=0
+gpt.scan.real-2-of-4 | OK n=2 ; 00112233-4455-6677-8899-aabbccddeeff sdABp0 off=17408 size=1031168 ; 01234567-89ab-cdef-fedc-ba9876543210 sdABp2 off=1048576 size=3128832
+gpt.scan.attr-high-bits | OK n=2 ; 00112233-4455-6677-8899-aabbccddeeff sdABp0 off=17408 size=1031168 ; 01234567-89ab-cdef-fedc-ba9876543210 sdABp1 off=1048576 size=3128832
+gpt.scan.A-lba-above-2^53 | OK n=1 ; 00112233-4455-6677-8899-aabbccddeeff sdABp0 off=4611686018427388416 size=2096640
+gpt.scan.entrysz-80 | ERR bad argument #2 to 'F' (data string too short)
+gpt.scan.capacity-512 | ERR bad argument #2 to 'F' (string expected, got nil)
+gpt.scan.capacity-600 | ERR bad argument #2 to 'F' (data string too short)
+msdos.pack.s2n.empty | ERR integral size (0) out of limits [1,16]
+msdos.pack.s2n.attrib-1 | OK 16 2
+msdos.pack.s2n.bps-512 | OK 512 3
+msdos.pack.s2n.tnos-2880 | OK 2880 3
+msdos.pack.s2n.three-bytes | OK 197121 4
+msdos.pack.s2n.vsn-deadbeef | OK 3735928559 5
+msdos.pack.s2n.ff4 | OK 4294967295 5
+msdos.pack.n2s.512/2 | OK s:0002
+msdos.pack.n2s.attrib/1 | OK s:10
+msdos.pack.n2s.size/4 | OK s:40e20100
+msdos.pack.n2s.ffff/2 | OK s:ffff
+msdos.pack.n2s.mkdir-odd-0xFFFF0/2 | ERR bad argument #2 to 'F' (unsigned overflow)
+msdos.pack.n2s.256/1 | ERR bad argument #2 to 'F' (unsigned overflow)
+msdos.pack.n2s.neg1/2 | ERR bad argument #2 to 'F' (unsigned overflow)
+msdos.pack.n2s.2^32/4 | ERR bad argument #2 to 'F' (unsigned overflow)
+msdos.pack.setFAT12-cluster2-0xFFFF | OK 2 s:ff0f s:000000ff0f000000
+msdos.pack.setFAT12-cluster3-0xFFFF | ERR bad argument #2 to 'F' (unsigned overflow)
+msdos.fallback.s2n.empty | OK 0
+msdos.fallback.s2n.attrib-1 | OK 16
+msdos.fallback.s2n.bps-512 | OK 512
+msdos.fallback.s2n.tnos-2880 | OK 2880
+msdos.fallback.s2n.three-bytes | OK 197121
+msdos.fallback.s2n.vsn-deadbeef | OK 3735928559
+msdos.fallback.s2n.ff4 | OK 4294967295
+msdos.fallback.n2s.512/2 | OK s:0002
+msdos.fallback.n2s.attrib/1 | OK s:10
+msdos.fallback.n2s.size/4 | OK s:40e20100
+msdos.fallback.n2s.ffff/2 | OK s:ffff
+msdos.fallback.n2s.mkdir-odd-0xFFFF0/2 | OK s:f0ff
+msdos.fallback.n2s.256/1 | OK s:00
+msdos.fallback.n2s.neg1/2 | OK s:ffff
+msdos.fallback.n2s.2^32/4 | OK s:00000000
+msdos.fallback.setFAT12-cluster2-0xFFFF | OK 2 s:ff0f s:000000ff0f000000
+msdos.fallback.setFAT12-cluster3-0xFFFF | OK 2 s:f0ff s:00000000f0ff0000
+msdos.pack.n2s.non-integral | ERR bad argument #2 to 'F' (number has no integer representation)
+ssh.pack.Bc16 | OK s:0269696969696969696969696969696969
+ssh.pack.Bc16-short-pads | OK s:0273686f72740000000000000000000000
+ssh.pack.Bc16-long | ERR bad argument #3 to 'F' (string longer than given size)
+ssh.pack.B-authok | OK s:01
+ssh.pack.B-256 | ERR bad argument #2 to 'F' (unsigned overflow)
+ssh.pack.B-neg | ERR bad argument #2 to 'F' (unsigned overflow)
+ssh.pack.B-float-int | OK s:03
+ssh.pack.B-float-frac | ERR bad argument #2 to 'F' (number has no integer representation)
+ssh.pack.Bc16c16 | OK s:036868686868686868686868686868686869696969696969696969696969696969
+ssh.pack.Bc32 | OK s:034848484848484848484848484848484848484848484848484848484848484848
+passwd.pack.c16c32 | OK s:686868686868686868686868686868684848484848484848484848484848484848484848484848484848484848484848
+sshsession.unpack.c16c32 | OK s:68686868686868686868686868686868 s:4848484848484848484848484848484848484848484848484848484848484848 49
+sshsession.unpack.c16c32-short | ERR bad argument #2 to 'F' (data string too short)
+ssh.unpack.c16c16 | OK s:68686868686868686868686868686868 s:69696969696969696969696969696969 33
+ssh.unpack.c16-iv-rest | OK s:69696969696969696969696969696969 17
+ssh.unpack.B-tag | OK 4 2
+ssh.unpack.B-empty | ERR bad argument #2 to 'F' (data string too short)
+dmesg.H | OK 5 258 3 5
+dmesg.R | OK 7 s:64657374 9 9
+dmesg.R-len-past-end | ERR bad argument #2 to 'F' (data string too short)
+dmesg.R-no-H | ERR bad argument #2 to 'F' (data string too short)
+dmesg.D | OK 9 2
+dmesg.D-empty | ERR bad argument #2 to 'F' (data string too short)
+dmesg.E | OK 1 s:6162 s:78797a 9
+dmesg.E-truncated | ERR bad argument #2 to 'F' (data string too short)
+dmesg.unknown-concat | OK s:28393029
+LONG.util.uuidBin-small | OK s:000000000000000000000000ffffffff
+LONG.util.uuidBin-2^32 | OK s:00000001000000000000000000000001
+LONG.util.uuidBin-2^53 | OK s:0020000000000000001fffffffffffff
+LONG.util.uuidBin-neg1 | OK s:ffffffffffffffff0000000000000000
+LONG.util.uuidBin-2^63-float | ERR bad argument #2 to 'F' (number has no integer representation)
+LONG.util.uuidBin-1.5 | ERR bad argument #2 to 'F' (number has no integer representation)
+LONG.size.l | OK 8
+LONG.size.L | OK 8
+LONG.size.!lL | OK 32
+LONG.unpack.<l-ff | OK -1 9
+LONG.unpack.<L-2^53+1 | OK 9007199254740993 9
+util.tonumber-hex16 | OK -1 1311768467463790320 4294967295
+util.binUUID-real | OK s:61663364633630662d383338342d373234372d386537392d336436396438343737646534
+LONG.util.uuidBin-real | OK s:0fc63daf848347728e793d69d8477de4
+procfs.microcode | OK s:30783533
+opengpu.submittest.pack.0 | OK s:0000000000000000
+opengpu.submittest.pack.-0 | OK s:8000000000000000
+opengpu.submittest.pack.1 | OK s:3ff0000000000000
+opengpu.submittest.pack.-1.5 | OK s:bff8000000000000
+opengpu.submittest.pack.0.1 | OK s:3fb999999999999a
+opengpu.submittest.pack.third | OK s:3fd5555555555555
+opengpu.submittest.pack.1e308 | OK s:7fe1ccf385ebc8a0
+opengpu.submittest.pack.dblmax | OK s:7fefffffffffffff
+opengpu.submittest.pack.minnormal | OK s:0010000000000000
+opengpu.submittest.pack.maxsubnormal | OK s:000fffffffffffff
+opengpu.submittest.pack.minsubnormal | OK s:0000000000000001
+opengpu.submittest.pack.1e-310 | OK s:000012688b70e62b
+opengpu.submittest.pack.inf | OK s:7ff0000000000000
+opengpu.submittest.pack.-inf | OK s:fff0000000000000
+opengpu.submittest.pack.nan | OK s:fff8000000000000
+opengpu.submittest.hand.0 | OK s:0000000000000000
+opengpu.submittest.hand.-0 | OK s:8000000000000000
+opengpu.submittest.hand.1 | OK s:3ff0000000000000
+opengpu.submittest.hand.-1.5 | OK s:bff8000000000000
+opengpu.submittest.hand.0.1 | OK s:3fb999999999999a
+opengpu.submittest.hand.third | OK s:3fd5555555555555
+opengpu.submittest.hand.1e308 | OK s:7fe1ccf385ebc8a0
+opengpu.submittest.hand.dblmax | OK s:7fefffffffffffff
+opengpu.submittest.hand.minnormal | OK s:0010000000000000
+opengpu.submittest.hand.maxsubnormal | OK s:0008000000000000
+opengpu.submittest.hand.minsubnormal | OK s:0000000000000001
+opengpu.submittest.hand.1e-310 | OK s:0000093445b87316
+opengpu.submittest.hand.inf | OK s:7ff0000000000000
+opengpu.submittest.hand.-inf | OK s:fff0000000000000
+opengpu.submittest.hand.nan | ERR NaN is not submittable
+opengpu.mesh3d.pack.u16.0 | OK s:0000
+opengpu.mesh3d.pack.u16.1 | OK s:0100
+opengpu.mesh3d.pack.u16.65535 | OK s:ffff
+opengpu.mesh3d.pack.u16.65536 | ERR bad argument #2 to 'F' (unsigned overflow)
+opengpu.mesh3d.pack.u16.-1 | ERR bad argument #2 to 'F' (unsigned overflow)
+opengpu.mesh3d.pack.u16.70000 | ERR bad argument #2 to 'F' (unsigned overflow)
+opengpu.mesh3d.pack.u16.1.5 | ERR bad argument #2 to 'F' (number has no integer representation)
+opengpu.mesh3d.pack.f32.0.10000000000000001 | OK s:cdcccc3d
+opengpu.mesh3d.pack.f32.-0 | OK s:00000080
+opengpu.mesh3d.pack.f32.9.9999999999999994e+38 | OK s:0000807f
+opengpu.mesh3d.pack.f32.-9.9999999999999994e+38 | OK s:000080ff
+opengpu.mesh3d.pack.f32.1e-46 | OK s:00000000
+opengpu.mesh3d.pack.f32.3.4028234663852886e+38 | OK s:ffff7f7f
+opengpu.mesh3d.pack.f32.16777217 | OK s:0000804b
+opengpu.mesh3d.hand.u16.0 | OK s:0000
+opengpu.mesh3d.hand.u16.1 | OK s:0100
+opengpu.mesh3d.hand.u16.65535 | OK s:ffff
+opengpu.mesh3d.hand.u16.65536 | OK s:0000
+opengpu.mesh3d.hand.u16.-1 | OK s:ffff
+opengpu.mesh3d.hand.u16.70000 | OK s:7011
+opengpu.mesh3d.hand.u16.1.5 | ERR bad argument #1 to 'F' (number has no integer representation)
+opengpu.mesh3d.hand.f32.0.10000000000000001 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.-0 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.9.9999999999999994e+38 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.-9.9999999999999994e+38 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.1e-46 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.3.4028234663852886e+38 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.mesh3d.hand.f32.16777217 | ERR needs Lua 5.3+ (string.pack); see the header
+opengpu.f32.nan | OK s:0000c0ff
+opengpu.i8.2^53 | OK s:0000000000002000
+opengpu.i8.-2^63 | OK s:0000000000000080
+opengpu.i8.2^63 | ERR bad argument #2 to 'F' (number has no integer representation)
+opengpu.i8.1.5 | ERR bad argument #2 to 'F' (number has no integer representation)
+opengpu.i8.inf | ERR bad argument #2 to 'F' (number has no integer representation)
+opengpu.i8.nan | ERR bad argument #2 to 'F' (number has no integer representation)
+opengpu.unpack.i8.2^53+1 | OK 9007199254740993 9
+opengpu.unpack.i8.2^53+3 | OK 9007199254740995 9
+opengpu.unpack.i8.max | OK 9223372036854775807 9
+opengpu.unpack.i8.min | OK -9223372036854775808 9
+opengpu.unpack.i8.-2^53-1 | OK -9007199254740993 9
+opengpu.unpack.I4.max | OK 4294967295 5
+opengpu.unpack.i4.-1 | OK -1 5
+opengpu.unpack.d-roundtrip | OK s:9a9999999999b93f
+opengpu.unpack.fdd | OK 0.10000000149011612 0.10000000000000001 -0 21
+opengpu.packsize.uniforms | OK 28
+opengpu.packsize.fill | OK 13
+opengpu.pack.fill | OK s:30ffffff7f00800000ffffffff
+opengpu.pack.fill-h-overflow | ERR bad argument #3 to 'F' (integer overflow)
+opengpu.pack.ffff | OK s:0000803f000000400000404000008040
+opengpu.pack.hhhhh | OK s:0100feff0300fcff0500
+N.nan.d-payload-roundtrip | OK true s:010000000000f87f
+N.nan.d-negpayload-roundtrip | OK true s:ffffffffffffffff
+N.nan.f-payload-roundtrip | OK true s:0100c07f
+N.nan.n-type | OK s:6e756d626572 true
+detect.string.pack~=nil | OK true
+detect.opengpu-usePack | OK false
+detect.method-call | OK 1
+# end

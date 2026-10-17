@@ -1,0 +1,9 @@
+f554beeb080e13b2534d242630975c75 *build/native/libdir/libjnlua52-windows-x86_64.dll
+0f55e727608e6d8525c39f010f17de86 *build/native/libdir-additive/libjnluajit52-windows-x86_64.dll
+0f55e727608e6d8525c39f010f17de86 *build/native/dist/libjnluajit52-windows-x86_64.dll
+c33d49d1e26887f0013c65e1aa14f52d *build/native/luajit-windows-x86_64/src/luajit.exe
+4f2e6c4c67076c63f1e1bfbb26e9475f *build/native/luajit-windows-x86_64/src/libluajit.a
+ed6a89df5c3967a20b2b4c52d580b2ce *build/native/luajit-windows-x86_64/src/lib_string.o
+69d80e67a20b06340f8a37944d958672 *build/native/obj-windows-x86_64/eris_lj.o
+4028fe5f25d641c23295ffa5480396ca *build/native/obj-windows-x86_64/jnlua.o
+fc1604f5d8034308ddaec68cb7c7ab86 *build/native/obj-windows-x86_64/lj52shim.o

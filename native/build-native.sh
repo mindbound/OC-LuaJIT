@@ -21,8 +21,8 @@
 #   eris_lj.o  our Eris-API-compatible serializer (serializer/eris_lj.c)
 #   libluajit.a  LuaJIT 2.1 static, with the feature set native/luajit/
 #              oclj_features.h names (LUA52COMPAT + CHECKHOOK + DISABLE_FFI),
-#              plus FOUR changes made on the build copy, three of them to
-#              functions.  lj_func_freeproto scrubs
+#              plus FIVE changes made on the build copy, three of them to
+#              functions and one adding three.  lj_func_freeproto scrubs
 #              the trace-abort penalty cache of the dying prototype's loop
 #              heads (native/luajit/patch-penalty-scrub.sh).  The cache is
 #              keyed by bytecode ADDRESS and upstream never clears it when a
@@ -55,10 +55,16 @@
 #              stitches around the call and a hot loop runs 1.6-2.1x slower
 #              when its strings repeat, 1.2x when each is new (2026-10-16);
 #              the patch formats the int as the double the
-#              interpreter formats, through the same C function.  And
+#              interpreter formats, through the same C function.
 #              lj_arch.h includes oclj_features.h
 #              (native/luajit/patch-features-include.sh): THE LUAJIT FEATURE
-#              SET below.  Same steps as the scrub, both.
+#              SET below.  And lib_string.c registers Lua 5.3.6's
+#              string.pack, string.packsize and string.unpack
+#              (native/luajit/patch-strpack-register.sh), whose code is
+#              native/luajit/oclj_strpack.c, copied next to it: our LuaJIT is
+#              a fork that may take 5.3 functions (decided 2026-10-13), and
+#              luaopen_string is the one opener jnlua, luajit.exe and every
+#              test reach.  Same steps as the scrub, all three.
 #
 # THE LUAJIT FEATURE SET is native/luajit/oclj_features.h, with the reason
 # for each flag: LUAJIT_ENABLE_LUA52COMPAT (OC's platform is Lua 5.2 source),
@@ -469,7 +475,7 @@ if [ ! -d "$LJ_WORK" ]; then
   rm -rf "$LJ_WORK/.git"
 fi
 LJ=$LJ_WORK/src
-# THE FIRST OF THE FOUR LUAJIT FILES WE CHANGE, on the copy, every
+# THE FIRST OF THE FIVE LUAJIT FILES WE CHANGE, on the copy, every
 # build.  The copy
 # persists between builds, and the patch script's "already patched" path
 # verifies only four marker lines -- so a stale or hand-edited block on the
@@ -594,6 +600,43 @@ FEAT_AT=$(awk -v a='#include "lua.h"' -v b="$FEAT_INC" \
   || fail "$LJ/lj_arch.h does not include oclj_features.h exactly once, directly after
          lua.h -- the copy make is about to compile does not carry the feature set"
 say "    lj_arch.h: includes oclj_features.h once, right after lua.h (asserted by content before make)"
+# THE FIFTH, AND THE FIRST THAT ADDS FUNCTIONS: lib_string.c registers Lua
+# 5.3.6's string.pack, string.packsize and string.unpack
+# (native/luajit/patch-strpack-register.sh), whose code is
+# native/luajit/oclj_strpack.c, copied next to it like oclj_features.h.  Our
+# LuaJIT is a fork that may take 5.3 functions (decided 2026-10-13), and
+# luaopen_string is the one opener that jnlua's openlib(STRING), luajit.exe's
+# luaL_openlibs and every native test reach.  Same steps as the four above:
+# pristine checkout asserted (no registration, no oclj_strpack.c), lib_string.c
+# re-copied, the registration ABSENT after the copy, the code copied and
+# compared, patched, present exactly once before make; after make,
+# lib_string.o newer than both files, the fast-function table naming all
+# three, and the luajit.exe gate below.
+STRPACK_MARK='OC-LuaJIT (native/luajit/patch-strpack-register.sh)'
+STRPACK_C=$OCLJ_REPO/native/luajit/oclj_strpack.c
+[ -f "$STRPACK_C" ] || fail "no $STRPACK_C: the code of string.pack/packsize/unpack"
+grep -q -F -- "$STRPACK_MARK" "$OCLJ_LUAJIT/src/lib_string.c" \
+  && fail "$OCLJ_LUAJIT/src/lib_string.c registers string.pack: the pinned checkout must stay
+         pristine.  The registration belongs on the build copy only."
+[ -e "$OCLJ_LUAJIT/src/oclj_strpack.c" ] \
+  && fail "$OCLJ_LUAJIT/src/oclj_strpack.c exists: the pinned checkout must stay pristine.
+         The code lives in native/luajit and is copied to the build copy only."
+cp -f "$OCLJ_LUAJIT/src/lib_string.c" "$LJ/lib_string.c" \
+  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lib_string.c over $LJ/lib_string.c"
+grep -q -F -- "$STRPACK_MARK" "$LJ/lib_string.c" \
+  && fail "$LJ/lib_string.c still registers string.pack right after the pristine re-copy --
+         the copy did not take"
+cp -f "$STRPACK_C" "$LJ/oclj_strpack.c" || fail "cannot copy $STRPACK_C into $LJ"
+cmp -s "$STRPACK_C" "$LJ/oclj_strpack.c" \
+  || fail "$LJ/oclj_strpack.c differs from $STRPACK_C right after the copy"
+say "    lib_string.c: pristine copy re-taken; oclj_strpack.c copied from native/luajit"
+sh "$OCLJ_REPO/native/luajit/patch-strpack-register.sh" "$LJ/lib_string.c" "$LJ/lib_string.c" \
+  || fail "the string.pack registration patch refused (see above)"
+[ "$(grep -c -F -- "$STRPACK_MARK" "$LJ/lib_string.c")" = "1" ] \
+  && [ "$(grep -c -x -F -- '#include "oclj_strpack.c"' "$LJ/lib_string.c")" = "1" ] \
+  || fail "$LJ/lib_string.c does not register string.pack exactly once -- the copy make is
+         about to compile is not the patched one"
+say "    lib_string.c: registers string.pack/packsize/unpack once (asserted by content before make)"
 make -C "$LJ" clean >/dev/null 2>&1
 # Q= makes the Makefile echo full compiler command lines, so the flags can be
 # asserted rather than assumed.
@@ -624,6 +667,31 @@ say "    lj_err.o recompiled from the patched lj_err.c ($(date -r "$LJ/lj_err.o"
 grep -q -F 'lj_ffrecord.c' "$OCLJ_BUILD/luajit_build.log" \
   || fail "lj_ffrecord.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
 say "    lj_ffrecord.o recompiled from the patched lj_ffrecord.c ($(date -r "$LJ/lj_ffrecord.o" +%H:%M:%S) > $(date -r "$LJ/lj_ffrecord.c" +%H:%M:%S))"
+[ -f "$LJ/lib_string.o" ] || fail "no $LJ/lib_string.o after make"
+[ "$LJ/lib_string.o" -nt "$LJ/lib_string.c" ] && [ "$LJ/lib_string.o" -nt "$LJ/oclj_strpack.c" ] \
+  || fail "lib_string.o is not newer than the patched lib_string.c and oclj_strpack.c -- make
+         did not recompile it"
+# Anchored on the compile line itself, which ends '-c -o lib_string.o
+# lib_string.c' (BUILDMODE=static: the Makefile's dynamic compile is '@:', so
+# this is the only one echoed).  The bare name would not do: buildvm's five
+# command lines list every LJLIB_C file, lib_string.c included, on every build.
+# On Windows mingw32-make echoes command lines with CRLF (95 of the log's 185
+# lines, this one included), so the pattern allows that one CR explicitly
+# rather than relying on Git Bash's grep 3.0 dropping it before '$'.
+grep -q -E -- '-c -o lib_string[.]o lib_string[.]c[[:cntrl:]]?$' "$OCLJ_BUILD/luajit_build.log" \
+  || fail "lib_string.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
+# buildvm turned the three registrations into fast functions: one FFDEF each
+# in the generated table (lj_ffdef.h is regenerated, `make clean` deletes it).
+for ff in string_pack string_packsize string_unpack; do
+  [ "$(grep -c -x -F "FFDEF($ff)" "$LJ/lj_ffdef.h" 2>/dev/null)" = "1" ] \
+    || fail "$LJ/lj_ffdef.h does not list FFDEF($ff) exactly once: buildvm did not register
+         the function (is the registration inside lib_string.c's string module?)"
+done
+# The LuaJIT compile is -Wall; nothing of ours may warn there either.
+if grep -E '(lib_string|oclj_strpack)[.]c:[0-9]+(:[0-9]+)?: warning' "$OCLJ_BUILD/luajit_build.log"; then
+  fail "lib_string.c or oclj_strpack.c warned in the LuaJIT build (above)"
+fi
+say "    lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)"
 
 # THE FEATURE SET HAS ONE CHANNEL, AND IT MUST BE OBSERVABLE (THE LUAJIT
 # FEATURE SET, in the header).  First: no feature macro may reach a LuaJIT
@@ -646,13 +714,31 @@ fi
 # unit of ours compiles with.  OCLJ_LUAJIT_FEATURES says the header was read;
 # the LJ_* values say what it decided.
 LJDM=$("$CC" -I"$LJ" -E -dM "$LJ/lj_arch.h" 2>&1)
-for d in 'OCLJ_LUAJIT_FEATURES 1' 'LJ_52 1' 'LJ_HASFFI 0' 'LJ_HASJIT 1' 'LJ_GC64 1'; do
+for d in 'OCLJ_LUAJIT_FEATURES 1' 'LJ_52 1' 'LJ_HASFFI 0' 'LJ_HASJIT 1' 'LJ_GC64 1' 'OCLJ_LIB_STRPACK 1'; do
   printf '%s\n' "$LJDM" | grep -qx "#define $d" \
     || fail "through -I$LJ the preprocessor does not say '#define $d'.  Every translation
          unit of ours compiles through exactly that -I: native/luajit/oclj_features.h is
          not reaching lj_arch.h, or it no longer says what this build needs."
 done
-say "    feature set through -I\$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1"
+say "    feature set through -I\$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1"
+# oclj_strpack.c under -Wall -Wextra, as the shim is held to (the LuaJIT
+# compile above is -Wall only): a throwaway translation unit that includes it
+# and calls its three entry points, compiled through the same -I.
+cat > "$OCLJ_BUILD/strpack_wgate.c" <<'EOF'
+#include "oclj_strpack.c"
+int oclj_strpack_wgate(lua_State *L);
+int oclj_strpack_wgate(lua_State *L)
+{
+  return oclj_strpack_pack(L) + oclj_strpack_packsize(L) + oclj_strpack_unpack(L);
+}
+EOF
+rm -f "$OCLJ_BUILD/strpack_wgate.o"
+"$CC" -c -O2 $PICFLAG -Wall -Wextra -I"$LJ" "$OCLJ_BUILD/strpack_wgate.c" \
+  -o "$OCLJ_BUILD/strpack_wgate.o" 2>"$OCLJ_BUILD/strpack.err"
+[ -f "$OCLJ_BUILD/strpack_wgate.o" ] || { cat "$OCLJ_BUILD/strpack.err"; fail "oclj_strpack.c did not compile on its own"; }
+PW=$(grep -c 'warning:' "$OCLJ_BUILD/strpack.err" || true)
+say "    oclj_strpack.c -Wall -Wextra warnings = $PW"
+[ "$PW" = "0" ] || { grep -E 'warning:' "$OCLJ_BUILD/strpack.err" | head -20; fail "oclj_strpack.c must compile warning-clean"; }
 
 LJEXE=$LJ/luajit.exe; [ -x "$LJEXE" ] || LJEXE=$LJ/luajit
 [ -x "$LJEXE" ] || fail "no luajit interpreter was produced"
@@ -750,6 +836,70 @@ if printf '%s\n' "$LJSYMS" | grep -qE ' T (luaopen_ffi|lj_ccallback_new)$'; then
   fail "libluajit.a defines FFI entry points (above): FFI is compiled in"
 fi
 say "    libluajit.a: lua_newstate defined; luaopen_ffi and lj_ccallback_new not (FFI compiled out)"
+
+# string.pack, string.packsize AND string.unpack ARE IN THE STRING LIBRARY,
+# functionally, on the luajit.exe that links this libluajit.a: present, reached
+# through the string metatable as ("fmt"):pack, the two decided deviations
+# (an I8 field of 2^63-1 rounds to 2^63; 'l' and 'L' are 8 bytes), one bounds
+# refusal and one argument refusal by message, and a hot loop of pack calls
+# that the JIT stitches around without aborting (an abort per call would
+# blacklist the caller's loop).  The probe prints the loop/stitch/abort counts
+# of the traces recorded in hot() and the gate requires the measured 0/1/0, as
+# the FFI gate above requires s=0/1/0: hot= and abort= alone read 14000 and 0
+# with the JIT off as well, so without the stitch count the gate would pass
+# with no trace recorded at all.  The full conformance and differential tests
+# are test/native/run-pack.sh and run-packfuzz.sh.  The probe contains no
+# backslashes (heredocs here eat them).
+cat > "$OCLJ_BUILD/strpack.lua" <<'EOF'
+local P, U, S = string.pack, string.unpack, string.packsize
+local fn = type(P) .. "/" .. type(U) .. "/" .. type(S)
+if fn ~= "function/function/function" then print("fn=" .. fn) return end
+local function hex(s) local t = {} for i = 1, #s do t[i] = string.format("%02x", s:byte(i)) end return table.concat(t) end
+local b = P("<i4", -2)
+local v, nx = U("<i4", b)
+local big = U("<I8", string.rep(string.char(255), 7) .. string.char(127))
+local ok1, e1 = pcall(U, "<i4", "abc")
+local ok2, e2 = pcall(P, "<j", 1.5)
+local jutil = require("jit.util")
+local st, mine = { loop = 0, stitch = 0, abort = 0 }, {}
+local function hot(n) local acc = 0 for i = 1, n do acc = acc + #P("<i4 z", i, "ab") end return acc end
+local function cb(what, tr, func)
+  if what == "start" then mine[tr] = (func == hot)
+  elseif what == "stop" and mine[tr] then
+    local lt = jutil.traceinfo(tr).linktype
+    if st[lt] then st[lt] = st[lt] + 1 end
+  elseif what == "abort" and mine[tr] then st.abort = st.abort + 1 end
+end
+jit.flush()
+jit.attach(cb, "trace")
+local acc = hot(2000)
+jit.attach(cb)
+print("fn=" .. fn .. " i4=" .. hex(b) .. " method=" .. tostring(("<i4"):pack(-2) == b) ..
+  " u=" .. v .. "/" .. nx .. " I8max=" .. tostring(big == 2^63) .. " l=" .. S("l") .. "/" .. S("<L") ..
+  " short=" .. tostring(not ok1 and e1:find("data string too short", 1, true) ~= nil) ..
+  " int=" .. tostring(not ok2 and e2:find("number has no integer representation", 1, true) ~= nil) ..
+  " hot=" .. acc .. " jit=" .. st.loop .. "/" .. st.stitch .. "/" .. st.abort)
+EOF
+SP=$("$LJEXE" "$OCLJ_BUILD/strpack.lua" 2>&1)
+say "    string.pack gate: $SP"
+SP_WANT='fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 jit=0/1/0'
+[ "$SP" = "$SP_WANT" ] || fail "the string.pack gate read
+           $SP
+         want
+           $SP_WANT
+         fn other than function/function/function: lib_string.c does not register them
+           (native/luajit/patch-strpack-register.sh did not reach the archive).
+         i4, method, u, short, int: native/luajit/oclj_strpack.c is not Lua 5.3.6's pack.
+         I8max=false: an unpacked integer beyond 2^53 is refused or not rounded to nearest.
+         l other than 8/8: 'l'/'L' follow sizeof(long), 4 on Win64 -- decided: 8 everywhere.
+         hot other than 14000: a compiled loop of pack calls computes something else.
+         jit (loop/stitch/abort traces recorded in hot()) other than 0/1/0:
+           a stitch count of 0 means no trace was recorded in hot(), so the gate
+           proved nothing about the JIT; a stitch count above 1 means the trace was
+           re-recorded (flushed, or a side exit went hot); an abort count other than 0 means the
+           JIT aborts traces at pack calls, which blacklists loops; a loop count
+           other than 0 means the recorder no longer stitches at the pack call (the
+           three have no LJLIB_REC): re-measure before changing the gate."
 
 # --------------------------------------------------------------- 1b
 # TWO PROPERTIES OF THE ARCHIVE, ONE PROBE.
@@ -1047,21 +1197,24 @@ rm -f "$OBJ/eris_lj.o"
 # THE VM-FEATURES WORD, checked against the library rather than trusted.  The
 # blob fingerprint ends in a word eris_lj.c derives from the macros it was
 # compiled with (THE VM-FEATURES WORD in eris_lj.c: ffi, lua52, gc64, fr2, dn,
-# le/be, p64/p32); blobs carry it, and a build that cannot interpret a blob
-# refuses it by that word.  Four of its tokens show in the behaviour of the
-# luajit.exe that links this libluajit.a: whether `1LL` loads (ffi), whether
-# table.unpack exists (lua52), and string.dump's flags byte (BCDUMP_F_FR2 8,
-# BCDUMP_F_BE 1; lj_bcdump.h:42-45).  gc64, dn and p64 are what stage 1b's
-# GG_State comparison and oclj_features.h's refusals cover.
-OBS=$("$LJEXE" -e 'local d = string.dump(function() end):byte(5) io.write(load("return 1LL") and "ffi1" or "ffi0", " ", table.unpack and "lua52" or "lua51", " ", d % 16 >= 8 and "fr2" or "fr1", " ", d % 2 == 1 and "be" or "le")' 2>&1)
+# le/be, p64/p32, pack); blobs carry it, and a build that cannot interpret a
+# blob refuses it by that word.  Five of its tokens show in the behaviour of
+# the luajit.exe that links this libluajit.a: whether `1LL` loads (ffi),
+# whether table.unpack exists (lua52), string.dump's flags byte (BCDUMP_F_FR2
+# 8, BCDUMP_F_BE 1; lj_bcdump.h:42-45), and whether string.pack exists (pack:
+# eris_lj.c reads OCLJ_LIB_STRPACK from oclj_features.h, the registration is
+# lib_string.c's, and this is where the two are seen to agree).  gc64, dn and
+# p64 are what stage 1b's GG_State comparison and oclj_features.h's refusals
+# cover.
+OBS=$("$LJEXE" -e 'local d = string.dump(function() end):byte(5) io.write(load("return 1LL") and "ffi1" or "ffi0", " ", table.unpack and "lua52" or "lua51", " ", d % 16 >= 8 and "fr2" or "fr1", " ", d % 2 == 1 and "be" or "le", " ", string.pack and "pack1" or "pack0")' 2>&1)
 case "$OBS" in
-  "ffi"[01]" lua5"[12]" fr"[12]" "[lb]e) : ;;
+  "ffi"[01]" lua5"[12]" fr"[12]" "[lb]e" pack"[01]) : ;;
   *) fail "luajit.exe's feature observation is malformed: '$OBS'" ;;
 esac
 WORD=$(grep -a -o -E "[|]$SER_HASH[|]ffi[01][.][a-z0-9.]+" "$OBJ/eris_lj.o" | head -1)
 WORD=${WORD##*|}
 case "$WORD" in
-  ffi[01].lua5[12].gc64.fr[12].dn[01].[lb]e.p64|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p64|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p32) : ;;
+  ffi[01].lua5[12].gc64.fr[12].dn[01].[lb]e.p64.pack[01]|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p64.pack[01]|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p32.pack[01]) : ;;
   *) fail "eris_lj.o carries no well-formed VM-features word after '|$SER_HASH|' (got '$WORD')" ;;
 esac
 for t in $OBS; do
@@ -1250,8 +1403,9 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #    prototype/watchdog luajit-src` clones it), pinned to upstream 1ee778a4,
 #    whose LUAJIT_ENABLE_CHECKHOOK is upstream's own option (lj_record.c:691,
 #    :2953).  The checkout stays pristine: this script builds a COPY with
-#    native/luajit/oclj_features.h and the four changes in native/luajit/.
-#    Another LuaJIT commit is untested: the four patch scripts' exactly-once
+#    native/luajit/oclj_features.h and the five changes in native/luajit/
+#    (the fifth adds native/luajit/oclj_strpack.c to lib_string.c).
+#    Another LuaJIT commit is untested: the five patch scripts' exactly-once
 #    anchors and the behaviour gates are what refuse a tree that changed shape.
 #
 # 5. For OCLJ_VARIANT=additive only: Python 3 (python3 or python on PATH, or

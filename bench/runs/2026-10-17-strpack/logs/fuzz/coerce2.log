@@ -1,0 +1,20 @@
+packfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; profile coerce; seeds 3000..3001 x 20000 cases; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/packfuzz-campaign-coerce2
+seed 3000: 1 -- lines 20000: EXACT 18928, DEVIATION 0, SECONDARY 0, MISMATCH 1072
+MISMATCH classes (1):
+  [1072] pack | ok/ok: value 1 str vs str   {coerce=1072}
+      puc:  42p|coerce|pack|f=z a=1:100000000000000|ok s16:31303030303030303030303030303000
+      ours: 42p|coerce|pack|f=z a=1:100000000000000|ok s6:31652b313400
+      puc:  49p|coerce|pack|f=s1 a=1:-0|ok s5:042d302e30
+      ours: 49p|coerce|pack|f=s1 a=1:-0|ok s3:022d30
+      puc:  53p|coerce|pack|f=<s4 a=1:-0|ok s8:040000002d302e30
+      ours: 53p|coerce|pack|f=<s4 a=1:-0|ok s6:020000002d30
+seed 3001: 1 -- lines 20000: EXACT 18908, DEVIATION 0, SECONDARY 0, MISMATCH 1092
+MISMATCH classes (1):
+  [1092] pack | ok/ok: value 1 str vs str   {coerce=1092}
+      puc:  13p|coerce|pack|f=z a=1:-0|ok s5:2d302e3000
+      ours: 13p|coerce|pack|f=z a=1:-0|ok s3:2d3000
+      puc:  24p|coerce|pack|f=z a=1:-0|ok s5:2d302e3000
+      ours: 24p|coerce|pack|f=z a=1:-0|ok s3:2d3000
+      puc:  45p|coerce|pack|f=z a=1:-0|ok s5:2d302e3000
+      ours: 45p|coerce|pack|f=z a=1:-0|ok s3:2d3000
+PACKFUZZ FAIL (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/packfuzz-campaign-coerce2)
