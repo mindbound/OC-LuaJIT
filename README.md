@@ -38,6 +38,7 @@ What 5.3's integers give beyond that is not here. There is no integer subtype: a
 - [docs/feasibility.md](docs/feasibility.md) — the full feasibility study: architecture integration, performance, persistence constraints. Read this first.
 - [docs/roadmap.md](docs/roadmap.md) — the living roadmap: v0.5 the ocelot-brain harness, v1 the working architecture, v2 the JIT and its watchdog, v3 a persistence fallback Track P made unnecessary, and Track P, full transparent persistence.
 - [docs/watchdog.md](docs/watchdog.md) — timeout-watchdog design, threat model, and measured prototype results.
+- [docs/jit-guide.md](docs/jit-guide.md) — the guide to JIT and DynASM work on our LuaJIT fork: the pipeline, the IR and fold engine, DynASM, the build, recipes worked through round 3's bitwise operators, invariants, pitfalls and verification discipline. Start with its agent checklist.
 - [docs/persistence-study.md](docs/persistence-study.md) — **Track P**: feasibility of a full-VM serializer for LuaJIT (transparent persistence). Positive verdict, since built: `serializer/eris_lj.c`, with the protocol in [docs/shell-fill.md](docs/shell-fill.md).
 - [docs/openpython-persistence.md](docs/openpython-persistence.md) — case study of the only OC architecture with true mid-execution persistence.
 - [docs/research/](docs/research/) — the raw multi-agent research reports behind all of the above, with file:line citations.
