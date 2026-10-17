@@ -1,0 +1,1 @@
+C:\Users\astro\Downloads\OC-LuaJIT\build\native\luajit-windows-x86_64\src\luajit.exe: ./jit\bc.lua:68: result of '>>' has more than 53 significant bits

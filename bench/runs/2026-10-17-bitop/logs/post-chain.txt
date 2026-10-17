@@ -1,0 +1,6 @@
+post-r3 started 09:51:15
+final chain done 10:02:16
+wsl exit=0 10:03:53
+campaign-2 done 10:48:21: fuzz50 0 gen20 0 phi20 0 trec 0 
+gradle: bit32 exit=1 control exit=0 build exit=0 total 44532 drwxr-xr-x 1 astro 197609      0 Oct 17 13:48 . drwxr-xr-x 1 astro 197609      0 Oct 16 23:15 .. -rw-r--r-- 1 astro 197609 739701 Sep 17 11:08 ocluajit-0280593-master+0280593635-dirty-dev.jar -rw-r--r-- 1 astro 197609 742576 Sep 17 11:08 ocluajit-
+post-r3 finished 10:48:40

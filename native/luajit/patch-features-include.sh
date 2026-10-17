@@ -1,9 +1,12 @@
 #!/bin/sh
 # native/luajit/patch-features-include.sh -- the fourth change to LuaJIT,
-# and the only one to a header: lj_arch.h includes native/luajit/
+# and the first to a header: lj_arch.h includes native/luajit/
 # oclj_features.h, the one file that names OC-LuaJIT's LuaJIT feature set.
 # (The others: patch-penalty-scrub.sh, patch-fastfunc-errmem-top.sh,
-# patch-strfmt-xint-noffi.sh, patch-strpack-register.sh.)
+# patch-strfmt-xint-noffi.sh, patch-strpack-register.sh, and round 3's
+# seven, patch-bitop-parse.sh, -vm.sh, -meta.sh, -record.sh, -fold.sh,
+# -bcdump.sh and -jitlib.sh; -bcdump.sh changes the second header,
+# lj_bcdump.h.)
 #
 #     sh native/luajit/patch-features-include.sh <in lj_arch.h> <out lj_arch.h>
 #

@@ -1,0 +1,7 @@
+chain r3ff-a started 08:13:09 natives=/c/Users/astro/claude-tmp/oclj/new-r2-0f55e727
+  r3ff-additive-on env=[-] additive /c/Users/astro/claude-tmp/oclj/new-r2-0f55e727/libdir-additive on UNSET
+r3ff-additive-on exit=1 SMOKE| CHECKS: 82   FAILURES: 1   WALL: 94.2s d5=[SMOKE| MILESTONE d5-sandbox-bitwise: FAIL -- 5.3's bitwise operators in the sandbox -> ok/0:1/-1:2147483648/0:2147483647/0:1073741825/0:1/0:1/0:0/E/0:0/0:2097151/0:16777215 (want ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:42]
+      SMOKE| MILESTONE d5-sandbox-bitwise: FAIL -- 5.3's bitwise operators in the sandbox -> ok/0:1/-1:2147483648/0:2147483647/0:1073741825/0:1/0:1/0:0/E/0:0/0:2097151/0:16777215 (want ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:42
+  r3ff-stock env=[-] stock - on UNSET
+r3ff-stock exit=0 SMOKE| CHECKS: 53   FAILURES: 0   WALL: 99.5s d5=[SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> absent (want absent)]
+chain r3ff-a finished 08:16:36

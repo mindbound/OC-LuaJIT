@@ -1,0 +1,50 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; seeds 1..1 x 1000 cases x 16 tuples; hotmin 0.25; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-ff-r3
+seed 1: 1 -- 16000 tuples, EXACT 10841, INEXACT 5159 (of them 5.3.6 computes a number: 4898); REF results: E:INEXACT 5159, E:NOINT 807, E:TYPE 621, num 9413 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-ff-r3/puc-1.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-ff-r3/ours-jon-1.txt: 16000 tuples, MISMATCH 12198 (of them INEXACT in the reference: 5159); by mode K 12198 V 12198 P 12198 H 12198 U 2295
+      #cov tuples 16000 hotcases 871/1000 hotU 2435/3000 traces 4123 aborts 966 [NYI: bytecode FNEW=4,NYI: bytecode UCLO=17,NYI: bytecode VARG=37,NYI: return to lower frame=17,bad argument type=126,call unroll limit reached=23,error thrown or hook called during re
+      => FAIL
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-ff-r3/ours-joff-1.txt: 16000 tuples, MISMATCH 12198 (of them INEXACT in the reference: 5159); by mode K 12198 V 12198 P 12198 H 12198 U 2295
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => FAIL
+    controls: sim-wrap PASS; sim-raw MISMATCH 5159 of INEXACT 5159; sim-round MISMATCH 5159 of REF E:INEXACT 5159
+  MISMATCH classes (mode want->got: count):
+    P num->num                   4992
+        ((a << a) << (2251799813685247 << 15))  with [(-16)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4293918720
+        ((a << a) << (2251799813685247 << 15))  with [(-31)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967234
+        ((a << a) << (2251799813685247 << 15))  with [(-32)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967264
+    V num->num                   4992
+        ((a << a) << (2251799813685247 << 15))  with [(-16)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4293918720
+        ((a << a) << (2251799813685247 << 15))  with [(-31)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967234
+        ((a << a) << (2251799813685247 << 15))  with [(-32)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967264
+    H num->num                   4992
+        ((a << a) << (2251799813685247 << 15))  with [(-16)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4293918720
+        ((a << a) << (2251799813685247 << 15))  with [(-31)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967234
+        ((a << a) << (2251799813685247 << 15))  with [(-32)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967264
+    K num->num                   4992
+        ((a << a) << (2251799813685247 << 15))  with [(-16)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4293918720
+        ((a << a) << (2251799813685247 << 15))  with [(-31)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967234
+        ((a << a) << (2251799813685247 << 15))  with [(-32)]  want N0:0 (5.3.6 exact N0:0)  got N-1:4294967264
+    K E:INEXACT->num             4239
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-3)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:2684354560
+    H E:INEXACT->num             4239
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-3)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:2684354560
+    P E:INEXACT->num             4239
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-3)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:2684354560
+    V E:INEXACT->num             4239
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:4060086272
+        ((a << a) << (2251799813685247 << 15))  with [(-3)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N-1:2684354560
+    H num->E:TYPE                1207
+        ((a << a) << (2251799813685247 << 15))  with ["0x10"]  want N0:0 (5.3.6 exact N0:0)  got E:TYPE:string:arith
+        ~a  with ["-3"]  want N0:2 (5.3.6 exact N0:2)  got E:TYPE:string:arith
+        ~a  with [" 7 "]  want N-1:4294967288 (5.3.6 exact N-1:4294967288)  got E:TYPE:string:arith
+    P num->E:TYPE                1207
+        ((a << a) << (2251799813685247 << 15))  with ["0x10"]  want N0:0 (5.3.6 exact N0:0)  got E:TYPE:string:arith
+        ~a  with ["-3"]  want N0:2 (5.3.6 exact N0:2)  got E:TYPE:string:arith
+BITFUZZ FAIL (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-ff-r3)

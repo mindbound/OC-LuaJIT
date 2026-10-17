@@ -102,11 +102,16 @@ public final class LuaJITStateFactory extends LuaStateFactory {
      * string.packsize, which the LuaJIT build registers in lib_string.c
      * (native/luajit/patch-strpack-register.sh, native/luajit/oclj_strpack.c)
      * and machine.lua already copies into the sandbox; TABLE and COROUTINE
-     * carry LuaJIT's own table.move and coroutine.isyieldable. There is still
-     * no integer subtype and no //. A program that tests for string.pack (or
-     * table.move, coroutine.isyieldable) finds it (Plan9k takes string.pack as
-     * its 5.3 test); one that tests for math.type, math.tointeger or utf8 does
-     * not, and one that tests _VERSION finds 5.2.
+     * carry LuaJIT's own table.move and coroutine.isyieldable. The language is
+     * the fork's too, whatever the list: its {@code & | ~ << >>} and unary
+     * {@code ~} compute Lua 5.3.6's 64-bit integer results, and raise where a
+     * result has more than 53 significant bits, which no double holds
+     * (native/luajit/oclj_bitop.h; README.md, "Lua dialect"). There is still
+     * no integer subtype, no // and no bitwise metamethod. A program that
+     * tests for string.pack (or table.move, coroutine.isyieldable) finds it
+     * (Plan9k takes string.pack as its 5.3 test); one that tests for
+     * math.type, math.tointeger or utf8 does not, and one that tests _VERSION
+     * finds 5.2.
      */
     @Override
     public void openLibs(final LuaState state) {

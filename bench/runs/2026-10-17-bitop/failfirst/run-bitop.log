@@ -1,0 +1,311 @@
+run-bitop: build /c/Users/astro/Downloads/OC-LuaJIT/build/native (windows-x86_64); results /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitop-ff-r3
+
+== 1. matrix on /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe, JIT on and -joff ==
+FAIL t_ops (jit): 6771 of 7467 lines differ from t_ops.expect (want, then got):
+    < & 0 2^63	ERR:number (local 'b') has no integer representation
+    > & 0 2^63	0
+    < & 0 -2^63-2048	ERR:number (local 'b') has no integer representation
+    < & 0 2^64	ERR:number (local 'b') has no integer representation
+    < & 0 2^70	ERR:number (local 'b') has no integer representation
+    < & 0 1.5	ERR:number (local 'b') has no integer representation
+    < & 0 -0.5	ERR:number (local 'b') has no integer representation
+    < & 0 0.5	ERR:number (local 'b') has no integer representation
+    < & 0 2.5	ERR:number (local 'b') has no integer representation
+    > & 0 -2^63-2048	0
+    > & 0 2^64	0
+    > & 0 2^70	0
+    > & 0 1.5	0
+    > & 0 -0.5	0
+    > & 0 0.5	0
+    > & 0 2.5	0
+    < & 0 1/0	ERR:number (local 'b') has no integer representation
+    < & 0 -1/0	ERR:number (local 'b') has no integer representation
+    < & 0 0/0	ERR:number (local 'b') has no integer representation
+    < & 0 '3'	0
+    < & 0 '0x10'	0
+    < & 0 ' 7 '	0
+    < & 0 '1e2'	0
+    < & 0 '1.5'	ERR:number (local 'b') has no integer representation
+    < & 0 'abc'	ERR:attempt to perform bitwise operation on local 'b' (a string value)
+    < & 0 ''	ERR:attempt to perform bitwise operation on local 'b' (a string value)
+    < & 0 '9007199254740993'	0
+    < & 0 '0x7fffffffffffffff'	0
+    < & 0 '0xffffffffffffffff'	0
+    < & 0 '-9223372036854775808'	0
+    < & 0 '9223372036854775808'	ERR:number (local 'b') has no integer representation
+    < & 0 nil	ERR:attempt to perform bitwise operation on local 'b' (a nil value)
+    < & 0 true	ERR:attempt to perform bitwise operation on local 'b' (a boolean value)
+    < & 0 {}	ERR:attempt to perform bitwise operation on local 'b' (a table value)
+    > & 0 1/0	0
+    > & 0 -1/0	0
+    > & 0 0/0	0
+    > & 0 '3'	ERR:attempt to perform arithmetic on local 'b' (a string value)
+    > & 0 '0x10'	ERR:attempt to perform arithmetic on local 'b' (a string value)
+    > & 0 ' 7 '	ERR:attempt to perform arithmetic on local 'b' (a string value)
+FAIL t_ops (joff): 6771 of 7467 lines differ from t_ops.expect (want, then got):
+    < & 0 2^63	ERR:number (local 'b') has no integer representation
+    > & 0 2^63	0
+    < & 0 -2^63-2048	ERR:number (local 'b') has no integer representation
+    < & 0 2^64	ERR:number (local 'b') has no integer representation
+    < & 0 2^70	ERR:number (local 'b') has no integer representation
+    < & 0 1.5	ERR:number (local 'b') has no integer representation
+    < & 0 -0.5	ERR:number (local 'b') has no integer representation
+    < & 0 0.5	ERR:number (local 'b') has no integer representation
+    < & 0 2.5	ERR:number (local 'b') has no integer representation
+    > & 0 -2^63-2048	0
+    > & 0 2^64	0
+    > & 0 2^70	0
+    > & 0 1.5	0
+    > & 0 -0.5	0
+    > & 0 0.5	0
+    > & 0 2.5	0
+    < & 0 1/0	ERR:number (local 'b') has no integer representation
+    < & 0 -1/0	ERR:number (local 'b') has no integer representation
+    < & 0 0/0	ERR:number (local 'b') has no integer representation
+    < & 0 '3'	0
+    < & 0 '0x10'	0
+    < & 0 ' 7 '	0
+    < & 0 '1e2'	0
+    < & 0 '1.5'	ERR:number (local 'b') has no integer representation
+    < & 0 'abc'	ERR:attempt to perform bitwise operation on local 'b' (a string value)
+    < & 0 ''	ERR:attempt to perform bitwise operation on local 'b' (a string value)
+    < & 0 '9007199254740993'	0
+    < & 0 '0x7fffffffffffffff'	0
+    < & 0 '0xffffffffffffffff'	0
+    < & 0 '-9223372036854775808'	0
+    < & 0 '9223372036854775808'	ERR:number (local 'b') has no integer representation
+    < & 0 nil	ERR:attempt to perform bitwise operation on local 'b' (a nil value)
+    < & 0 true	ERR:attempt to perform bitwise operation on local 'b' (a boolean value)
+    < & 0 {}	ERR:attempt to perform bitwise operation on local 'b' (a table value)
+    > & 0 1/0	0
+    > & 0 -1/0	0
+    > & 0 0/0	0
+    > & 0 '3'	ERR:attempt to perform arithmetic on local 'b' (a string value)
+    > & 0 '0x10'	ERR:attempt to perform arithmetic on local 'b' (a string value)
+    > & 0 ' 7 '	ERR:attempt to perform arithmetic on local 'b' (a string value)
+FAIL t_fold (jit): 45 of 63 lines differ from t_fold.expect (want, then got):
+    < 1 << 31	2147483648	folded
+    < 1 << 32	4294967296	folded
+    < 1 << 33	8589934592	folded
+    < 1 << 63	-9.2233720368547758e+18	folded
+    < 1 << 64	0	folded
+    < 1 << -1	0	folded
+    < 1 >> -1	2	folded
+    < -1 >> 1	ERR:result of '>>' has more than 53 significant bits	runtime:BSHR
+    > 1 << 31	-2147483648	folded
+    > 1 << 32	1	folded
+    > 1 << 33	2	folded
+    > 1 << 63	-2147483648	folded
+    > 1 << 64	1	folded
+    > 1 << -1	-2147483648	folded
+    > 1 >> -1	0	folded
+    > -1 >> 1	2147483647	folded
+    < -1 >> 64	0	folded
+    > -1 >> 64	-1	folded
+    < ~2^31	-2147483649	folded
+    < ~2^53	ERR:result of '~' has more than 53 significant bits	runtime:BNOT
+    < 2^31 | 0	2147483648	folded
+    < 2^32 | 0	4294967296	folded
+    < 2^53 | 0	9007199254740992	folded
+    < 2^63 | 0	ERR:number has no integer representation	runtime:BOR
+    < -2^63 | 0	-9.2233720368547758e+18	folded
+    < 2^64 | 0	ERR:number has no integer representation	runtime:BOR
+    < 1.5 | 0	ERR:number has no integer representation	runtime:BOR
+    < 0.5 | 0	ERR:number has no integer representation	runtime:BOR
+    < 2.5 | 0	ERR:number has no integer representation	runtime:BOR
+    > ~2^31	2147483647	folded
+    > ~2^53	-1	folded
+    > 2^31 | 0	-2147483648	folded
+    > 2^32 | 0	0	folded
+    > 2^53 | 0	0	folded
+    > 2^63 | 0	0	folded
+    > -2^63 | 0	0	folded
+    > 2^64 | 0	0	folded
+    > 1.5 | 0	2	folded
+    > 0.5 | 0	0	folded
+    > 2.5 | 0	2	folded
+FAIL t_fold (joff): 45 of 63 lines differ from t_fold.expect (want, then got):
+    < 1 << 31	2147483648	folded
+    < 1 << 32	4294967296	folded
+    < 1 << 33	8589934592	folded
+    < 1 << 63	-9.2233720368547758e+18	folded
+    < 1 << 64	0	folded
+    < 1 << -1	0	folded
+    < 1 >> -1	2	folded
+    < -1 >> 1	ERR:result of '>>' has more than 53 significant bits	runtime:BSHR
+    > 1 << 31	-2147483648	folded
+    > 1 << 32	1	folded
+    > 1 << 33	2	folded
+    > 1 << 63	-2147483648	folded
+    > 1 << 64	1	folded
+    > 1 << -1	-2147483648	folded
+    > 1 >> -1	0	folded
+    > -1 >> 1	2147483647	folded
+    < -1 >> 64	0	folded
+    > -1 >> 64	-1	folded
+    < ~2^31	-2147483649	folded
+    < ~2^53	ERR:result of '~' has more than 53 significant bits	runtime:BNOT
+    < 2^31 | 0	2147483648	folded
+    < 2^32 | 0	4294967296	folded
+    < 2^53 | 0	9007199254740992	folded
+    < 2^63 | 0	ERR:number has no integer representation	runtime:BOR
+    < -2^63 | 0	-9.2233720368547758e+18	folded
+    < 2^64 | 0	ERR:number has no integer representation	runtime:BOR
+    < 1.5 | 0	ERR:number has no integer representation	runtime:BOR
+    < 0.5 | 0	ERR:number has no integer representation	runtime:BOR
+    < 2.5 | 0	ERR:number has no integer representation	runtime:BOR
+    > ~2^31	2147483647	folded
+    > ~2^53	-1	folded
+    > 2^31 | 0	-2147483648	folded
+    > 2^32 | 0	0	folded
+    > 2^53 | 0	0	folded
+    > 2^63 | 0	0	folded
+    > -2^63 | 0	0	folded
+    > 2^64 | 0	0	folded
+    > 1.5 | 0	2	folded
+    > 0.5 | 0	0	folded
+    > 2.5 | 0	2	folded
+FAIL t_sar (jit): 313 of 437 lines differ from t_sar.expect (want, then got):
+    < 0 ~>> 1.5	E:NOINT
+    < 0 ~>> '2'	0
+    > 0 ~>> 1.5	0
+    > 0 ~>> '2'	SPLIT K=E:attempt to perform arithmetic on a string value V=E:attempt to perform arithmetic on local 'n' (a string value) H=E:attempt to perform arithmetic on local 'n' (a string value)/Hk=E:attempt to perform arithmetic on a string value
+    < 1 ~>> 32	0
+    > 1 ~>> 32	1
+    < 1 ~>> 64	0
+    > 1 ~>> 64	1
+    < 1 ~>> -1	2
+    < 1 ~>> -4	16
+    < 1 ~>> -31	2147483648
+    < 1 ~>> -63	-9.2233720368547758e+18
+    < 1 ~>> -64	0
+    > 1 ~>> -1	0
+    > 1 ~>> -4	0
+    > 1 ~>> -31	0
+    > 1 ~>> -63	0
+    > 1 ~>> -64	1
+    < 1 ~>> -0x1p63	0
+    < 1 ~>> 0x1p62	0
+    < 1 ~>> 1.5	E:NOINT
+    < 1 ~>> '2'	0
+    > 1 ~>> -0x1p63	1
+    > 1 ~>> 0x1p62	1
+    > 1 ~>> 1.5	0
+    > 1 ~>> '2'	SPLIT K=E:attempt to perform arithmetic on a string value V=E:attempt to perform arithmetic on local 'n' (a string value) H=E:attempt to perform arithmetic on local 'n' (a string value)/Hk=E:attempt to perform arithmetic on a string value
+    < 5 ~>> 32	0
+    < 5 ~>> 33	0
+    > 5 ~>> 32	5
+    > 5 ~>> 33	2
+    < 5 ~>> 64	0
+    < 5 ~>> 65	0
+    > 5 ~>> 64	5
+    > 5 ~>> 65	2
+    < 5 ~>> -1	10
+    < 5 ~>> -4	80
+    < 5 ~>> -31	10737418240
+    < 5 ~>> -63	-9.2233720368547758e+18
+    < 5 ~>> -64	0
+    > 5 ~>> -1	0
+FAIL t_sar (joff): 313 of 437 lines differ from t_sar.expect (want, then got):
+    < 0 ~>> 1.5	E:NOINT
+    < 0 ~>> '2'	0
+    > 0 ~>> 1.5	0
+    > 0 ~>> '2'	SPLIT K=E:attempt to perform arithmetic on a string value V=E:attempt to perform arithmetic on local 'n' (a string value) H=E:attempt to perform arithmetic on local 'n' (a string value)/Hk=E:attempt to perform arithmetic on a string value
+    < 1 ~>> 32	0
+    > 1 ~>> 32	1
+    < 1 ~>> 64	0
+    > 1 ~>> 64	1
+    < 1 ~>> -1	2
+    < 1 ~>> -4	16
+    < 1 ~>> -31	2147483648
+    < 1 ~>> -63	-9.2233720368547758e+18
+    < 1 ~>> -64	0
+    > 1 ~>> -1	0
+    > 1 ~>> -4	0
+    > 1 ~>> -31	0
+    > 1 ~>> -63	0
+    > 1 ~>> -64	1
+    < 1 ~>> -0x1p63	0
+    < 1 ~>> 0x1p62	0
+    < 1 ~>> 1.5	E:NOINT
+    < 1 ~>> '2'	0
+    > 1 ~>> -0x1p63	1
+    > 1 ~>> 0x1p62	1
+    > 1 ~>> 1.5	0
+    > 1 ~>> '2'	SPLIT K=E:attempt to perform arithmetic on a string value V=E:attempt to perform arithmetic on local 'n' (a string value) H=E:attempt to perform arithmetic on local 'n' (a string value)/Hk=E:attempt to perform arithmetic on a string value
+    < 5 ~>> 32	0
+    < 5 ~>> 33	0
+    > 5 ~>> 32	5
+    > 5 ~>> 33	2
+    < 5 ~>> 64	0
+    < 5 ~>> 65	0
+    > 5 ~>> 64	5
+    > 5 ~>> 65	2
+    < 5 ~>> -1	10
+    < 5 ~>> -4	80
+    < 5 ~>> -31	10737418240
+    < 5 ~>> -63	-9.2233720368547758e+18
+    < 5 ~>> -64	0
+    > 5 ~>> -1	0
+PASS t_bit (jit): 2109 cases, every line as t_bit.expect says (0 of them raise the inexact error)
+PASS t_bit (joff): 2109 cases, every line as t_bit.expect says (0 of them raise the inexact error)
+FAIL coerce_agree (exit 0): coerce-agree: 51 strings, 29 disagreements 
+    DISAGREE "0": pack true 0:0 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "10": pack true 0:10 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "-10": pack true 4294967295:4294967286 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "+10": pack true 0:10 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE " 7 ": pack true 0:7 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "\0097\
+    DISAGREE "1e2": pack true 0:100 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "1E2": pack true 0:100 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "1.0": pack true 0:1 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "-0": pack true 0:0 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "-0.0": pack true 0:0 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0x10": pack true 0:16 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0X10": pack true 0:16 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "-0x10": pack true 4294967295:4294967280 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0x1p4": pack true 0:16 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0x1.8p1": pack true 0:3 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0xffffffffffffffff": pack true 4294967295:4294967295 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0x10000000000000000": pack true 0:0 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0x7fffffffffffffff": pack true 2147483647:4294967295 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+    DISAGREE "0x8000000000000000": pack true 2147483648:0 | bitop false ...o/Downloads/OC-LuaJIT/test/native/bitop/coerce_agree.lua:26: attempt to perform arithmetic on local 'x' (a string value)
+
+== 2. provenance: the .expect files against PUC Lua 5.3.6 ==
+PASS t_ops (1): PUC 5.3.6 with X (reword.lua: 1356 messages reworded) differs from t_ops.expect in exactly the 2 lines deviations.txt lists for windows
+PASS t_ops (2): xrule: 7467 lines agree: 550 raise (an operator's integer has more than 53 significant bits), 2574 exact, 4343 errors as PUC's, 0 without an operator
+PASS t_fold (1): PUC 5.3.6 with X (reword.lua: 0 messages reworded) differs from t_fold.expect in exactly the 7 lines deviations.txt lists for windows
+PASS t_fold (2): xrule: 63 lines agree: 12 raise (an operator's integer has more than 53 significant bits), 37 exact, 7 errors as PUC's, 7 without an operator
+PASS t_sar (1): PUC 5.3.6 with X (reword.lua: 0 messages reworded) differs from t_sar.expect in exactly the 0 lines deviations.txt lists for windows
+PASS t_sar (2): xrule: 437 lines agree: 5 raise (an operator's integer has more than 53 significant bits), 369 exact, 63 errors as PUC's, 0 without an operator
+PASS coerce_agree on PUC 5.3.6: its own two readers agree on the same 51 strings
+
+== 3. the shim path: bitop_test.c ==
+
+== BT1  results through lua_tonumber: 5.3.6's integer, exactly ==
+FAIL BT1a  runtime operands: six results equal C's int64, exactly         256 1048577 -2147483648 -1048577 2097151 2
+FAIL BT1b  literal operands (folded): the same six                        256 1048577 -2147483648 -1048577 2097151 2
+
+== BT2  lua_tointeger / lua_tointegerx: 64-bit integers, not a 32-bit wrap ==
+FAIL BT2   1 << 40, -1 >> 11, 1 << 63 read back as integers               status 0: 256, 2097151 (isnum 1), -2147483648 (isnum 1)
+
+== BT3  the new error through lua_pcall: LUA_ERRRUN, positioned ==
+FAIL BT3a  a runtime operand: -1 >> 1 raises                              status 0 (LUA_ERRRUN 2) '2147483647'
+FAIL BT3b  literals: not folded, raised at run time                       status 0 (LUA_ERRRUN 2) '2147483647'
+FAIL BT3c  a string operand (the C path)                                  status 2 (LUA_ERRRUN 2) '[string "return '-1' >> 1"]:1: attempt to perform arithmetic on a string value'
+FAIL BT3d  a compiled loop: the inexact result at iteration 150 raises    status 0 'true/2400|true/-2147471920|1'
+FAIL BT3e  after the errors the state computes on                         1048577
+
+== BT4  the RAM cap: the C path charges nothing ==
+FAIL BT4a  100000 iterations of C-path operations: +0 bytes               status 2, result 0 (C: 498720), charged +272 bytes
+PASS BT4b  control: 2000 tostring() calls ARE charged (the instrument sees) status 0, result 6893, charged +88676 bytes
+
+== BT5  the count hook fires inside a compiled 64-bit bit loop ==
+FAIL BT5   20M iterations, hook every 500: ticks > 100, compiled, 5.3's s status 0, 320000 ticks, 102 traces, s = 0 (PUC 5.3.6: 4206410837014599)
+
+== BT6  bit32 beside the operators: untouched ==
+FAIL BT6   bit32's 5.2 results, and 1 << 32 == 2^32 between them          '0 1 1073741823 5 4294967295 -1 4294967292 2 15 2147483648 2147483649 0 0 1'
+
+BITOP TESTS: 12 checks, 11 failures
+
+RUN-BITOP: FAIL (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitop-ff-r3)

@@ -1,0 +1,4 @@
+fuzz50 0
+gen20 0
+phi20 0
+trec 0

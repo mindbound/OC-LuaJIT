@@ -1,0 +1,71 @@
+run-bitjit: ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts gen; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-campaign-phi20
+
+== 1. the generator: 20 seeds x 2000 loops (phi), five JIT option sets x two closure modes against -joff ==
+seed 201: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6111 raised, 135 after iteration 60; a trace completed in 1242 loops (JIT-on shared run, jit on)
+seed 201: PASS
+seed 202: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5883 raised, 121 after iteration 60; a trace completed in 1276 loops (JIT-on shared run, jit on)
+seed 202: PASS
+seed 203: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5931 raised, 81 after iteration 60; a trace completed in 1273 loops (JIT-on shared run, jit on)
+seed 203: PASS
+seed 204: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6222 raised, 147 after iteration 60; a trace completed in 1278 loops (JIT-on shared run, jit on)
+seed 204: PASS
+seed 205: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5909 raised, 99 after iteration 60; a trace completed in 1317 loops (JIT-on shared run, jit on)
+seed 205: PASS
+seed 206: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5895 raised, 130 after iteration 60; a trace completed in 1275 loops (JIT-on shared run, jit on)
+seed 206: PASS
+seed 207: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5949 raised, 122 after iteration 60; a trace completed in 1263 loops (JIT-on shared run, jit on)
+seed 207: PASS
+seed 208: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6082 raised, 149 after iteration 60; a trace completed in 1265 loops (JIT-on shared run, jit on)
+seed 208: PASS
+seed 209: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5788 raised, 74 after iteration 60; a trace completed in 1288 loops (JIT-on shared run, jit on)
+seed 209: PASS
+seed 210: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5980 raised, 159 after iteration 60; a trace completed in 1274 loops (JIT-on shared run, jit on)
+seed 210: PASS
+seed 211: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5724 raised, 124 after iteration 60; a trace completed in 1261 loops (JIT-on shared run, jit on)
+seed 211: PASS
+seed 212: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6051 raised, 124 after iteration 60; a trace completed in 1259 loops (JIT-on shared run, jit on)
+seed 212: PASS
+seed 213: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6002 raised, 130 after iteration 60; a trace completed in 1267 loops (JIT-on shared run, jit on)
+seed 213: PASS
+seed 214: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5893 raised, 83 after iteration 60; a trace completed in 1277 loops (JIT-on shared run, jit on)
+seed 214: PASS
+seed 215: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5868 raised, 154 after iteration 60; a trace completed in 1239 loops (JIT-on shared run, jit on)
+seed 215: PASS
+seed 216: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5776 raised, 82 after iteration 60; a trace completed in 1265 loops (JIT-on shared run, jit on)
+seed 216: PASS
+seed 217: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6166 raised, 80 after iteration 60; a trace completed in 1226 loops (JIT-on shared run, jit on)
+seed 217: PASS
+seed 218: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5897 raised, 169 after iteration 60; a trace completed in 1279 loops (JIT-on shared run, jit on)
+seed 218: PASS
+seed 219: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5855 raised, 132 after iteration 60; a trace completed in 1268 loops (JIT-on shared run, jit on)
+seed 219: PASS
+seed 220: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5857 raised, 101 after iteration 60; a trace completed in 1291 loops (JIT-on shared run, jit on)
+seed 220: PASS
+
+== 2. the floor: t_rec.lua and t_jit2.lua against -joff, t_jit2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+RUN-BITJIT: PASS (parts run: gen; the others prove nothing here) (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-campaign-phi20)

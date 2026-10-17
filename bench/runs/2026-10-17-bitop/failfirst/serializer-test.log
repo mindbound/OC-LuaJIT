@@ -1,0 +1,206 @@
+mingw32-make: Entering directory 'C:/Users/astro/Downloads/OC-LuaJIT/serializer'
+gcc -std=c11 -O2 -g -Wall -Wextra -I ../build/native/luajit-windows-x86_64/src -DERIS_LJ_COMMIT='"1ee778a4e37122d8ca7d5733c590a47dafd6b15c"' -DERIS_LJ_SERHASH='"412be694"' eris_lj.c test_main.c ../build/native/luajit-windows-x86_64/src/libluajit.a -lm -o erislj_test.exe
+./erislj_test.exe tests/m1.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- scalars
+-- tables
+-- cycles and sharing
+-- metatables
+-- spkey protocol
+-- permanents
+-- unsupported types error cleanly
+-- malformed input is rejected, never crashes
+-- recursion limit
+-- oracle: persist -> unpersist -> persist
+-- regressions (review findings)
+
+M1 RESULT: ALL 82 TESTS PASS
+./erislj_test.exe tests/m2.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- closures: basics
+-- upvalues
+-- function environments
+-- spkey function protocol
+-- C functions
+-- malformed function records
+-- interop
+-- regressions (review findings)
+
+M2 RESULT: ALL 56 TESTS PASS
+./erislj_test.exe tests/m3.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- plain yields
+-- yields under protection and metamethods
+-- open upvalues
+-- nested coroutines
+-- coroutine states
+-- for-in loops
+-- mini-kernel (machine.lua's shape)
+
+M3 RESULT: ALL 79 TESTS PASS
+./erislj_test.exe tests/contract.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+contract required by ocelot-brain PersistenceAPI:
+  ok   settings('spkey', <uuid>) accepted
+  ok   settings('spkey', ...) accepted a SECOND time (re-settable)
+  ok   and the second value took effect
+  ok   settings('path', true) accepted
+  ok   settings('path', false) accepted again
+  ok   configure->persist->configure->unpersist, pass 1
+  ok   and pass 2 (the case a one-shot setting would break)
+  ok   spkey metafield under a randomised per-machine key
+  ok   and the closure ran on restore, rebuilding the object
+  ok   a suspended coroutine as the persist root (the _kernel tag)
+  ok   and it resumes to completion
+  ok   a bare closure as the persist root (the _stack tag)
+  ok   and it restores callable, with upvalues
+
+CONTRACT: all checks pass
+./erislj_test.exe tests/stack-universe.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+control (never saved): probe=host:file1 kind=table registered=true back=host:file3; loads=0
+-- U1: the defect, documented. persist(kernel) then persist(closure): two calls, two reference spaces (OC's save)
+  ok   U1 persist(kernel)
+  ok   U1 persist(closure)
+  [U1] kernel blob 11417 bytes, stack blob 11680 bytes (kernel pulled in: true)
+  ok   U1 unpersist(kernel)
+  ok   U1 unpersist(closure)
+  [U1] userdata.load calls: kernel restore 2, stack restore 2, for 2 persisted proxies
+  [U1] closure aliases the restored kernel: upvalue-id=false args-slot=false registry=false
+  ok   U1 restored closure runs
+  [U1] after the call: invoke's args slot in the kernel = table: 0x027f29f0c9e8; kernel sees probe=host:file1 kind=table registered=false back=NOT-UNWRAPPED:table
+  ok   U1 [defect] the stack blob carries the kernel (kernel-sized)
+  ok   U1 [defect] TWO host loads per persisted proxy: each blob restores its own kernel
+  ok   U1 [defect] the restored closure aliases a SECOND kernel, not the one at index 1
+  ok   U1 [defect] the closure's args=nil cleared the second thread's slot; the kernel's still holds the args table
+  ok   U1 [defect] the sync result is a proxy the kernel's registry does NOT know: the silent mode
+-- U1r: the same defect, documented, for the SynchronizedReturn shape: a result table at index 2
+  ok   U1r persist(kernel), persist(result table)
+  [U1r] kernel blob 11401 bytes, stack blob 11604 bytes (kernel pulled in: true)
+  ok   U1r unpersist both
+  [U1r] userdata.load calls: kernel restore 2, stack restore 3, for 3 persisted proxies; kernel sees probe=host:file1 kind=table registered=false back=NOT-UNWRAPPED:table
+  ok   U1r [defect] the stack blob carries the kernel (kernel-sized)
+  ok   U1r [defect] the two kept handles load twice, the result once: 2N+1 loads for N+1 proxies
+  ok   U1r [defect] the returned proxy is one the kernel's registry does NOT know: the silent mode
+-- U2: the fix. ONE persist of {kernel, closure}: one reference space
+  ok   U2 persist({kernel, closure})
+  [U2] combined blob 11690 bytes = kernel-only blob 11417 + 273 for the closure
+  ok   U2 unpersist
+  ok   U2 t[1] is the suspended kernel, t[2] the closure (push to indices 1 and 2)
+  [U2] userdata.load calls: 2 for 2 persisted proxies
+  [U2] closure aliases the restored kernel: upvalue-id=true args-slot=true registry=true
+  ok   U2 restored closure runs
+  [U2] after the call: invoke's args slot in the kernel = nil; kernel sees probe=host:file1 kind=table registered=true back=host:file3
+  ok   U2 exactly one host load per persisted proxy
+  ok   U2 closure's unwrapUserdata upvalue is the kernel's own chunk slot (rawequal upvalue id)
+  ok   U2 closure's args upvalue is invoke's frame slot in the kernel
+  ok   U2 closure's registry IS the kernel's registry
+  ok   U2 the closure's args=nil cleared the kernel's frame slot
+  ok   U2 call + resume gives the never-saved result
+-- U2r: the fix for the SynchronizedReturn shape: {kernel, result table}
+  ok   U2r persist({kernel, result table})
+  ok   U2r unpersist
+  [U2r] userdata.load calls: 3 for 3 persisted proxies; kernel sees probe=host:file1 kind=table registered=true back=host:file3
+  ok   U2r exactly one host load per persisted proxy
+  ok   U2r resume with the restored result gives the never-saved result
+-- U3: two rounds of the combined shape: one thread, no growth
+  ok   U3 round 1 persist
+  ok   U3 round 1 unpersist
+  ok   U3 round 2 persist (of the restored pair, untouched)
+  ok   U3 round 2 unpersist
+  [U3] round 1 blob 11690 bytes, round 2 blob 11690 bytes (delta 0); loads on round 2: 2
+  ok   U3 blob size stable across rounds (no second universe accreting)
+  ok   U3 still one host load per proxy after two rounds
+  ok   U3 closure still aliases the (twice-restored) kernel
+  [U3] kernel sees probe=host:file1 kind=table registered=true back=host:file3
+  ok   U3 call + resume after two rounds gives the never-saved result
+-- U4: stock-shape control. The closure's upvalues written BY VALUE, persisted separately
+  ok   U4 control: persist(kernel)
+  ok   U4 control: the kernel persisted its own sync closure
+  [U4] kernel blob 11417 bytes, stack blob 4782 bytes (kernel pulled in: false)
+  ok   U4 control: the stack blob does not carry the kernel (stock's shape)
+  ok   U4 control: unpersist both
+  [U4] userdata.load calls: kernel restore 2, stack restore 1 (the args proxy, loaded again into a COPY registry)
+  [U4] closure aliases the restored kernel: upvalue-id=false args-slot=false registry=false
+  ok   U4 control: closed-copy closure runs
+  [U4] the sync result's proxy: in the copy's registry=true, in the kernel's registry=false
+  [U4] kernel sees probe=host:file1 kind=table registered=false back=NOT-UNWRAPPED:table
+  ok   U4 control: a second registry, holding a second Value for the args proxy
+  ok   U4 control: the result proxy is registered only in the copy
+  ok   U4 control: the kernel's unwrapUserdata hands the host a plain table (the silent mode)
+counters: loads=21 saves=23
+FAILS: 0
+./erislj_test.exe tests/fingerprint.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- the VM-features word
+-- control: the surgery itself is sound
+-- every token flipped is refused by the fingerprint, nothing restored
+-- a fingerprint WITHOUT the word (the pre-word layout) is refused
+-- the refusal precedes the checksum
+
+FINGERPRINT RESULT: ALL 20 TESTS PASS
+./erislj_test.exe tests/strpack.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- the string library carries the three as C functions, and the walk names each once
+-- a coroutine holding them as upvalues, frozen mid-loop, resumes after a restore
+
+STRPACK RESULT: ALL 11 TESTS PASS
+./erislj_test.exe tests/bitop.lua
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+-- the uninterrupted run computes Lua 5.3.6's results
+  FAIL: x and h equal PUC 5.3.6's (8245983005562532, 5497560713767387)  -- 0 1280000
+-- a coroutine frozen mid-loop resumes after a restore to the same results
+  FAIL: its folded constants are 64-bit results: 1 << 62, ~0 >> 11, ~(2^53 - 1), -2^63 | 0  -- 1073741824 2097151 -1 0
+  FAIL: an inexact result still raises, unfolded (1 << 62 | 1) and at run time (-n >> 1)  -- true 1073741825 / true 2147481148
+
+BITOP RESULT: 4 passed, 3 FAILED
+mingw32-make: *** [makefile:71: test] Error 3
+mingw32-make: Leaving directory 'C:/Users/astro/Downloads/OC-LuaJIT/serializer'

@@ -1,0 +1,37 @@
+run-bitjit: ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts gen floor fix1; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-ff-r3
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+seed 1: shared/jon=73 shared/hl1=81 shared/ms0=71 shared/he1=86 shared/noloop=80 shared/puc=1830 fresh/jon=61 fresh/hl1=63 fresh/ms0=60 fresh/he1=65 fresh/noloop=62 fresh/puc=1830
+    coverage: 2000 loops, 14000 runs, 0 raised, 0 after iteration 60; a trace completed in 1990 loops (JIT-on shared run, jit on)
+seed 1: FAIL -- shared/jon differs from -joff, first cases:22 28 48; shared/hl1 differs from -joff, first cases:4 22 28; shared/ms0 differs from -joff, first cases:22 28 48; shared/he1 differs from -joff, first cases:4 22 28; shared/noloop differs from -joff, first cases:22 28 48; shared/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 4; fresh/jon differs from -joff, first cases:4 22 28; fresh/hl1 differs from -joff, first cases:4 28 48; fresh/ms0 differs from -joff, first cases:4 22 28; fresh/he1 differs from -joff, first cases:4 22 28; fresh/noloop differs from -joff, first cases:4 22 28; fresh/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 4;
+seed 2: shared/jon=67 shared/hl1=67 shared/ms0=58 shared/he1=69 shared/noloop=63 shared/puc=1818 fresh/jon=55 fresh/hl1=52 fresh/ms0=47 fresh/he1=54 fresh/noloop=50 fresh/puc=1818
+    coverage: 2000 loops, 14000 runs, 0 raised, 0 after iteration 60; a trace completed in 1989 loops (JIT-on shared run, jit on)
+seed 2: FAIL -- shared/jon differs from -joff, first cases:44 49 72; shared/hl1 differs from -joff, first cases:44 49 72; shared/ms0 differs from -joff, first cases:44 49 72; shared/he1 differs from -joff, first cases:44 49 72; shared/noloop differs from -joff, first cases:44 49 72; shared/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 3; fresh/jon differs from -joff, first cases:44 101 121; fresh/hl1 differs from -joff, first cases:44 101 121; fresh/ms0 differs from -joff, first cases:44 101 121; fresh/he1 differs from -joff, first cases:44 101 121; fresh/noloop differs from -joff, first cases:44 101 121; fresh/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 3;
+seed 3: shared/jon=53 shared/hl1=55 shared/ms0=47 shared/he1=56 shared/noloop=58 shared/puc=1821 fresh/jon=43 fresh/hl1=44 fresh/ms0=42 fresh/he1=44 fresh/noloop=43 fresh/puc=1821
+    coverage: 2000 loops, 14000 runs, 0 raised, 0 after iteration 60; a trace completed in 1989 loops (JIT-on shared run, jit on)
+seed 3: FAIL -- shared/jon differs from -joff, first cases:12 26 45; shared/hl1 differs from -joff, first cases:12 26 45; shared/ms0 differs from -joff, first cases:12 45 78; shared/he1 differs from -joff, first cases:12 45 78; shared/noloop differs from -joff, first cases:12 26 45; shared/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 3; fresh/jon differs from -joff, first cases:12 26 45; fresh/hl1 differs from -joff, first cases:12 26 45; fresh/ms0 differs from -joff, first cases:12 26 45; fresh/he1 differs from -joff, first cases:12 26 45; fresh/noloop differs from -joff, first cases:12 26 45; fresh/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 3;
+seed 4: shared/jon=74 shared/hl1=78 shared/ms0=68 shared/he1=79 shared/noloop=72 shared/puc=1845 fresh/jon=57 fresh/hl1=59 fresh/ms0=52 fresh/he1=59 fresh/noloop=54 fresh/puc=1845
+    coverage: 2000 loops, 14000 runs, 0 raised, 0 after iteration 60; a trace completed in 1986 loops (JIT-on shared run, jit on)
+seed 4: FAIL -- shared/jon differs from -joff, first cases:7 75 114; shared/hl1 differs from -joff, first cases:7 75 114; shared/ms0 differs from -joff, first cases:7 75 114; shared/he1 differs from -joff, first cases:7 75 114; shared/noloop differs from -joff, first cases:7 75 114; shared/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 4; fresh/jon differs from -joff, first cases:75 118 131; fresh/hl1 differs from -joff, first cases:75 118 131; fresh/ms0 differs from -joff, first cases:75 131 174; fresh/he1 differs from -joff, first cases:75 118 131; fresh/noloop differs from -joff, first cases:75 131 136; fresh/puc: -joff differs from PUC 5.3.6 with U1-B's rule, first cases:1 2 4;
+
+== 2. the floor: t_rec.lua and t_jit2.lua against -joff, t_jit2.lua against PUC 5.3.6 ==
+FAIL t_rec seed 1: jon=141[first:2 3 4] hl1=141[first:2 3 4] ms0=141[first:2 3 4]  (2000 runs, 0 raised, 0 after iteration 60)
+FAIL t_rec seed 2: jon=125[first:2 3 7] hl1=125[first:2 3 7] ms0=125[first:2 3 7]  (2000 runs, 0 raised, 0 after iteration 60)
+FAIL t_rec seed 3 (counts): jon=135[first:2 3 6] hl1=135[first:2 3 6] ms0=135[first:2 3 6]  (2000 runs, 0 raised, 0 after iteration 60)
+FAIL t_rec seed 4 (counts): jon=132[first:3 5 6] hl1=132[first:3 5 6] ms0=132[first:3 5 6]  (2000 runs, 0 raised, 0 after iteration 60)
+FAIL t_jit2 (27 loops, 1 of them end in a raise): jon=2[narrow-entry bnot] O0=0 O1=0 hl1=2[narrow-entry bnot] ms0=2[narrow-entry bnot] he1=2[narrow-entry bnot]
+FAIL t_jit2: PUC 5.3.6 with U1-B's rule differs from -joff in 25 loops, first:narrow-add narrow-entry narrow-sub-shl
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+    or0	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    xor0	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    andm1	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    shl0	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    shr0	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    sar0	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    notnot	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    mask	x=100000 y=8192	traces=1 typeins=0 loop=JFORL ok
+    p4v: 8 of 8 variants compiled without type instability or blacklisting
+PASS fix1: all 8 p4 loops compiled (no type-instability abort, none blacklisted), results equal -joff's
+
+RUN-BITJIT: FAIL (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-ff-r3)

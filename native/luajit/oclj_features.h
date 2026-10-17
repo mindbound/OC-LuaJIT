@@ -76,6 +76,31 @@
  *       'L' are 8 bytes on every platform. */
 #define OCLJ_LIB_STRPACK 1
 
+/* OUR CHANGES TO WHAT LuaJIT'S BYTECODE MEANS.  Each one changes the result
+ * of an existing opcode, or of a constant the parser folds, so a function
+ * dumped by one build computes something else when another build loads it.
+ * Each is named here, once: serializer/eris_lj.c names it in the blob
+ * fingerprint's VM-features word from this macro, build-native.sh checks the
+ * word against what luajit.exe does, and LuaJIT's own dump format refuses
+ * the other build's bytecode by BCDUMP_VERSION (lj_bcdump.h:36-39 demands
+ * 0x80 or more for any private change).
+ *   OCLJ_OPS_BIT64 -- & | ~ << >> ~>> and unary ~ (BC_BNOT..BC_BSAR) compute
+ *       Lua 5.3.6's 64-bit integer results, in the parser's constant folding,
+ *       the interpreter and the JIT (native/luajit/oclj_bitop.h and six of
+ *       the seven patch-bitop-*.sh scripts; the seventh,
+ *       patch-bitop-jitlib.sh, makes jit.util return bytecode words and
+ *       snapshot entries unsigned, so that LuaJIT's own jit/bc.lua and
+ *       jit/dump.lua decode them exactly with these operators); upstream
+ *       computes BitOp's 32-bit ones.  A result with more than 53
+ *       significant bits has no double and raises "result of '<op>' has more
+ *       than 53 significant bits (mask each operand to 32 bits first)", so
+ *       every result that does not raise is 5.3.6's.  oclj_bitop.h refuses
+ *       to compile without it.  Word token "bit64" ("bit32" without it).
+ *       BCDUMP_VERSION is 0x80 (native/luajit/patch-bitop-bcdump.sh), the
+ *       first private value; the next private change to the bytecode takes
+ *       0x81. */
+#define OCLJ_OPS_BIT64 1
+
 #if defined(LUAJIT_USE_SYSMALLOC)
 #error "OC-LuaJIT (oclj_features.h): LUAJIT_USE_SYSMALLOC compiles lj_alloc out; lj52shim.c keeps every state in its own lj_alloc arena (lj52_back)"
 #endif

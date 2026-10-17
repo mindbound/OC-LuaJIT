@@ -1,0 +1,1 @@
+gcc -std=c11 -O2 -g -Wall -Wextra -I ../build/native/luajit-windows-x86_64/src -DERIS_LJ_COMMIT='"1ee778a4e37122d8ca7d5733c590a47dafd6b15c"' -DERIS_LJ_SERHASH='"412be694"' eris_lj.c test_main.c ../build/native/luajit-windows-x86_64/src/libluajit.a -lm -o erislj_test.exe

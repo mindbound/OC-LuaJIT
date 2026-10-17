@@ -1,0 +1,10 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src/luajit; seeds 1..1 x 1000 cases x 16 tuples; hotmin 0.25; results /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-20261017T100340Z
+seed 1: 0 -- 16000 tuples, EXACT 10841, INEXACT 5159 (of them 5.3.6 computes a number: 4898); REF results: E:INEXACT 5159, E:NOINT 807, E:TYPE 621, num 9413 (/mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-20261017T100340Z/puc-1.txt)
+    /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-20261017T100340Z/ours-jon-1.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 409/1000 hotU 1514/3000 traces 2817 aborts 3187 [NYI: bytecode FNEW=5,NYI: bytecode UCLO=21,NYI: bytecode VARG=31,NYI: return to lower frame=13,bad argument type=2925,call unroll limit reached=29,inner loop in root trace=148,leavin
+      => PASS
+    /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-20261017T100340Z/ours-joff-1.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 5159 of INEXACT 5159; sim-round MISMATCH 5159 of REF E:INEXACT 5159
+BITFUZZ PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-20261017T100340Z)

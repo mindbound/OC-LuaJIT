@@ -1,0 +1,25 @@
+extracted 109 lines of the jit gate from /c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh
+[build]     jit tools gate (luajit -bl, -jdump): jitlib f=1 hot=206208 snapend=-16777216 bc=118 bl=0 blerr=1 bldec=0 jd=5/0/4/4 jdb=11/0 jdim=1/1 jdline=0
+C:\Users\astro\Downloads\OC-LuaJIT\build\native\luajit-windows-x86_64\src\luajit.exe: ./jit\bc.lua:68: result of '>>' has more than 53 significant bits
+BUILD FAIL: the jit tools gate read
+           jitlib f=1 hot=206208 snapend=-16777216 bc=118 bl=0 blerr=1 bldec=0 jd=5/0/4/4 jdb=11/0 jdim=1/1 jdline=0
+         want
+           jitlib f=1 hot=206208 snapend=4278190080 bc=118 bl=118 blerr=0 bldec=3 jd=1/1/0/0 jdb=12/1 jdim=1/1 jdline=1
+         (stderr of -bl above, if any; the probe is /c/Users/astro/Downloads/OC-LuaJIT/bench/runs/2026-10-17-bitop/failfirst2/jit-gate-work/jitlib.lua, run in /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src)
+         the probe's own fields other than those: f and hot are PUC 5.3.6's values,
+           and bc counts the probe's instructions without decoding them; snapend
+           -16777216 is jit.util.tracesnap returning snapshot entries signed again
+           (native/luajit/patch-bitop-jitlib.sh); an error text means require found
+           no jit/*.lua in /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src, or the probe failed.
+         bl other than bc, blerr other than 0, bldec other than 3: luajit -bl did not list
+           every instruction, wrote to stderr (jit/bc.lua raising on a word), or decoded
+           a negative word wrongly -- jit.util.funcbc returns the word signed again
+           (native/luajit/patch-bitop-jitlib.sh did not reach lib_jit.o).
+         jd other than 1/1/0/0: under -jdump the loop did not compile once, as a loop,
+           without an abort or a failed dump handler: an abort with 'VM handler failed'
+           is jit/bc.lua raising in the record handler, the same cause.
+         jdb other than 12/1: the dump did not list the twelve recorded instructions, or
+           listed the JMP (A = 9, a negative word) with another target.
+         jdim other than 1/1: the IR or machine-code dump is missing (jit/dump.lua or
+           jit/dis_x64.lua failed).
+         jdline other than 1: the probe's line differs under -jdump.

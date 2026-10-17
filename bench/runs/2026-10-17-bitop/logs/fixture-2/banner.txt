@@ -1,0 +1,2 @@
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)

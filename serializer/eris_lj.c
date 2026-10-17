@@ -128,12 +128,22 @@
  * a blob that crossed the change would be checked name by name only (one saved
  * with them fails mid-restore with "unknown permanent" on a build without
  * them, and one saved without them restores silently with the sandbox's
- * string.pack nil until a reboot).  Eight tokens, always, in this order; a
- * restore requires an exact match.  It is derived HERE, from this file's own
- * macros, so it is true only because this file sees libluajit.a's feature
- * set: the #error under the includes above, the GG_State check (eris_lj_ggsize
- * below, compared by lj52_newstate and test_main.c), and build-native.sh's
- * check of the word against the built luajit.exe. */
+ * string.pack nil until a reboot).  And bit, the first token that names what
+ * BYTECODE means: bit64 when oclj_features.h says OCLJ_OPS_BIT64 (& | ~ << >>
+ * ~>> and unary ~ compute Lua 5.3.6's 64-bit results, native/luajit/
+ * oclj_bitop.h, in the parser, the interpreter and the JIT), bit32 for
+ * upstream's 32-bit BitOp results.  The parser folds constant operands, so a
+ * dumped prototype carries the folded RESULTS as constants (1 << 32 is
+ * 4294967296 under bit64 and 1 under bit32), and the same operators compute
+ * differently in a restored thread.  BCDUMP_VERSION moved to 0x80 with it, so
+ * lj_bcread refuses such a dump on the other build (lj_bcread.c:400), but
+ * only mid-restore, at the first closure; the token refuses the blob at its
+ * header, before a single object is restored.  Nine tokens, always, in this
+ * order; a restore requires an exact match.  It is derived HERE, from this
+ * file's own macros, so it is true only because this file sees libluajit.a's
+ * feature set: the #error under the includes above, the GG_State check
+ * (eris_lj_ggsize below, compared by lj52_newstate and test_main.c), and
+ * build-native.sh's check of the word against the built luajit.exe. */
 #if LJ_HASFFI
 #define ELJ_W_FFI "ffi1"
 #else
@@ -174,7 +184,23 @@
 #else
 #define ELJ_W_PACK "pack0"
 #endif
-#define ERIS_LJ_FEATURES ELJ_W_FFI "." ELJ_W_52 "." ELJ_W_GC "." ELJ_W_FR "." ELJ_W_DN "." ELJ_W_END "." ELJ_W_PTR "." ELJ_W_PACK
+#if defined(OCLJ_OPS_BIT64) && OCLJ_OPS_BIT64
+#define ELJ_W_BIT "bit64"
+#else
+#define ELJ_W_BIT "bit32"
+#endif
+/* bit64 promises dumps that a build without the change refuses.  Every dump
+ * carries BCDUMP_VERSION (lj_bcwrite.c:397), and this file sees the build
+ * copy's lj_bcdump.h, as libluajit.a did, so the macro without the bump is a
+ * build error here.  One direction only: lj_bcdump.h:35-37 asks for 0x80 or
+ * more after ANY private change to the bytecode, so a bumped version without
+ * the macro is no error, and tests/negctl-fingerprint.sh's bitword arm
+ * compiles this file against a header copy that lacks the macro and keeps
+ * the 0x80 lj_bcdump.h. */
+#if defined(OCLJ_OPS_BIT64) && OCLJ_OPS_BIT64 && BCDUMP_VERSION < 0x80
+#error "eris_lj.c: oclj_features.h says OCLJ_OPS_BIT64 (word token bit64) but lj_bcdump.h's BCDUMP_VERSION is below 0x80: a dump holding 64-bit folded constants would load on a 32-bit build (native/luajit/patch-bitop-bcdump.sh sets 0x80)"
+#endif
+#define ERIS_LJ_FEATURES ELJ_W_FFI "." ELJ_W_52 "." ELJ_W_GC "." ELJ_W_FR "." ELJ_W_DN "." ELJ_W_END "." ELJ_W_PTR "." ELJ_W_PACK "." ELJ_W_BIT
 #define ERIS_LJ_FINGERPRINT ERIS_LJ_COMMIT "|" LUAJIT_VERSION "|" ERIS_LJ_SERHASH "|" ERIS_LJ_FEATURES
 /* The header stores the length in one byte.  Refuse at BUILD time: a runtime
  * check fails every persist, which the architecture answers by dropping the

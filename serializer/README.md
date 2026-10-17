@@ -34,7 +34,13 @@ fail (`tests/negctl-fingerprint.sh`). `tests/strpack.lua` persists and
 restores a coroutine holding `string.pack`, `string.unpack` and
 `string.packsize` mid-loop: our LuaJIT's string library carries them (Lua
 5.3.6's, `native/luajit/oclj_strpack.c`), so they are permanents a blob holds
-by name.
+by name. `tests/bitop.lua` persists and restores a coroutine frozen inside a
+compiled loop of Lua 5.3.6's 64-bit bitwise operators
+(`native/luajit/oclj_bitop.h`): it must resume to PUC Lua 5.3.6's results,
+its folded constants must come back as 64-bit results, and a result with
+more than 53 significant bits must still raise after the restore, with the
+whole message: `result of '<op>' has more than 53 significant bits (mask
+each operand to 32 bits first)`.
 
 ## API
 
@@ -78,14 +84,22 @@ The mode is per-VM, like the other settings, and the list sits beside them.
 
 The fingerprint pins the blob to one natives build. It is
 `LuaJIT commit|LUAJIT_VERSION|serializer hash|VM-features word`; the word is
-derived in `eris_lj.c` from the LuaJIT macros it is compiled with, eight
-tokens in a fixed order (`ffi0.lua52.gc64.fr2.dn0.le.p64.pack1` on x64). The
-eighth, `pack`, names a library rather than a layout: `string.pack`,
-`string.unpack` and `string.packsize` are in the string library
-(`OCLJ_LIB_STRPACK` in `native/luajit/oclj_features.h`), three C functions
-within reach of `_G` and so three permanents. A blob whose fingerprint
-differs is refused before its checksum is read and before any object is
-restored, and the error names the field that differs. Numbers
+derived in `eris_lj.c` from the LuaJIT macros it is compiled with, nine
+tokens in a fixed order (`ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64` on
+x64). The eighth, `pack`, names a library rather than a layout:
+`string.pack`, `string.unpack` and `string.packsize` are in the string
+library (`OCLJ_LIB_STRPACK` in `native/luajit/oclj_features.h`), three C
+functions within reach of `_G` and so three permanents. The ninth, `bit`,
+names what bytecode means: under `bit64` (`OCLJ_OPS_BIT64`) the bitwise
+operators compute Lua 5.3.6's 64-bit results, and the parser folds constant
+operands into a prototype's constants, so a dump holds 64-bit results where
+upstream's holds 32-bit ones (`1 << 32` is 4294967296, not 1). The bytecode
+version moved to 0x80 with it, so a closure dumped on the other side of the
+change is refused by `lj_bcread` too, but only mid-restore; the token refuses
+the whole blob first. `tests/fingerprint.lua` checks the `pack` and `bit`
+tokens against what the archive it runs on actually provides. A blob whose
+fingerprint differs is refused before its checksum is read and before any
+object is restored, and the error names the field that differs. Numbers
 are canonical (exact integers as zigzag varints, everything else as raw IEEE
 bytes), so the value encoding is the same on DUALNUM (arm64) and non-DUALNUM
 (x64) builds; the word's `dn` token still refuses a blob across that boundary,

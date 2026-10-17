@@ -1,0 +1,6 @@
+b0 run1: bit 0.30 ns/it (r=9005056)  ref 3.65 ns/it (r=6861824)  ratio 0.08  crc 48.00 ns/byte (r=-908476929) || rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 2.90 ns/byte (r=1136067215) 
+shipped run1: bit 0.40 ns/it (r=9005056)  ref 3.70 ns/it (r=6861824)  ratio 0.11  crc 70.00 ns/byte (r=3386490367) || rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 7.20 ns/byte (r=1136067215) 
+b0 run2: bit 0.35 ns/it (r=9005056)  ref 3.65 ns/it (r=6861824)  ratio 0.10  crc 49.00 ns/byte (r=-908476929) || rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 2.80 ns/byte (r=1136067215) 
+shipped run2: bit 0.30 ns/it (r=9005056)  ref 3.70 ns/it (r=6861824)  ratio 0.08  crc 70.00 ns/byte (r=3386490367) || rgb 3.70 ns (r=1748186903) ref 4.90 ns (r=1748186903) ratio 0.76 | crc-table 7.20 ns/byte (r=1136067215) 
+b0 run3: bit 0.35 ns/it (r=9005056)  ref 3.65 ns/it (r=6861824)  ratio 0.10  crc 48.00 ns/byte (r=-908476929) || rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 2.90 ns/byte (r=1136067215) 
+shipped run3: bit 0.40 ns/it (r=9005056)  ref 3.70 ns/it (r=6861824)  ratio 0.11  crc 69.50 ns/byte (r=3386490367) || rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 7.20 ns/byte (r=1136067215) 

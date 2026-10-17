@@ -21,10 +21,14 @@
 #   eris_lj.o  our Eris-API-compatible serializer (serializer/eris_lj.c)
 #   libluajit.a  LuaJIT 2.1 static, with the feature set native/luajit/
 #              oclj_features.h names (LUA52COMPAT + CHECKHOOK + DISABLE_FFI),
-#              plus FIVE changes made on the build copy, three of them to
-#              functions and one adding three.  lj_func_freeproto scrubs
-#              the trace-abort penalty cache of the dying prototype's loop
-#              heads (native/luajit/patch-penalty-scrub.sh).  The cache is
+#              plus TWELVE changes made on the build copy: three to
+#              functions, one including that header, one adding three
+#              functions, and round 3's seven, six of which give the bitwise
+#              operators Lua 5.3.6's 64-bit results and one of which keeps
+#              LuaJIT's own jit.* tools exact under them.
+#              lj_func_freeproto scrubs the trace-abort penalty cache of the
+#              dying prototype's loop heads
+#              (native/luajit/patch-penalty-scrub.sh).  The cache is
 #              keyed by bytecode ADDRESS and upstream never clears it when a
 #              prototype dies, so on a heap that hands a freed block straight
 #              back -- the machine's was the C library's until 2026-10-02,
@@ -65,6 +69,27 @@
 #              a fork that may take 5.3 functions (decided 2026-10-13), and
 #              luaopen_string is the one opener jnlua, luajit.exe and every
 #              test reach.  Same steps as the scrub, all three.
+#              And round 3's seven (native/luajit/patch-bitop-*.sh, decided
+#              2026-10-17): & | ~ << >> ~>> and unary ~ compute Lua 5.3.6's
+#              64-bit integer results -- 1 << 32 is 4294967296, no longer 1
+#              -- in the parser's constant folding (lj_parse.c), the
+#              interpreter's fast path (vm_x64.dasc) and slow path
+#              (lj_meta.c), the trace recorder (lj_record.c) and the fold
+#              engine (lj_opt_fold.c), with the rules in native/luajit/
+#              oclj_bitop.h and the code in oclj_bitop_meta.c,
+#              oclj_bitop_rec.c, oclj_bitop_fold.c and oclj_num53.h (5.3.6's
+#              number readers, which oclj_strpack.c shares), all copied next
+#              to them.  A result with more than 53 significant bits has no
+#              double and raises; every other result is 5.3.6's.  The same
+#              bytecode now computes something else, so lj_bcdump.h's
+#              BCDUMP_VERSION becomes 0x80 and each build refuses the other's
+#              dumps.  The seventh (patch-bitop-jitlib.sh) makes jit.util
+#              (lib_jit.c) return bytecode words and snapshot entries
+#              unsigned: LuaJIT's own jit/bc.lua decodes them with these
+#              operators, and a negative word made `luajit -bl` raise and
+#              -jdump abort the traces it recorded.  Same steps as the
+#              scrub, all seven; vm_x64.dasc also because make regenerates
+#              host/buildvm_arch.h from it.
 #
 # THE LUAJIT FEATURE SET is native/luajit/oclj_features.h, with the reason
 # for each flag: LUAJIT_ENABLE_LUA52COMPAT (OC's platform is Lua 5.2 source),
@@ -475,7 +500,7 @@ if [ ! -d "$LJ_WORK" ]; then
   rm -rf "$LJ_WORK/.git"
 fi
 LJ=$LJ_WORK/src
-# THE FIRST OF THE FIVE LUAJIT FILES WE CHANGE, on the copy, every
+# THE FIRST OF THE TWELVE LUAJIT CHANGES, on the copy, every
 # build.  The copy
 # persists between builds, and the patch script's "already patched" path
 # verifies only four marker lines -- so a stale or hand-edited block on the
@@ -637,6 +662,71 @@ sh "$OCLJ_REPO/native/luajit/patch-strpack-register.sh" "$LJ/lib_string.c" "$LJ/
   || fail "$LJ/lib_string.c does not register string.pack exactly once -- the copy make is
          about to compile is not the patched one"
 say "    lib_string.c: registers string.pack/packsize/unpack once (asserted by content before make)"
+# THE SIXTH TO THE TWELFTH, ROUND 3: Lua 5.3.6's bitwise operators with
+# 64-bit results (native/luajit/oclj_features.h, OCLJ_OPS_BIT64).  Seven
+# LuaJIT files, each patched by its own script:
+#   lj_parse.c     patch-bitop-parse.sh    constant folding
+#   vm_x64.dasc    patch-bitop-vm.sh       the interpreter's fast path
+#   lj_meta.c      patch-bitop-meta.sh     the slow path, oclj_bitop_meta.c
+#   lj_record.c    patch-bitop-record.sh   the recorder, oclj_bitop_rec.c
+#   lj_opt_fold.c  patch-bitop-fold.sh     the fold engine, oclj_bitop_fold.c
+#   lj_bcdump.h    patch-bitop-bcdump.sh   BCDUMP_VERSION 0x80
+#   lib_jit.c      patch-bitop-jitlib.sh   jit.util's words unsigned, for
+#                                          LuaJIT's own jit/*.lua tools
+# and five tracked files copied next to them: those three, oclj_bitop.h (the
+# rules) and oclj_num53.h (5.3.6's number readers, which oclj_strpack.c
+# includes too, so it is copied before any make).  Same steps as the five
+# above, per file: the pristine checkout asserted (no round-3 marker, none of
+# the five files), the file re-copied, no round-3 marker after the copy,
+# patched, its own script's marker exactly once and no other script's before
+# make, and each include it gained present once; the five files copied and
+# compared.  vm_x64.dasc MUST be re-copied for one more reason: `make clean`
+# deletes host/buildvm_arch.h, and make regenerates it with DynASM from
+# whatever vm_x64.dasc the copy holds.  After make: each object newer than
+# its sources, buildvm_arch.h newer than vm_x64.dasc and lj_vm.o newer than
+# it, DynASM's command line in the log, the patched comment lines echoed in
+# buildvm_arch.h, no warning naming a round-3 file, the bitops gate and the
+# jit tools gate.  The fast path is patched in vm_x64.dasc only; on another
+# architecture DynASM would assemble an unpatched interpreter.
+[ "$OCLJ_ARCH" = x86_64 ] || fail "round 3's interpreter fast path is patched in vm_x64.dasc only (native/luajit/patch-bitop-vm.sh):
+         on $OCLJ_ARCH DynASM would assemble upstream's 32-bit bit operators, which the parser,
+         the slow path and the JIT no longer agree with.  $OCLJ_ARCH is parked as unsupported."
+BITOP_ANY='OC-LuaJIT (native/luajit/patch-bitop-'
+BITOP_FILES='oclj_bitop.h oclj_bitop_meta.c oclj_bitop_rec.c oclj_bitop_fold.c oclj_num53.h'
+BITOP_PATCHES='lj_parse.c:parse vm_x64.dasc:vm lj_meta.c:meta lj_record.c:record lj_opt_fold.c:fold lj_bcdump.h:bcdump lib_jit.c:jitlib'
+for f in $BITOP_FILES; do
+  [ -f "$OCLJ_REPO/native/luajit/$f" ] || fail "no $OCLJ_REPO/native/luajit/$f: round 3's bitwise operators"
+  [ -e "$OCLJ_LUAJIT/src/$f" ] \
+    && fail "$OCLJ_LUAJIT/src/$f exists: the pinned checkout must stay pristine.
+         The file lives in native/luajit and is copied to the build copy only."
+  cp -f "$OCLJ_REPO/native/luajit/$f" "$LJ/$f" || fail "cannot copy native/luajit/$f into $LJ"
+  cmp -s "$OCLJ_REPO/native/luajit/$f" "$LJ/$f" \
+    || fail "$LJ/$f differs from $OCLJ_REPO/native/luajit/$f right after the copy"
+done
+say "    $BITOP_FILES: copied from native/luajit and compared"
+for p in $BITOP_PATCHES; do
+  f=${p%%:*}
+  s=patch-bitop-${p#*:}.sh
+  grep -q -F -- "$BITOP_ANY" "$OCLJ_LUAJIT/src/$f" \
+    && fail "$OCLJ_LUAJIT/src/$f carries a round-3 bit-operator patch: the pinned checkout must
+         stay pristine.  The patch belongs on the build copy only."
+  cp -f "$OCLJ_LUAJIT/src/$f" "$LJ/$f" \
+    || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/$f over $LJ/$f"
+  grep -q -F -- "$BITOP_ANY" "$LJ/$f" \
+    && fail "$LJ/$f still carries a round-3 patch right after the pristine re-copy -- the copy did not take"
+  sh "$OCLJ_REPO/native/luajit/$s" "$LJ/$f" "$LJ/$f" || fail "the round-3 patch $s refused (see above)"
+  [ "$(grep -c -F -- "OC-LuaJIT (native/luajit/$s)" "$LJ/$f")" = "1" ] \
+    && [ "$(grep -c -F -- "$BITOP_ANY" "$LJ/$f")" = "1" ] \
+    || fail "$LJ/$f does not carry $s's marker exactly once and no other round-3 marker -- the
+         copy make is about to compile is not the patched one"
+done
+for p in lj_parse.c:oclj_bitop.h lj_meta.c:oclj_bitop_meta.c lj_record.c:oclj_bitop.h \
+         lj_record.c:oclj_bitop_rec.c lj_opt_fold.c:oclj_bitop.h lj_opt_fold.c:oclj_bitop_fold.c; do
+  [ "$(grep -c -F -- '#include "'"${p#*:}"'"' "$LJ/${p%%:*}")" = "1" ] \
+    || fail "$LJ/${p%%:*} does not include ${p#*:} exactly once -- the copy make is about to
+         compile is not the patched one"
+done
+say "    lj_parse.c vm_x64.dasc lj_meta.c lj_record.c lj_opt_fold.c lj_bcdump.h lib_jit.c: pristine copies re-taken and patched (round 3; markers and includes asserted by content before make)"
 make -C "$LJ" clean >/dev/null 2>&1
 # Q= makes the Makefile echo full compiler command lines, so the flags can be
 # asserted rather than assumed.
@@ -669,8 +759,9 @@ grep -q -F 'lj_ffrecord.c' "$OCLJ_BUILD/luajit_build.log" \
 say "    lj_ffrecord.o recompiled from the patched lj_ffrecord.c ($(date -r "$LJ/lj_ffrecord.o" +%H:%M:%S) > $(date -r "$LJ/lj_ffrecord.c" +%H:%M:%S))"
 [ -f "$LJ/lib_string.o" ] || fail "no $LJ/lib_string.o after make"
 [ "$LJ/lib_string.o" -nt "$LJ/lib_string.c" ] && [ "$LJ/lib_string.o" -nt "$LJ/oclj_strpack.c" ] \
-  || fail "lib_string.o is not newer than the patched lib_string.c and oclj_strpack.c -- make
-         did not recompile it"
+  && [ "$LJ/lib_string.o" -nt "$LJ/oclj_num53.h" ] \
+  || fail "lib_string.o is not newer than the patched lib_string.c, oclj_strpack.c and the
+         oclj_num53.h it includes -- make did not recompile it"
 # Anchored on the compile line itself, which ends '-c -o lib_string.o
 # lib_string.c' (BUILDMODE=static: the Makefile's dynamic compile is '@:', so
 # this is the only one echoed).  The bare name would not do: buildvm's five
@@ -692,6 +783,57 @@ if grep -E '(lib_string|oclj_strpack)[.]c:[0-9]+(:[0-9]+)?: warning' "$OCLJ_BUIL
   fail "lib_string.c or oclj_strpack.c warned in the LuaJIT build (above)"
 fi
 say "    lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)"
+# Round 3's objects (THE SIXTH TO THE TWELFTH, above): each newer than its
+# patched source and every round-3 file it includes, and its compile line in
+# the log, anchored as lib_string.c's is.  lj_bcwrite.o writes the dump's
+# version byte and lj_bcread.o refuses any other (lj_bcwrite.c:397,
+# lj_bcread.c:400), so both must be newer than the patched lj_bcdump.h.
+# lib_jit.o is jit.util (patch-bitop-jitlib.sh).
+for p in lj_parse:lj_parse.c,oclj_bitop.h,oclj_num53.h \
+         lj_meta:lj_meta.c,oclj_bitop_meta.c,oclj_bitop.h,oclj_num53.h \
+         lj_record:lj_record.c,oclj_bitop_rec.c,oclj_bitop.h,oclj_num53.h \
+         lj_opt_fold:lj_opt_fold.c,oclj_bitop_fold.c,oclj_bitop.h,oclj_num53.h \
+         lj_bcwrite:lj_bcwrite.c,lj_bcdump.h lj_bcread:lj_bcread.c,lj_bcdump.h \
+         lib_jit:lib_jit.c; do
+  o=${p%%:*}
+  [ -f "$LJ/$o.o" ] || fail "no $LJ/$o.o after make"
+  for src in $(echo "${p#*:}" | tr ',' ' '); do
+    # -f first: test's -nt is true when the second file is missing.
+    [ -f "$LJ/$src" ] && [ "$LJ/$o.o" -nt "$LJ/$src" ] \
+      || fail "$o.o is not newer than $src (or $src is missing) -- make did not recompile it from round 3's sources"
+  done
+  grep -q -E -- '-c -o '"$o"'[.]o '"$o"'[.]c[[:cntrl:]]?$' "$OCLJ_BUILD/luajit_build.log" \
+    || fail "$o.c never reached the compiler command line (log: $OCLJ_BUILD/luajit_build.log)"
+done
+# And the patched vm_x64.dasc reached the interpreter: DynASM regenerated
+# host/buildvm_arch.h from it (its command line in the log, CRLF-tolerant
+# like lib_string.c's), buildvm made lj_vm.o from that (on ELF through
+# lj_vm.S), and since DynASM echoes every line of the .dasc into
+# buildvm_arch.h as a //| comment, the patch's three OC-LuaJIT comment lines
+# -- one per hunk, two of them saying "OC-LuaJIT: Lua 5.3's" -- are there.
+[ -f "$LJ/host/buildvm_arch.h" ] || fail "no $LJ/host/buildvm_arch.h after make"
+[ "$LJ/host/buildvm_arch.h" -nt "$LJ/vm_x64.dasc" ] \
+  || fail "host/buildvm_arch.h is not newer than the patched vm_x64.dasc -- DynASM did not regenerate it"
+grep -q -E -- '-o host/buildvm_arch[.]h vm_x64[.]dasc[[:cntrl:]]?$' "$OCLJ_BUILD/luajit_build.log" \
+  || fail "DynASM's command line for vm_x64.dasc is not in the log (log: $OCLJ_BUILD/luajit_build.log)"
+[ "$LJ/lj_vm.o" -nt "$LJ/host/buildvm_arch.h" ] \
+  || fail "lj_vm.o is not newer than host/buildvm_arch.h -- buildvm did not rebuild the interpreter"
+if [ -f "$LJ/lj_vm.S" ]; then
+  [ "$LJ/lj_vm.S" -nt "$LJ/host/buildvm_arch.h" ] && [ "$LJ/lj_vm.o" -nt "$LJ/lj_vm.S" ] \
+    || fail "lj_vm.S / lj_vm.o are not newer than host/buildvm_arch.h -- the interpreter was not rebuilt"
+fi
+VM_OC=$(grep -c -F 'OC-LuaJIT' "$LJ/vm_x64.dasc")
+ARCH_OC=$(grep -c -E '^[[:space:]]*//[|].*OC-LuaJIT' "$LJ/host/buildvm_arch.h")
+ARCH_53=$(grep -c -E "^[[:space:]]*//[|].*OC-LuaJIT: Lua 5[.]3's" "$LJ/host/buildvm_arch.h")
+[ "$VM_OC" = "3" ] && [ "$ARCH_OC" = "3" ] && [ "$ARCH_53" = "2" ] \
+  || fail "host/buildvm_arch.h echoes $ARCH_OC OC-LuaJIT comment lines ($ARCH_53 of them
+         'OC-LuaJIT: Lua 5.3's'), vm_x64.dasc carries $VM_OC: want 3, 2 and 3.  DynASM did
+         not assemble the patched vm_x64.dasc (native/luajit/patch-bitop-vm.sh)."
+# The LuaJIT compile is -Wall: no round-3 file may warn there.
+if grep -E '(lj_parse|lj_meta|lj_record|lj_opt_fold|lj_bcwrite|lj_bcread|lib_jit|oclj_[a-z0-9_]+)[.][ch]:[0-9]+(:[0-9]+)?: warning' "$OCLJ_BUILD/luajit_build.log"; then
+  fail "a file round 3 patched or added warned in the LuaJIT build (above)"
+fi
+say "    round 3: lj_parse.o lj_meta.o lj_record.o lj_opt_fold.o lj_bcwrite.o lj_bcread.o lib_jit.o recompiled; buildvm_arch.h regenerated from the patched vm_x64.dasc ($ARCH_OC OC-LuaJIT lines echoed); no warnings"
 
 # THE FEATURE SET HAS ONE CHANNEL, AND IT MUST BE OBSERVABLE (THE LUAJIT
 # FEATURE SET, in the header).  First: no feature macro may reach a LuaJIT
@@ -714,13 +856,22 @@ fi
 # unit of ours compiles with.  OCLJ_LUAJIT_FEATURES says the header was read;
 # the LJ_* values say what it decided.
 LJDM=$("$CC" -I"$LJ" -E -dM "$LJ/lj_arch.h" 2>&1)
-for d in 'OCLJ_LUAJIT_FEATURES 1' 'LJ_52 1' 'LJ_HASFFI 0' 'LJ_HASJIT 1' 'LJ_GC64 1' 'OCLJ_LIB_STRPACK 1'; do
+for d in 'OCLJ_LUAJIT_FEATURES 1' 'LJ_52 1' 'LJ_HASFFI 0' 'LJ_HASJIT 1' 'LJ_GC64 1' 'OCLJ_LIB_STRPACK 1' 'OCLJ_OPS_BIT64 1'; do
   printf '%s\n' "$LJDM" | grep -qx "#define $d" \
     || fail "through -I$LJ the preprocessor does not say '#define $d'.  Every translation
          unit of ours compiles through exactly that -I: native/luajit/oclj_features.h is
          not reaching lj_arch.h, or it no longer says what this build needs."
 done
-say "    feature set through -I\$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1"
+say "    feature set through -I\$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1, OCLJ_OPS_BIT64 1"
+# And the bytecode version every translation unit of ours sees (serializer/
+# eris_lj.c refuses to compile with OCLJ_OPS_BIT64 and a version below 0x80):
+# native/luajit/patch-bitop-bcdump.sh's 0x80, through the same -I.
+LJDMB=$("$CC" -I"$LJ" -E -dM "$LJ/lj_bcdump.h" 2>&1)
+printf '%s\n' "$LJDMB" | grep -qx '#define BCDUMP_VERSION 0x80' \
+  || fail "through -I$LJ the preprocessor does not say '#define BCDUMP_VERSION 0x80' for
+         lj_bcdump.h ($(printf '%s\n' "$LJDMB" | grep 'BCDUMP_VERSION' | head -1)): round 3's
+         operators change what bytecode means, and a dump must say so"
+say "    lj_bcdump.h -dM: BCDUMP_VERSION 0x80"
 # oclj_strpack.c under -Wall -Wextra, as the shim is held to (the LuaJIT
 # compile above is -Wall only): a throwaway translation unit that includes it
 # and calls its three entry points, compiled through the same -I.
@@ -739,6 +890,63 @@ rm -f "$OCLJ_BUILD/strpack_wgate.o"
 PW=$(grep -c 'warning:' "$OCLJ_BUILD/strpack.err" || true)
 say "    oclj_strpack.c -Wall -Wextra warnings = $PW"
 [ "$PW" = "0" ] || { grep -E 'warning:' "$OCLJ_BUILD/strpack.err" | head -20; fail "oclj_strpack.c must compile warning-clean"; }
+# Round 3's C files under -Wall -Wextra likewise: one throwaway translation
+# unit with the union of the headers lj_meta.c, lj_record.c and lj_opt_fold.c
+# include, the IR and emitir macros oclj_bitop_rec.c and oclj_bitop_fold.c
+# expect from lj_record.c and lj_opt_fold.c, the three .c files, and one
+# function that calls their entry points and oclj_bitop.h's and
+# oclj_num53.h's functions (an uncalled static inline function is never
+# compiled, so the warnings that need code generation would miss it).
+cat > "$OCLJ_BUILD/bitop_wgate.c" <<'EOF'
+#define LUA_CORE
+#include "lj_obj.h"
+#include "lj_gc.h"
+#include "lj_err.h"
+#include "lj_buf.h"
+#include "lj_str.h"
+#include "lj_tab.h"
+#include "lj_meta.h"
+#include "lj_frame.h"
+#include "lj_bc.h"
+#include "lj_ff.h"
+#include "lj_debug.h"
+#include "lj_ir.h"
+#include "lj_jit.h"
+#include "lj_ircall.h"
+#include "lj_iropt.h"
+#include "lj_trace.h"
+#include "lj_record.h"
+#include "lj_ffrecord.h"
+#include "lj_snap.h"
+#include "lj_dispatch.h"
+#include "lj_vm.h"
+#include "lj_strscan.h"
+#include "lj_strfmt.h"
+#include "lj_lib.h"
+#include "oclj_bitop.h"
+#define IR(ref) (&J->cur.ir[(ref)])
+#define emitir(ot, a, b) (lj_ir_set(J, (ot), (a), (b)), lj_opt_fold(J))
+#include "oclj_bitop_meta.c"
+#include "oclj_bitop_rec.c"
+#include "oclj_bitop_fold.c"
+int oclj_bitop_wgate(lua_State *L, jit_State *J, TValue *o);
+int oclj_bitop_wgate(lua_State *L, jit_State *J, TValue *o)
+{
+  int64_t k = 0;
+  double d = 0;
+  oclj_meta_bitop(L, o, o, o, BC_BAND);
+  return (int)oclj_rec_bitop(J, BC_BSHL, 0, 0, o, o) + oclj_bitwidth(J, 0, 0) +
+    oclj_bit2num(oclj_bitop64(BC_BSAR, 1, 2), &d) + oclj_flt2int(d, &k) +
+    oclj_str2int("1", 1, &k) + oclj_str2d("1", 1, &d) + (int)oclj_u2s(1);
+}
+EOF
+rm -f "$OCLJ_BUILD/bitop_wgate.o"
+"$CC" -c -O2 $PICFLAG -Wall -Wextra -I"$LJ" "$OCLJ_BUILD/bitop_wgate.c" \
+  -o "$OCLJ_BUILD/bitop_wgate.o" 2>"$OCLJ_BUILD/bitop.err"
+[ -f "$OCLJ_BUILD/bitop_wgate.o" ] || { cat "$OCLJ_BUILD/bitop.err"; fail "round 3's oclj_bitop*.{h,c} and oclj_num53.h did not compile on their own"; }
+BW=$(grep -c 'warning:' "$OCLJ_BUILD/bitop.err" || true)
+say "    oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = $BW"
+[ "$BW" = "0" ] || { grep -E 'warning:' "$OCLJ_BUILD/bitop.err" | head -20; fail "round 3's C files must compile warning-clean"; }
 
 LJEXE=$LJ/luajit.exe; [ -x "$LJEXE" ] || LJEXE=$LJ/luajit
 [ -x "$LJEXE" ] || fail "no luajit interpreter was produced"
@@ -900,6 +1108,228 @@ SP_WANT='fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true
            JIT aborts traces at pack calls, which blacklists loops; a loop count
            other than 0 means the recorder no longer stitches at the pack call (the
            three have no LJLIB_REC): re-measure before changing the gate."
+
+# THE BITWISE OPERATORS ARE LUA 5.3.6's, 64-BIT (round 3), functionally, on
+# the luajit.exe that links this libluajit.a, in every place that computes
+# them: folded constants, the interpreter's fast path (number operands), its
+# slow path (strings, out-of-range counts, errors), and a hot loop compiled
+# by the JIT, whose exactness guard must exit where the result first has
+# more than 53 significant bits (i = 151: (150 - 151) >> 1 is 2^63 - 1) and
+# leave the interpreter to raise.  Before that it adds (150 - i) >> 1 and
+# the masked remedy (-i & 0xFFFFFFFF) >> 8 & 0xFF for i = 1..150 into a sum
+# it keeps in an upvalue every iteration, acc, which the raise does not
+# discard: the line carries it, so a compiled loop that computes other
+# values but still exits at 151 is seen (the review's catch, 2026-10-17:
+# without acc such a loop printed the expected line).  Each field is an
+# operator's result as %.17g, or its error's kind: X<op> for "result of
+# '<op>' has more than 53 significant bits (mask each operand to 32 bits
+# first)", noint, type (the bitwise verb), arith (upstream's verb).  The
+# expected line is PUC Lua 5.3.6's on every field the two share, with each
+# result passed through the same rule (an exact double or the error); acc is
+# PUC's sum for i = 1..150 (43800, measured); dump, bit and jit are LuaJIT's.
+# The loop counts loop/stitch/abort traces in hot() as the string.pack gate
+# does, so that the gate fails with the JIT off.  The probe contains no
+# backslashes (heredocs here eat them).
+cat > "$OCLJ_BUILD/bitops.lua" <<'EOF'
+local o = tonumber("1")
+local function E(f, ...)
+  local ok, r = pcall(f, ...)
+  if ok then return string.format("%.17g", r) end
+  r = tostring(r)
+  if r:find("has more than 53 significant bits", 1, true) then
+    return "X" .. (r:match("result of '([^']*)'") or "?")
+  elseif r:find("no integer representation", 1, true) then return "noint"
+  elseif r:find("perform bitwise operation on", 1, true) then return "type"
+  elseif r:find("perform arithmetic on", 1, true) then return "arith"
+  end
+  return "other"
+end
+local fold = string.format("%.17g/%.17g/%.17g", 1 << 32, ~0, 1 << 64)
+local kx = E(load("return -1 >> 1"))
+local rt = E(function() return o << 32 end) .. "/" .. E(function() return (-o) >> 1 end) .. "/" ..
+  E(function() return ~0 >> o end) .. "/" .. E(function() return (-o) >> 11 end) .. "/" ..
+  E(function() return (-o) >> 10 end) .. "/" .. E(function() return o << 64 end) .. "/" ..
+  E(function() return ~(2^53 * o) end) .. "/" .. E(function() return (2^60 * o) | 1 end)
+local err = E(function() return 1.5 | o end) .. "/" .. E(function() return "3" & o end) .. "/" ..
+  E(function() return "0x10" | o end) .. "/" .. E(function() return {} | o end) .. "/" ..
+  E(function() return 2^63 & o end) .. "/" .. E(function() return "-1" >> o end)
+local sar = E(function() return (-8 * o) ~>> 2 end) .. "/" .. E(function() return (-o) ~>> 64 end) .. "/" ..
+  E(function() return (4 * o) ~>> -1 end)
+local dump = string.dump(function() end):byte(4)
+local bl = bit and bit.lshift(1, 32)
+local jutil = require("jit.util")
+local st, mine = { loop = 0, stitch = 0, abort = 0 }, {}
+local last, acc = 0, 0
+local function hot() local s = 0 for i = 1, 300 do last = i s = s + ((150 - i) >> 1) + ((-i & 0xFFFFFFFF) >> 8 & 0xFF) acc = s end return s end
+local function cold() local s = 0 for i = 1, 300 do last = i s = s + ((150 - i) >> 1) + ((-i & 0xFFFFFFFF) >> 8 & 0xFF) acc = s end return s end
+local function cb(what, tr, func)
+  if what == "start" then mine[tr] = (func == hot)
+  elseif what == "stop" and mine[tr] then
+    local lt = jutil.traceinfo(tr).linktype
+    if st[lt] then st[lt] = st[lt] + 1 end
+  elseif what == "abort" and mine[tr] then st.abort = st.abort + 1 end
+end
+jit.off(cold)
+jit.flush()
+jit.attach(cb, "trace")
+local hres = E(hot)
+local hlast, hacc = last, acc
+jit.attach(cb)
+local cres = E(cold)
+local clast, cacc = last, acc
+print("fold=" .. fold .. " kx=" .. kx .. " rt=" .. rt .. " err=" .. err .. " sar=" .. sar ..
+  " dump=" .. dump .. " bit=" .. tostring(bl) .. " hot=" .. hres .. "@" .. hlast .. " acc=" .. hacc ..
+  " jit=" .. st.loop .. "/" .. st.stitch .. "/" .. st.abort ..
+  " same=" .. tostring(hres == cres and hlast == clast and hacc == cacc))
+EOF
+BO=$("$LJEXE" "$OCLJ_BUILD/bitops.lua" 2>&1)
+say "    bitwise-operator gate: $BO"
+BO_WANT='fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true'
+[ "$BO" = "$BO_WANT" ] || fail "the bitwise-operator gate read
+           $BO
+         want
+           $BO_WANT
+         fold (1 << 32, ~0, 1 << 64, folded by the parser) other than 4294967296/-1/0:
+           lj_parse.c folds by BitOp's 32-bit rules (native/luajit/patch-bitop-parse.sh).
+         kx other than X>>: the parser folded -1 >> 1, whose result has 64 significant
+           bits, instead of leaving it to the run time to raise.
+         rt (o << 32, -o >> 1, ~0 >> o, -o >> 11, -o >> 10, o << 64, ~(2^53 o),
+           2^60 o | 1, with o a run-time 1): the interpreter's fast path
+           (native/luajit/patch-bitop-vm.sh) is not 5.3.6's 64-bit one, or returns a
+           rounded result where it must raise (X); -o >> 11 is 2^53 - 1, the largest
+           exact result of a shifted -1.
+         err (1.5 | o, '3' & o, '0x10' | o, {} | o, 2^63 & o, '-1' >> o): the slow path
+           (native/luajit/oclj_bitop_meta.c) does not coerce strings, raise 5.3.6's
+           errors, or check the result of a string operand.
+         sar (-8 o ~>> 2, -o ~>> 64, 4 o ~>> -1) other than -2/-1/8: ~>> is not the
+           64-bit arithmetic shift (oclj_bitop.h, oclj_shiftar).
+         dump other than 128: string.dump's version byte is not 0x80
+           (native/luajit/patch-bitop-bcdump.sh).
+         bit other than 1: LuaJIT's own bit library changed; it must stay 32-bit.
+         hot other than X>>@151: the compiled loop did not raise where the result first
+           has more than 53 significant bits (no exactness guard, or a rounded
+           result), or raised elsewhere (native/luajit/oclj_bitop_rec.c,
+           patch-bitop-fold.sh).
+         acc other than 43800: the loop's sum for i = 1..150, before the raise, is not
+           PUC 5.3.6's: the compiled loop computes another value for (150 - i) >> 1 or
+           (-i & 0xFFFFFFFF) >> 8 & 0xFF while the results fit (native/luajit/
+           oclj_bitop_rec.c, oclj_bitop_fold.c, patch-bitop-fold.sh), or, with
+           same=true, the interpreter does as well (patch-bitop-vm.sh).
+         jit (loop/stitch/abort traces recorded in hot()) other than 1/0/0: a loop count
+           of 0 means no trace was recorded, so the gate proved nothing about the JIT;
+           an abort means the recorder refuses the operators, which runs such loops
+           interpreted.
+         same=false: the compiled loop and the interpreted one disagree: in the result,
+           in where they raise, or in acc."
+
+# LuaJIT'S OWN jit.* TOOLS STILL DECODE BYTECODE (round 3's seventh change,
+# native/luajit/patch-bitop-jitlib.sh), on the luajit.exe that links this
+# libluajit.a, run in the build copy's src/ with LUA_PATH ./?.lua so that
+# require finds jit/*.lua there (the sandbox has none of them).  jit.util
+# returned a bytecode word as a signed int32, and jit/bc.lua's
+# (ins >> 8) & 0xff raises on a negative word whose A operand is not a
+# multiple of 8 (on the others it decodes a wrong jump target, silently):
+# `luajit -bl` stopped at the first forward jump, FORI or negative KSHORT,
+# and -jdump, whose default modes include 'b', raised in its record handler
+# and aborted every trace it recorded through such a word -- the instrument
+# made bit-operator loops look uncompilable.  One probe, three runs:
+#   plain     the probe's line: f's and hot()'s results (PUC 5.3.6's, with
+#             the rule); snapend, the end marker of the first snapshot of
+#             hot()'s trace as jit.util.tracesnap returns it, SNAP(255, 0,
+#             0) unsigned, 4278190080 (signed it is -16777216; the entries
+#             themselves differ only for a slot of 128 or more, which a
+#             trace this short has not, so they are left to the patch
+#             script's content check); and bc, how many instructions -bl
+#             must list (each function's jit.util.funcinfo bytecodes less
+#             its header, counted without decoding a word).
+#   -bl       bl, the instruction lines listed, must be bc; blerr, the lines
+#             on stderr, 0 (luajit -b exits 0 even when the listing raises);
+#             bldec, how many of f's three negative words are listed exactly
+#             as LuaJIT before round 3 listed them (KSHORT 1 -1, FORI 2 =>
+#             0011, JMP 7 => 0010), 3.
+#   -jdump=T  the default modes, t b i m (T only picks plain text over the
+#             colours TERM would choose), over hot()'s loop, whose JMP has
+#             A = 9: jd, the traces started, stopped as a loop, aborted, and
+#             the "VM handler failed" lines, 1/1/0/0; jdb, the recorded
+#             instructions the dump listed ('b') and of them the JMP decoded
+#             exactly, 12/1; jdim, the IR and machine-code dumps, 1/1;
+#             jdline, the probe's line printed unchanged under the dump, 1.
+# The probe contains no backslashes (heredocs here eat them).
+cat > "$OCLJ_BUILD/jitlib.lua" <<'EOF'
+local jutil = require("jit.util")
+local function f(t)
+  local s = -1
+  for i = 1, 3 do
+    if t[i] then s = s + 1 end
+  end
+  return s
+end
+local function hot(n)
+  local t, x, y = {}, 0, 3
+  for i = 1, n do
+    local a = t[1] or y
+    x = (((x ~ i) & 0xFFFF) << 3) >> 1
+  end
+  return x
+end
+local function count(fn)
+  local n = jutil.funcinfo(fn).bytecodes - 1
+  for k = -1, -1000000, -1 do
+    local c = jutil.funck(fn, k)
+    if c == nil then break end
+    if type(c) == "proto" then n = n + count(c) end
+  end
+  return n
+end
+local function snapend()
+  for tr = 1, 100 do
+    if jutil.traceinfo(tr) then local s = jutil.tracesnap(tr, 0) return string.format("%.0f", s[#s]) end
+  end
+  return "none"
+end
+local fr, hr = f({ true, false, true }), hot(300)
+print("jitlib f=" .. fr .. " hot=" .. hr .. " snapend=" .. snapend() .. " bc=" .. count(debug.getinfo(1, "f").func))
+EOF
+# Absolute paths: the three runs cd into $LJ first.
+JL_DIR=$(CDPATH= cd -- "$OCLJ_BUILD" && pwd)
+JL_PROBE=$JL_DIR/jitlib.lua
+JL_EXE=./$(basename "$LJEXE")
+JL_LINE=$(cd "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" "$JL_PROBE" 2>&1 | tr -d '\r')
+JL_BL=$(cd "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" -bl "$JL_PROBE" 2>"$JL_DIR/jitlib-bl.err" | tr -d '\r')
+JL_JD=$(cd "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" -jdump=T "$JL_PROBE" 2>&1 | tr -d '\r')
+jl_n() { printf '%s\n' "$1" | grep -c -E -- "$2" || true; }
+jl_x() { printf '%s\n' "$1" | grep -c -x -F -- "$2" || true; }
+JL_DEC=$(( $(jl_x "$JL_BL" '0001    KSHORT   1  -1') + $(jl_x "$JL_BL" '0005    FORI     2 => 0011') + $(jl_x "$JL_BL" '0008    JMP      7 => 0010') ))
+JL="$JL_LINE bl=$(jl_n "$JL_BL" '^[0-9]{4} ') blerr=$(grep -c . "$JL_DIR/jitlib-bl.err" || true) bldec=$JL_DEC"
+JL="$JL jd=$(jl_n "$JL_JD" '^---- TRACE [0-9]+ start ')/$(jl_n "$JL_JD" '^---- TRACE [0-9]+ stop -> loop$')"
+JL="$JL/$(jl_n "$JL_JD" '^---- TRACE [0-9]+ abort ')/$(jl_n "$JL_JD" 'VM handler failed')"
+JL="$JL jdb=$(jl_n "$JL_JD" '^[0-9]{4}  [A-Z]')/$(jl_x "$JL_JD" '0010  JMP      9 => 0012')"
+JL="$JL jdim=$(jl_n "$JL_JD" '^---- TRACE [0-9]+ IR$')/$(jl_n "$JL_JD" '^---- TRACE [0-9]+ mcode [0-9]+$')"
+JL="$JL jdline=$(jl_x "$JL_JD" "$JL_LINE")"
+say "    jit tools gate (luajit -bl, -jdump): $JL"
+JL_WANT='jitlib f=1 hot=206208 snapend=4278190080 bc=118 bl=118 blerr=0 bldec=3 jd=1/1/0/0 jdb=12/1 jdim=1/1 jdline=1'
+[ "$JL" = "$JL_WANT" ] || { head -5 "$JL_DIR/jitlib-bl.err"; fail "the jit tools gate read
+           $JL
+         want
+           $JL_WANT
+         (stderr of -bl above, if any; the probe is $JL_PROBE, run in $LJ)
+         the probe's own fields other than those: f and hot are PUC 5.3.6's values,
+           and bc counts the probe's instructions without decoding them; snapend
+           -16777216 is jit.util.tracesnap returning snapshot entries signed again
+           (native/luajit/patch-bitop-jitlib.sh); an error text means require found
+           no jit/*.lua in $LJ, or the probe failed.
+         bl other than bc, blerr other than 0, bldec other than 3: luajit -bl did not list
+           every instruction, wrote to stderr (jit/bc.lua raising on a word), or decoded
+           a negative word wrongly -- jit.util.funcbc returns the word signed again
+           (native/luajit/patch-bitop-jitlib.sh did not reach lib_jit.o).
+         jd other than 1/1/0/0: under -jdump the loop did not compile once, as a loop,
+           without an abort or a failed dump handler: an abort with 'VM handler failed'
+           is jit/bc.lua raising in the record handler, the same cause.
+         jdb other than 12/1: the dump did not list the twelve recorded instructions, or
+           listed the JMP (A = 9, a negative word) with another target.
+         jdim other than 1/1: the IR or machine-code dump is missing (jit/dump.lua or
+           jit/dis_x64.lua failed).
+         jdline other than 1: the probe's line differs under -jdump."; }
 
 # --------------------------------------------------------------- 1b
 # TWO PROPERTIES OF THE ARCHIVE, ONE PROBE.
@@ -1197,25 +1627,33 @@ rm -f "$OBJ/eris_lj.o"
 # THE VM-FEATURES WORD, checked against the library rather than trusted.  The
 # blob fingerprint ends in a word eris_lj.c derives from the macros it was
 # compiled with (THE VM-FEATURES WORD in eris_lj.c: ffi, lua52, gc64, fr2, dn,
-# le/be, p64/p32, pack); blobs carry it, and a build that cannot interpret a
-# blob refuses it by that word.  Five of its tokens show in the behaviour of
-# the luajit.exe that links this libluajit.a: whether `1LL` loads (ffi),
-# whether table.unpack exists (lua52), string.dump's flags byte (BCDUMP_F_FR2
-# 8, BCDUMP_F_BE 1; lj_bcdump.h:42-45), and whether string.pack exists (pack:
-# eris_lj.c reads OCLJ_LIB_STRPACK from oclj_features.h, the registration is
-# lib_string.c's, and this is where the two are seen to agree).  gc64, dn and
-# p64 are what stage 1b's GG_State comparison and oclj_features.h's refusals
-# cover.
-OBS=$("$LJEXE" -e 'local d = string.dump(function() end):byte(5) io.write(load("return 1LL") and "ffi1" or "ffi0", " ", table.unpack and "lua52" or "lua51", " ", d % 16 >= 8 and "fr2" or "fr1", " ", d % 2 == 1 and "be" or "le", " ", string.pack and "pack1" or "pack0")' 2>&1)
+# le/be, p64/p32, pack, bit); blobs carry it, and a build that cannot
+# interpret a blob refuses it by that word.  Six of its tokens show in the
+# behaviour of the luajit.exe that links this libluajit.a: whether `1LL`
+# loads (ffi), whether table.unpack exists (lua52), string.dump's flags byte
+# (BCDUMP_F_FR2 8, BCDUMP_F_BE 1; lj_bcdump.h:42-45), whether string.pack
+# exists (pack: eris_lj.c reads OCLJ_LIB_STRPACK from oclj_features.h, the
+# registration is lib_string.c's, and this is where the two are seen to
+# agree), and whether 1 << 32 is 4294967296 (bit: eris_lj.c reads
+# OCLJ_OPS_BIT64 from oclj_features.h, the operators are six of the seven
+# patch-bitop-*.sh scripts', and this is where the two are seen to agree;
+# the operands are made at run time, because the parser folds constants).
+# gc64, dn and p64 are what stage 1b's GG_State comparison and
+# oclj_features.h's refusals cover.
+OBS=$("$LJEXE" -e 'local d = string.dump(function() end):byte(5) io.write(load("return 1LL") and "ffi1" or "ffi0", " ", table.unpack and "lua52" or "lua51", " ", d % 16 >= 8 and "fr2" or "fr1", " ", d % 2 == 1 and "be" or "le", " ", string.pack and "pack1" or "pack0", " ", (tonumber("1") << 32 == 4294967296) and "bit64" or "bit32")' 2>&1)
 case "$OBS" in
-  "ffi"[01]" lua5"[12]" fr"[12]" "[lb]e" pack"[01]) : ;;
+  "ffi"[01]" lua5"[12]" fr"[12]" "[lb]e" pack"[01]" bit32"|"ffi"[01]" lua5"[12]" fr"[12]" "[lb]e" pack"[01]" bit64") : ;;
   *) fail "luajit.exe's feature observation is malformed: '$OBS'" ;;
 esac
 WORD=$(grep -a -o -E "[|]$SER_HASH[|]ffi[01][.][a-z0-9.]+" "$OBJ/eris_lj.o" | head -1)
 WORD=${WORD##*|}
 case "$WORD" in
-  ffi[01].lua5[12].gc64.fr[12].dn[01].[lb]e.p64.pack[01]|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p64.pack[01]|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p32.pack[01]) : ;;
+  ffi[01].lua5[12].gc64.fr[12].dn[01].[lb]e.p64.pack[01].bit[36][24]|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p64.pack[01].bit[36][24]|ffi[01].lua5[12].gc32.fr[12].dn[01].[lb]e.p32.pack[01].bit[36][24]) : ;;
   *) fail "eris_lj.o carries no well-formed VM-features word after '|$SER_HASH|' (got '$WORD')" ;;
+esac
+case "$WORD" in
+  *.bit32|*.bit64) : ;;
+  *) fail "eris_lj.o's VM-features word '$WORD' ends in neither bit32 nor bit64" ;;
 esac
 for t in $OBS; do
   case ".$WORD." in
@@ -1403,10 +1841,13 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #    prototype/watchdog luajit-src` clones it), pinned to upstream 1ee778a4,
 #    whose LUAJIT_ENABLE_CHECKHOOK is upstream's own option (lj_record.c:691,
 #    :2953).  The checkout stays pristine: this script builds a COPY with
-#    native/luajit/oclj_features.h and the five changes in native/luajit/
-#    (the fifth adds native/luajit/oclj_strpack.c to lib_string.c).
-#    Another LuaJIT commit is untested: the five patch scripts' exactly-once
-#    anchors and the behaviour gates are what refuse a tree that changed shape.
+#    native/luajit/oclj_features.h and the twelve changes in native/luajit/
+#    (the fifth adds native/luajit/oclj_strpack.c to lib_string.c; the sixth
+#    to the twelfth, round 3's seven patch-bitop-*.sh, patch seven files and
+#    add oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c
+#    and oclj_num53.h to them).  Another LuaJIT commit is untested: the
+#    twelve patch scripts' exactly-once anchors and the behaviour gates are
+#    what refuse a tree that changed shape.
 #
 # 5. For OCLJ_VARIANT=additive only: Python 3 (python3 or python on PATH, or
 #    OCLJ_PYTHON), to regenerate LuaStateLuaJIT.java and compare it with the

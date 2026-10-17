@@ -1,0 +1,47 @@
+# test/native/bitop/deviations.txt -- the lines in which PUC Lua 5.3.6's
+# output of bitop/t_ops.lua, t_fold.lua and t_sar.lua (run with X, U1-B's rule,
+# and reworded to LuaJIT's word order by reword.lua) differs from ours, i.e.
+# from the .expect files, each with its class.  test/native/run-bitop.sh
+# (part 2) requires the set of differing lines to be EXACTLY the set listed
+# here for the host platform, comparing the case and its result (the first two
+# fields: t_fold's third, LuaJIT's fold decision, has no PUC counterpart).
+#   <script> <platform: any, windows or linux> <class> <case id, to the end>
+#
+# The .expect files were made from PUC Lua 5.3.6 mechanically (2026-10-17):
+# its X run reworded, with these lines (and t_fold's third field) taken from
+# the reference build of round 3, r3/b/bB (luajit.exe md5 702b747a17d5).
+# Re-derived the same way the same day for the inexact error's hint ("...
+# significant bits (mask each operand to 32 bits first)", decided
+# 2026-10-17), these lines and the third field taken from round 3's build
+# with the hint (r3/fix/R2-tests/b-hint, luajit.exe md5 f203c44e5628).
+#
+# LEX (U9, decided 2026-10-17): LuaJIT's lexer reads every numeral as its
+# nearest double (lj_lex.c:95-114 lex_number, lj_strscan_scan), so a
+# literal with more than 53 significant bits is rounded before any operator
+# sees it; 5.3.6's lexer wraps a hex integer literal mod 2^64 (lobject.c:299
+# l_str2int) and keeps a decimal one below 2^63 exact.
+# 0xffffffffffffffff is 2^64 here and -1 there, 0x8000000000000000 is 2^63
+# here and -2^63 there, and 0x00ff00ff00ff00ff & 0xff is 0 here and 255 there;
+# 0x7fffffffffffffff and 9223372036854775807 are 2^63 here and 2^63 - 1
+# there, 9007199254740993 is 2^53 here and 2^53 + 1 there.  The last three
+# are bare literals whose two values print alike under %.17g, so t_fold.lua
+# prints a PUC integer with %d in X mode too: without that, part 2 could not
+# see them (review of 2026-10-17).  A LEX id holds a hex literal ("0x") or a
+# decimal integer literal of 16 or more digits (2^53 has 16).
+# IDIV: LuaJIT 2.1 has no "//" (a later round, with the bitwise metamethods).
+# RESID-varinfo: the VM, not the operators -- 5.3.6 names the result of an
+# index with a variable key "field '?'" (ldebug.c:432-483 getobjname, kname);
+# LuaJIT's lj_debug_slotname (lj_debug.c:255-295) names the results of MOV,
+# GGET, TGETS and UGET only, so the message names no operand.
+t_fold any LEX 0x7fffffffffffffff | 0
+t_fold any LEX 0xffffffffffffffff | 0
+t_fold any LEX 0x8000000000000000 | 0
+t_fold any LEX 0xffffffffffffffff
+t_fold any LEX 0x8000000000000000
+t_fold any LEX 0x7fffffffffffffff
+t_fold any LEX 9007199254740993
+t_fold any LEX 9223372036854775807
+t_fold any LEX 0x00ff00ff00ff00ff & 0xff
+t_fold any IDIV 5 // 1
+t_ops any RESID-varinfo name: field ? type
+t_ops any RESID-varinfo name: field ? noint

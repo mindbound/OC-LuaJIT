@@ -1,0 +1,4 @@
+lengths 516 516
+differing bytes 8 ; at a dump's version byte (after ESC L J): 3 values [(128, 2)]
+other differing offsets (1-based): [499, 500, 501, 502, 503]
+dump headers in fixture body: 3

@@ -12,9 +12,12 @@ LuaJIT -- https://luajit.org/
 Used in: the native libraries (assets/opencomputers/lib/libjnluajit52-*),
 which statically link LuaJIT 2.1 built from upstream commit 1ee778a4, with
 the feature set of native/luajit/oclj_features.h and with lj_func.c,
-lj_err.c, lj_ffrecord.c, lj_arch.h and lib_string.c changed by this
-project's build (native/luajit/); lib_string.c then also compiles
-native/luajit/oclj_strpack.c (see Lua 5.2 and 5.3 below).
+lj_err.c, lj_ffrecord.c, lj_arch.h, lib_string.c, lj_parse.c, vm_x64.dasc,
+lj_meta.c, lj_record.c, lj_opt_fold.c, lj_bcdump.h and lib_jit.c changed
+by this project's build (native/luajit/); lib_string.c then also compiles
+native/luajit/oclj_strpack.c, and lj_parse.c, lj_meta.c, lj_record.c and
+lj_opt_fold.c compile native/luajit/oclj_bitop.h and the oclj_bitop_*.c
+files beside it (see Lua 5.2 and 5.3 below).
 License text: LuaJIT's COPYRIGHT file at commit 1ee778a4, whole.
 
 ===============================================================================
@@ -77,15 +80,26 @@ https://creativecommons.org/licenses/publicdomain
 -------------------------------------------------------------------------------
 Lua 5.2 and 5.3 -- https://www.lua.org/
 -------------------------------------------------------------------------------
-Used in: native/lj52shim.c and native/luajit/oclj_strpack.c, compiled into
-the native libraries. The shim's Lua 5.2 compatibility functions follow PUC
-Lua's: luaL_getsubtable and luaL_tolstring follow Lua 5.2.4's lauxlib.c
-(luaL_tolstring with Lua 5.3's '__tostring' check), luaL_requiref follows
-Lua 5.3.6's, and bit32's field checks and extract/replace follow Lua
-5.2.4's lbitlib.c. string.pack, string.unpack and string.packsize
-(native/luajit/oclj_strpack.c, compiled into the LuaJIT library's
-lib_string.c) are ported from Lua 5.3.6's lstrlib.c, with its argument
-conversions from Lua 5.3.6's lauxlib.c, lobject.c and lvm.c.
+Used in: native/lj52shim.c, native/luajit/oclj_strpack.c,
+native/luajit/oclj_num53.h, native/luajit/oclj_bitop.h and
+native/luajit/oclj_bitop_meta.c, compiled into the native libraries. The
+shim's Lua 5.2 compatibility functions follow PUC Lua's: luaL_getsubtable
+and luaL_tolstring follow Lua 5.2.4's lauxlib.c (luaL_tolstring with Lua
+5.3's '__tostring' check), luaL_requiref follows Lua 5.3.6's, and bit32's
+field checks and extract/replace follow Lua 5.2.4's lbitlib.c. string.pack,
+string.unpack and string.packsize (native/luajit/oclj_strpack.c, compiled
+into the LuaJIT library's lib_string.c) are ported from Lua 5.3.6's
+lstrlib.c, with its argument conversions from Lua 5.3.6's lauxlib.c,
+lobject.c and lvm.c; the reading of a string or a float as an integer
+(lobject.c's l_str2int and l_str2d, lvm.c's luaV_tointeger) is in
+native/luajit/oclj_num53.h, which the bitwise operators share. The
+bitwise operators' rules (native/luajit/oclj_bitop.h, compiled into the
+LuaJIT library's lj_parse.c, lj_meta.c, lj_record.c and lj_opt_fold.c)
+follow Lua 5.3.6's lvm.c (luaV_tointeger, luaV_shiftl and the integer
+operations of luaV_execute), and their errors
+(native/luajit/oclj_bitop_meta.c, compiled into lj_meta.c) follow Lua
+5.3.6's ltm.c (luaT_trybinTM) and ldebug.c (luaG_opinterror,
+luaG_tointerror).
 License text: the notices at the end of Lua 5.2.4's and Lua 5.3.6's
 lua.h, whole, in that order.
 

@@ -1,0 +1,3 @@
+java.exe                      3288 Console                    1    722,288 K
+java.exe                     32652 Console                    1    202,752 K
+3288 Gradle daemon (JDK 25), 32652 javac/Kotlin compiler daemon (Gradle's JDK 17), both left by gradle-r3.sh's build minutes before; idle; identified by command line

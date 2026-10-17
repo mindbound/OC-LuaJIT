@@ -1,0 +1,2 @@
+build/native/luajit-windows-x86_64/src/lib_jit.o
+build/native/luajit-windows-x86_64/src/lj_meta.o

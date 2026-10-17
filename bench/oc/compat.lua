@@ -32,6 +32,22 @@
 -- PATH WAS TAKEN so the results row can carry it.  A future build without
 -- operator syntax degrades to bit32 -- slow but correct -- with a visible
 -- marker, instead of failing to parse.
+--
+-- THE ROTATE MASKS ITS LEFT PIECE BEFORE THE `|`.  It is
+--     (a >> n) | ((a << (32 - n)) & 0xFFFFFFFF)
+-- and not the usual 5.3 idiom, ((a >> n) | (a << (32 - n))) & 0xFFFFFFFF,
+-- whose `|` joins the two pieces into up to 64 - n significant bits before
+-- the mask can drop them.  Since round 3 our fork computes 5.3's operators
+-- on int64 and raises "result of '<op>' has more than 53 significant bits
+-- (mask each operand to 32 bits first)" for a result no double holds
+-- (README, "Lua dialect"), so the idiom raises for right rotations by 1-10:
+-- at SHA-256's own counts 2, 6 and 7, for 82-99% of random words.  It
+-- stopped sha256 on the first round-3 build, standalone and in-machine
+-- alike, with "result of '|' has more than 53 significant bits" (that build
+-- had no hint yet).  Masked first, both pieces stay below 2^32 and so does
+-- their `|`.
+-- Same digest as the idiom's on PUC 5.3.6 and 5.4 and on the round-2 32-bit
+-- build, and the published one on round 3, JIT on and off (2026-10-17).
 
 local M = {}
 
@@ -52,7 +68,7 @@ local opsrc = [[
     function(a, n)
       a = a & 0xFFFFFFFF
       if n == 0 then return a end
-      return ((a >> n) | (a << (32 - n))) & 0xFFFFFFFF
+      return (a >> n) | ((a << (32 - n)) & 0xFFFFFFFF)
     end
 ]]
 

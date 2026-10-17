@@ -1,0 +1,16 @@
+build-dropin exit=0
+build-additive exit=0
+shim exit=0 SHIM TESTS: PASS
+security exit=0 SECURITY TESTS: PASS
+race exit=2 
+mem exit=0 checks=86 failures=0
+vgc exit=0 checks=47 failures=0
+wd exit=0 checks=35 failures=0
+penalty exit=0 checks=6 failures=0
+run-pack exit=0 RUN-PACK: PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/pack-20261017T100259Z)
+run-packfuzz exit=0 seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0 PACKFUZZ PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/packfuzz-20261017T100300Z) 
+run-bitop exit=0 BITOP TESTS: 12 checks, 0 failures RUN-BITOP: PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitop-20261017T100304Z) 
+run-bitjit exit=0 RUN-BITJIT: PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-20261017T100307Z)
+run-bitfuzz exit=0 BITFUZZ PASS (results: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-20261017T100340Z)
+ser-test exit=0 M1 RESULT: ALL 82 TESTS PASS M2 RESULT: ALL 56 TESTS PASS M3 RESULT: ALL 79 TESTS PASS FINGERPRINT RESULT: ALL 20 TESTS PASS STRPACK RESULT: ALL 11 TESTS PASS BITOP RESULT: ALL 7 TESTS PASS FOR-IN RESULT: all cases exact across every pad 
+ser-negctl exit=0 NEGCTL-FINGERPRINT: PASS (all four sabotages caught)

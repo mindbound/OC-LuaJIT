@@ -1,0 +1,58 @@
+{
+ "summary": "Role C1 is done. run-bitop.sh passes on the B reference (exit 0, 28 PASS lines, about 4 s) and fails on today's build b0 (exit 1). Every new check was also shown to fail on a case that must fail. On b0, part 1 fails t_ops 6771/7467, t_fold 45/63, t_sar 313/437 and coerce_agree (29 disagreements), and part 3 fails 11 of 12 checks. The 12th, BT4b, is the RAM-cap instrument's own control and passes on every build. Under B, b0 differs from the core 7440 t_ops cases in 6744 lines [M]. That is the same count design.md gives under A. Cases that now expect the error \"result of '<op>' has more than 53 significant bits\": t_ops 550 (544 core, 4 string extras, 2 naming cases), t_fold 11, t_sar 5 (new string operands), t_bit 0 [M]. Part 2 runs PUC 5.3.6 with X and reworded. It differs from the .expect files in exactly the 9 ids in deviations.txt: 6 LEX and 1 IDIV in t_fold, 2 RESID-varinfo in t_ops. Linux PUC 5.3.6 produces byte-identical X output [M]. The xrule checker compares the X run with PUC's raw integers and agrees on every line: 550/12/5 raise, the rest exact or PUC's own errors [M]. Fail-firsts, all on scratch copies: one altered .expect line; one listed deviation set to PUC's value; an .expect made from a wrong X rule (only check (2) catches it, 550 disagreements); a broken precedence in t_fold's rewrite for PUC (the raw run exits 3); bad deviations lines. Two one-line sabotage builds of B, both static: INEXACT-SLOW fails t_ops 550, t_fold 11, t_sar 5 and BT3a-d; an allocation in the C path fails exactly BT4a (+32,000,000 bytes). security_test.c: 56/0 on B; on b0 it fails FF9, FF10 and FF12 [M]; the committed (HEAD) file on B fails FF9 and FF10 (55 checks). Part 3 needs a build dir. Built at C:/Users/astro/claude-tmp/oclj/r3/impl/C1/bBnative2 from bB/src, with lj52shim.o and eris_lj.o compiled from HEAD sources by C:/Users/astro/claude-tmp/oclj/r3/impl/C1/mk-native.sh. Main-session command once role A's build exists: OCLJ_BUILD=<build dir> sh test/native/run-bitop.sh.",
+ "files": [
+  "test/native/run-bitop.sh (NEW, 306 lines)",
+  "test/native/bitop_test.c (NEW, 380 lines)",
+  "test/native/security_test.c (MODIFIED, 680 lines, +32 -3: fixtures' byte 3 = 0x80, BC_PLAIN_V2, FF12, header paragraph)",
+  "test/native/bitop/t_ops.lua (NEW, 205)",
+  "test/native/bitop/t_ops.expect (NEW, 7467)",
+  "test/native/bitop/t_fold.lua (NEW, 243)",
+  "test/native/bitop/t_fold.expect (NEW, 63)",
+  "test/native/bitop/t_sar.lua (NEW, 112)",
+  "test/native/bitop/t_sar.expect (NEW, 437)",
+  "test/native/bitop/t_bit.lua (NEW, 52)",
+  "test/native/bitop/t_bit.expect (NEW, 2109)",
+  "test/native/bitop/deviations.txt (NEW, 34)",
+  "test/native/bitop/reword.lua (NEW, 19)",
+  "test/native/bitop/xrule.lua (NEW, 108)",
+  "test/native/bitop/coerce_agree.lua (NEW, 42)",
+  "scratch, not shipped: C:/Users/astro/claude-tmp/oclj/r3/impl/C1/gen-expect.sh (mechanical .expect generator), mk-native.sh (build-dir maker), sab.lua (meta sabotages), negtests.sh + replace.lua (machinery fail-firsts), bBnative2/ (B build dir for part 3), runs/ and runs-*.log (all results)"
+ ],
+ "checks": [
+  "[M] PASS on B: OCLJ_BUILD=C:/Users/astro/claude-tmp/oclj/r3/impl/C1/bBnative2 OCLJ_JNI='/c/Program Files/Eclipse Adoptium/jdk-25.0.4.101-hotspot/include' OCLJ_BITOP_OUT=.../runs/bB-3 sh test/native/run-bitop.sh -> exit 0. Part 1 with JIT on and -joff: t_ops 7467, t_fold 63, t_sar 437 and t_bit 2109 lines exact; coerce_agree 51/0. Part 2: (1) 2, 7 and 0 deviation ids exactly; (2) xrule agrees on all 7467, 63 and 437 lines; coerce on PUC 0. Part 3: 12 checks, 0 failures. Earlier runs bB-1 and bB-2 also PASS.",
+  "[M] FAIL on b0: OCLJ_BUILD=r3/synth/b0/build/native, OCLJ_BITOP_OUT=.../runs/b0-2 -> exit 1. t_ops 6771/7467 (core 6744/7440), t_fold 45/63, t_sar 313/437, coerce 29 disagreements, bitop_test 11 of 12 failures. t_bit passes there, as it should: b0's output equals B's (md5 b448099af3b2, JIT on and -joff). Part 2 passes: it judges the files, not the build.",
+  "[M] INEXACT-SLOW sabotage (C path stores the rounded double; static build at .../sab3-slow): t_ops 550, t_fold 11 and t_sar 5 lines fail with JIT on and off; BT3a-d fail; exit 1. Every inexact line catches it, because the fast path's check exits to the C path, which raises.",
+  "[M] Allocation sabotage in oclj_meta_bitop (.../sab3-alloc): only BT4a fails, charged +32,000,000 bytes against +0 on B; BT4b control charged +88,676 on every build.",
+  "[M] Provenance fail-firsts (negtests.sh, results .../neg1). alter: '& 1 3' changed -> part 1 fails 1 line, part 2 (1) 'differ but not listed: & 1 3'. alterdev: t_fold LEX line set to PUC's 255 -> 'listed but agree'. wrongx: X never raises and t_ops.expect regenerated from it -> (1) PASS, (2) FAIL with 550 disagreements. xform: '<<' priority 3 -> raw run exit 3 with the rewritten expression shown. devbad: 2 lines rejected with reasons.",
+  "[M] t_bit fail-first: a bit library built on 5.3's 64-bit operators (PUC wrapper, .../tbitneg) differs in 1554 of 2109 lines.",
+  "[M] security_test.c: run-security.sh with OCLJ_BUILD=bBnative2 -> 56 checks, 0 failures, FF12 'bcv2: cannot load incompatible bytecode'. Compiled into scratch against b0 -> FF9, FF10 and FF12 fail (3 of 56). HEAD's file on B -> FF9 and FF10 fail (2 of 55). The 0x80 BC_PLAIN equals B's string.dump(load('return 1'), true) byte for byte, and BC_PLAIN_V2 equals b0's.",
+  "[M] Linux PUC 5.3.6 (WSL): X output byte-identical to Windows PUC for all three scripts; same 9 deviation ids; xrule passes; coerce 0. run-bitop.sh passes dash -n; its awk parts tested with gawk.",
+  "[M] Instrument checks: t_bit's 120-iteration loops compile (2129 trace stops over 2109 cases). t_sar: 436 stops, 816 aborts. t_ops runs nearly all interpreted with the JIT on (16 traces). LF only, no CR, in every delivered file; ids unique except 22 documented repeats in t_ops."
+ ],
+ "deviations": [
+  "reword.lua goes the other way from the prototype's reword.py: it turns 5.3.6's word order into LuaJIT's and is applied to PUC's output, because the .expect files must equal luajit's output exactly. It is a Lua filter, so run-bitop.sh needs no Python.",
+  "Line format is '<id> TAB <result>' with ids like '& 2^31 -1', not r3's four tab-separated fields. t_fold.expect has a third field: LuaJIT's fold decision ('folded' or 'runtime:B...'). It comes from the B reference, has no PUC counterpart, and part 2 compares only the first two fields.",
+  "Applying X per operator on PUC: t_ops wraps each op's result; t_fold rewrites each source with Lua 5.3's own precedence table (xform). In raw mode it checks the rewrite changes nothing (exit 3 otherwise). t_sar applies X to the model's result. Check (2) traces every operator's exact integer, so an inexact intermediate under an exact final result is still checked.",
+  "coerce_agree.lua is rewritten for B. 's | 0' now raises for '0x7fffffffffffffff', '9007199254740993' and '9223372036854775807' (3 false disagreements on B [M]). It now compares pack('<j') unpacked as two I4 halves against 's & 0xFFFFFFFF' and 's >> 32', both always exact. Results: B 0, b0 29, PUC 0.",
+  "Added beyond design.md: 6 string-operand extras in t_ops; 21 error-naming cases (2 of them the RESID-varinfo lines); 18 B cases in t_fold; and 2 string operands in t_sar (391 -> 437), because only a string can give ~>> an inexact result.",
+  "Added a fourth matrix script, t_bit.lua with its .expect, for the 'bit/bit32 regressions' in design.md section 6: LuaJIT's bit library on luajit.exe. bit32 is covered through the shim in bitop_test.c BT6, expected values from PUC 5.3.6's bit32. Both are regression guards that pass on b0 too, so their fail-firsts are the 64-bit bit wrapper and BT6's '1 << 32' field.",
+  "The prototype's checkhook_bit loop raises under B, so BT5 uses a loop that stays exact: s = (s ~ ((i << 28) & 0x1FFFFFFFFFFFFF)) >> 1. Expected s = 4206410837014599, from PUC 5.3.6.",
+  "'The RAM cap' in part 3 means: the C path, string operands and counts outside 0..63 included, charges the cap nothing (100000 iterations, GC stopped, the function's JIT off), next to a control that is charged. An inexact error raised at an exhausted cap is not tested: that would measure the shim's credit and window semantics, not the operators."
+ ],
+ "open_questions": [
+  "Part 3 was run only against my scratch build dir (bB/src copied, lj52shim.o and eris_lj.o compiled from HEAD with -DLJ52_ADDITIVE). The main session should run it on role A's real build: OCLJ_BUILD=<scratch>/build/native sh test/native/run-bitop.sh. Before that, check the B reference's luajit.exe md5 702b747a17d5 against the shipped build's.",
+  "BT5's tick bound (> 100) comes from the build-native.sh checkhook gate. I did not build a LuaJIT without CHECKHOOK, so on its own it has no fail-first here: b0 fails BT5 only through s. The gate's own fail-first is a stock LuaJIT.",
+  "The t_fold fold column records LuaJIT's own decisions taken from the B reference. Two are not B's rule: '-0.0 | 0' runs at run time because LuaJIT's parser does not fold a negated zero, and '\"3\" | 4' runs at run time because it has a string. The column is not derived from PUC. Should part 2 also check it against a stated rule?",
+  "The Linux LuaJIT side is not measured [I]: no Linux B build exists. Only Linux PUC was run.",
+  "For C3 (negctl): INEXACT-SLOW is caught by every inexact line of the matrix (550 + 11 + 5) and by BT3a-d, not only by string cases, because the interpreter's fast path defers raising to the C path. t_ops barely exercises the JIT (16 traces), so JIT-side arms need C2's suites."
+ ],
+ "unfinished": [
+  "Not run, as the rules require: negative-control.sh, the harness, gradle, any repo build/. No git changes; the user commits.",
+  "Not done: a Linux run of run-bitop.sh (no Linux B build dir); a non-CHECKHOOK build for BT5's tick bound."
+ ],
+ "build_paths": [
+  "C:/Users/astro/claude-tmp/oclj/r3/impl/C1/bBnative2 (B reference as an OCLJ_BUILD dir: luajit-windows-x86_64/src copied from r3/b/bB/src, obj-windows-x86_64/{lj52shim.o,eris_lj.o} from HEAD sources)",
+  "C:/Users/astro/claude-tmp/oclj/r3/impl/C1/sab3-slow/native and sab3-alloc/native (one-line sabotage builds of B, BUILDMODE=static)",
+  "C:/Users/astro/claude-tmp/oclj/r3/impl/C1/sab2-* and bBnative (instrument-error leftovers: sab2-* built mixed-mode so libluajit.a was never re-archived; bBnative has a wrong copy layout); kept, not cleared"
+ ]
+}

@@ -36,17 +36,36 @@ local _, fp, _, feat = eris.version()
 ok(type(feat) == "string" and #feat > 0, "eris.version() returns the VM-features word", feat)
 feat = type(feat) == "string" and feat or ""
 ok(#feat > 0 and fp:sub(-#feat - 1) == "|" .. feat, "the word is the fingerprint's last field", fp)
-ok(feat:match("^ffi[01]%.lua5[12]%.gc[36][24]%.fr[12]%.dn[01]%.[lb]e%.p[36][24]%.pack[01]$") ~= nil,
+ok(feat:match("^ffi[01]%.lua5[12]%.gc[36][24]%.fr[12]%.dn[01]%.[lb]e%.p[36][24]%.pack[01]%.bit[36][24]$") ~= nil,
    "the word has the documented shape", feat)
 ok(#fp <= 255, "the fingerprint fits the header's u8 length", #fp)
 -- The pack token is read from oclj_features.h; string.pack comes from the
 -- archive's lib_string.c.  This host opens the archive's own string library
 -- (luaL_openlibs), so the two must agree here as they must in the DLL.
-local packtok = feat:match("%.(pack[01])$")
+local packtok = feat:match("%.(pack[01])%.")
 ok(packtok == (type(string.pack) == "function" and type(string.unpack) == "function"
                and type(string.packsize) == "function" and "pack1" or "pack0"),
    "the pack token agrees with this archive's string library",
    tostring(packtok) .. " vs string.pack " .. type(string.pack))
+-- The bit token is read from oclj_features.h too (OCLJ_OPS_BIT64); what the
+-- operators compute comes from the archive: its parser folds constant
+-- operands (what a dump's constants hold), and its interpreter computes the
+-- rest (what a restored thread runs).  Ask both: 'a << 32' with a vararg
+-- operand, which no fold can see, and the constant '1 << 32'.  Under bit64
+-- each is 4294967296; upstream's 32-bit BitOp masks the count to 0 and gives
+-- 1; anything else agrees with neither token.  load() compiles the chunk, so
+-- a parser without the operators fails this check alone, not the whole file.
+local bittok = feat:match("%.(bit[36][24])$")
+local shl, rv = load("local a = ... return a << 32, 1 << 32")
+local okb, rk = false, nil
+if shl then okb, rv, rk = pcall(shl, 1) end
+local arch = not okb and "an error"
+  or (rv == 4294967296 and rk == 4294967296) and "bit64"
+  or (rv == 1 and rk == 1) and "bit32" or "neither"
+ok(bittok ~= nil and bittok == arch,
+   "the bit token agrees with this archive's bitwise operators",
+   tostring(bittok) .. " vs " .. arch .. " (a << 32 = " .. tostring(rv)
+     .. ", folded 1 << 32 = " .. tostring(rk) .. ")")
 
 -- A blob whose restore would CHANGE state: a __persist recipe bumps a
 -- permanent sentinel when it runs, and recipes run only after the whole body
@@ -86,10 +105,10 @@ print("-- every token flipped is refused by the fingerprint, nothing restored")
 local FLIP = { ffi0 = "ffi1", ffi1 = "ffi0", lua52 = "lua51", lua51 = "lua52",
                gc64 = "gc32", gc32 = "gc64", fr2 = "fr1", fr1 = "fr2",
                dn0 = "dn1", dn1 = "dn0", le = "be", be = "le", p64 = "p32", p32 = "p64",
-               pack1 = "pack0", pack0 = "pack1" }
+               pack1 = "pack0", pack0 = "pack1", bit64 = "bit32", bit32 = "bit64" }
 local toks = {}
 for t in feat:gmatch("[^.]+") do toks[#toks + 1] = t end
-ok(#toks == 8, "eight tokens", #toks)
+ok(#toks == 9, "nine tokens", #toks)
 for i = 1, #toks do
   local other = {}
   for j = 1, #toks do other[j] = toks[j] end

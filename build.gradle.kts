@@ -135,31 +135,41 @@ val verifyModAssets by tasks.registering {
         // feature set (native/luajit/oclj_features.h): ffi0, FFI compiled out,
         // and lua52, LUA52COMPAT on.  So the fragment is "<hash>|ffi0.lua52.",
         // and a native built with FFI, or from another serializer, is refused.
-        // Since 2026-10-17 the word's last token names our fork's string.pack
-        // (OCLJ_LIB_STRPACK in oclj_features.h): the word that follows the
-        // fragment must end in ".pack1", so a native whose string library lacks
-        // string.pack/unpack/packsize is refused too.
+        // Since 2026-10-17 the word's eighth token names our fork's string.pack
+        // (OCLJ_LIB_STRPACK in oclj_features.h), so a native whose string
+        // library lacks string.pack/unpack/packsize is refused too.  Since round
+        // 3 (2026-10-17) a ninth token, bit64, names what the bitwise operators
+        // compute (OCLJ_OPS_BIT64: Lua 5.3.6's 64-bit results, and bytecode
+        // version 0x80), and the WHOLE word is compared, not a prefix and a
+        // suffix: the middle tokens (gc64, fr2, dn0, le, p64) had gone
+        // unchecked, and a word that grows a tenth token must be named here
+        // before a jar ships it.  The match runs on through every character a
+        // word can hold, so a longer word is a different word, never a match.
+        // One word fits every native a jar carries because x86_64 (Windows and
+        // Linux) is the only platform we build; aarch64 is parked (roadmap).
         if (ours.isNotEmpty() && serC.isFile && serH.isFile) {
             val md = MessageDigest.getInstance("SHA-1")
             md.update(serC.readBytes())
             md.update(serH.readBytes())
-            val want = md.digest().joinToString("") { b -> "%02x".format(b) }.take(8) + "|ffi0.lua52."
+            val want = md.digest().joinToString("") { b -> "%02x".format(b) }.take(8) +
+                "|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64"
             val word = Regex(Regex.escape(want) + "[a-z0-9.]*")
             val stale = ours.filter { f ->
-                word.findAll(String(f.readBytes(), Charsets.ISO_8859_1)).none { m -> m.value.endsWith(".pack1") }
+                word.findAll(String(f.readBytes(), Charsets.ISO_8859_1)).none { m -> m.value == want }
             }
             if (stale.isNotEmpty()) {
                 throw GradleException(
                     "OC-LuaJIT: " + stale.joinToString { it.name } + " was NOT built from the " +
-                        "serializer in this tree without FFI and with string.pack (expected fingerprint " +
-                        "fragment '" + want + "...pack1': the sha1 of serializer/eris_lj.c + eris_lj.h, " +
-                        "then the VM-features word's ffi0.lua52 and its last token pack1, " +
-                        "native/luajit/oclj_features.h). A jar built now would pair this tree's kernel " +
-                        "with a native from a different serializer or LuaJIT feature set. " +
+                        "serializer in this tree with this tree's LuaJIT feature set (expected fingerprint " +
+                        "fragment '" + want + "', exactly: the sha1 of serializer/eris_lj.c + eris_lj.h, " +
+                        "then the whole VM-features word -- FFI off, LUA52COMPAT, x86_64's layout, " +
+                        "string.pack and the 64-bit bitwise operators, native/luajit/oclj_features.h). " +
+                        "A jar built now would pair this tree's kernel with a native from a different " +
+                        "serializer or LuaJIT feature set. " +
                         "Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh"
                 )
             }
-            logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (" + want + "...pack1)")
+            logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (" + want + ")")
         }
 
         // THE NATIVE MUST BACK THE CLASS IN THIS TREE.  LuaStateLuaJIT declares four

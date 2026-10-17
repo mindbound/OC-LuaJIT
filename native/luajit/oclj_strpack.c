@@ -76,8 +76,12 @@
 ** (5.3.6's strlen stops at the terminator LuaJIT also guarantees,
 ** lj_str.c:299-300; the result is the same).
 **
-** This file includes LuaJIT's internal lj_obj.h only for LJ_MAX_STR and the
-** feature set; everything it calls is the public C API.
+** This file includes LuaJIT's internal lj_obj.h for LJ_MAX_STR and the
+** feature set, and native/luajit/oclj_num53.h, 5.3.6's number readers,
+** which it shares with the bitwise operators (oclj_bitop_meta.c) so that the
+** two read every value alike; their string scan is LuaJIT's lj_strscan_scan,
+** the call lua_tonumberx makes.  Everything else it calls is the public C
+** API.
 */
 
 #include <limits.h>
@@ -95,6 +99,8 @@
 #if !defined(OCLJ_LIB_STRPACK) || OCLJ_LIB_STRPACK != 1
 #error "oclj_strpack.c: native/luajit/oclj_features.h does not say OCLJ_LIB_STRPACK 1, so serializer/eris_lj.c would not name this library in the blob fingerprint"
 #endif
+
+#include "oclj_num53.h"
 
 typedef int64_t  pk_Int;   /* LJ: 5.3.6's lua_Integer (64-bit) */
 typedef uint64_t pk_Uns;   /* LJ: 5.3.6's lua_Unsigned (64-bit) */
@@ -153,11 +159,18 @@ typedef enum pk_KOption {
 ** 5.3.6's argument conversions, on a double-only VM
 ** ======================================================= */
 
-/* uint64 -> int64, two's complement, without implementation-defined casts. */
-static pk_Int pk_u2s(pk_Uns u)
-{
-  return u <= (pk_Uns)INT64_MAX ? (pk_Int)u : -(pk_Int)(~u) - 1;
-}
+/* 5.3.6's readers, in native/luajit/oclj_num53.h, which the bitwise
+** operators share (oclj_bitop_meta.c), so that pack and the operators read
+** every argument alike: the two's-complement cast, l_str2int over
+** [s, s+len), l_str2d through LuaJIT's scanner after the refusals described
+** there (the RESID-scan residual, D5/D7), and the float->integer conversion
+** with mode 0.  The pk_ names stay, so the code below reads as it did before
+** the readers moved, and negctl-pack.sh's CHECKINT and LJCOERCE arms still
+** find their lines in pk_checkint and pk_tonum. */
+#define pk_u2s		oclj_u2s
+#define pk_str2int	oclj_str2int
+#define pk_str2d	oclj_str2d
+#define pk_flt2int	oclj_flt2int
 
 /* 5.3.6 lauxlib.c:182-193 (typeerror): __name, then "light userdata". */
 static int pk_typeerror(lua_State *L, int arg, const char *tname)
@@ -182,86 +195,6 @@ static const char *pk_checklstring(lua_State *L, int arg, size_t *len)
   return s;
 }
 
-/* lctype's ASCII classes (5.3.6 builds with LUA_USE_CTYPE 0): no locale. */
-static int pk_isspace(int c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
-static int pk_isdigit(int c) { return c >= '0' && c <= '9'; }
-static int pk_isxdigit(int c)
-{
-  return pk_isdigit(c) || ((c | 0x20) >= 'a' && (c | 0x20) <= 'f');
-}
-static int pk_hexavalue(int c)
-{
-  return pk_isdigit(c) ? c - '0' : (c | 0x20) - 'a' + 10;
-}
-
-#define PK_MAXBY10	((pk_Uns)(INT64_MAX / 10))
-#define PK_MAXLASTD	((int)(INT64_MAX % 10))
-
-/* 5.3.6 lobject.c:299-328 (l_str2int) over [s, s+len): a decimal numeral
-** that fits, or a hex numeral of any length, wrapping modulo 2^64.  5.3.6
-** also demands that the whole string be the numeral (luaO_str2num == len +
-** 1), so an embedded NUL fails here as there. */
-static int pk_str2int(const char *s, size_t len, pk_Int *res)
-{
-  const char *e = s + len;
-  pk_Uns a = 0;
-  int empty = 1;
-  int neg = 0;
-  while (s < e && pk_isspace((unsigned char)*s)) s++;
-  if (s < e && *s == '-') { s++; neg = 1; }
-  else if (s < e && *s == '+') s++;
-  if (e - s >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-    s += 2;
-    for (; s < e && pk_isxdigit((unsigned char)*s); s++) {
-      a = a * 16 + (pk_Uns)pk_hexavalue((unsigned char)*s);
-      empty = 0;
-    }
-  }
-  else {
-    for (; s < e && pk_isdigit((unsigned char)*s); s++) {
-      int d = *s - '0';
-      if (a >= PK_MAXBY10 && (a > PK_MAXBY10 || d > PK_MAXLASTD + neg))
-        return 0;  /* overflow: not an integer (5.3.6 then tries a float) */
-      a = a * 10 + (pk_Uns)d;
-      empty = 0;
-    }
-  }
-  while (s < e && pk_isspace((unsigned char)*s)) s++;
-  if (empty || s != e) return 0;
-  *res = pk_u2s(neg ? 0u - a : a);
-  return 1;
-}
-
-/* 5.3.6 lobject.c:274-293 (l_str2d), whose conversion is strtod.  LJ: we
-** convert with LuaJIT's own scanner (lua_tonumberx -> lj_strscan_num), which
-** is locale-free -- a JVM may set a locale whose strtod wants ',' -- and
-** first refuse the two numerals it reads that strtod does not: "inf"/"nan"
-** (5.3.6 rejects them itself, by the first of ".xXnN") and binary "0b..."
-** (lj_strscan.c:417-418).  Left different, refused here and read by strtod
-** (decided D5/D7): LuaJIT's scanner refuses a numeral with 2^20 or more
-** digits after the radix point, leading zeros counted and trailing zeros
-** not, decimal or hex (lj_strscan.c:449-453), or an exponent of 2^20 or more
-** (:468).  strtod reads the first as its value, and the second as inf or 0. */
-static int pk_str2d(lua_State *L, int arg, const char *s, size_t len,
-                    double *res)
-{
-  const char *p, *e = s + len;
-  int isnum = 0;
-  lua_Number n;
-  for (p = s; p < e; p++) {
-    if (*p == '\0') return 0;
-    if (*p == '.' || *p == 'x' || *p == 'X') break;
-    if (*p == 'n' || *p == 'N') return 0;
-  }
-  p = s;
-  while (p < e && pk_isspace((unsigned char)*p)) p++;
-  if (p < e && (*p == '-' || *p == '+')) p++;
-  if (e - p >= 2 && p[0] == '0' && (p[1] == 'b' || p[1] == 'B')) return 0;
-  n = lua_tonumberx(L, arg, &isnum);
-  *res = (double)n;
-  return isnum;
-}
-
 /* What 5.3.6 sees in an argument (lvm.c:94-117, lobject.c:331-343):
 ** 0 not a number, 1 an integer (*pi), 2 a float (*pn).  Every number of
 ** this VM is a float; only a string can yield a 5.3 integer. */
@@ -276,19 +209,9 @@ static int pk_tonum(lua_State *L, int arg, pk_Int *pi, double *pn)
     size_t len;
     const char *s = lua_tolstring(L, arg, &len);
     if (pk_str2int(s, len, pi)) return 1;
-    if (pk_str2d(L, arg, s, len, pn)) return 2;
+    if (pk_str2d(s, len, pn)) return 2;
   }
   return 0;
-}
-
-/* 5.3.6's float->integer with mode 0 (lvm.c:97-105, luaconf.h:449-451):
-** exact integral values in [-2^63, 2^63) only; NaN fails the range test. */
-static int pk_flt2int(double n, pk_Int *p)
-{
-  if (!(n >= -9223372036854775808.0 && n < 9223372036854775808.0))
-    return 0;
-  *p = (pk_Int)n;  /* in range, so defined (C99 6.3.1.4) */
-  return (double)*p == n;
 }
 
 /* 5.3.6's luaL_checkinteger (lauxlib.c:422-436, interror and the function). */

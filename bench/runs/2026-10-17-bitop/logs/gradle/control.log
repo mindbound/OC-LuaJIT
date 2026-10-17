@@ -1,0 +1,15 @@
+Calculating task graph as configuration cache cannot be reused because the set of Gradle properties has changed: 'ocljit.nativesDir' was removed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.34 available! Run ./gradlew updateBuildScript
+
+> Task :verifyModAssets
+OC-LuaJIT: packaging 2 native(s): libjnluajit52-linux-x86_64.so (734096 bytes), libjnluajit52-windows-x86_64.dll (739237 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+OC-LuaJIT: packaging the patched kernel (52904 bytes)
+
+BUILD SUCCESSFUL in 798ms
+1 actionable task: 1 executed
+Configuration cache entry stored.

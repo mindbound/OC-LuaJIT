@@ -1,0 +1,13 @@
+make: Entering directory '/mnt/c/Users/astro/Downloads/OC-LuaJIT/serializer'
+LJSRC='/mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src' OCLJ_BUILD='/mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native' CC='gcc' NEGCTL_LIBS='-lpthread -lm -ldl' sh tests/negctl-fingerprint.sh
+[negctl-fingerprint] work dir /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/negctl-fingerprint/20261017-130348-6440
+[negctl-fingerprint] nocompare: exit 11 (want 11); FAIL lines 11 (want 11): token 9 (9), three-field 1 (1), crc-order 1 (1)
+  RESULT: PASS  a serializer that ignores the fingerprint is caught by fingerprint.lua
+[negctl-fingerprint] packword: exit 1 (want 1); FAIL lines 1 (want 1): pack-token agreement 1 (1)
+  RESULT: PASS  a serializer whose word misnames the string library is caught by fingerprint.lua
+[negctl-fingerprint] bitword: exit 1 (want 1); word ends bit32 1 (1); FAIL lines 1 (want 1): bit-token agreement 1 (1)
+  RESULT: PASS  a serializer whose word misnames the bitwise operators is caught by fingerprint.lua
+[negctl-fingerprint] layout: exit 3 (want 3); LAYOUT MISMATCH: libluajit.a's GG_State is 6376 bytes, eris_lj.c was compiled for 6384 -- compile it against native/build-native.sh's LuaJIT build copy, whose lj_arch.h includes native/luajit/oclj_features.h
+  RESULT: PASS  eris_lj.c compiled for another LuaJIT layout is refused before any test runs
+NEGCTL-FINGERPRINT: PASS (all four sabotages caught)
+make: Leaving directory '/mnt/c/Users/astro/Downloads/OC-LuaJIT/serializer'

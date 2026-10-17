@@ -3802,6 +3802,67 @@ object Smoke {
       |  packRow = ok and r or ("error/" .. tostring(r):gsub("[ /]", "_"))
       |end
       |
+      |-- BITWISE PROBE (d5).  Our fork's & | ~ << >> and unary ~ compute Lua
+      |-- 5.3.6's 64-bit integer results, in the parser's folding, the
+      |-- interpreter and the JIT (native/luajit/oclj_bitop.h), and a result
+      |-- with more than 53 significant bits, which no double holds, raises
+      |-- "result of '<op>' has more than 53 significant bits (mask each
+      |-- operand to 32 bits first)" (decided 2026-10-17: an error, never a
+      |-- wrong value; the hint added the same day).  X matches the message
+      |-- without the hint, unanchored, so the row names the operator either
+      |-- way and the wanted line is the same.  Every operator sits in a
+      |-- load()ed string, so a VM that cannot parse them (OC's stock PUC 5.2
+      |-- native) gets nil from load and the cell paints absent instead of the
+      |-- whole autorun failing to compile.  Each row runs in its own pcall and
+      |-- paints its value, as hi:lo of 2^32 (exact, where tostring's %.14g is
+      |-- not), or its error's kind, so one wrong row cannot hide the others.
+      |-- Row 9 is a hot loop, compiled on a JIT arm; with shift counts taken
+      |-- mod 32 its sum is 0, so a 32-bit VM cannot pass it.
+      |local bitRow
+      |do
+      |  local function big(v)
+      |    if v ~= v or v == math.huge or v == -math.huge then return tostring(v) end
+      |    local hi = math.floor(v / 4294967296.0)
+      |    return string.format("%d:%d", hi, v - hi * 4294967296.0)
+      |  end
+      |  local f = load([[
+      |    local function X(g, a)
+      |      local ok, v = pcall(g, a)
+      |      if ok then return v end
+      |      local m = tostring(v)
+      |      local op = m:match("result of '([^']*)' has more than 53 significant bits")
+      |      return op and ("inexact" .. op) or
+      |        (m:find("integer representation", 1, true) and "noint" or "E")
+      |    end
+      |    local s = {}
+      |    s[#s + 1] = X(function() return 1 << 32 end)             -- 2^32
+      |    s[#s + 1] = X(function() return 1 << 63 end)             -- -2^63, exact
+      |    s[#s + 1] = X(function() return ~0 >> 1 end)             -- 5.3.6: 2^63-1; raises
+      |    s[#s + 1] = X(function() return (1 << 62) | 1 end)       -- 5.3.6: 2^62+1; raises
+      |    s[#s + 1] = X(function() return 1 << 64 end)             -- count >= 64: 0
+      |    s[#s + 1] = X(function() return -1 >> 63 end)            -- logical: 1
+      |    s[#s + 1] = X(function(x) return x & 1 end, 1.5)         -- no integer representation
+      |    s[#s + 1] = X(function(x) return x & 0xff end, "0x10")   -- 5.3's string coercion: 16
+      |    s[#s + 1] = X(function()
+      |      local acc = 0
+      |      for i = 1, 300 do acc = acc + ((i << 40) >> 20) end
+      |      return acc                                            -- 45150 * 2^20
+      |    end)
+      |    s[#s + 1] = X(function() return ~0 >> 11 end)            -- 2^53-1, the widest exact
+      |    s[#s + 1] = X(function(n) return (n & 0xFFFFFFFF) >> 8 end, -2)  -- the remedy: 2^24-1
+      |    return s
+      |  ]], "=bitprobe")
+      |  if not f then bitRow = "absent"
+      |  else
+      |    local ok, r = pcall(function()
+      |      local s, t = f(), {}
+      |      for i = 1, #s do t[i] = type(s[i]) == "number" and big(s[i]) or tostring(s[i]) end
+      |      return "ok/" .. table.concat(t, "/")
+      |    end)
+      |    bitRow = ok and r or ("error/" .. tostring(r):gsub("[ /]", "_"))
+      |  end
+      |end
+      |
       |-- JIT PROBE.  A compute-bound loop run from INSIDE the sandbox -- i.e.
       |-- under OC's real deadline hook, with OC's real hookInterval and the real
       |-- checkDeadline doing its work -- timed with the sandbox's own os.clock.
@@ -4222,6 +4283,11 @@ object Smoke {
       |  -- repainted every tick for the same reason as the counter: boot output
       |  -- would otherwise scroll a one-shot line off the screen.
       |  component.gpu.set(1, 16, gate .. " OCLJLIT=" .. litRow .. " OCLJPACK=" .. packRow .. "        ")
+      |  -- The bitwise probe gets a row of its own: row 16 already holds about
+      |  -- 100 of the screen's 160 columns, and OCLJBIT is about 110 more.  Row
+      |  -- 39 is free: the suite rows are 24 to 23 + #suiteOrder (32 with all 9
+      |  -- of bench/oc/references.txt), the gc rows 37 and 38, encore 41.
+      |  component.gpu.set(1, 39, "OCLJBIT=" .. bitRow .. "        ")
       |  -- The suite block.  gpu.set is a DIRECT call and OC meters those per
       |  -- tick; painting twenty-odd rows every 50 ms would spend the machine's
       |  -- call budget on the scoreboard and stretch the wall time of the very
@@ -5746,6 +5812,52 @@ object Smoke {
          else if (pk == "absent") "   <- the sandbox has no string.pack: this native's string library lacks it"
          else if (nativeMode == "stock") "   <- the stock cell has a string.pack: this is not PUC 5.2"
          else "   <- string.pack is there but does not behave as Lua 5.3.6's with the two decided deviations"))
+
+    // --- (d5) 5.3's bitwise operators in the sandbox: our fork's 64-bit port --
+    // & | ~ << >> and unary ~ compute Lua 5.3.6's int64 results in the
+    // parser's folding, the interpreter and the JIT (native/luajit/
+    // oclj_bitop.h and the patch-bitop-*.sh beside it), and a result with
+    // more than 53 significant bits raises "result of '<op>' has more than 53
+    // significant bits (mask each operand to 32 bits first)" (decided
+    // 2026-10-17: an error, never a wrong value).  The probe's classifier
+    // matches the text before the hint, so a row reads "inexact<op>" with or
+    // without it.
+    // The probe's eleven rows, in order: 1 << 32; 1 << 63 (-2^63, exact);
+    // ~0 >> 1 and (1 << 62) | 1, which 5.3.6 computes as 2^63-1 and 2^62+1
+    // and which raise here, each naming its operator; 1 << 64 (0); -1 >> 63
+    // (logical, 1); 1.5 & 1 (no integer representation); "0x10" & 0xff (5.3's
+    // string coercion, 16); a hot loop's sum of (i << 40) >> 20 (45150 * 2^20;
+    // 0 with counts taken mod 32); ~0 >> 11 (2^53-1, the widest result that
+    // computes); and masking before the shift, the README's remedy:
+    // (n & 0xFFFFFFFF) >> 8 for n = -2 (2^24-1).  Numbers paint as hi:lo of
+    // 2^32.  The wanted line is PUC
+    // 5.3.6's, every operator's result put through the decided rule (its
+    // double if exact, else the error), not written by hand; JIT on and off
+    // want the same line.  OC's stock native is PUC 5.2.4 + Eris, whose lexer
+    // has no << and no unary ~: its load returns nil, and the stock cell
+    // paints "absent".
+    val bw = parse(txtA2, "OCLJBIT")
+    val bwWant = if (nativeMode == "stock") "absent"
+      else "ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215"
+    // LuaJIT's 32-bit BitOp results, the line before round 3 (measured
+    // 2026-10-17 on the round-2 luajit.exe, JIT on and off alike).
+    val bw32 = "ok/0:1/-1:2147483648/0:2147483647/0:1073741825/0:1/0:1/0:0/E/0:0/0:2097151/0:16777215"
+    val bwNames = Array("1<<32", "1<<63", "~0>>1", "(1<<62)|1", "1<<64", "-1>>63", "1.5&1",
+      "'0x10'&0xff", "hot-sum", "~0>>11", "remedy")
+    val bwGot = bw.split("/", -1).drop(1)
+    val bwExp = bwWant.split("/", -1).drop(1)
+    val bwDiff = bwNames.indices
+      .filter(i => i >= bwGot.length || i >= bwExp.length || bwGot(i) != bwExp(i))
+      .map(i => bwNames(i) + "=" + (if (i < bwGot.length) bwGot(i) else "?")).mkString(", ")
+    milestone("d5-sandbox-bitwise", bw == bwWant,
+      "5.3's bitwise operators in the sandbox -> " + bw + " (want " + bwWant + ")" +
+        (if (bw == bwWant) ""
+         else if (bw == "<missing>") "   <- no OCLJBIT on screen -- the in-sandbox probe never ran"
+         else if (bw == "absent") "   <- the sandbox's load refused the operators: this native's parser does not know them"
+         else if (nativeMode == "stock") "   <- the stock cell parsed 5.3's operators: this is not PUC 5.2"
+         else if (bw == bw32) "   <- LuaJIT's 32-bit BitOp results: this native predates the 64-bit operators"
+         else if (bw.startsWith("error/")) "   <- the probe raised outside its per-row pcalls"
+         else "   <- the rows that differ: " + bwDiff))
 
     // --- (k1) the deadline still fires -----------------------------------
     // The watchdog replaces the mechanism behind "too long without yielding";

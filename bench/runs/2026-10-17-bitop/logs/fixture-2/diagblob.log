@@ -1,0 +1,8 @@
+eris-lj test harness
+  eris-lj 0.3 (M3)
+  fingerprint: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+  format: 3
+  VM features: ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+  GG_State: 6376 bytes (libluajit.a and eris_lj.c agree)
+
+DIAGBLOB bytes=636 body=516

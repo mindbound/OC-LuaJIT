@@ -1,0 +1,3 @@
+extracted 113 lines of the bitops gate from /c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh
+[build]     bitwise-operator gate: fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true
+GATE PASSED (bitops)

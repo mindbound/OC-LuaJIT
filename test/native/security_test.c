@@ -75,6 +75,15 @@
  * dumps below were made on an FFI-on build of the same tree (1ee778a4, GC64)
  * with string.dump(load(<src>), true).
  *
+ * Since round 3 (2026-10-17) our bytecode is version 0x80, not upstream's 2
+ * (lj_bcdump.h BCDUMP_VERSION, native/luajit/patch-bitop-bcdump.sh): a folded
+ * `1 << 32` is the constant 2^32 here and 1 in an upstream dump, so neither
+ * may load the other's.  The two fixtures carry 0x80 in byte 3, and FF12 says
+ * an upstream dump -- the plain one, byte for byte as an upstream-versioned
+ * build writes it -- is refused as "incompatible bytecode" (lj_bcread.c, the
+ * version test of the header).  Fail-first (r3/synth/sec, F16): a build
+ * before round 3 fails FF9, FF10 and FF12.
+ *
  * REGRESSION 5 -- string.buffer without FFI (section BF)
  *
  * Its FFI-only methods (reserve, commit, ref, putcdata; lib_buffer.c:183-237)
@@ -177,13 +186,23 @@ static int evalstr(lua_State *L, const char *src, char *out, size_t outn) {
 
 /* string.dump(load("return 1LL"), true) from an FFI-ON build of this tree
  * (1ee778a4, GC64): flags byte 0x0E = STRIP|FFI|FR2 (lj_bcdump.h:43-45).
- * Byte 3 of both dumps is BCDUMP_VERSION (2): a change to the bytecode must
- * raise it (lj_bcdump.h:36-37), and these fixtures must follow. */
+ * Byte 3 of both dumps is BCDUMP_VERSION: a change to the bytecode must raise
+ * it (lj_bcdump.h:36-37), and these fixtures must follow.  It was 2 when they
+ * were made; round 3 made it 0x80 (the first value lj_bcdump.h:36-39 leaves
+ * to forks), and byte 3 is the only byte that changed.  The 0x80 BC_PLAIN is
+ * byte for byte what round 3's reference build writes for
+ * string.dump(load("return 1"), true) (r3/b/bB, measured 2026-10-17). */
 static const unsigned char BC_FFI[] = {
-  0x1B,0x4C,0x4A,0x02,0x0E,0x12,0x06,0x00,0x01,0x00,0x01,0x00,0x02,0x28,0x00,
+  0x1B,0x4C,0x4A,0x80,0x0E,0x12,0x06,0x00,0x01,0x00,0x01,0x00,0x02,0x28,0x00,
   0x00,0x00,0x4C,0x00,0x02,0x00,0x02,0x01,0x00,0x00 };
 /* string.dump(load("return 1"), true), same build: flags 0x0A = STRIP|FR2. */
 static const unsigned char BC_PLAIN[] = {
+  0x1B,0x4C,0x4A,0x80,0x0A,0x0F,0x02,0x00,0x01,0x00,0x00,0x00,0x02,0x29,0x00,
+  0x01,0x00,0x4C,0x00,0x02,0x00,0x00 };
+/* The same dump as upstream LuaJIT 2.1 writes it (BCDUMP_VERSION 2), byte for
+ * byte what a build before round 3 writes (r3/synth/b0, measured 2026-10-17):
+ * FF12. */
+static const unsigned char BC_PLAIN_V2[] = {
   0x1B,0x4C,0x4A,0x02,0x0A,0x0F,0x02,0x00,0x01,0x00,0x00,0x00,0x02,0x29,0x00,
   0x01,0x00,0x4C,0x00,0x02,0x00,0x00 };
 
@@ -607,6 +626,16 @@ int main(void) {
               sizeof detail - strlen(detail) - 1);
     check("FF10", plain_ok && st != 0 && strstr(detail, "incompatible bytecode") != NULL,
           "an FFI-flagged dump (return 1LL) is refused in mode \"b\"", detail);
+    lua_settop(L, top0);
+    /* The upstream-versioned twin of BC_PLAIN differs from it in byte 3 only,
+     * so, while FF9 loads, its refusal is the version one. */
+    r.p = (const char *)BC_PLAIN_V2; r.n = sizeof BC_PLAIN_V2; r.done = 0;
+    st = lua_loadx(L, bufread, &r, "=bcv2", "b");
+    snprintf(detail, sizeof detail, "status=%d \"%s\"%s", st,
+             st && lua_isstring(L, -1) ? lua_tostring(L, -1) : "",
+             plain_ok ? "" : " (FF9 control failed)");
+    check("FF12", plain_ok && st != 0 && strstr(detail, "incompatible bytecode") != NULL,
+          "an upstream dump (BCDUMP_VERSION 2, its bit operators 32-bit) is refused", detail);
     lua_settop(L, top0);
   }
   evalstr(L, "return tostring(debug.getregistry()._LOADED.ffi)", buf, sizeof buf);

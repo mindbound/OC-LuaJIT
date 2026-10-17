@@ -1,0 +1,25 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as configuration cache cannot be reused because the set of Gradle properties has changed: 'ocljit.nativesDir' was added.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.34 available! Run ./gradlew updateBuildScript
+
+> Task :verifyModAssets FAILED
+OC-LuaJIT: packaging 2 native(s): libjnluajit52-linux-x86_64.so (716648 bytes), libjnluajit52-windows-x86_64.dll (732544 bytes)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyModAssets'.
+> OC-LuaJIT: libjnluajit52-linux-x86_64.so, libjnluajit52-windows-x86_64.dll was NOT built from the serializer in this tree with this tree's LuaJIT feature set (expected fingerprint fragment '412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64', exactly: the sha1 of serializer/eris_lj.c + eris_lj.h, then the whole VM-features word -- FFI off, LUA52COMPAT, x86_64's layout, string.pack and the 64-bit bitwise operators, native/luajit/oclj_features.h). A jar built now would pair this tree's kernel with a native from a different serializer or LuaJIT feature set. Rebuild it: OCLJ_VARIANT=additive sh native/build-native.sh
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 12s
+1 actionable task: 1 executed
+Configuration cache entry stored.

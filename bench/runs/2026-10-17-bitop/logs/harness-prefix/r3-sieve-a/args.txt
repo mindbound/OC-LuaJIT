@@ -1,0 +1,1 @@
+native=additive lib=/c/Users/astro/claude-tmp/oclj/new-r3-8c272b0b/libdir-additive jit=on only=sieve dispose= bundle= javasrc=

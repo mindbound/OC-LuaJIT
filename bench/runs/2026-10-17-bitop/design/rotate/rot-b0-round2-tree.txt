@@ -1,0 +1,11 @@
+2e737b86879494b2e46926f8d5c268b1 *luajit.exe
+n=2 idiom: raise 0 wrong 5000 | masked: raise 0 wrong 5000
+n=6 idiom: raise 0 wrong 5004 | masked: raise 0 wrong 5004
+n=7 idiom: raise 0 wrong 4999 | masked: raise 0 wrong 4999
+n=11 idiom: raise 0 wrong 5004 | masked: raise 0 wrong 5004
+n=13 idiom: raise 0 wrong 4958 | masked: raise 0 wrong 4958
+n=17 idiom: raise 0 wrong 4947 | masked: raise 0 wrong 4947
+n=18 idiom: raise 0 wrong 4938 | masked: raise 0 wrong 4938
+n=19 idiom: raise 0 wrong 5006 | masked: raise 0 wrong 5006
+n=22 idiom: raise 0 wrong 4971 | masked: raise 0 wrong 4971
+n=25 idiom: raise 0 wrong 5019 | masked: raise 0 wrong 5019

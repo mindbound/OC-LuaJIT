@@ -7,6 +7,18 @@
 --    unsigned. The two are congruent mod 2^32, so bit ops and mod-2^32
 --    sums agree; raw comparisons/prints of intermediates would not.)
 --  * Print 32-bit values only via tohex32() (or after norm()).
+--
+-- The operator rotate masks the left-shifted piece BEFORE the `|`:
+--     (a >> n) | ((a << (32 - n)) & 0xFFFFFFFF)
+-- and not the usual 5.3 idiom, ((a >> n) | (a << (32 - n))) & 0xFFFFFFFF,
+-- whose `|` joins the two pieces into up to 64 - n significant bits before
+-- the mask.  Our LuaJIT fork (round 3) computes 5.3's operators on int64 and
+-- raises "result of '|' has more than 53 significant bits (mask each operand
+-- to 32 bits first)" for a result no double holds, so the idiom raises for
+-- right rotations by 1-10 -- for most words at SHA-256's 2, 6 and 7.  Here
+-- that matters only where `jit` is hidden, as in an OpenComputers sandbox;
+-- standalone LuaJIT takes `bit`.  The masked form gives the same results on
+-- PUC 5.3.6 and 5.4, on round 3 and on the round-2 32-bit build (2026-10-17).
 
 local M = {}
 
@@ -36,7 +48,7 @@ else
       function(a, n)
         a = a & 0xFFFFFFFF
         if n == 0 then return a end
-        return ((a >> n) | (a << (32 - n))) & 0xFFFFFFFF
+        return (a >> n) | ((a << (32 - n)) & 0xFFFFFFFF)
       end
   ]]
   local f = assert(load(src, "compat-bitops"))

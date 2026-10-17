@@ -1,0 +1,33 @@
+final-r3 started 09:27:00
+campaign done 09:28:45
+build-dropin exit=0
+build-additive exit=0
+objects changed against the first build: build/native/luajit-windows-x86_64/src/lib_jit.o build/native/luajit-windows-x86_64/src/lj_meta.o 
+objects compared: 77 final, 77 first
+9ae455ce493c149dd841f45f9536c527 */c/Users/astro/claude-tmp/oclj/new-r3f-9ae455ce/libdir-additive/libjnluajit52-windows-x86_64.dll
+2c37a7a180b985ac05a8d199f66e1c43 */c/Users/astro/claude-tmp/oclj/new-r3f-9ae455ce/libdir/libjnlua52-windows-x86_64.dll
+mem 0
+negctl-bitop 0
+negctl-pack 0
+negctl 0
+penalty 0
+race 0
+run-bitfuzz 0
+run-bitjit 0
+run-bitop 0
+run-pack 0
+run-packfuzz 0
+security 0
+ser-negctl 0
+ser-test 0
+shim 0
+vgc 0
+wd 0
+r3-additive-on exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 94.1s
+r3-dropin exit=0 SMOKE| CHECKS: 69   FAILURES: 0   WALL: 100.6s
+r3-additive-off exit=0 SMOKE| CHECKS: 80   FAILURES: 0   WALL: 101.2s
+r3-sieve exit=0 SMOKE| CHECKS: 76   FAILURES: 0   WALL: 82.6s
+r3-stock exit=0 SMOKE| CHECKS: 53   FAILURES: 0   WALL: 94.7s
+r3-disposeoff exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 98.5s
+r3-bundleoff exit=1 SMOKE| CHECKS: 82   FAILURES: 3   WALL: 99.4s
+final-r3 finished 10:02:07

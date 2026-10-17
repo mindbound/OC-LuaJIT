@@ -1,0 +1,403 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; seeds 11..60 x 20000 cases x 16 tuples; hotmin 0.25; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50
+seed 11: 0 -- 320000 tuples, EXACT 225889, INEXACT 94111 (of them 5.3.6 computes a number: 90171); REF results: E:INEXACT 94111, E:NOINT 17777, E:TYPE 8482, num 199630 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-11.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-11.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8679/20000 hotU 32280/60000 traces 57738 aborts 62741 [NYI: bytecode FNEW=89,NYI: bytecode UCLO=271,NYI: bytecode VARG=680,NYI: return to lower frame=180,bad argument type=57770,call unroll limit reached=408,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-11.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94111 of INEXACT 94111; sim-round MISMATCH 94111 of REF E:INEXACT 94111
+seed 12: 0 -- 320000 tuples, EXACT 225003, INEXACT 94997 (of them 5.3.6 computes a number: 90762); REF results: E:INEXACT 94997, E:NOINT 17655, E:TYPE 8846, num 198502 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-12.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-12.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8671/20000 hotU 32309/60000 traces 55830 aborts 61592 [NYI: bytecode FNEW=70,NYI: bytecode UCLO=254,NYI: bytecode VARG=667,NYI: return to lower frame=155,bad argument type=56852,call unroll limit reached=368,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-12.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94997 of INEXACT 94997; sim-round MISMATCH 94997 of REF E:INEXACT 94997
+seed 13: 0 -- 320000 tuples, EXACT 224076, INEXACT 95924 (of them 5.3.6 computes a number: 91943); REF results: E:INEXACT 95924, E:NOINT 17459, E:TYPE 8595, num 198022 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-13.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-13.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8561/20000 hotU 31959/60000 traces 57080 aborts 62195 [NYI: bytecode FNEW=74,NYI: bytecode UCLO=279,NYI: bytecode VARG=682,NYI: return to lower frame=170,bad argument type=57479,call unroll limit reached=349,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-13.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95924 of INEXACT 95924; sim-round MISMATCH 95924 of REF E:INEXACT 95924
+seed 14: 0 -- 320000 tuples, EXACT 224021, INEXACT 95979 (of them 5.3.6 computes a number: 91822); REF results: E:INEXACT 95979, E:NOINT 17618, E:TYPE 8714, num 197689 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-14.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-14.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8492/20000 hotU 31643/60000 traces 57175 aborts 63845 [NYI: bytecode FNEW=78,NYI: bytecode UCLO=291,NYI: bytecode VARG=712,NYI: return to lower frame=168,bad argument type=58709,call unroll limit reached=588,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-14.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95979 of INEXACT 95979; sim-round MISMATCH 95979 of REF E:INEXACT 95979
+seed 15: 0 -- 320000 tuples, EXACT 223433, INEXACT 96567 (of them 5.3.6 computes a number: 92277); REF results: E:INEXACT 96567, E:NOINT 16979, E:TYPE 9022, num 197432 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-15.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-15.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8513/20000 hotU 31738/60000 traces 57467 aborts 63025 [NYI: bytecode FNEW=76,NYI: bytecode UCLO=294,NYI: bytecode VARG=712,NYI: return to lower frame=221,bad argument type=58012,call unroll limit reached=507,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-15.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96567 of INEXACT 96567; sim-round MISMATCH 96567 of REF E:INEXACT 96567
+seed 16: 0 -- 320000 tuples, EXACT 224718, INEXACT 95282 (of them 5.3.6 computes a number: 91164); REF results: E:INEXACT 95282, E:NOINT 17838, E:TYPE 8819, num 198061 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-16.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-16.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8590/20000 hotU 31975/60000 traces 58286 aborts 62774 [NYI: bytecode FNEW=84,NYI: bytecode UCLO=280,NYI: bytecode VARG=835,NYI: return to lower frame=188,bad argument type=57494,call unroll limit reached=584,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-16.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95282 of INEXACT 95282; sim-round MISMATCH 95282 of REF E:INEXACT 95282
+seed 17: 0 -- 320000 tuples, EXACT 223066, INEXACT 96934 (of them 5.3.6 computes a number: 92968); REF results: E:INEXACT 96934, E:NOINT 17484, E:TYPE 8964, num 196618 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-17.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-17.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8586/20000 hotU 31664/60000 traces 56461 aborts 63185 [NYI: bytecode FNEW=71,NYI: bytecode UCLO=257,NYI: bytecode VARG=772,NYI: return to lower frame=179,bad argument type=58196,call unroll limit reached=408,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-17.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96934 of INEXACT 96934; sim-round MISMATCH 96934 of REF E:INEXACT 96934
+seed 18: 0 -- 320000 tuples, EXACT 224898, INEXACT 95102 (of them 5.3.6 computes a number: 91000); REF results: E:INEXACT 95102, E:NOINT 17693, E:TYPE 8572, num 198633 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-18.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-18.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8626/20000 hotU 32211/60000 traces 56783 aborts 62341 [NYI: bytecode FNEW=77,NYI: bytecode UCLO=280,NYI: bytecode VARG=534,NYI: return to lower frame=177,bad argument type=57727,call unroll limit reached=422,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-18.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95102 of INEXACT 95102; sim-round MISMATCH 95102 of REF E:INEXACT 95102
+seed 19: 0 -- 320000 tuples, EXACT 225761, INEXACT 94239 (of them 5.3.6 computes a number: 90245); REF results: E:INEXACT 94239, E:NOINT 17867, E:TYPE 9115, num 198779 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-19.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-19.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8656/20000 hotU 32148/60000 traces 59184 aborts 63114 [NYI: bytecode FNEW=88,NYI: bytecode UCLO=297,NYI: bytecode VARG=1027,NYI: return to lower frame=218,bad argument type=57270,call unroll limit reached=631,failed to allocate mc
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-19.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94239 of INEXACT 94239; sim-round MISMATCH 94239 of REF E:INEXACT 94239
+seed 20: 0 -- 320000 tuples, EXACT 224366, INEXACT 95634 (of them 5.3.6 computes a number: 91520); REF results: E:INEXACT 95634, E:NOINT 17523, E:TYPE 8821, num 198022 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-20.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-20.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8616/20000 hotU 32114/60000 traces 58298 aborts 63087 [NYI: bytecode FNEW=74,NYI: bytecode UCLO=290,NYI: bytecode VARG=761,NYI: return to lower frame=207,bad argument type=57453,call unroll limit reached=595,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-20.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95634 of INEXACT 95634; sim-round MISMATCH 95634 of REF E:INEXACT 95634
+seed 21: 0 -- 320000 tuples, EXACT 223970, INEXACT 96030 (of them 5.3.6 computes a number: 91711); REF results: E:INEXACT 96030, E:NOINT 17342, E:TYPE 8778, num 197850 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-21.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-21.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8583/20000 hotU 31990/60000 traces 57984 aborts 62787 [NYI: bytecode FNEW=79,NYI: bytecode UCLO=293,NYI: bytecode VARG=823,NYI: return to lower frame=171,bad argument type=57644,call unroll limit reached=461,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-21.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96030 of INEXACT 96030; sim-round MISMATCH 96030 of REF E:INEXACT 96030
+seed 22: 0 -- 320000 tuples, EXACT 223276, INEXACT 96724 (of them 5.3.6 computes a number: 92923); REF results: E:INEXACT 96724, E:NOINT 17506, E:TYPE 9073, num 196697 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-22.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-22.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8576/20000 hotU 31681/60000 traces 58798 aborts 63733 [NYI: bytecode FNEW=87,NYI: bytecode UCLO=310,NYI: bytecode VARG=760,NYI: return to lower frame=197,bad argument type=58304,call unroll limit reached=483,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-22.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96724 of INEXACT 96724; sim-round MISMATCH 96724 of REF E:INEXACT 96724
+seed 23: 0 -- 320000 tuples, EXACT 223845, INEXACT 96155 (of them 5.3.6 computes a number: 91717); REF results: E:INEXACT 96155, E:NOINT 17697, E:TYPE 9066, num 197082 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-23.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-23.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8532/20000 hotU 31851/60000 traces 58396 aborts 63284 [NYI: bytecode FNEW=89,NYI: bytecode UCLO=309,NYI: bytecode VARG=724,NYI: return to lower frame=214,bad argument type=58156,call unroll limit reached=524,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-23.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96155 of INEXACT 96155; sim-round MISMATCH 96155 of REF E:INEXACT 96155
+seed 24: 0 -- 320000 tuples, EXACT 222695, INEXACT 97305 (of them 5.3.6 computes a number: 93255); REF results: E:INEXACT 97305, E:NOINT 16408, E:TYPE 8817, num 197470 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-24.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-24.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8527/20000 hotU 31925/60000 traces 56324 aborts 62243 [NYI: bytecode FNEW=66,NYI: bytecode UCLO=262,NYI: bytecode VARG=578,NYI: return to lower frame=211,bad argument type=57475,call unroll limit reached=503,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-24.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 97305 of INEXACT 97305; sim-round MISMATCH 97305 of REF E:INEXACT 97305
+seed 25: 0 -- 320000 tuples, EXACT 224863, INEXACT 95137 (of them 5.3.6 computes a number: 91093); REF results: E:INEXACT 95137, E:NOINT 17873, E:TYPE 8563, num 198427 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-25.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-25.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8725/20000 hotU 32242/60000 traces 56455 aborts 62332 [NYI: bytecode FNEW=66,NYI: bytecode UCLO=269,NYI: bytecode VARG=599,NYI: return to lower frame=218,bad argument type=57802,call unroll limit reached=306,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-25.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95137 of INEXACT 95137; sim-round MISMATCH 95137 of REF E:INEXACT 95137
+seed 26: 0 -- 320000 tuples, EXACT 225286, INEXACT 94714 (of them 5.3.6 computes a number: 90820); REF results: E:INEXACT 94714, E:NOINT 16970, E:TYPE 9168, num 199148 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-26.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-26.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8682/20000 hotU 32132/60000 traces 57221 aborts 62469 [NYI: bytecode FNEW=73,NYI: bytecode UCLO=280,NYI: bytecode VARG=635,NYI: return to lower frame=174,bad argument type=57526,call unroll limit reached=475,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-26.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94714 of INEXACT 94714; sim-round MISMATCH 94714 of REF E:INEXACT 94714
+seed 27: 0 -- 320000 tuples, EXACT 224008, INEXACT 95992 (of them 5.3.6 computes a number: 91858); REF results: E:INEXACT 95992, E:NOINT 17805, E:TYPE 8967, num 197236 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-27.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-27.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8515/20000 hotU 31879/60000 traces 55373 aborts 63258 [NYI: bytecode FNEW=70,NYI: bytecode UCLO=256,NYI: bytecode VARG=672,NYI: return to lower frame=202,bad argument type=58445,call unroll limit reached=420,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-27.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95992 of INEXACT 95992; sim-round MISMATCH 95992 of REF E:INEXACT 95992
+seed 28: 0 -- 320000 tuples, EXACT 224594, INEXACT 95406 (of them 5.3.6 computes a number: 91505); REF results: E:INEXACT 95406, E:NOINT 18031, E:TYPE 8645, num 197918 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-28.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-28.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8547/20000 hotU 31868/60000 traces 58281 aborts 63051 [NYI: bytecode FNEW=64,NYI: bytecode UCLO=297,NYI: bytecode VARG=679,NYI: return to lower frame=215,bad argument type=57894,call unroll limit reached=478,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-28.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95406 of INEXACT 95406; sim-round MISMATCH 95406 of REF E:INEXACT 95406
+seed 29: 0 -- 320000 tuples, EXACT 223159, INEXACT 96841 (of them 5.3.6 computes a number: 92608); REF results: E:INEXACT 96841, E:NOINT 17706, E:TYPE 8545, num 196908 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-29.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-29.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8382/20000 hotU 31618/60000 traces 56956 aborts 63275 [NYI: bytecode FNEW=79,NYI: bytecode UCLO=279,NYI: bytecode VARG=654,NYI: return to lower frame=191,bad argument type=58253,call unroll limit reached=431,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-29.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96841 of INEXACT 96841; sim-round MISMATCH 96841 of REF E:INEXACT 96841
+seed 30: 0 -- 320000 tuples, EXACT 224638, INEXACT 95362 (of them 5.3.6 computes a number: 91472); REF results: E:INEXACT 95362, E:NOINT 17612, E:TYPE 8723, num 198303 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-30.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-30.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8637/20000 hotU 32051/60000 traces 57245 aborts 62410 [NYI: bytecode FNEW=75,NYI: bytecode UCLO=269,NYI: bytecode VARG=783,NYI: return to lower frame=189,bad argument type=57319,call unroll limit reached=484,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-30.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95362 of INEXACT 95362; sim-round MISMATCH 95362 of REF E:INEXACT 95362
+seed 31: 0 -- 320000 tuples, EXACT 224856, INEXACT 95144 (of them 5.3.6 computes a number: 90962); REF results: E:INEXACT 95144, E:NOINT 17206, E:TYPE 8761, num 198889 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-31.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-31.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8739/20000 hotU 32127/60000 traces 55963 aborts 62555 [NYI: bytecode FNEW=83,NYI: bytecode UCLO=267,NYI: bytecode VARG=757,NYI: return to lower frame=186,bad argument type=57879,call unroll limit reached=364,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-31.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95144 of INEXACT 95144; sim-round MISMATCH 95144 of REF E:INEXACT 95144
+seed 32: 0 -- 320000 tuples, EXACT 222563, INEXACT 97437 (of them 5.3.6 computes a number: 93312); REF results: E:INEXACT 97437, E:NOINT 17459, E:TYPE 8891, num 196213 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-32.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-32.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8413/20000 hotU 31484/60000 traces 56573 aborts 63966 [NYI: bytecode FNEW=74,NYI: bytecode UCLO=273,NYI: bytecode VARG=701,NYI: return to lower frame=203,bad argument type=58722,call unroll limit reached=517,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-32.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 97437 of INEXACT 97437; sim-round MISMATCH 97437 of REF E:INEXACT 97437
+seed 33: 0 -- 320000 tuples, EXACT 222389, INEXACT 97611 (of them 5.3.6 computes a number: 93585); REF results: E:INEXACT 97611, E:NOINT 17600, E:TYPE 8736, num 196053 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-33.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-33.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8551/20000 hotU 31600/60000 traces 57088 aborts 63215 [NYI: bytecode FNEW=72,NYI: bytecode UCLO=281,NYI: bytecode VARG=907,NYI: return to lower frame=227,bad argument type=57797,call unroll limit reached=658,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-33.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 97611 of INEXACT 97611; sim-round MISMATCH 97611 of REF E:INEXACT 97611
+seed 34: 0 -- 320000 tuples, EXACT 223112, INEXACT 96888 (of them 5.3.6 computes a number: 92905); REF results: E:INEXACT 96888, E:NOINT 17162, E:TYPE 8701, num 197249 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-34.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-34.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8617/20000 hotU 32031/60000 traces 55634 aborts 61982 [NYI: bytecode FNEW=65,NYI: bytecode UCLO=256,NYI: bytecode VARG=538,NYI: return to lower frame=167,bad argument type=57369,call unroll limit reached=410,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-34.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96888 of INEXACT 96888; sim-round MISMATCH 96888 of REF E:INEXACT 96888
+seed 35: 0 -- 320000 tuples, EXACT 224751, INEXACT 95249 (of them 5.3.6 computes a number: 90998); REF results: E:INEXACT 95249, E:NOINT 18144, E:TYPE 8716, num 197891 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-35.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-35.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8597/20000 hotU 32055/60000 traces 57266 aborts 62926 [NYI: bytecode FNEW=92,NYI: bytecode UCLO=279,NYI: bytecode VARG=732,NYI: return to lower frame=223,bad argument type=57764,call unroll limit reached=367,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-35.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95249 of INEXACT 95249; sim-round MISMATCH 95249 of REF E:INEXACT 95249
+seed 36: 0 -- 320000 tuples, EXACT 224942, INEXACT 95058 (of them 5.3.6 computes a number: 91019); REF results: E:INEXACT 95058, E:NOINT 16930, E:TYPE 8625, num 199387 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-36.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-36.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8649/20000 hotU 32348/60000 traces 58426 aborts 62628 [NYI: bytecode FNEW=86,NYI: bytecode UCLO=299,NYI: bytecode VARG=834,NYI: return to lower frame=180,bad argument type=57520,call unroll limit reached=451,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-36.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95058 of INEXACT 95058; sim-round MISMATCH 95058 of REF E:INEXACT 95058
+seed 37: 0 -- 320000 tuples, EXACT 222866, INEXACT 97134 (of them 5.3.6 computes a number: 92906); REF results: E:INEXACT 97134, E:NOINT 17657, E:TYPE 8575, num 196634 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-37.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-37.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8555/20000 hotU 31784/60000 traces 57884 aborts 62903 [NYI: bytecode FNEW=77,NYI: bytecode UCLO=294,NYI: bytecode VARG=731,NYI: return to lower frame=187,bad argument type=57686,call unroll limit reached=557,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-37.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 97134 of INEXACT 97134; sim-round MISMATCH 97134 of REF E:INEXACT 97134
+seed 38: 0 -- 320000 tuples, EXACT 225023, INEXACT 94977 (of them 5.3.6 computes a number: 90915); REF results: E:INEXACT 94977, E:NOINT 16706, E:TYPE 9295, num 199022 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-38.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-38.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8662/20000 hotU 32291/60000 traces 57130 aborts 61941 [NYI: bytecode FNEW=78,NYI: bytecode UCLO=283,NYI: bytecode VARG=670,NYI: return to lower frame=174,bad argument type=57127,call unroll limit reached=517,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-38.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94977 of INEXACT 94977; sim-round MISMATCH 94977 of REF E:INEXACT 94977
+seed 39: 0 -- 320000 tuples, EXACT 225391, INEXACT 94609 (of them 5.3.6 computes a number: 90451); REF results: E:INEXACT 94609, E:NOINT 17749, E:TYPE 8617, num 199025 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-39.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-39.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8616/20000 hotU 32004/60000 traces 57224 aborts 62783 [NYI: bytecode FNEW=69,NYI: bytecode UCLO=261,NYI: bytecode VARG=725,NYI: return to lower frame=180,bad argument type=57837,call unroll limit reached=527,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-39.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94609 of INEXACT 94609; sim-round MISMATCH 94609 of REF E:INEXACT 94609
+seed 40: 0 -- 320000 tuples, EXACT 223380, INEXACT 96620 (of them 5.3.6 computes a number: 91996); REF results: E:INEXACT 96620, E:NOINT 18417, E:TYPE 8782, num 196181 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-40.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-40.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8423/20000 hotU 31474/60000 traces 55100 aborts 63050 [NYI: bytecode FNEW=69,NYI: bytecode UCLO=252,NYI: bytecode VARG=581,NYI: return to lower frame=184,bad argument type=58503,call unroll limit reached=286,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-40.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96620 of INEXACT 96620; sim-round MISMATCH 96620 of REF E:INEXACT 96620
+seed 41: 0 -- 320000 tuples, EXACT 224469, INEXACT 95531 (of them 5.3.6 computes a number: 91552); REF results: E:INEXACT 95531, E:NOINT 17480, E:TYPE 9077, num 197912 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-41.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-41.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8512/20000 hotU 31935/60000 traces 54344 aborts 62000 [NYI: bytecode FNEW=58,NYI: bytecode UCLO=212,NYI: bytecode VARG=488,NYI: return to lower frame=155,bad argument type=57673,call unroll limit reached=293,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-41.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95531 of INEXACT 95531; sim-round MISMATCH 95531 of REF E:INEXACT 95531
+seed 42: 0 -- 320000 tuples, EXACT 223780, INEXACT 96220 (of them 5.3.6 computes a number: 92227); REF results: E:INEXACT 96220, E:NOINT 17536, E:TYPE 8661, num 197583 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-42.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-42.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8539/20000 hotU 32015/60000 traces 56645 aborts 62498 [NYI: bytecode FNEW=64,NYI: bytecode UCLO=275,NYI: bytecode VARG=639,NYI: return to lower frame=187,bad argument type=57518,call unroll limit reached=400,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-42.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96220 of INEXACT 96220; sim-round MISMATCH 96220 of REF E:INEXACT 96220
+seed 43: 0 -- 320000 tuples, EXACT 223420, INEXACT 96580 (of them 5.3.6 computes a number: 92430); REF results: E:INEXACT 96580, E:NOINT 17089, E:TYPE 9403, num 196928 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-43.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-43.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8527/20000 hotU 31799/60000 traces 56668 aborts 63049 [NYI: bytecode FNEW=66,NYI: bytecode UCLO=258,NYI: bytecode VARG=632,NYI: return to lower frame=206,bad argument type=58155,call unroll limit reached=513,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-43.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96580 of INEXACT 96580; sim-round MISMATCH 96580 of REF E:INEXACT 96580
+seed 44: 0 -- 320000 tuples, EXACT 224196, INEXACT 95804 (of them 5.3.6 computes a number: 91496); REF results: E:INEXACT 95804, E:NOINT 16870, E:TYPE 8789, num 198537 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-44.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-44.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8551/20000 hotU 32029/60000 traces 58363 aborts 63507 [NYI: bytecode FNEW=96,NYI: bytecode UCLO=290,NYI: bytecode VARG=617,NYI: return to lower frame=165,bad argument type=58328,call unroll limit reached=466,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-44.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95804 of INEXACT 95804; sim-round MISMATCH 95804 of REF E:INEXACT 95804
+seed 45: 0 -- 320000 tuples, EXACT 225239, INEXACT 94761 (of them 5.3.6 computes a number: 90700); REF results: E:INEXACT 94761, E:NOINT 17812, E:TYPE 9595, num 197832 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-45.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-45.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8504/20000 hotU 31845/60000 traces 55655 aborts 62939 [NYI: bytecode FNEW=60,NYI: bytecode UCLO=238,NYI: bytecode VARG=608,NYI: return to lower frame=149,bad argument type=58379,call unroll limit reached=351,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-45.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94761 of INEXACT 94761; sim-round MISMATCH 94761 of REF E:INEXACT 94761
+seed 46: 0 -- 320000 tuples, EXACT 223803, INEXACT 96197 (of them 5.3.6 computes a number: 91888); REF results: E:INEXACT 96197, E:NOINT 17712, E:TYPE 9183, num 196908 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-46.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-46.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8465/20000 hotU 31839/60000 traces 56346 aborts 62370 [NYI: bytecode FNEW=75,NYI: bytecode UCLO=259,NYI: bytecode VARG=738,NYI: return to lower frame=172,bad argument type=57628,call unroll limit reached=446,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-46.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96197 of INEXACT 96197; sim-round MISMATCH 96197 of REF E:INEXACT 96197
+seed 47: 0 -- 320000 tuples, EXACT 223385, INEXACT 96615 (of them 5.3.6 computes a number: 92135); REF results: E:INEXACT 96615, E:NOINT 18136, E:TYPE 9103, num 196146 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-47.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-47.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8528/20000 hotU 31749/60000 traces 57186 aborts 63293 [NYI: bytecode FNEW=80,NYI: bytecode UCLO=282,NYI: bytecode VARG=677,NYI: return to lower frame=192,bad argument type=58143,call unroll limit reached=447,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-47.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96615 of INEXACT 96615; sim-round MISMATCH 96615 of REF E:INEXACT 96615
+seed 48: 0 -- 320000 tuples, EXACT 224689, INEXACT 95311 (of them 5.3.6 computes a number: 91034); REF results: E:INEXACT 95311, E:NOINT 17749, E:TYPE 8568, num 198372 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-48.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-48.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8590/20000 hotU 32093/60000 traces 57715 aborts 62967 [NYI: bytecode FNEW=104,NYI: bytecode UCLO=300,NYI: bytecode VARG=724,NYI: return to lower frame=199,bad argument type=57762,call unroll limit reached=421,failed to allocate mc
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-48.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95311 of INEXACT 95311; sim-round MISMATCH 95311 of REF E:INEXACT 95311
+seed 49: 0 -- 320000 tuples, EXACT 224359, INEXACT 95641 (of them 5.3.6 computes a number: 91711); REF results: E:INEXACT 95641, E:NOINT 17590, E:TYPE 8404, num 198365 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-49.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-49.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8554/20000 hotU 31964/60000 traces 56420 aborts 62717 [NYI: bytecode FNEW=66,NYI: bytecode UCLO=265,NYI: bytecode VARG=567,NYI: return to lower frame=180,bad argument type=57993,call unroll limit reached=388,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-49.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95641 of INEXACT 95641; sim-round MISMATCH 95641 of REF E:INEXACT 95641
+seed 50: 0 -- 320000 tuples, EXACT 222690, INEXACT 97310 (of them 5.3.6 computes a number: 93265); REF results: E:INEXACT 97310, E:NOINT 16959, E:TYPE 8754, num 196977 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-50.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-50.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8456/20000 hotU 31818/60000 traces 54328 aborts 62541 [NYI: bytecode FNEW=58,NYI: bytecode UCLO=239,NYI: bytecode VARG=459,NYI: return to lower frame=176,bad argument type=58138,call unroll limit reached=321,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-50.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 97310 of INEXACT 97310; sim-round MISMATCH 97310 of REF E:INEXACT 97310
+seed 51: 0 -- 320000 tuples, EXACT 224626, INEXACT 95374 (of them 5.3.6 computes a number: 91276); REF results: E:INEXACT 95374, E:NOINT 17373, E:TYPE 9086, num 198167 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-51.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-51.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8604/20000 hotU 32146/60000 traces 55860 aborts 62084 [NYI: bytecode FNEW=77,NYI: bytecode UCLO=246,NYI: bytecode VARG=696,NYI: return to lower frame=193,bad argument type=57230,call unroll limit reached=393,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-51.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95374 of INEXACT 95374; sim-round MISMATCH 95374 of REF E:INEXACT 95374
+seed 52: 0 -- 320000 tuples, EXACT 224125, INEXACT 95875 (of them 5.3.6 computes a number: 91518); REF results: E:INEXACT 95875, E:NOINT 17918, E:TYPE 9215, num 196992 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-52.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-52.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8495/20000 hotU 31906/60000 traces 57348 aborts 62501 [NYI: bytecode FNEW=85,NYI: bytecode UCLO=273,NYI: bytecode VARG=608,NYI: return to lower frame=173,bad argument type=57810,call unroll limit reached=395,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-52.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95875 of INEXACT 95875; sim-round MISMATCH 95875 of REF E:INEXACT 95875
+seed 53: 0 -- 320000 tuples, EXACT 224193, INEXACT 95807 (of them 5.3.6 computes a number: 91810); REF results: E:INEXACT 95807, E:NOINT 16981, E:TYPE 8968, num 198244 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-53.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-53.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8675/20000 hotU 31981/60000 traces 55442 aborts 62296 [NYI: bytecode FNEW=80,NYI: bytecode UCLO=249,NYI: bytecode VARG=585,NYI: return to lower frame=179,bad argument type=57632,call unroll limit reached=270,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-53.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95807 of INEXACT 95807; sim-round MISMATCH 95807 of REF E:INEXACT 95807
+seed 54: 0 -- 320000 tuples, EXACT 225741, INEXACT 94259 (of them 5.3.6 computes a number: 90126); REF results: E:INEXACT 94259, E:NOINT 17332, E:TYPE 8561, num 199848 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-54.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-54.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8728/20000 hotU 32452/60000 traces 58277 aborts 62782 [NYI: bytecode FNEW=79,NYI: bytecode UCLO=276,NYI: bytecode VARG=841,NYI: return to lower frame=204,bad argument type=57590,call unroll limit reached=543,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-54.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 94259 of INEXACT 94259; sim-round MISMATCH 94259 of REF E:INEXACT 94259
+seed 55: 0 -- 320000 tuples, EXACT 224239, INEXACT 95761 (of them 5.3.6 computes a number: 91773); REF results: E:INEXACT 95761, E:NOINT 17329, E:TYPE 9041, num 197869 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-55.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-55.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8597/20000 hotU 32029/60000 traces 56460 aborts 62676 [NYI: bytecode FNEW=70,NYI: bytecode UCLO=265,NYI: bytecode VARG=657,NYI: return to lower frame=196,bad argument type=57749,call unroll limit reached=421,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-55.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95761 of INEXACT 95761; sim-round MISMATCH 95761 of REF E:INEXACT 95761
+seed 56: 0 -- 320000 tuples, EXACT 224215, INEXACT 95785 (of them 5.3.6 computes a number: 91451); REF results: E:INEXACT 95785, E:NOINT 17190, E:TYPE 9429, num 197596 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-56.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-56.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8566/20000 hotU 31971/60000 traces 55062 aborts 61997 [NYI: bytecode FNEW=73,NYI: bytecode UCLO=234,NYI: bytecode VARG=519,NYI: return to lower frame=168,bad argument type=57677,call unroll limit reached=303,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-56.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95785 of INEXACT 95785; sim-round MISMATCH 95785 of REF E:INEXACT 95785
+seed 57: 0 -- 320000 tuples, EXACT 223109, INEXACT 96891 (of them 5.3.6 computes a number: 92719); REF results: E:INEXACT 96891, E:NOINT 17512, E:TYPE 8484, num 197113 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-57.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-57.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8454/20000 hotU 31776/60000 traces 57519 aborts 63155 [NYI: bytecode FNEW=78,NYI: bytecode UCLO=257,NYI: bytecode VARG=659,NYI: return to lower frame=221,bad argument type=58092,call unroll limit reached=433,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-57.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96891 of INEXACT 96891; sim-round MISMATCH 96891 of REF E:INEXACT 96891
+seed 58: 0 -- 320000 tuples, EXACT 223862, INEXACT 96138 (of them 5.3.6 computes a number: 92129); REF results: E:INEXACT 96138, E:NOINT 17227, E:TYPE 9062, num 197573 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-58.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-58.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8527/20000 hotU 31849/60000 traces 57368 aborts 63155 [NYI: bytecode FNEW=94,NYI: bytecode UCLO=292,NYI: bytecode VARG=717,NYI: return to lower frame=189,bad argument type=58300,call unroll limit reached=364,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-58.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96138 of INEXACT 96138; sim-round MISMATCH 96138 of REF E:INEXACT 96138
+seed 59: 0 -- 320000 tuples, EXACT 223763, INEXACT 96237 (of them 5.3.6 computes a number: 91833); REF results: E:INEXACT 96237, E:NOINT 17436, E:TYPE 8415, num 197912 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-59.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-59.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8629/20000 hotU 32227/60000 traces 57316 aborts 61769 [NYI: bytecode FNEW=50,NYI: bytecode UCLO=257,NYI: bytecode VARG=588,NYI: return to lower frame=194,bad argument type=57143,call unroll limit reached=386,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-59.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 96237 of INEXACT 96237; sim-round MISMATCH 96237 of REF E:INEXACT 96237
+seed 60: 0 -- 320000 tuples, EXACT 224991, INEXACT 95009 (of them 5.3.6 computes a number: 90800); REF results: E:INEXACT 95009, E:NOINT 18074, E:TYPE 9213, num 197704 (C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/puc-60.txt)
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-jon-60.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 8479/20000 hotU 31974/60000 traces 56888 aborts 62929 [NYI: bytecode FNEW=58,NYI: bytecode UCLO=281,NYI: bytecode VARG=668,NYI: return to lower frame=212,bad argument type=58036,call unroll limit reached=436,failed to allocate mco
+      => PASS
+    C:/Users/astro/Downloads/OC-LuaJIT/build/native/bitfuzz-campaign-50/ours-joff-60.txt: 320000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 320000 hotcases 0/20000 hotU 0/60000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 95009 of INEXACT 95009; sim-round MISMATCH 95009 of REF E:INEXACT 95009
+test/native/run-bitfuzz.sh: line 193: syntax error near unexpected token `then'
+test/native/run-bitfuzz.sh: line 193: `then crc=1; fi'
