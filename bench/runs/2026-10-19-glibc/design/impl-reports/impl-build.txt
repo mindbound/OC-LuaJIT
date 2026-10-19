@@ -1,0 +1,118 @@
+SUMMARY: I've implemented and verified the build side of the glibc round in my 11 files. All of them are LF with CR=0 and pass sh -n.
+
+(a) Linux LINK_EXTRA is now "-static-libgcc -pthread -Wl,--no-undefined". I kept --no-undefined because it held for both variants on both distros, and it is the cheaper, earlier guard: without -pthread the AlmaLinux 8 link fails and names the six pthread functions [M]. I left out -ldl, because the .so imports no dl* symbol.
+
+(b) The ELF import gate sits in step 6, between "# BEGIN/END ELF IMPORT GATE" markers, and runs only on Linux:
+- It first checks that readelf actually read the file.
+- Any non-weak UND symbol without a version is a BUILD FAIL that names the symbols.
+- It reports the highest GLIBC_x.y needed, comparing versions component by component in one awk function.
+- With OCLJ_GLIBC_MAX set, a need above the limit, or one outside the GLIBC_x.y family (GCC_x.y, GLIBC_PRIVATE), is a BUILD FAIL that lists the needs, their libraries and up to 12 imports.
+- With it unset, it says whether the build is within the release floor 2.28 and carries on.
+- Preflight refuses a malformed OCLJ_GLIBC_MAX before the build starts. Set on Windows, it only prints a note.
+- The header (EXTERNAL INPUTS, USAGE), the LINK_EXTRA comment and PREREQUISITES 7 (AlmaLinux 8 release build, Ubuntu builds in their own OCLJ_BUILD, git and the fingerprint) are updated.
+
+(c) Every Linux test link now uses TEST_EXTRA="-pthread -ldl" with one shared comment: the 8 runners, plus negative-control.sh's platform case and its six links, which had no tail at all. serializer/Makefile LIBS becomes "-lm -pthread -ldl". It already linked, so this only unifies the spelling.
+
+Verified [M]:
+- **Alma, OCLJ_GLIBC_MAX=2.28:** both variants pass every gate (GLIBC_2.17, NEEDED libpthread.so.0). The .so md5s 62555188 / f357129a equal the investigation's builds.
+- **Alma suites:** all pass, PUC provenance included, as do the serializer suite and its negctl.
+- **Old flags in Alma:** the build FAILs at the gate, naming the six. The .so files are byte-identical to the trial's.
+- **Ubuntu unset:** passes and reports GLIBC_2.38 NOT within the floor. The .so is byte-identical to round 3's.
+- **Ubuntu with 2.28:** BUILD FAIL.
+- **Gate text matrix:** 22/22 as wanted under binutils 2.30 and 2.46.
+- **Runner A/Bs:** HEAD's runners fail to link in Alma and the edited ones pass.
+- **Windows:** logs are identical to HEAD's apart from wall-clock times, and all objects are identical.
+
+Not done:
+- negative-control.sh's full Linux run. It has arms that must die, which my rules forbid running; only its canonical link was A/B'd.
+- The JVM harness on the new .so, the docs, and gradle (other roles).
+
+Open: the Alma build bakes LJ_COMMIT=unknown (no git), so its blob fingerprint differs from the Windows DLL's.
+-- findings
+  * (a) CHOSEN: Linux LINK_EXTRA="-static-libgcc -pthread -Wl,--no-undefined" (build-native.sh :304). Why --no-undefined: both variants link with it on AlmaLinux 8 (gcc 8.5.0, binutils 2.30, glibc 2.28) and Ubuntu 26.04 (gcc 15.2, binutils 2.46, glibc 2.43) [M: alma-1, alma-2, ubuntu-1, ubuntu-2]. It makes the missing-library case a LINK error before any postflight: with --no-undefined but no -pthread the Alma link fails with 'undefined reference' to exactly pthread_attr_setstacksize, pthread_condattr_setclock, pthread_create, pthread_join, pthread_setname_np, pthread_sigmask [M: alma-ff-nopthread/link-additive.err]. Not -ldl: the .so imports no dl* symbol [M, inv-build nm -D; and --no-undefined would fail the Alma link if that changed [I]].
+  * Alma .so with the new flags [M alma-1, alma-2]: 110 UND, every non-weak one versioned (weak and unversioned only _ITM_deregisterTMCloneTable, _ITM_registerTMCloneTable, __gmon_start__); NEEDED libm.so.6 libpthread.so.0 libc.so.6 ld-linux-x86-64.so.2; highest GLIBC_2.17. md5 additive 62555188b64fa09c23f12f89d71b1d6a, dropin f357129a886f1e005aa9be8991c891d6. These equal inv-build's alma-new/validate-alma, so the Alma build is reproducible across OCLJ_BUILD paths.
+  * Ubuntu .so with the new flags [M ubuntu-1, ubuntu-2]: md5 additive 7e8b8b89cdde7e2a67ff4fe654f93339 and dropin cdad2167deb334b99ee415f933f6a48f, byte-identical to round 3's (and to build/native/dist's current .so). -pthread and --no-undefined change nothing on glibc 2.43. Highest need is GLIBC_2.38. 14 imports sit above 2.28: __isoc23_strtoul@2.38, fmod@2.38, _dl_find_object@2.35, exp/log/log2/pow@2.29, pthread_*@2.34, pthread_sigmask@2.32.
+  * Old flags reproduce the trial exactly [M alma-ff-oldlink]: LINK_EXTRA="-static-libgcc" gives additive bf0d0916 / dropin 3681ed86, the trial-3adfeaf .so files the harness investigation loaded. The new gate refuses both by name, and nothing is collected into dist.
+  * Versions must compare numerically, and do [M]: the Alma .so's needs include GLIBC_2.3.3, GLIBC_2.3 and GLIBC_2.2.5. A string maximum would report GLIBC_2.3.3 and would fail a 2.28 limit; the gate reports GLIBC_2.17, refuses limit 2.4 and passes limit 2.17 [matrix].
+  * Windows DLL md5s depend on the OCLJ_BUILD path [M win-ab, win-relink]. HEAD's and the edited script's DLLs differ in about 1300 bytes (ImageBase among them), while all 3 obj-windows-x86_64 objects and all 77 LuaJIT objects are identical. Relinking each arm's additive objects at ONE output path gives byte-identical DLLs (022d9f52, 0 bytes differ). So GNU ld's automatic DLL image base follows the output name [I from M]. A release DLL can be checked by md5 only at the same path, or through its objects.
+  * Side finding, release-relevant [M alma-1/build-additive.log; S build-native.sh LJ_COMMIT line ~:526]: in Alma (no git) the build logs 'luajit = ... @ unknown' and 'jnlua = ... @ unknown'. LJ_COMMIT=unknown goes into ERIS_LJ_COMMIT, so the Alma release .so's blob fingerprint begins 'unknown|' while the Windows DLL's begins '1ee778a4|'. I documented this in PREREQUISITES 7 and did not change the behaviour (outside my assignment).
+  * Instrument note: Git Bash's own sed -n with a '$' inside 'sh -c' through wsl.exe was mangled ('unexpected ,'). Everything that runs in WSL went through script files instead [M].
+-- recommended_changes
+  * APPLIED native/build-native.sh: header EXTERNAL INPUTS gains OCLJ_GLIBC_MAX (Linux only; set = BUILD FAIL above it or outside GLIBC_x.y; unset = report against the release floor 2.28); USAGE gains the AlmaLinux 8 release command (OCLJ_GLIBC_MAX=2.28 OCLJ_VARIANT=additive ... OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include) and says Ubuntu builds take their own OCLJ_BUILD; defaults gain ': "${OCLJ_GLIBC_MAX:=}"'; the LINK_EXTRA comment explains -pthread, --no-undefined and why not -ldl; the Linux row is LINK_EXTRA="-static-libgcc -pthread -Wl,--no-undefined"; preflight sets GLIBC_FLOOR=2.28, refuses a malformed OCLJ_GLIBC_MAX (awk ^[0-9]+([.][0-9]+)+$), and prints one 'glibc   = ...' line on Linux, or on other OSes only when the variable is set; step 6 gains the ELF import gate between '# BEGIN ELF IMPORT GATE' and '# END ELF IMPORT GATE', just before 'SZ=$(wc -c ...'; PREREQUISITES gains item 7 (Linux tools, the AlmaLinux 8 release host, why the floor is the build host's, git and the fingerprint).
+  * APPLIED test/native/run.sh, run-security.sh, run-mem.sh, run-wd.sh, run-vgc.sh, run-pack.sh, run-bitop.sh: Linux TEST_EXTRA=-pthread -> TEST_EXTRA="-pthread -ldl", with one shared 4-line comment (replacing the old 2-line one in run-wd.sh and run-vgc.sh). run-penalty.sh: TEST_EXTRA=-ldl -> "-pthread -ldl" with the same comment.
+  * APPLIED test/native/negative-control.sh: the platform case sets TEST_EXTRA (windows/darwin empty, else "-pthread -ldl", same comment), and all six links ('"$LJ/libluajit.a" -lm -o "') become '"$LJ/libluajit.a" -lm $TEST_EXTRA -o "'.
+  * APPLIED serializer/Makefile: the Linux and fallback LIBS go from '-lpthread -lm -ldl' to '-lm -pthread -ldl', with a one-line comment. Not needed to link in Alma; changed so every test link spells the tail the same way.
+  * FOR THE MAIN SESSION, the release build: in AlmaLinux-8, as the default user, OCLJ_GLIBC_MAX=2.28 OCLJ_JNLUA=/mnt/c/Users/astro/Downloads/OC-JNLua OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include CC=gcc, OCLJ_VARIANT=dropin then additive, into build/native. Expected (HEAD 3adfeaf sources + this round's build-native.sh + the same OC-JNLua): additive 62555188..., dropin f357129a..., 'glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28'. Until then build/native/dist holds the round-3 Ubuntu .so (7e8b8b89, GLIBC_2.38), which gradle's new gate will refuse.
+  * FOR THE MAIN SESSION / build-native.sh owner, decide: make the Alma release build carry the real LuaJIT commit. Either install git in Alma (and add safe.directory if built as root), or add an OCLJ_LJ_COMMIT override and refuse LJ_COMMIT=unknown when OCLJ_GLIBC_MAX is set. Not done here: outside (a)-(c).
+  * FOR THE DOCS OWNER: docs/jit-guide.md 7.6 cites build-native.sh line ranges that have moved. Lines after the preflight are now +49 (e.g. stage 1 ':486-733' is now ':535-782'), and EXTERNAL INPUTS/USAGE '~:111-128' is now ~:111-143. 7.7's last paragraph ('Both .so files still need GLIBC_2.38; the glibc floor round is next') should give the Alma result. README's building section and the roadmap glibc row also need updating.
+  * FOR THE MAIN SESSION: run negative-control.sh's first full Linux run in Alma (its memory half has arms that must die, so not in an agent), against an Alma OCLJ_BUILD.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh (2026 lines, CR=0, md5 49d08794ea7b6a61c95500aa64c558cf; +168/-? vs HEAD)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run.sh (73 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-security.sh (85 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-mem.sh (99 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-wd.sh (60 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-vgc.sh (96 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-penalty.sh (68 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-pack.sh (242 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-bitop.sh (331 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/negative-control.sh (1015 lines, CR=0)
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/Makefile (82 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/lbuild.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/lsuites.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/gate-harness.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/matrix.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/mkmutants.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/ff-glibcmax.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/ab-runners.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/negctl-canonlink.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/win-ab.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/win-final.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/win-relink.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/bn-oldlink-2.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/bn-nopthread.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/scripts/build-native.HEAD.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/alma-2/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/alma-1-suites/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/ubuntu-2/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/ubuntu-ff-max-2/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/alma-ff-oldlink-2/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/alma-ff-nopthread/link-additive.err
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/matrix-alma-2/matrix.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/matrix-ubuntu-2/matrix.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/ff-glibcmax-alma-2/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/ab-runners-alma/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/negctl-canonlink-alma/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/win-ab/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/win-final/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-build/win-relink/summary.txt
+-- checks
+  * Alma release-shaped build, final script, OCLJ_GLIBC_MAX=2.28 [M alma-2]: dropin exit 0 (12 s), additive exit 0 (11 s). Every existing gate passes (ABI surface 87/260 and 91/264). The new gate prints 'ELF imports: 110 undefined, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable _ITM_registerTMCloneTable __gmon_start__)', 'NEEDED: libm.so.6 libpthread.so.0 libc.so.6 ld-linux-x86-64.so.2' and 'glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28'. md5 62555188 / f357129a, the same as alma-1 (the earlier text of this round) and inv-build's builds.
+  * Native suites in Alma against my Alma build [M alma-1-suites; alma-1's .so are byte-identical to alma-2's]: shim 57/0, security 56/0, mem 86/0, vgc 47/0, wd 35/0, penalty 6/0. run-pack PASS, with the PUC provenance section run. run-bitop 'BITOP TESTS: 12 checks, 0 failures', RUN-BITOP PASS, with provenance (t_ops, t_fold, t_sar, coerce_agree PASS) against C:/Users/astro/claude-tmp/oclj/puc536-alma/lua (5.3.6). Serializer make test: 7 RESULT lines, 0 FAIL, link tail '-lm -pthread -ldl'. make negctl: 'NEGCTL-FINGERPRINT: PASS (all four sabotages caught)'.
+  * UND gate fail-first, in situ [M alma-ff-oldlink (both variants), alma-ff-oldlink-2 (final text, additive)]: a copy of build-native.sh with only the Linux row back to LINK_EXTRA="-static-libgcc" (2 diff lines) fails: 'BUILD FAIL: libjnluajit52-linux-x86_64.so imports these symbols with NO version: pthread_attr_setstacksize pthread_condattr_setclock pthread_create pthread_join pthread_setname_np pthread_sigmask'. Exit 1, no dist collected, .so md5 = the trial's.
+  * Link-flag fail-first [M alma-ff-nopthread]: with LINK_EXTRA="-static-libgcc -Wl,--no-undefined" the build fails at 'link failed', with undefined references to the same six (pthread_sigmask twice).
+  * Ubuntu dev build, OCLJ_GLIBC_MAX unset [M ubuntu-1, ubuntu-2 (final)]: both variants exit 0. 'glibc: highest version needed GLIBC_2.38, NOT within the release floor GLIBC_2.28 (OCLJ_GLIBC_MAX unset: not enforced)', then the needs above the floor with their libraries, '14 imports above it, e.g. __isoc23_strtoul@GLIBC_2.38 _dl_find_object@GLIBC_2.35 exp@GLIBC_2.29 fmod@GLIBC_2.38 ...', the AlmaLinux hint, and 'A development build: gradle's verifyModAssets refuses to package this .so.' NEEDED libm, libc, ld-linux (no libpthread). md5 = round 3's.
+  * Floor fail-first in Ubuntu [M ubuntu-ff-max (both variants), ubuntu-ff-max-2 (final, additive)]: OCLJ_GLIBC_MAX=2.28 gives exit 1, 'BUILD FAIL: libjnluajit52-linux-x86_64.so needs more than OCLJ_GLIBC_MAX=2.28 allows (highest GLIBC_x.y: GLIBC_2.38)', listing the needs above GLIBC_2.28, 'Needs outside GLIBC_x.y: none', the 14 imports and the AlmaLinux hint.
+  * The gate's own text (extracted between its markers from the repo file, md5 62d31126, 101 lines) over 22 cases [M matrix-alma-2 binutils 2.30, matrix-ubuntu-2 binutils 2.46; gawk in both]: 22/22 as wanted in both. PASS: Alma additive at limit 2.28, unset, and 2.17 (its own max); Alma dropin at 2.28; Ubuntu unset (report) and at 2.38; m228 boundary mutant at 2.28; m229, mpriv and nolibgcc unset (reports). REFUSED: Alma at 2.16 and 2.4 (numeric comparison); the unversioned .so at 2.28 and unset; Ubuntu at 2.28 and 2.37; m229 at 2.28; mpriv (GLIBC_PRIV, outside the family) at 2.28; nolibgcc (GCC_3.0, GCC_3.3 from libgcc_s) at 2.28; a 100-byte truncated .so at 2.28 and unset ('readelf listed no undefined dynamic symbols': the reader check); a text file ('readelf --dyn-syms failed'). An earlier text version gave 22/22 too (matrix-alma, matrix-ubuntu).
+  * The matrix tally can fail [M ff-tally]: with one label flipped it prints 'WRONG: no-alma-additive limit=2.28 got PASSED' and 'MATRIX: 21/22 as wanted, 1 WRONG'.
+  * OCLJ_GLIBC_MAX format fail-first [M ff-glibcmax-alma-2, final script]: 'GLIBC_2.28', '2', '2.28x', '2..28', 'abc', ' 2.28' and '2.28 ' each stop in preflight ('is not a glibc version written x.y, such as 2.28'), rc=1, and no OCLJ_BUILD directory is created. The valid '2.28' proceeds (alma-2).
+  * Runner A/B on one Alma build [M ab-runners-alma]: HEAD's run.sh, run-security.sh, run-mem.sh and run-wd.sh fail to link (undefined dlclose, dlerror, dlopen, dlsym; 'test did not build' / 'security_test.c did not build'), while HEAD's vgc 47/0 and penalty 6/0 pass. The edited six all pass: 57/0, 56/0, 86/0, 35/0, 47/0, 6/0.
+  * negative-control.sh canonical link A/B [M negctl-canonlink-alma]: its own platform block and build_variant function were extracted and only the canonical shim was built. HEAD: 'NEGATIVE CONTROL SETUP FAIL: canon: security_test.c did not link' (dl* undefined, TEST_EXTRA unset). Edited: TEST_EXTRA=[-pthread -ldl], canon linked, canonical security test 56 checks, 0 failures. No sabotaged variant was built or run.
+  * Ubuntu suites with the edited runners against ubuntu-1 [M ubuntu-1-suites]: shim 57/0, security 56/0, mem 86/0, vgc 47/0, wd 35/0, penalty 6/0, run-pack PASS, run-bitop 12/0 PASS (PUC puc536-linux), ser-test 7/0 (link tail -lm -pthread -ldl), ser-negctl PASS.
+  * Windows unchanged in behaviour [M win-ab: HEAD vs edited; win-final: final script vs HEAD]: dropin then additive, each into a fresh scratch OCLJ_BUILD with round 3's environment, OCLJ_GLIBC_MAX unset; all exit 0 (27-36 s). Normalised logs are identical to HEAD's except the 3 freshness-gate wall-clock lines per log. obj-windows-x86_64 (3 objects) and the 77 LuaJIT objects are md5-identical. The DLL md5s differ only through the output path (win-relink: same path gives byte-identical DLLs).
+  * That Windows log diff can fail [M]: against the OCLJ_GLIBC_MAX=2.28 Windows build (win-glibcmax-set) it shows the added line '[build] glibc   = OCLJ_GLIBC_MAX=2.28 does not apply: a windows library imports no glibc'. That build exits 0, with ABI surface 91 (want 91) and 93 total.
+  * Hygiene [M]: CR=0 in all 11 repo files and every scratch script (Python byte counts); sh -n passes on all 10 scripts. build/native was not written: dist md5s are still 7e8b8b89 (.so) and 9ae455ce (DLL). No git command that changes anything; nothing installed in either distro; WSL ran as the default user. Every run wrote a fresh directory, and nothing was deleted or reused. The runners ran from the repo but wrote only under scratch OCLJ_BUILDs; the serializer ran in a copy.
+-- open_questions
+  * Should the Alma release build carry the real LuaJIT commit? Today it bakes LJ_COMMIT=unknown (no git in Alma), so its blob fingerprint ('unknown|...') differs from the Windows DLL's ('1ee778a4|...') and blobs do not move between them. The options are installing git in Alma (safe.directory if root) or an OCLJ_LJ_COMMIT override that a release build (OCLJ_GLIBC_MAX set) requires. It needs a decision from the user or the main session.
+  * Needs outside the GLIBC_x.y family (GCC_x.y, GLIBC_PRIVATE, and possibly GLIBC_ABI_DT_RELR from newer toolchains [I]): I made them count against the limit, a BUILD FAIL when OCLJ_GLIBC_MAX is set and only reported when unset, so a development build on an unusual toolchain still finishes. The investigation proposed failing them always. Which do you want?
+  * When the floor fails (OCLJ_GLIBC_MAX set and exceeded), the build stops before the dist collection, like every other postflight failure, so dist keeps whatever .so was there before. gradle's gate is then the check on dist. Is that acceptable, or should a failed Linux gate also remove the dist copy?
+  * GLIBC_FLOOR=2.28 in build-native.sh is a second copy of the floor that build.gradle.kts holds. My comments say gradle's verifyModAssets refuses a .so above it, which is true only once the gradle role's edit lands.
+  * The gate's awk was tested with gawk only, which both distros use. mawk and busybox awk are untested [I: the program uses only POSIX awk features, a newline-terminated function definition and a bracket-class split separator].
+  * negative-control.sh has never run fully on Linux. Its first Alma run belongs to the main session, because its memory half has arms that must die.
+  * Three Ocelot-0.24.2-5{2,3,4}-libjnlua5x-windows-x86_64.dll files in the repo root have recent mtimes. They come from a Windows JVM harness run with the repo as its cwd, not from my work, which started no JVM.
+-- scratch
+  * Everything is under C:/Users/astro/claude-tmp/oclj/glibc/impl-build/ (fresh). scripts/ holds the WSL and Windows drivers, HEAD's build-native.sh (build-native.HEAD.sh) and the sabotaged copies bn-oldlink.sh, bn-oldlink-2.sh (final text) and bn-nopthread.sh.
+  * Build dirs (each OCLJ_BUILD=<dir>/build/native): alma-1 (earlier text, md5 c7bdcdb3) and alma-2 (final, 49d08794), both at 2.28; alma-ff-oldlink, alma-ff-oldlink-2 and alma-ff-nopthread (fail-firsts); ubuntu-1 and ubuntu-2 (unset); ubuntu-ff-max and ubuntu-ff-max-2 (2.28, fail); win-ab/head, win-ab/edited, win-final and win-glibcmax-set (Windows).
+  * Suites: alma-1-suites, ubuntu-1-suites, ab-runners-alma (HEAD runners staged in head-runners/test/native), negctl-canonlink-alma (HEAD negative-control.sh in head-negctl.sh). Gate evidence: matrix-alma, matrix-ubuntu (earlier text), matrix-alma-2, matrix-ubuntu-2 (final; each keeps the extracted gate text in gate-extracted-<distro>/gate.sh), mutants/ (m229, m228, mpriv, trunc, text, all from alma-1's additive), ff-tally, ff-glibcmax-alma (c7bdcdb3) and ff-glibcmax-alma-2 (final). win-relink holds the two same-path relinks.
+  * Read-only use of the investigation's files: inv-build/nolibgcc-alma/libjnluajit52-linux-x86_64.so (the GCC_3.0/3.3 case) and inv-build/scripts as models. C:/Users/astro/claude-tmp/oclj/puc536-alma/lua and puc536-linux/lua were used as OCLJ_LUA53.
+  * One process note: I patched gate-harness.sh once through a quoted Python heredoc containing a newline escape, against the repo convention. The result was checked (the three lines landed as intended, CR=0), and all other files were written with the Write/Edit tools. An Edit dropped a trailing space from the PICFLAG comment line in build-native.sh. I found it in the diff and restored it.

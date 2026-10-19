@@ -1,0 +1,83 @@
+SUMMARY: I applied the review's confirmed doc findings and recorded the glibc round's final results, which I measured from the chain's logs rather than from summaries. I also recorded the negative-control and for-in follow-ups, and fixed and fail-first-tested both Linux launchers. Every file I edited is LF with 0 CR, and all 422 markdown links in the four docs resolve.
+
+**Doc findings applied:**
+- The "AlmaLinux 8 has no git / stamps unknown / decision open" text is gone from roadmap row 196, the glibc row's item 1 (now closed) and JIT guide 7.7. In its place: git_head, the refusal, git now installed in Alma, and the release stamping 1ee778a4.
+- The 62555188/f357129a expectation is replaced by the measured release md5s.
+- I re-derived every build-native.sh line reference in the JIT guide and the glibc row by content against today's file (md5 f3dc7167). The offset is +40, not +32, because the comment fixes added lines.
+- The floor wording now says 2.28 is the supported floor gradle enforces, today's .so needs only GLIBC_2.17, and older systems are untested and unsupported.
+- "Imports no dl* symbol" is corrected: `dl_iterate_phdr` is the one dl import and it is libc's. I re-measured this with readelf on both release .so files.
+
+**Final results recorded:**
+- Release .so files: additive 6c888050 and dropin 6c0715d1, built in Alma by build-native.sh 94c94fb8. They need GLIBC_2.17 at most and carry the same fingerprint string as the Windows DLL. A rebuild with today's script gives byte-identical .so files.
+- Windows DLLs 3174ef37 and 1e9f4ac4 differ from round 3's (9ae455ce, 2c37a7a1) in only 8 and 9 bytes. I measured them: the COFF time stamp, the PE checksum and the export-directory time stamp.
+- The Ubuntu development build reproduces round 3's 7e8b8b89 byte for byte.
+- Fail-firsts, every suite on all three hosts, and gradle are recorded: verifyModAssets passes with "needs at most GLIBC_2.17", and the build produced jar 0c675a02.
+- Harness: all seven Alma arms have milestone ids and verdicts identical to both the Windows chain and round 3's (0 differing lines per arm). The Ubuntu additive arm is identical too.
+- Roadmap row 216's harness part is closed. What stays open: no Minecraft client or server has loaded the .so, and jar extraction on Linux has never run.
+
+**Follow-ups recorded:**
+- Negative-control (glibc item 2): the cause was two faults in the test, and the result after the fix is 57/57 on all three hosts.
+- For-in flake (glibc item 5): about 1% on every platform, two causes in the test, a test-only fix.
+- Watchdog row 144: current line references plus the new Linux notimer arm.
+- M5 row: thread blobs are not deterministic across processes.
+
+No product issue was reported, so no new row.
+
+**Launchers:** I recorded their pre-edit md5s first: full-linux.sh bdfa837e and chain-linux.sh 79e2323b. The chain ran those texts (unchanged since 23:44, before the chain's 23:45 local start). Each fix was shown to fail on the old text and pass on the new in AlmaLinux 8 dry runs, using a stub smoke so no harness JVM ran.
+
+PRODUCT_ISSUE: NONE. No investigation or fix reported a product issue, and my own checks found none. The negctl failures were two test faults: the Windows-only notimer text, and bash 4.4 POSIX-mode prefix-assignment persistence that made 23 mem arms sweep 8 caps. The for-in failure is a test flake at the same rate on all three platforms. The Windows DLLs differ from round 3's only in link time stamps and checksum.
+-- findings
+  * [M] Release Linux natives (bench/runs/2026-10-19-glibc/logs/build-alma): additive and dist 6c888050 (681392 bytes), dropin 6c0715d1. Needs GLIBC_2.2.5..2.17, nothing higher. NEEDED: libm, libpthread, libc, ld-linux. Fingerprint 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64. Built by build-native.sh 94c94fb8. The build-alma-fixed rebuild with today's f3dc7167 gives byte-identical .so files; its libluajit.a differs (21fee2b1 vs a0f264d7), probably archive time stamps [I].
+  * [M] Windows DLLs 3174ef37 (additive) and 1e9f4ac4 (dropin) against round 3's 9ae455ce and 2c37a7a1 (claude-tmp/oclj/new-r3f-9ae455ce): same sizes, 8 and 9 differing bytes. These sit at 0x88-0x8a (COFF TimeDateStamp, equal to the build times), 0xd8-0xda (PE CheckSum) and the .edata TimeDateStamp (0x89c04 / 0x89a04). Nothing else differs.
+  * [M] The Ubuntu dev build reproduces round 3's 7e8b8b89 and cdad2167 byte for byte: GLIBC_2.38, no libpthread NEEDED.
+  * [M] Suites (logs/suite-*): every Windows runner passes, including negative-control.sh 56/56. Alma passes the same set except: race exit 2 (Win32-only), ser-test for-in fails once (diag/4-identity), and negctl 51/5. negctl-bitop and negctl-pack pass in Alma. In Ubuntu all suites in its set pass; race exits 2.
+  * [M] Harness: Alma CHECKS are 82/69/80/76/53/82/82, and bundleoff fails exactly stk-2, stk-3 and stk-4. The sorted 'MILESTONE id: PASS|FAIL' lines match the Windows chain (gl-*-a) and round 3's (r3-*-f) with 0 differences in all 7 arms. Ubuntu additive is 82/0 and identical too. The eris fingerprint string is the same on Windows, Alma and Ubuntu. disposeoff and bundleoff got their switches inside the distro (env.txt and the OFF banners).
+  * [M] gradle verifyModAssets on dist (6c888050 + 3174ef37) passes with 'needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28)'. ./gradlew build succeeded; the jar is 0c675a02.
+  * [M] Launcher fail-firsts, Alma dry runs in C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/r1. The stub smoke means no harness JVM runs; full-linux.sh still runs java -version for host.txt.
+  * [M] full-linux.sh, relative run dir (F1): the old text exits 1, writes 0 files and never runs the smoke stub. The new text exits 0, leaves exit.txt=0 and records absolute paths.
+  * [M] full-linux.sh, relative existing libdir (F2): the old text refuses with 94 'no libjnlua*.so in nat/libdir-additive'. The new text exits 0 and OCLJ_LIBDIR is absolute. Controls: a missing libdir gives 94 in both, now naming the absolute path; '-' stays '-' for the stock arm; an existing run dir gives 99 in both, with its marker untouched.
+  * [M] chain-linux.sh, relative natives and runs dirs (C1): with the old text all 7 arms log 'exit=' empty and no exit.txt exists. With the new chain on the old full-linux.sh, and with new on new, all 7 log exit=0.
+  * [M] chain-linux.sh, existing run dirs (C2): the old text reports 7 old runs ('CHECKS: 82 ... OLD-RUN') and writes env.txt into the old disposeoff and bundleoff dirs. The new text logs 7 REFUSED lines, and the old dirs' files are byte-unchanged.
+  * [M] Env probe (lt/env-1): a Git Bash prefix variable arrives unset in Alma, and so does an exported one. Only 'wsl.exe -- env X=1 sh ...' delivers it.
+  * [S] build-native.sh line references re-derived by content against f3dc7167. Examples: LINK_EXTRA :306, reasons :267-290, GLIBC_FLOOR :353, preflight :351-364, git_head :544-559, LJ_COMMIT :561, refusal :562-565, stage 1 :575-824, copy-if-missing :585-590, x86_64 refusal :780-782, BITOP_PATCHES loop :785-811, make clean/make :819-824, freshness :827-925, -f comment :890, feature gates :927-963, -dM :948, luajit.exe gates :1040-1421, stage 1b :1423-1518, ELF gate :1883-1984, PREREQUISITES 7 :2050-2067.
+  * [M] Re-verified the follow-up reports' key numbers from their own logs. fix-negctl: run-{alma,ubuntu,win}-new 57/0; run-alma-old 51/5; run-ubuntu-old 55/1 (notimer only); the repo negative-control.sh is 452d869b. inv-forin pristine census 20, 18 and 26 failures per 2000; fixed 0 per 2000. fix-forin final file 1000/500/500, all OK. fix-forin hotloop arms: pristine fails 20/20, final passes 20/20, nojit=false fails 19/19/20. Alma reruns of the original for-in suite: 12/12 pass.
+-- recommended_changes
+  * Main session: review and commit README.md, docs/roadmap.md, docs/jit-guide.md, CLAUDE.md and the two launchers together with the round. The user handles commits.
+  * Main session: run the 57-line negative-control.sh once against build/native itself (libluajit.a a0f264d7) in the next chain. The follow-up ran it on alma-fixed mirrors, whose .so files equal the release's but whose libluajit.a differs. The glibc row's item 2 says so.
+  * Not my file: bench/runs/2026-10-19-glibc has no summary of the follow-ups. inv-forin and fix-forin suggest archiving the for-in census rates and test-binary md5s there, and fix-negctl suggests its run summaries.
+  * Not applied, outside my files: the review's all.sh freeze-reuse finding (all.sh reuses an existing new-gl-* dir keyed only on the additive md5). It should stop like round 3's freeze did.
+  * Optional, same class as the launcher fix: OCLJ_LUAJIT_EXE and OCLJ_SMOKE given as relative paths would still break after full-linux.sh's cd. Not changed, because it was not asked.
+  * Optional: older dated roadmap statuses (rows 145, 203, 262 and others) keep historical build-native.sh line references from their dates. I left them as snapshots.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/README.md
+  * C:/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md
+  * C:/Users/astro/Downloads/OC-LuaJIT/docs/jit-guide.md
+  * C:/Users/astro/Downloads/OC-LuaJIT/CLAUDE.md
+  * C:/Users/astro/Downloads/OC-LuaJIT/bench/runs/2026-10-19-glibc/scripts/full-linux.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/bench/runs/2026-10-19-glibc/scripts/chain-linux.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/pre.md5
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/post.md5
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/pre/
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/lt.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/stub-smoke.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/envprobe.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/r1/
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/env-1/
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lt/scripts-and-natives.md5
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/linkcheck.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/crcount.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/lc-ff/t.md
+-- checks
+  * md5s before editing (C:/Users/astro/claude-tmp/oclj/glibc/followup/docs-final/pre.md5): README bee37a24, roadmap 23e3d367, jit-guide 57171eb1, CLAUDE 36a3f72d, full-linux.sh bdfa837e3c4a66717936109101cbd8e0, chain-linux.sh 79e2323bb150a98e80696a8c2cf7c372. The chain ran the launchers from the repo scripts dir; their mtime (23:44 local) is before the chain's start (20:45:52Z = 23:45:52 local).
+  * md5s after editing: README b9405672, roadmap 0a45c7fb, jit-guide 309fce4c, CLAUDE d9741a42, full-linux.sh 987c26c5, chain-linux.sh a65c36d6. The tested copies in lt/ have the same md5s.
+  * All six edited files: 0 CR, counted by bytes in Python.
+  * sh -n passes on both launchers under Git Bash bash 5.3, Alma bash 4.4 and Ubuntu dash.
+  * Link check: 422 markdown links in the four docs, 0 bad. The checker was first run on a file with a missing target and a missing anchor, and it failed with rc 1.
+  * Every evidence path cited in the new roadmap text exists (scripted -e check).
+  * No TODO-MEASURE is left in any live doc. The only matches are archived round-3 design JSONs.
+  * Not touched: native/build-native.sh (still f3dc7167) and everything under build/. No git command that changes anything was run. Scratch is a fresh dir, and nothing was deleted.
+  * Launcher fixes fail first on the old text and pass on the new (lt/r1): F1, F2, C1 and C2 as listed in the findings, with F3, F4 and F5 as controls.
+-- open_questions
+  * Should the next main-session chain rerun negative-control.sh on build/native to close the gap noted in the glibc row's item 2? The follow-up's runs used alma-fixed mirrors.
+  * README's smoke-suite row still dates its Windows 82/0 to 2026-10-17. The glibc chain re-ran it on 2026-10-19. Update the date?
+  * Thread blobs carry inert raw words: frame links, plus each continuation frame's lj_cont_* address and contpc. The code address shows where the library was loaded [I]. Writing nil there is a wire change, recorded in the M5 row and not started. Should it get its own row?

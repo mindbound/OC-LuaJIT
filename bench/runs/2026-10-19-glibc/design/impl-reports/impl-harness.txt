@@ -1,0 +1,174 @@
+SUMMARY: The harness now runs on Linux. I changed three repo files, all LF with CR=0: test/native/smoke-test.sh (814 lines, +111/-22 in the diff), test/native/OcljSmoke.scala (7041 lines, one message changed) and test/native/LinkProbe.java (99 lines, one usage string changed).
+
+What smoke-test.sh does now:
+- **Platform from uname.** It reads the host the same way build-native.sh does (windows under MINGW/MSYS/CYGWIN/Windows_NT, linux on Linux, x86_64 only). The library name, the patcher binary (luajit.exe on Windows, luajit on Linux) and the path plumbing all come from that host value.
+- **Plumbing keyed on the host.** It no longer depends on whether cygpath happens to be on PATH. On Windows a missing cygpath now fails with a message.
+- **Patcher lookup.** The default is <libdir>/../luajit-<platform>/src/luajit[.exe], with the older luajit/src/ layout as a fallback. On Linux it refuses a Windows PE by its first two bytes ("MZ"), and the patcher-failure message now names the binary as a possible cause.
+- **Benchmark directory.** The default is bench/oc when the caller stands in the repository, which is unchanged on Windows. Otherwise it is this checkout's bench/oc, absolute. A missing mandelbrot.lua is refused before the JVM starts.
+- **Docs.** The header has updated docs and a new HOST PLATFORMS section.
+
+Two scratch launchers are written and tested:
+- **full-linux.sh** reads the distro and picks the JDK: AlmaLinux gets JDK 8u504, Ubuntu gets JDK 17. It pins a Linux-only PATH, runs the JVM in a per-run working directory, resolves and test-runs the patcher's luajit, records each .so's glibc needs, and refuses an unrunnable arm before the harness starts.
+- **chain-linux.sh** runs chain-r3's seven arms. It was verified against a stub launcher, not as a real chain.
+
+Arm results [M]:
+
+| arm | host and JDK | natives | CHECKS / FAILURES | milestone lines vs r3-f | JVM WALL |
+|---|---|---|---|---|---|
+| additive JIT on | Windows, JDK 8u504 | frozen 9ae455ce DLL | 82 / 0 PASS | 82, identical to r3-additive-on-f | 92.7 s (r3-f 94.1 s) |
+| additive JIT on | Alma, JDK 8u504 | build role's -pthread .so (md5 62555188) | 82 / 0 PASS | 82, identical | 80.7 s |
+| stock | Alma, JDK 8u504 | OC's bundled native | 53 / 0 PASS | 60, identical to r3-stock-f | 77.7 s |
+| dropin (extra) | Alma, JDK 8u504 | frozen alma-1 dropin .so (f357129a) | 69 / 0 PASS | 72, identical to r3-dropin-f | 85.6 s |
+| additive JIT on (extra) | Ubuntu 26.04, JDK 17, smoke-test.sh under dash | frozen alma-1 additive .so (62555188, built in Alma) | 82 / 0 PASS | 82, identical | 82.4 s |
+
+- On Windows, the generated config is identical to r3-f's apart from the run path, and run.log gains exactly three new [smoke] lines (host, bench, patcher).
+- The Alma additive arm is the first JVM run of the -pthread .so built by the build role (the trial .so was not used). It needs at most GLIBC_2.17, has no unversioned imports, and NEEDs libpthread.so.0.
+- The Ubuntu arm shows the .so built in Alma (glibc 2.28) also loads on glibc 2.43.
+
+The Scala compiles to 26 classes everywhere: in a fresh Windows compile of HEAD and of the edited sources (the same class list as r3-f's), and through the harness on Alma (JDK 8) and Ubuntu (JDK 17). Every new check was shown to fail on a case that must fail, then pass: 17 of 17 Linux cases, 7 of 7 Windows cases (after fixing a fault in my own test script), 6 of 6 launcher refusals and 4 chain refusal/positive checks.
+
+Not done: the full seven-arm Linux chain (it belongs to the main session), a Linux census, and a Linux variant of bench-r3.
+-- findings
+  * Windows behaviour is unchanged [M] (runs/win-additive-on-1, run through the unchanged claude-tmp/oclj/full.sh, md5 2f654180 = the archived one, with the frozen DLL 9ae455ce and smoke-test.sh 21981d67). Result: 'CHECKS: 82   FAILURES: 0   WALL: 92.7s', 'VERDICT: PASS'. The 82 milestone id:verdict lines diff EMPTY against bench/runs/2026-10-17-bitop/logs/harness/r3-additive-on-f, which is 82/0 at 94.1 s. The generated ocljit.conf differs from r3-f's in only one line, the forceNativeLibPathFirst run path. The [smoke] lines of run.log differ by exactly three additions: 'host    = windows-x86_64 (library libjnluajit52-windows-x86_64.dll, patcher luajit.exe)', 'bench   = bench/oc' and 'patcher = .../build/native/luajit-windows-x86_64/src/luajit.exe'. The patched kernel's md5 is 03c07a4e, the same as r3-f's.
+  * Alma additive JIT on [M] (runs/alma-additive-on-1). Natives were frozen from impl-build/alma-1 into impl-harness/natives-alma1: the additive .so 62555188 and the luajit ee1fff76. native.glibc reads 'needs=GLIBC_2.17 host=glibc-2.28 unversioned=[] NEEDED=[libm.so.6 libpthread.so.0 libc.so.6 ld-linux-x86-64.so.2]'. Result: 'CHECKS: 82   FAILURES: 0   WALL: 80.7s', PASS, and the 82 id:verdict lines are identical to r3-additive-on-f and to win-additive-on-1. The milestones, all PASS: a-lua-state-opens b-machine.lua-sandbox b2-machine-memory-accounted k0-kernel-observed km-1-kernel-init-compiles-nothing al-1-machine-heap-is-lj-alloc acc-1-machine-handover gc-0-value-disposer-installed c-openos-shell d-autorun-counter-live k2-jit-not-thrashing k3-sandbox-loop-is-compiled j0-jit-switch-honoured d2-sandbox-bytecode-gate d3-sandbox-ffi-literal-refused d4-sandbox-string-pack d5-sandbox-bitwise k1-deadline-still-fires k5-watchdog-fired jn-1-resume-error-carries-message k4-still-compiled-after-timeout p0-compute-checksum p0-component-walk-ran p1-suite-complete p1-compat-path-known p1-mandelbrot p1-binarytrees p1-trampoline p1-matmul p1-strings2 p1-nqueens p1-sha256 gc-emergency-collects-resolve gc-emergency-not-stuck-armed m1-mcode-is-real m2-persist-flush-observed f1-persist-blob f1b-blob-carries-userdata m4-persist-and-continue-under-load mem-1-resident-traces-at-tier m3-post-save-workload-resumes f7-restored-userdata-proxy-live f2-restore-same-vm f3-restore-counter-continues f5-restore-memory-still-accounted acc-1r-restored-machine-handover f4-restore-no-error gc-2-restored-drop-disposes gc-1-live-drop-disposes gc-3-save-boundary-disposes fi-1-save-landed-mid-loop fi-2-component-list-walk-exact fi-3-proxy-pairs-walk-exact dg-1-forin-diagnostic-names-the-os-wrapper stk-1-save-landed-in-synccall stk-2-one-reference-space stk-3-one-value-per-proxy stk-4-sync-result-recognised acc-2-fast-path-live mem-2-pressure-flushes-traces g1-bytecode-refused-with-mode-t g1b-rejected-load-leaks-no-stack g2-text-still-loads-with-mode-t g3-eris-internal-bytecode-path-open acc-3-freemem-exact-mid-call acc-4-constructor-cap-bites acc-5-uncapped-stays-legacy acc-6-closed-state acc-7-overrides-synchronized vd-1..vd-9 (9 lines) e1-accounting-live e2-freemem-falls e3-gc-credits-frees e4-oom-at-the-cap. The full lines are in impl-harness/alma-additive-on-1-milestone-lines.txt. This is the first JVM load of a -pthread, --no-undefined .so, which answers inv-harness's open question.
+  * Alma stock [M] (runs/alma-stock-1; OC-JNLua-Natives jar md5 5a0bd349). Result: 'CHECKS: 53   FAILURES: 0   WALL: 77.7s', 'SMOKE PASS (BASELINE)', fingerprint 'native=<stock> | class=LuaState | ... jit=NO-JIT-TABLE'. Its 60 milestone lines are identical to r3-stock-f (53/0, 94.7 s). The lines: a, b, b2, k0 PASS; km-1, al-1, acc-1 and gc-0 SKIP; c, d PASS; k2-baseline-has-no-jit, j0, d2, d3 (refused-puc), d4 (absent), d5 (absent), k1-deadline-still-fires and k5-baseline-has-no-watchdog PASS; k4-still-compiled-after-timeout-NEGATIVE-CONTROL PASS; p0 x2 and p1 x9 PASS; m1-baseline-has-no-mcode, f1, f1b, m3, f7, f2, f3 and f5 PASS; acc-1r SKIP; f4, gc-2, gc-1, gc-3, fi-1, fi-2-stock-control, fi-3-stock-control, stk-1, stk-2/3/4-stock-control, g1, g1b, g2 and g3 PASS; acc-3..7 SKIP; vd-1..9 SKIP; e1..e4 PASS. The full lines are in impl-harness/alma-stock-1-milestone-lines.txt.
+  * EXTRA ARM: Alma dropin [M] (runs/alma-dropin-1, frozen .so f357129a). Result: 'CHECKS: 69   FAILURES: 0   WALL: 85.6s', PASS, fingerprint 'class=LuaState' on 'native=luajit/'. Its 72 milestone lines are identical to r3-dropin-f (69/0), with gc-0, acc-4/5/7 and vd-1..9 SKIP, and the gc-*/stk-2..4 '-dropin-control' ids PASS. This is the first Linux run of OC's own LuaState JNI binding on our .so (an inv-harness open question).
+  * EXTRA ARM: Ubuntu 26.04 with JDK 17.0.20.1 [M] (runs/ubuntu-additive-on-1). The natives are the Alma-built ones, and Ubuntu's /bin/sh is dash, so smoke-test.sh and full-linux.sh ran under dash. Result: 'CHECKS: 82   FAILURES: 0   WALL: 82.4s', PASS, with 82 id:verdict lines identical to r3-f. So the .so built in Alma (glibc 2.28) loads on glibc 2.43, and full-linux.sh's Ubuntu/JDK 17 branch works end to end.
+  * LINUX-SPECIFIC IN THE MILESTONES (1): tick-counted figures are not comparable across hosts [M][I]. k1's deadline fired 'after 320 ticks' in 5 of 5 Windows runs (r3-f additive-on, disposeoff, bundleoff and sieve, plus win-additive-on-1) and after 360/360/370 ticks in 3 of 3 Linux runs (inv Alma, my Alma, my Ubuntu). In milliseconds (WDTIMELINE-K1 k1_ms) it is 9942/9977 ms on Windows against 9131/9160/9409 ms on Linux. That is about 31.1 ms per harness tick on Windows and about 25.4 ms on Linux. The tick loop is ws.update() plus Thread.sleep(25) [S]. The difference fits Windows' coarser sleep granularity [I], not the watchdog. The watchdog thread fired once on every host (k5 'fires=1'), and k4 read 0.11x of the interpreted reference on Linux against 0.10x on Windows.
+  * LINUX-SPECIFIC IN THE MILESTONES (2), timing, one sample each and unpinned, with other roles building in the same WSL VM [M]:
+- f1's first persist: Windows 24 ms (r3-f 44, 31, 36 ms); Linux 82 ms (Alma), 134 ms (Ubuntu) and 215 ms (inv Alma). It is consistently slower on Linux and unexplained.
+- JVM WALL: Linux 80.7 s / 82.4 s against Windows 92.7 s.
+- mem-2's 'min 0' (Linux) against 'min 1, never 0' (this Windows run) is not Linux-specific: r3-additive-on-f, dropin, sieve and bundleoff on Windows also read min 0.
+- The Linux JVMs run with file.encoding=UTF-8 and the Windows one with Cp1252; no milestone differs. full-linux.sh deliberately does NOT set LC_ALL=C, which would make JDK 8 read and write ASCII.
+  * OC's native extraction [M]:
+- On Linux, with the run dir as the working directory, the three Ocelot-0.24.2-5x-libjnlua5x-linux-x86_64.so files appeared there during the run and were gone in cwd-after.txt after exit, in all four Linux arms.
+- The Windows arm (full.sh does cd $REPO) re-extracted Ocelot-0.24.2-5{2,3,4}-*.dll into the repo root (timestamps 2026-10-19 23:03:33; gitignored, '!!' in status). That is full.sh's standing behaviour, which I did not change.
+  * Blob fingerprint [M]: the build role's Alma build still bakes 'unknown|LuaJIT 2.1.ROLLING|412be694|...' (Alma has no git), where the Windows DLL has '1ee778a4|...'. The release concern inv-harness raised still stands, and it is outside my role.
+  * Compile [M]: a fresh Windows compile (JDK 8u504, scripts/compile-check.sh) of HEAD's sources and of the edited ones gives javac rc=0, scalac rc=0 and 26 classes for each. The class lists are identical to each other and to r3-additive-on-f's work/classes. On Linux the harness's own compile gave the same 26-class list (Alma JDK 8; Ubuntu JDK 17 in 9 s, '+11s harness compiled'), and every scalac.log has 0 'error' lines. LinkProbe.java compiles and prints the new usage line.
+  * INSTRUMENT NOTES [M]:
+- wsl.exe -d X -- sh -c '... $f ...' expands $f in the distro's login shell before sh runs, so my first dash syntax loop read empty names. Inline shell code to WSL belongs in a script file.
+- My first Windows no-cygpath case reported rc=127 because env looked up 'sh' in the stripped PATH. I fixed it with /usr/bin/sh and re-ran into ff-windows-2.
+- The AlmaLinux-8 distro showed an uptime of 1-2 minutes twice between my calls, so WSL stops an idle distro. For a nohup wsl.exe chain the client must stay attached [I].
+  * Not changed, and outside my files [S]:
+- test/native/build-brain.sh:59-61 keeps the old 'command -v cygpath' plumbing.
+- census-os.sh passes its kernel-root and EEPROM paths as main args without wm conversion. That is Windows-only behaviour, and a Linux census was not attempted.
+-- recommended_changes
+  * Main session: review and commit test/native/smoke-test.sh, test/native/OcljSmoke.scala and test/native/LinkProbe.java. The exact diff is C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/impl-harness-repo.diff (236 lines, CR=0). Verified md5s: smoke-test.sh 21981d67, OcljSmoke.scala abee6ed8, LinkProbe.java 65feb015.
+  * Main session: archive C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/full-linux.sh (md5 bdfa837e, 119 lines) and chain-linux.sh (md5 79e2323b, 67 lines) into the round's bench/runs/<date>-glibc/scripts/, with arm-linux.sh, milestones.sh, ff-linux.sh, ff-windows.sh, ff-launcher.sh, chaintest.sh and compile-check.sh as the evidence scripts.
+  * Main session, the Linux chain: from Git Bash run 'MSYS_NO_PATHCONV=1 nohup wsl.exe -d AlmaLinux-8 -- sh /mnt/c/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/chain-linux.sh <tag> /mnt/c/<frozen natives dir with libdir/, libdir-additive/ and luajit-linux-x86_64/src/luajit> > <out> 2>&1 &' and Monitor <runs>/chain-linux-<tag>.done (default runs dir claude-tmp/oclj/runs-linux). Predicted CHECKS are the Windows chain's: 82/69/80/76/53/82/82, with bundleoff's 3 expected failures. impl-harness/natives-alma1 is such a frozen dir, and the build role's alma-1 output reproduces it.
+  * Docs owners (not mine):
+- docs/jit-guide.md 7.7's last paragraph: the harness now runs on Linux.
+- Roadmap row 216 ('The Linux native has never been loaded by a JVM') is answered by these runs (AlmaLinux 8 JDK 8: additive-on, stock, dropin; Ubuntu JDK 17: additive-on).
+- README's harness notes should name full-linux.sh's host and JDK choice.
+  * Optional follow-ups:
+- The smoke-test.sh header line 'OCLJ_JAVA JDK home, 8 or later (the chains run 8u504, on Windows and in AlmaLinux 8)' could add 'and 17 ran in Ubuntu on 2026-10-19'. I left the verified file unchanged.
+- test/native/build-brain.sh:59-61 could take the same host-keyed plumbing.
+- full.sh's 'md5sum $OCLJ_LIBDIR/*.dll' could become libjnlua*.*.
+- A per-run working directory for the Windows full.sh would keep Ocelot-*.dll out of the repo root. smoke-test.sh's new bench default already supports that (proved by ff-windows W5).
+  * Build-native owner or user: decide how the Alma release build records the LuaJIT commit. impl-build/alma-1's .so still bakes 'unknown|...', so Windows-written blobs are refused by the Alma-built .so.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/smoke-test.sh (814 lines, CR=0, md5 21981d67; the edit)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/OcljSmoke.scala (7041 lines, CR=0, md5 abee6ed8; the guard message at :1656-1659 is platform-neutral)
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/LinkProbe.java (99 lines, CR=0, md5 65feb015; usage string)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/impl-harness-repo.diff (236 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/full-linux.sh (119 lines, CR=0, md5 bdfa837e)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/chain-linux.sh (67 lines, CR=0, md5 79e2323b)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/arm-linux.sh (16 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/milestones.sh (5 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/compile-check.sh (33 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/ff-linux.sh (68 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/ff-windows.sh (37 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/ff-launcher.sh (37 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/chaintest.sh (23 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/chaintest/stub-full-linux.sh (11 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/mkmutant.py (22 lines, CR=0, no backslashes)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/scripts/syntax.sh (8 lines, CR=0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/runs/win-additive-on-1/ (run.log, work/smoke.log)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/runs/alma-additive-on-1/ (run.log, work/smoke.log, host.txt, native.glibc, native.md5, cwd-after.txt)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/runs/alma-stock-1/
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/runs/alma-dropin-1/
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/runs/ubuntu-additive-on-1/
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/runs/ubuntu-stop-before-jvm-1/
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/{win-additive-on-1,alma-additive-on-1,alma-stock-1,alma-dropin-1,ubuntu-additive-on-1}-milestone-lines.txt (full milestone lines per arm)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/{ref-r3f-additive-on,ref-r3f-stock,ref-r3f-dropin}-milestones.txt (the references, from bench/runs/2026-10-17-bitop/logs/harness)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/ff-linux-1/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/ff-windows-2/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/ff-launcher-1/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/chaintest-1/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/compile-win-head/ and compile-win-edit/ (rc.txt, classes.txt)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/natives-alma1/ (frozen copy of impl-build/alma-1's natives and luajit, md5-frozen.txt)
+-- checks
+  * Fail-first, Linux, in Alma (ff-linux-1/summary.txt): 17 of 17 OK, and no JVM booted in any case [M].
+- MUST FAIL:
+  - A1/A2: Windows libdirs on Linux -> 'no .../libjnlua(jit)52-linux-x86_64.so'.
+  - A3: the dropin dir given for the additive arm.
+  - A4/A5: fake uname Darwin -> "unsupported host system 'Darwin'"; fake aarch64 -> "unsupported machine 'aarch64'".
+  - B1: OCLJ_BENCHDIR without mandelbrot.lua -> 'no mandelbrot.lua in OCLJ_BENCHDIR=...'.
+  - C1: no sibling luajit -> 'needs luajit ... none at .../luajit/src/luajit'.
+  - C2: a Windows luajit.exe -> 'is a Windows executable'.
+  - C3: the Ubuntu-built luajit -> "the kernel patcher failed ... or <path> does not run on this host", with the loader's "GLIBC_2.38' not found" above it.
+- MUST PASS:
+  - A6-A8: the Linux additive, dropin and stock libdirs pass the library check.
+  - B2: cwd outside the repo -> 'bench   = /mnt/c/.../OC-LuaJIT/bench/oc'.
+  - B3: cwd = repo -> 'bench   = bench/oc'.
+  - B4: with a cygpath shim on PATH the plumbing stays ':' and identity (no CYGPATH-SHIM).
+  - C4: default patcher 'patcher = .../libdir-additive/../luajit-linux-x86_64/src/luajit', 'patch-machine-lua: ok ... 13 sites'.
+- INSTRUMENT: M4, a mutant with HEAD's 'command -v cygpath' condition, DOES print CYGPATH-SHIM, so B4 can fail.
+  * Fail-first, Windows, in Git Bash (ff-windows-2/summary.txt): 7 of 7 OK [M].
+- W1/W2: the frozen Windows libdirs still pass.
+- W3: a Linux libdir is refused on Windows ('no .../libjnluajit52-windows-x86_64.dll').
+- W4: with no cygpath on PATH -> 'no cygpath: on Windows this harness runs under Git Bash'.
+- W5: cwd outside the repo -> 'bench   = C:/Users/astro/Downloads/OC-LuaJIT/bench/oc', and the -f test on the C:/ form works.
+- W6: cwd = repo -> 'bench/oc'.
+- W7: missing mandelbrot.lua is refused.
+- ff-windows-1 had one WRONG case (W4, rc=127), caused by my test running 'sh' through the stripped PATH. I fixed it and re-ran into a fresh dir.
+  * Launcher refusals (ff-launcher-1/summary.txt, Alma): 5 of 5 OK, none ran the harness [M]:
+- L1, exit 93: 'libjnluajit52-linux-x86_64.so needs GLIBC_2.38, and this host has glibc 2.28: it cannot load here' (Ubuntu-built .so).
+- L2, exit 92: the Ubuntu luajit 'does not run on this host: ... GLIBC_2.38 not found'.
+- L3, exit 94: a Windows libdir has 'no libjnlua*.so'.
+- L4, exit 96: 'no javac at /nonexistent/bin/javac'.
+- L5, exit 99: the run dir already exists.
+- Plus Git Bash: 'REFUSING: full-linux.sh runs inside Linux', rc=95, with no directory created.
+- These used full-linux.sh before its one cosmetic host.txt fix (getconf line).
+  * Chain logic against a stub launcher (chaintest-1, Alma) [M]:
+- The seven arms run in chain-r3's order: lx-additive-on, lx-dropin, lx-additive-off, lx-sieve, lx-stock, lx-disposeoff, lx-bundleoff.
+- OCLJ_DISPOSE=off reaches only disposeoff, and OCLJ_PERSIST_BUNDLE=off only bundleoff.
+- jit=off reaches only additive-off, and only=sieve only sieve.
+- Every arm gets the one patcher resolved up front, and .done is touched.
+- Refusals: the same tag again -> rc=99 'exists'; Windows natives -> rc=98 'no Linux natives'; a patcher that cannot run here -> rc=98 'does not run on this host'.
+  * Windows arm, behaviour unchanged [M]: win-additive-on-1 scored 82/0 PASS. Its milestone id:verdict lines diff empty against r3-additive-on-f, the config differs only in the run path, run.log gains 3 say lines, and the kernel md5 is 03c07a4e.
+  * Alma arms [M]:
+- additive-on (-pthread .so 62555188): 82/0 PASS, identical to r3-f.
+- stock: 53/0 PASS, 60 lines identical to r3-stock-f.
+- dropin (extra): 69/0 PASS, 72 lines identical to r3-dropin-f.
+- Ubuntu JDK 17 additive-on (extra): 82/0 PASS, identical.
+- Ubuntu path up to the JVM (runs/ubuntu-stop-before-jvm-1): JDK 17 detected, 26 classes, the Alma-built patcher ran on glibc 2.43, and the run stopped at 'OCLJ_JIT must be on or off'.
+  * Instrument check for the milestone comparison [M]: flipping one verdict in a copy of the reference makes diff report it (rc=1). The extracted reference lists equal inv-harness's (82 and 60 lines).
+  * Compile [M]: on Windows, HEAD and the edited sources each compile to 26 classes (javac/scalac rc=0) with the class list identical to r3-f's. On Linux the harness compile gives the same list under Alma JDK 8 and Ubuntu JDK 17. LinkProbe.java compiles.
+  * Hygiene [M]:
+- CR=0 in the three repo files, the diff and every scratch script and fakebin.
+- sh -n passes on smoke-test.sh and every scratch script under bash (Alma) and under sh -n and dash -n (Ubuntu).
+- git status shows my three files modified among the other roles' files. I made no git changes.
+- Nothing was written under build/native (it was only read: luajit.exe copied into scratch, md5s taken). build-native.sh was not run.
+- Nothing was installed. All runs went to fresh directories under impl-harness/ and nothing was deleted.
+-- open_questions
+  * Not run on Linux: additive-off, sieve, disposeoff and bundleoff. They are env and libdir variants that chain-linux.sh runs, and the main session should run the full chain. The probes (grace, capacity, rawrace) and the census were not attempted either; the census launcher (bench/runs/2026-10-03-ramscale/scripts/census.sh) is Windows-only.
+  * Whether nohup wsl.exe keeps a Linux chain alive is untested. The AlmaLinux-8 distro was seen restarted (uptime 1-2 min) between my calls, so WSL stops idle distros. The chain must run with its wsl.exe client attached throughout [I].
+  * f1's first persist is 82-215 ms on Linux against 24-44 ms on Windows (one sample per run, with other roles loading the same VM). Is it worth a pinned look, or is it noise?
+  * Should smoke-test.sh itself set the JVM's cwd to OCLJ_WORK, which would also change the Windows chain? I left the cwd to the launchers: full-linux.sh uses the run dir, and Windows full.sh still uses the repo, so Ocelot-*.dll keeps being rewritten in the repo root.
+  * The java.io.tmpdir dirs (ocljit-smoke-*, 7 per arm) are left in Alma's and Ubuntu's /tmp and in C:/Users/astro/claude-tmp. I deleted nothing, per the rules. Is that wanted?
+  * smoke-test.sh refuses darwin and freebsd, although build-native.sh names them; macOS is parked. Keep the refusal, or name them and let a missing library fail later?
+  * Release fingerprint: the Alma-built .so carries 'unknown|...' where the Windows DLL carries '1ee778a4|...'. This needs a decision from the user or the build owner.
+-- scratch
+  * Everything is under C:/Users/astro/claude-tmp/oclj/glibc/impl-harness/ (fresh):
+- scripts/, ff/ (fakebins, the nolj libdir copy, the winexe copy), head/ (HEAD copies of the harness sources from git show)
+- compile-win-head, compile-win-edit, linkprobe-compile-1
+- ff-linux-1, ff-windows-1 (instrument fault), ff-windows-2, ff-launcher-1, chaintest-1
+- natives-alma1 (frozen from impl-build/alma-1), runs/
+- milestone lists, impl-harness-repo.diff, repo-files.md5
+  * Arm settings:
+- The Linux arms ran through scripts/arm-linux.sh with OCLJ_TIMEOUT=420 (the chain default stays 600), OCLJ_REPS=5, no OCLJ_CONF_EXTRA, as the default WSL user (not root).
+- alma-additive-on-1 and alma-stock-1 used full-linux.sh before the cosmetic host.txt fix ('glibc glibc 2.28'); ubuntu-stop-before-jvm-1, ubuntu-additive-on-1 and alma-dropin-1 used the final bdfa837e. All used smoke-test.sh 21981d67.
+- The Windows arm used the unchanged claude-tmp/oclj/full.sh (OCLJ_TIMEOUT 600) and ran alone among JVMs at launch.
+  * Concurrency: impl-build and impl-gradle were active during my runs, building in the same WSL VM and running gradle JVMs on Windows. Load averages are in each runs/*/wall.txt; ubuntu-additive-on-1 started at a 1-minute load of 5.44. Timing figures are indicative only.
+  * The trial natives (alma/trial-3adfeaf) were used only in the fail-first cases. The build role's alma-1 build was ready, so the arms used a frozen copy of it (additive 62555188, dropin f357129a, luajit ee1fff76).

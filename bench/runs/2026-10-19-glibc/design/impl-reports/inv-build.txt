@@ -1,0 +1,188 @@
+SUMMARY: I checked the build side of the glibc round (items 1-5) in AlmaLinux 8 (glibc 2.28, binutils 2.30) and Ubuntu 26.04 (glibc 2.43, binutils 2.46), and all five plan items hold up.
+
+(1) The new Linux link flags are LINK_EXTRA="-static-libgcc -pthread -Wl,--no-undefined". Both variants link with them in both distros. In Alma, the six pthread imports gain versions, libpthread.so.0 becomes NEEDED, and the highest need stays GLIBC_2.17. In Ubuntu the .so is byte-identical to the round-3 one.
+
+(2) Without -pthread, --no-undefined makes the link fail, naming the six pthread functions. The .so does not need -ldl: it imports no dl* symbol, and adding -ldl in Alma only adds a useless NEEDED libdl.so.2.
+
+(3) Two gate commands work the same under binutils 2.30 and 2.46:
+- readelf --dyn-syms -W: every non-weak UND name must contain '@'.
+- readelf -V: the highest GLIBC_x.y need, found with sort -V.
+
+Both fail first: the trial .so is refused for its six unversioned pthread imports, and the round-3 .so needs GLIBC_2.38. In Alma, adding "-pthread -ldl" to every Linux test link makes the native suites, run-pack, run-bitop and the serializer suite pass; with the current flags shim, security, mem and wd fail to link. In Ubuntu everything links either way.
+
+(4) A PUC Lua 5.3.6 built in Alma (POSIX+DLOPEN, no readline) runs and says 5.3.6. The Ubuntu-built one does not run in Alma.
+
+(5) A Kotlin check in verifyModAssets reads .gnu.version_r, .dynsym and .gnu.version itself, with no binutils. A prototype project running the proposed task code on gradle 9.3.1 with the configuration cache on ran it against 10 natives directories, and every result was as designed.
+
+Exact proposed copies and diffs are in scratch; the repo is untouched (git status is empty, and build/native was only read).
+-- findings
+  * THE LINK, Alma [M] (linkmatrix-alma-trialobjs/summary.txt, relinking the trial's objects with five flag sets):
+- L1 -static-libgcc (today's flags): 6 unversioned non-weak UND (pthread_attr_setstacksize, pthread_condattr_setclock, pthread_create, pthread_join, pthread_setname_np, pthread_sigmask), and pthread_once/__pthread_key_create weak and unversioned; NEEDED libm, libc, ld-linux.
+- L2 +-pthread: NEEDED gains libpthread.so.0; all six get versions (pthread_create@GLIBC_2.2.5, pthread_condattr_setclock@GLIBC_2.3.3, pthread_setname_np@GLIBC_2.12, ...); pthread_once and __pthread_key_create become @GLIBC_2.2.5; highest need still GLIBC_2.17 (clock_gettime).
+- L3 +-pthread -Wl,--no-undefined: links; md5 62555188 is the same as a full fresh build (alma-new).
+- L4 -Wl,--no-undefined without -pthread: the link FAILS, 'undefined reference' to exactly the six. So the linker flag can fail.
+- L5 +-ldl: links, but adds NEEDED libdl.so.2 for nothing.
+  * FULL BUILDS with a scratch copy of build-native.sh (only LINK_EXTRA changed, plus the proposed postflight gate) [M]:
+- alma-new: both variants exit 0; every existing gate passed; 110 UND, none unversioned; NEEDED libm, libpthread.so.0, libc, ld-linux; highest GLIBC_2.17.
+- ubuntu-new: both variants exit 0; NEEDED unchanged (libm, libc, ld-linux), so -pthread adds nothing there; highest GLIBC_2.38. The .so files are byte-identical to the old-flag Ubuntu build (ubuntu-oldlink-gate) and to the round-3 build/native .so: additive 7e8b8b89cdde7e2a67ff4fe654f93339, dropin cdad2167deb334b99ee415f933f6a48f.
+- --no-undefined holds for this JNI library in both distros and both variants. [S] build-native.sh step 5 says javavm.c is not linked; jnlua.c reaches the JVM only through the JNIEnv tables.
+  * Alma builds are reproducible across OCLJ_BUILD paths [M]. With the proposed flags: additive 62555188b64fa09c23f12f89d71b1d6a and dropin f357129a886f1e005aa9be8991c891d6 in alma-new, validate-alma and alma-proposed2. With today's flags: dropin 3681ed86 equals the trial's, and additive bf0d0916 equals the trial's. The main session can check its release build against these md5s, provided HEAD 3adfeaf, the same OC-JNLua checkout and Alma's JDK 8 include.
+  * NO -ldl IN THE .so [M]:
+- nm -u on jnlua.o, lj52shim.o and eris_lj.o lists no luaopen_package or luaopen_io, so lib_package.o is never pulled from the archive.
+- nm -D of the .so shows 0 of dlopen, dlsym, dlclose and dlerror.
+- If that ever changes, the link with --no-undefined will fail in Alma (dlopen is in libdl before 2.34) [I].
+  * THE DYNAMIC LOADER AGREES WITH THE GATES (ldd -r; lddr/AlmaLinux-8.txt and lddr/Ubuntu.txt) [M]:
+- On Alma 2.28: the round-3 .so fails with "version `GLIBC_2.38' not found", plus 2.35, 2.32, 2.34 and 2.29.
+- On Alma 2.28: the trial .so reports 'undefined symbol: pthread_create' and the other five (no libpthread is NEEDED).
+- Both alma-new variants relocate clean on Alma 2.28 AND on Ubuntu 2.43. So a NEEDED libpthread.so.0 with pthread_*@GLIBC_2.2.5 still resolves on glibc 2.34+.
+- [I] The trial .so works inside a JVM only because the JVM on glibc < 2.34 has already loaded libpthread.
+  * WHAT THE UBUNTU .so NEEDS ABOVE 2.28 (its UND list, and the gradle prototype's message) [M]:
+- fmod@GLIBC_2.38 and __isoc23_strtoul@GLIBC_2.38
+- _dl_find_object@GLIBC_2.35
+- pthread_*@GLIBC_2.34, pthread_sigmask@GLIBC_2.32
+- exp, log, log2 and pow @GLIBC_2.29
+
+[I] _dl_find_object comes from gcc 12+'s static libgcc_eh unwinder; __isoc23_strtoul comes from C23-default headers.
+  * GATE COMMANDS, the robust choice [M] (out-failfirst-gates/*, snippet-matrix-3/*; identical verdicts and stdout under binutils 2.30 and 2.46):
+(a) readelf --dyn-syms -W, keeping lines where $1 ~ /^[0-9]+:$/, $7=="UND", $5!="WEAK", NF>=8 and $8 !~ /@/. Both readelf versions print versioned UND as name@GLIBC_x.y and unversioned UND with no '@'. That holds whether the versym entry is 1 (objdump prints 'Base') or 0 (objdump prints blank).
+(b) The version NEEDS from readelf -V -W: the 'Name:' fields after 'Version needs section', GLIBC_[0-9]+([.][0-9]+)+ only, sort -V, tail -1. Anything else (GCC_*, GLIBC_PRIVATE) is listed separately and refused.
+
+objdump -T is a poor instrument: 2.46 prints UND versions as '(GLIBC_2.34)' in parentheses, and the unversioned marker is 'Base' or blank depending on the file [M]. -W is needed so readelf does not truncate names [S]. On a truncated ELF, readelf exits 0 and prints no symbols, so the gate must first require that UND count > 0 [M] (mutants/trunc).
+  * EVERY LINUX TEST LINK [S]:
+- run.sh, run-security.sh, run-mem.sh, run-wd.sh, run-vgc.sh, run-pack.sh and run-bitop.sh pass TEST_EXTRA=-pthread; run-penalty.sh passes -ldl.
+- negative-control.sh's six links pass only -lm.
+- serializer/Makefile uses LIBS=-lpthread -lm -ldl.
+- negctl-bitop.sh and negctl-pack.sh link through LuaJIT's own Makefile, which adds -ldl itself; build-native.sh's allocprobe links need nothing; run-race.sh is Win32-only; bench/runs/* are archives and stay as they are.
+
+Link-only matrix (linktests-alma, linktests-ubuntu) [M]:
+- Alma, today's tails: shim, security, mem and wd FAIL (dlopen, dlsym, dlclose, dlerror undefined; luaL_openlibs pulls lib_package). vgc, pack, bitop, penalty and erislj link.
+- Alma, -lm alone (negative-control's shape): all 9 FAIL.
+- Alma, "-pthread -ldl": all 9 link, 0 warnings.
+- Ubuntu: all 27 combinations link. Ubuntu cannot detect a missing flag, because its libpthread.a and libdl.a are 8-byte empty archives.
+  * RUNNING THE SUITES [M]:
+- suites-alma-repo (the repo's runners, Alma): shim exit 1, security exit 2, mem 1, wd 1 (did not build); vgc 47/0 and penalty 6/0.
+- suites-alma-pldl and suites-ubuntu-pldl: shim 57/0, security 56/0, mem 86/0, wd 35/0, vgc 47/0, penalty 6/0.
+- With the final proposed files: validate-alma and validate-ubuntu run all of the above plus run-pack PASS, run-bitop PASS (12/0, with PUC provenance) and the serializer suite with the 7 RESULT lines round 3 had (M1 82, M2 56, M3 79, FINGERPRINT 20, STRPACK 11, BITOP 7, FOR-IN exact).
+- negctl-repo-alma: the repo's negative-control.sh in Alma stops with 'NEGATIVE CONTROL SETUP FAIL: canon: security_test.c did not link' (dl* and pthread undefined).
+  * PUC 5.3.6 FOR ALMA [M]:
+- The Ubuntu-built C:/Users/astro/claude-tmp/oclj/puc536-linux/lua does not run in Alma: "version `GLIBC_2.34' not found", plus GLIBC_2.38 and 2.29 from libm.
+- Built in Alma at C:/Users/astro/claude-tmp/oclj/puc536-alma/lua from the vendored sources. I copied only *.c, *.h and Makefile, because src/ also holds Windows .o files. Command: make generic MYCFLAGS="-DLUA_USE_POSIX -DLUA_USE_DLOPEN" MYLIBS="-Wl,-E -ldl". That is the Ubuntu binary's feature set, which imports dlopen, popen and mkstemp64 and no readline.
+- Result: 0 warnings; -v says 'Lua 5.3.6 Copyright (C) 1994-2020 Lua.org, PUC-Rio'; highest need GLIBC_2.14; md5 12136059629660c6aada23cd6e702028.
+- Its outputs equal the Ubuntu PUC's on all 20 reference runs (pack conformance and conf-extra; t_ops, t_fold and t_sar with X and with raw; coerce_agree) (puccmp2-*). Only t_bit's error text differs, because it names the interpreter path.
+- In Alma, run-bitop's PUC provenance part passes with it (runpb-alma, validate-alma).
+  * GRADLE GATE [M] (gradle/proto-2, gradle 9.3.1, JDK 25, configuration cache ON, 'Configuration cache entry stored' with no problems; gradle/results-3):
+- REFUSED: c01 (today's build/native/dist, holding the round-3 .so), c02 (round 3), c03 (trial, unversioned), c04 (no -static-libgcc, GCC_3.0/3.3), c05 (one need renamed to GLIBC_2.29), c11 (section table cut off), c12 (bad magic).
+- PASSED: c06 (renamed to GLIBC_2.28, exactly the floor), c07 (Alma, 'needs at most GLIBC_2.17'), c10 (Alma .so plus the Windows DLL; the DLL is not read).
+- The floor message names the needs above 2.28, their libraries and the symbols (fmod@GLIBC_2.38, __isoc23_strtoul@GLIBC_2.38, ...).
+- A non-ELF file is refused by the existing fingerprint check first (c08, c09), so I proved the parser's own refusal with c11 and c12, which keep the fingerprint.
+  * WHAT ELSE APPEARS IN THE NEEDS, and how the gates treat it:
+- ld-linux-x86-64.so.2 needs GLIBC_2.3 in every build [M]. It is part of glibc, so it counts toward the highest version like any other need.
+- GCC_3.0 and GCC_3.3 from libgcc_s.so.1 appear only without -static-libgcc (_Unwind_*, __register_frame) [M] (nolibgcc-alma). Both gates refuse them.
+- GLIBC_PRIVATE appears in none of our builds [M]. It takes the same refusal path as GCC_* [S].
+- Weak unversioned UND are benign and excluded: __gmon_start__, _ITM_deregisterTMCloneTable, _ITM_registerTMCloneTable [M].
+  * Two side effects for sequencing:
+- build/native/dist today holds the round-3 Ubuntu .so (7e8b8b89, needs GLIBC_2.38). With the gradle change applied, ./gradlew build FAILS until the Alma release build replaces it [M] (case c01). So the gradle edit belongs with, or after, the Alma build into build/native.
+- Keep build-native.sh collecting into dist even above the floor; do not skip. If it skipped, a stale Alma .so could stay in dist beside a newer shim, and the fingerprint check (serializer only) would not catch it [I].
+-- recommended_changes
+  * native/build-native.sh :269. Change the Linux row to
+  *)       LIBEXT=.so    ; JNI_MD=$OCLJ_OS ; LINK_EXTRA="-static-libgcc -pthread -Wl,--no-undefined"  ; PICFLAG=-fPIC ;;
+Not -ldl. Proved in Alma and Ubuntu, both variants.
+  * native/build-native.sh :251-253 (the LINK_EXTRA comment). Append a paragraph saying:
+- -pthread: before glibc 2.34 six watchdog pthread calls live in libpthread; without it they were unversioned and had no NEEDED; on 2.34+ it changes nothing (byte-identical .so).
+- -Wl,--no-undefined: it turns that into a link error, and is safe for a JNI library (JNIEnv tables only; javavm.c not linked).
+- Why not -ldl: no dl* import, and before 2.34 it only adds a NEEDED libdl.so.2.
+Exact text: C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2/native/build-native.sh lines 251-266.
+  * native/build-native.sh postflight. Insert the ELF gate directly before the line
+  SZ=$(wc -c < "$OCLJ_OUT/$DLL_NAME")
+(it occurs once, ~:1792). The text is C:/Users/astro/claude-tmp/oclj/glibc/inv-build/scripts/gate-snippet.sh: 52 lines including its comment. It runs only when OCLJ_OS=linux, and in order:
+1. Requires readelf.
+2. Reader check: fail unless the count of named UND symbols is > 0.
+3. FAIL on any non-weak UND without '@'.
+4. Reads the needs with readelf -V -W; FAIL if there is no GLIBC_x.y need, or any need that is not GLIBC_x.y.
+5. Says 'glibc: highest version needed <max>; N undefined, none unversioned; NEEDED: ...'.
+6. Warns (does not fail) when the max is above GFLOOR=GLIBC_2.28, so Ubuntu development builds still finish.
+  * test/native/run.sh :44, run-security.sh :54, run-mem.sh :58, run-wd.sh :39, run-vgc.sh :57, run-pack.sh :70, run-bitop.sh :102. Change TEST_EXTRA=-pthread ;; to TEST_EXTRA="-pthread -ldl" ;;.
+Update the comment above it (it exists in run-vgc.sh and run-wd.sh; add it in the others) to say: -ldl because luaL_openlibs pulls LuaJIT's lib_package, which calls dlopen; before glibc 2.34 (AlmaLinux 8) both libraries are outside libc; from 2.34 the flags add nothing.
+  * test/native/run-penalty.sh :44. Change TEST_EXTRA=-ldl ;; to TEST_EXTRA="-pthread -ldl" ;; so every runner uses one Linux tail. It links and passes 6/0 in both distros.
+  * test/native/negative-control.sh.
+- Platform case :80-84 becomes: windows) JNI_MD=win32 ; TEST_EXTRA= ;;  darwin) JNI_MD=darwin ; TEST_EXTRA= ;;  *) JNI_MD=$OCLJ_OS ; TEST_EXTRA="-pthread -ldl" ;;
+- At all six links (:116, :310, :337, :361, :724, :837), change "$LJ/libluajit.a" -lm -o to "$LJ/libluajit.a" -lm $TEST_EXTRA -o.
+- Today the script stops in Alma at 'canon: security_test.c did not link'.
+- Its full first Linux run belongs to the main session: it has sabotage arms, including the stopgap arm, and an unknown Linux run time.
+  * serializer/Makefile :24 and :28 (optional, for one spelling everywhere). Change LIBS := -lpthread -lm -ldl to LIBS := -pthread -lm -ldl. Today's line already links in Alma. The proposed one ran make test with all 7 RESULT lines PASS in both distros.
+  * build.gradle.kts verifyModAssets. Insert the block C:/Users/astro/claude-tmp/oclj/glibc/inv-build/gradle/glibc-gate.kts.txt directly before the line '        if (!kernelFile.isFile) {', i.e. after the four-oclj-natives check (157 lines with its comment).
+It runs for every ours file named *.so, and is skipped when there is none, as on CI. It reads the file with no binutils, in this order:
+1. ELF64 LE, ET_DYN, EM_X86_64, a section header table, exactly one .gnu.version_r (0x6ffffffe), .dynsym (11) and .gnu.version (0x6fffffff); anything else is refused, naming the reason.
+2. Walks Verneed/Vernaux and records vna_other -> name.
+3. Refuses any need that is not GLIBC_x.y (GCC_*, GLIBC_PRIVATE).
+4. Refuses any non-weak UND whose versym & 0x7fff <= 1.
+5. Refuses a highest GLIBC above floorName = "GLIBC_2.28" (one constant), listing the needs above the floor, their libraries and up to 12 symbols, and the fix: build in AlmaLinux 8 and put the .so in nativesDir.
+Otherwise it logs 'needs at most GLIBC_x.y (the floor is GLIBC_2.28), and every import carries a version'.
+Optionally extend the task description: '...; refuse a Linux native above the glibc floor'.
+Exact patched file: C:/Users/astro/claude-tmp/oclj/glibc/inv-build/gradle/build.gradle.kts.proposed-2.
+  * Process. Build the release Linux .so in AlmaLinux-8 into build/native (OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include, CC=gcc) before or together with the gradle edit, because today's dist .so will be refused. Ubuntu builds go to a separate OCLJ_BUILD. In Alma's suites, use OCLJ_LUA53=/mnt/c/Users/astro/claude-tmp/oclj/puc536-alma/lua.
+  * All of the above as exact, anchored, LF-only copies: C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2/<repo-relative path>. As one unified diff (0 CR): C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2-all.diff, which is proposed-2.diff (scripts and Makefile) plus proposed-2-gradle.diff. Generator: scripts/propose.py, which asserts each anchor occurs the expected number of times.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/build.gradle.kts
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/Makefile
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-security.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-mem.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-wd.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-vgc.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-pack.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-bitop.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/run-penalty.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/negative-control.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2-all.diff
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2.diff
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2-gradle.diff
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/proposed-2/native/build-native.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/gradle/build.gradle.kts.proposed-2
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/gradle/glibc-gate.kts.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/scripts/gate-snippet.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/scripts/elfcheck.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/gradle/results-3/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/snippet-matrix-3/AlmaLinux-8.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/linkmatrix-alma-trialobjs/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/linktests-alma/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/validate-alma/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/validate-ubuntu/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/lddr/AlmaLinux-8.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/inv-build/undlists/alma-new-additive.txt
+  * C:/Users/astro/claude-tmp/oclj/puc536-alma/lua
+-- checks
+  * Gate A (unversioned non-weak UND), fail-first [M]:
+- It must fail on the trial .so: FAILED with the six pthread functions, in Alma and in Ubuntu (out-failfirst-gates/*), and as the in-situ build-native gate (alma-oldlink-gate: 'BUILD FAIL: libjnlua52-linux-x86_64.so imports these symbols with NO version: ...').
+- It then passes on alma-new, ubuntu-new and the round-3 .so.
+  * Gate B (highest GLIBC need against 2.28), fail-first [M]:
+- It must fail on the round-3 .so: GLIBC_2.38 (fmod, __isoc23_strtoul).
+- Boundary probes, byte-edited copies of the Alma .so (scripts/mutate.py): renamed to GLIBC_2.29 it fails or warns; renamed to GLIBC_2.28 it passes. That is both sides of the floor, in the shell gate and in gradle.
+  * Odd-need branch, fail-first on a real case [M]: the additive linked without -static-libgcc (nolibgcc-alma) needs GCC_3.0 and GCC_3.3 from libgcc_s.so.1. The build-native gate, elfcheck.sh and gradle all refuse it.
+  * Reader check [M]: on the first 100 bytes of the .so, readelf exits 0 and prints nothing, and the snippet refuses ('readelf listed no undefined dynamic symbols'). On a non-ELF text file the snippet refuses because readelf fails.
+  * The linker flag can fail [M]: -Wl,--no-undefined without -pthread fails the Alma link, naming the six (linkmatrix L4).
+  * Runner change, fail-first [M]: the repo's runners in Alma fail to build shim, security, mem and wd (suites-alma-repo). The repo's negative-control.sh fails its canonical link in Alma (negctl-repo-alma). With "-pthread -ldl" every link builds and every suite passes in Alma and Ubuntu (suites-*-pldl, validate-*).
+  * Gradle check, fail-first [M]: in gradle/results-3, 7 of 10 cases are refused, each naming its reason, and 3 pass, including the 2.28 boundary and the Alma .so beside the Windows DLL. Configuration cache on, entry stored, no problems reported.
+  * Final proposed files end to end [M]: validate-alma and validate-ubuntu (proposed build-native.sh, runners and Makefile). alma-proposed2 is the final snippet build. The md5s reproduce the earlier builds exactly (Alma 62555188 and f357129a; Ubuntu 7e8b8b89 and cdad2167).
+  * Cross-toolchain [M]: elfcheck.sh and snippet-harness.sh give identical verdicts and stdout under binutils 2.30 and 2.46. Only readelf's own stderr wording differs.
+  * Hygiene [M]: every scratch file and proposed diff has 0 CR, counted by bytes with Python. git --no-optional-locks status --porcelain on the repo is empty. build/native/dist md5s are unchanged (7e8b8b89, 9ae455ce). No directory was deleted or reused: every run wrote a fresh one. negative-control.sh's own rm -rf of $WORK ran only on a path that did not exist.
+-- open_questions
+  * negative-control.sh has never run on Linux. Its first Alma run, with the proposed TEST_EXTRA and including the stopgap arm, should be part of the main session's chain; I proved only its link shape.
+  * The JVM harness on Linux (smoke-test.sh, OcljSmoke.scala, roadmap row 216) was not my role. ldd -r shows both Alma .so files relocate clean on glibc 2.28 and 2.43, but no JVM has loaded them yet.
+  * Should build-native.sh refuse, rather than warn, when an above-floor .so would be collected into the DEFAULT build/native/dist? I recommend warning and letting gradle refuse, because skipping could leave a stale .so beside a newer shim. An opt-in guard on the default OCLJ_BUILD for glibc > 2.28 is possible if the main session wants one.
+  * Docs to update by their owners: jit-guide 7.7 (its last paragraph says both .so need GLIBC_2.38 and the round is next), README's building section (Alma for the release, puc536-alma for Linux PUC), and the roadmap glibc row and row 216. The build-native.sh PREREQUISITES section could name AlmaLinux 8 as the Linux release host.
+  * The proposed runner comment says '-pthread, not -lpthread: it sets the preprocessor defines too'. The test sources are compiled and linked in one gcc call, so that is true for the runners. For build-native.sh's LINK_EXTRA it is link-only, which is all the .so needs.
+-- scratch
+  * Label inv-build. Everything is under C:/Users/astro/claude-tmp/oclj/glibc/inv-build/:
+- scripts/: env.sh, elfcheck.sh, link-matrix.sh, build.sh, suites.sh, linktests.sh, runpb.sh, validate.sh, snippet-harness.sh, gate-snippet.sh, mkcopy.py, propose.py, mutate.py, puc-alma.sh, puc-cmp2.sh, lddr.sh, undlist.sh, link-nolibgcc.sh
+- gradle/: gen-gradle.py, run-cases.sh, proto-2 (the prototype project), cases/, results-1..3
+  * Run directories (each written fresh):
+- builds: alma-new, alma-oldlink-gate, ubuntu-new, ubuntu-oldlink-gate, alma-proposed2, validate-alma, validate-ubuntu
+- link tests: linkmatrix-alma-trialobjs, linktests-alma, linktests-ubuntu, nolibgcc-alma
+- suites: suites-alma-repo, suites-alma-pldl, suites-ubuntu-pldl, runpb-alma, negctl-repo-alma
+- PUC comparison: puccmp-*, puccmp2-*
+- gate evidence: snippet-matrix (first message), snippet-matrix-2, snippet-matrix-3 (final), out-failfirst-gates, mutants, lddr, undlists
+- proposals: proposed and proposed.diff are superseded by proposed-2 and proposed-2*.diff
+  * Outside the label directory: C:/Users/astro/claude-tmp/oclj/puc536-alma/ (src/ copy, build.log, host.txt, lua), as the task named. Installed nothing in either distro. Gradle used the cached 9.3.1 distribution, --offline --no-daemon, with JDK 25 from JAVA_HOME.
+  * Nothing to clean up: no daemons are left. Scripts invoked from Git Bash through wsl.exe printed rc=0 where the real exit was non-zero, because the outer shell expanded $? before sh -c ran. I relied on the scripts' own messages and summary files, never on those rc echoes.

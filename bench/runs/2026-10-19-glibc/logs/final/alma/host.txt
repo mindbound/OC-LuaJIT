@@ -1,0 +1,7 @@
+"AlmaLinux 8.10 (Cerulean Leopard)"
+glibc 2.28
+lrwxrwxrwx 1 root root 4 Aug 26  2025 /bin/sh -> bash
+OCLJ_BUILD=/mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native
+452d869b580129a6f92627c0a8506d78  /mnt/c/Users/astro/Downloads/OC-LuaJIT/test/native/negative-control.sh
+41b0fd3fd609bd5ea7bd3cdbec610613  /mnt/c/Users/astro/Downloads/OC-LuaJIT/serializer/tests/forin.lua
+6c88805001bae0cd2b385803f5d857c7  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so

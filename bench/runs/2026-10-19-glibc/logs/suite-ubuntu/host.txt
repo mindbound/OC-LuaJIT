@@ -1,0 +1,8 @@
+"Ubuntu 26.04.1 LTS"
+glibc 2.43
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio
+OCLJ_BUILD=/mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ubuntu-build/build/native
+7e8b8b89cdde7e2a67ff4fe654f93339  /mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ubuntu-build/build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+7051d208ee12bbc67b27049d69d7e61a  /mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ubuntu-build/build/native/luajit-linux-x86_64/src/libluajit.a
+adc7d36ca4247f9a7de3ab9e04b2bfda  /mnt/c/Users/astro/claude-tmp/oclj/puc536-linux/lua

@@ -41,7 +41,11 @@ PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 case $OCLJ_OS in
   windows) EXE=.exe ; TEST_EXTRA= ;;
   darwin)  EXE= ; TEST_EXTRA= ;;
-  *)       EXE= ; TEST_EXTRA=-ldl ;;
+  # One Linux tail for every test link.  -pthread, not -lpthread: it sets the
+  # preprocessor defines too.  -ldl: luaL_openlibs pulls LuaJIT's lib_package,
+  # which calls dlopen.  Before glibc 2.34 (AlmaLinux 8, the release build's
+  # host) both are outside libc and a link that needs one fails without it.
+  *)       EXE= ; TEST_EXTRA="-pthread -ldl" ;;
 esac
 LJ=$OCLJ_BUILD/luajit-$PLATFORM/src
 : "${OCLJ_LJLIB:=$LJ/libluajit.a}"

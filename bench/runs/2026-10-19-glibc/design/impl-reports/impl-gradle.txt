@@ -1,0 +1,99 @@
+SUMMARY: The glibc gate is in build.gradle.kts's verifyModAssets and has been verified with the real task, `./gradlew --offline --no-daemon verifyModAssets -Pocljit.nativesDir=<scratch>`, on 35 natives directories. Nothing under build/native was used or written.
+
+The gate reads every packaged .so itself, with no binutils: the ELF64 header, the section headers, the one .gnu.version_r with its Verneed/Vernaux chains, and names from the string table that sh_link points to. It refuses the build with a GradleException in the existing style when any GLIBC_x.y need is above the floor, when any need is not a GLIBC_x.y release version (GLIBC_PRIVATE, GCC_*), or when the file does not parse. Every read is bounds-checked and every loop is bounded, so a bad file is refused with a reason and never ends in an exception or a hang. When a .so passes, a lifecycle line names its highest need.
+
+Results:
+- The round-3 Ubuntu .so (7e8b8b89) is REFUSED: "needs GLIBC_2.38, above the glibc floor GLIBC_2.28" [M]. Under HEAD's build.gradle.kts it passed [M].
+- The Alma trial .so (bf0d0916) is ACCEPTED: "needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28)". It also passes the fingerprint and exports checks, because its serializer hash is this tree's (412be694), so the whole task ends BUILD SUCCESSFUL [M].
+- Truncated, garbage and corrupt files are refused cleanly. In 16 malformed cases every refusal is our own message [M].
+- The lines the existing checks print are byte-identical to the baseline in all 31 cases that have one [M].
+- One behaviour change: a .so the gate refuses stops the build before the kernel line, as every other refusal already does.
+- Sequencing: `./gradlew build` with the default nativesDir now FAILS until the Alma release .so replaces the round-3 .so in build/native/dist. The case c04 is a byte-identical copy of dist's two files and is refused [M].
+
+Final file: 415 lines, CR 0, md5 67153bd5, diff +166/-1.
+-- findings
+  * [M] Baseline, HEAD's build.gradle.kts (md5 da7ae8f2, equal to git show HEAD:build.gradle.kts), runs-baseline-2 and -3: 29 of the 31 cases run (c32 was added later) end BUILD SUCCESSFUL, including the round-3 Ubuntu .so that needs GLIBC_2.38 and every mutant built to be refused. Only c15-trunc100 and c16-text were refused, both by the existing fingerprint check. So every glibc refusal below comes from the new gate.
+  * [M] Final, runs-final-1 (md5 7e6b986d, 32 cases): 6 PASS, 24 REFUSED by the glibc gate, 2 REFUSED by the fingerprint check (trunc100 and text, unchanged from the baseline).
+- PASS: c02-trial and c03-alma-new at 2.17; c05 (alma-new plus the Windows DLL; the DLL is not read); c06 (DLL only; no glibc line); c10-m228 at exactly the floor; c11-m299 at 2.17 (GLIBC_2.2.5 renamed to GLIBC_2.9.9: a numeric compare passes it, a lexicographic one would refuse it).
+- REFUSED above the floor: c01-r3 (GLIBC_2.38), c04-r3-plus-dll, c09-m229 (GLIBC_2.29), c12-m101 (GLIBC_10.1: a lexicographic compare would wrongly pass it).
+- REFUSED as non-release names: c07-nolibgcc (a real Alma build without -static-libgcc, GCC_3.0 and GCC_3.3 from libgcc_s.so.1); c08-glibc-private (Alma's own libdl-2.28.so, with the fingerprint and exports appended, GLIBC_PRIVATE from ld-linux and libc); c13 (GLIBC_2.1x); c14 (a 12-digit component; refused, no NumberFormatException).
+- REFUSED as malformed: tailcut, badmagic, garbage, sh_info 0xFFFFFFFF, vn_next=0 early, vna_next=0 early, vn_cnt 65535, no SHT_GNU_verneed, a name offset outside its string table, sh_link=0, ELFCLASS32, big-endian, ET_EXEC, e_shentsize 40, a library chain longer than sh_info, a version chain longer than vn_cnt.
+  * [M] scripts/crosscheck.py on runs-final-1 reports 0 problems:
+- every failed run's 'What went wrong' line is '> OC-LuaJIT: ...';
+- no ArrayIndexOutOfBounds, IndexOutOfBounds, NumberFormat, OOM or NPE text appears in any log;
+- the existing checks' lines (packaging, fingerprint, exports, kernel, no-native, fingerprint refusal) equal the baseline's in all 31 cases with one. The run-dir name in the kernel line is normalised, and in 23 cases the baseline's kernel line is set aside because the run was refused before the kernel check;
+- in all 9 cases where both report one, gradle's highest need equals binutils readelf's (Alma, binutils 2.30): c01, c02, c03, c04, c05, c09, c10, c11, c12;
+- 'Configuration cache entry stored.' appears in every log, and the report written for the failed builds has totalProblemCount 0.
+  * [M] readelf is the weaker reader on inconsistent chains (ref/alma-cases-1 and -2). It trusts sh_info and vn_cnt, so it reports top GLIBC_2.12 for c31-chainlonger (missing libc's 2.17), GLIBC_2.3 for c21-nonext, and 8 of 9 needs for c32. The gate walks the vn_next and vna_next chains and requires them to end exactly where the counts say, so it refuses all three rather than under-report. [I] glibc's loader walks the next-chains to zero (elf/dl-version.c; from knowledge, not read in this session).
+  * [M] Policy on non-numeric needs. GLIBC_PRIVATE and GCC_* occur in none of our builds: readelf on r3, trial and alma-new lists only GLIBC_x.y needs. GCC_3.0 and GCC_3.3 appear only in a link without -static-libgcc (inv-build's nolibgcc), which build-native.sh:251-253 avoids because 'the host may not have' libgcc. So both are refused, not ignored. The working-tree build-native.sh (another role's, uncommitted) also counts names outside GLIBC_x.y against its limit [S, :1855-1859, :1918].
+  * [M] The final file was re-verified after its last two edits, both text only.
+- runs-final-3 (md5 800fc421): c01, c02, c06, c08, c10 and c17, same verdicts.
+- runs-final-4 (md5 67153bd5, the final file): c01 and c09 refused with the final message; c02 and c10 pass; c22 refused.
+- runs-final-2 (md5 7e6b986d, an earlier edit): an empty natives dir gives the unchanged 'no libjnluajit52-* ... (Expected on CI.)' and BUILD SUCCESSFUL; a libjnlua52-linux-x86_64.so is refused first by the unchanged dropin-trespass guard.
+  * [M] The refusal for round 3's .so, as printed: "OC-LuaJIT: libjnluajit52-linux-x86_64.so needs GLIBC_2.38, above the glibc floor GLIBC_2.28 (GLIBC_2.38 from libc.so.6, libm.so.6; GLIBC_2.35 from libc.so.6; GLIBC_2.34 from libc.so.6; GLIBC_2.32 from libc.so.6; GLIBC_2.29 from libm.so.6). The dynamic loader refuses it wherever glibc is older than GLIBC_2.38, and there the LuaJIT architecture would never be offered. It was linked on a newer distribution. Build it in AlmaLinux 8, or on any host whose glibc is 2.28: OCLJ_VARIANT=additive OCLJ_GLIBC_MAX=2.28 sh native/build-native.sh, and package that build's .so." OCLJ_VARIANT=additive is included because build-native.sh's default variant is dropin [S :273].
+  * [M] Each gradle run takes about 6 s (configuration cache, --no-daemon, JDK 25 from JAVA_HOME). The runs wrote only .gradle/configuration-cache entries and one build/reports/configuration-cache report into the repo. Nothing under build/native is newer than the start of this work, and its md5s (dist, libdir, libdir-additive, kernel) are unchanged.
+-- recommended_changes
+  * build.gradle.kts (DONE, owned):
+- A top-level `val glibcFloor = "2.28"` with a doc comment: AlmaLinux/RHEL 8's glibc, the user's decision of 2026-10-19, and that build-native.sh's GLIBC_FLOOR holds the same floor so both change together.
+- verifyModAssets' description gains ', or a Linux native above the glibc floor'.
+- `val floor = glibcFloor` is captured at configuration time beside serC and serH (the configuration cache needs this).
+- The gate block goes after the four-natives check and before the kernel check, as one `for (f in ours.filter { it.name.endsWith(".so") })` loop:
+  - bounds-checked LE readers and a bad() that throws 'is not an ELF64 shared object this check can read (<why>)';
+  - header checks: magic, ELFCLASS64, little-endian, ET_DYN, e_shentsize 64, a section table inside the file;
+  - exactly one SHT_GNU_verneed section, whose sh_link must point at an SHT_STRTAB;
+  - the needs walk: sh_info at most size/16, a global record cap, chains that end exactly at sh_info and vn_cnt;
+  - names checked against GLIBC_([0-9]{1,4}(.[0-9]{1,4})+), compared numerically by component;
+  - refusals for non-release names, then for needs above the floor (grouped by version, with their libraries);
+  - otherwise logger.lifecycle 'needs at most GLIBC_x.y (the glibc floor is GLIBC_2.28)'.
+  * Main session, sequencing: land this together with, or after, the Alma release build into build/native/dist. Until then `./gradlew build` with the default nativesDir fails on the round-3 .so in dist (7e8b8b89); c04 is a byte copy of dist and is refused [M].
+  * Optional, for the main session to decide: also refuse non-weak UNVERSIONED imports in gradle. The Alma trial .so, built with HEAD's pre-fix link flags (six unversioned pthread UNDs), passes all four gradle checks [M]. Its serializer hash equals a fixed build's (412be694), so only an ELF check could tell the two apart. inv-build's proven block (glibc-gate.kts.txt :94-139, case c03) could be added. I left it out because the plan assigns that check to build-native.sh and the task says the trial .so must be accepted by the glibc check.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/build.gradle.kts (415 lines, CR 0, LF 415, non-ASCII 0, md5 67153bd5e9f61213c22de4203faa665d; git diff +166/-1; the only repo file I edited)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/scripts/mkcases.py (builds the case dirs; CR 0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/scripts/run-gradle.sh (runs the real ./gradlew verifyModAssets once per case; CR 0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/scripts/ref-cases.sh, ref.sh, private-scan.sh (readelf as the reference, in Alma; CR 0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/scripts/crosscheck.py (CR 0)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/src/ (r3.so 7e8b8b89, trial.so bf0d0916, alma-new.so 62555188, nolibgcc.so c8e6c7e6, win.dll 9ae455ce, alma-libdl-2.28.so 5c6b8977; md5.txt; build.gradle.kts.HEAD)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/cases-2/ (the 32 final cases; cases.txt lists each case's md5)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/runs-baseline-2/summary.txt and runs-baseline-3/summary.txt (HEAD's task)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/runs-final-1/summary.txt (all 32 cases), runs-final-2 (empty dir and dropin guard), runs-final-3, runs-final-4 (the final file)
+  * C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/ref/alma-cases-1/summary.txt and ref/alma-cases-2/summary.txt (readelf reference)
+-- checks
+  * Fail-first [M]: HEAD's task PASSES the round-3 .so (runs-baseline-2 c01-r3: BUILD SUCCESSFUL) and every mutant built to be refused (runs-baseline-3). The new task REFUSES them (runs-final-1).
+  * Round-3 Ubuntu .so REFUSED [M]: c01 and c04 report 'needs GLIBC_2.38, above the glibc floor GLIBC_2.28', listing 2.38, 2.35, 2.34, 2.32 and 2.29 with their libraries. readelf's top is GLIBC_2.38.
+  * Alma trial .so ACCEPTED [M]: c02 logs 'needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28)' and ends BUILD SUCCESSFUL, after the unchanged fingerprint (412be694) and exports lines. The fixed Alma build alma-new (62555188) is accepted at 2.17 too.
+  * Floor boundary [M]: GLIBC_2.28 passes (c10) and GLIBC_2.29 is refused (c09). The numeric compare is exercised by c11 (GLIBC_2.9.9 passes) and c12 (GLIBC_10.1 refused).
+  * Non-release names [M]: GCC_3.0/3.3 (a real build, c07), GLIBC_PRIVATE (a real Alma glibc library, c08), GLIBC_2.1x (c13) and a 12-digit component (c14) are all refused with our message.
+  * Malformed files [M]: 16 cases (c17-c32) are refused with 'is not an ELF64 shared object this check can read (<reason>)', with no exception and no hang (each run 5-8 s). trunc100 and text are still refused first by the unchanged fingerprint check.
+  * Existing checks unchanged [M]: crosscheck.py finds 0 problems. The old lines equal the baseline in 31 of 31 cases with one, the empty-dir CI path is unchanged (runs-final-2 c00), and the dropin-trespass guard still fires first (runs-final-2 c33).
+  * Configuration cache [M]: 'Configuration cache entry stored.' in every run, and the report has totalProblemCount 0.
+  * Final file re-run [M]: runs-final-4 on md5 67153bd5 (c01, c09 refused; c02, c10 pass; c22 refused).
+  * Hygiene [M]:
+- build.gradle.kts has CR 0, ends in LF and has no non-ASCII bytes;
+- git diff shows only my change in that file;
+- build/native md5s are unchanged and nothing there is newer than my start;
+- every scratch dir was fresh and none was deleted;
+- every scratch script has CR 0;
+- no git command that changes anything was run.
+  * Instrument faults caught [M]:
+- runs-baseline-1 passed only because a relative nativesDir resolved against the project, where no such dir exists; run-gradle.sh now makes it absolute.
+- crosscheck's first version flagged kernel-line diffs caused by the run-dir name and by refusals stopping before the kernel check; both are now normalised.
+- runs-baseline-3 ran cases.txt as a stray 'case' (a harmless no-native run).
+  * Convention slip, scratch only: I patched crosscheck.py through a shell heredoc that contained backslash escapes. The edit applied, which I checked by grep (crosscheck.py:68 and :90), and no repo file was written that way.
+-- open_questions
+  * Should gradle also refuse non-weak UNVERSIONED imports? As built, a .so made by HEAD's build-native.sh in Alma (the trial: six unversioned pthread UNDs) is packaged: it passes the fingerprint, exports and floor checks [M]. inv-harness found that it works inside a JVM [M], but it is fragile. The plan gives this check to build-native.sh only.
+  * The floor now lives in two places: build.gradle.kts glibcFloor, and build-native.sh GLIBC_FLOOR (:351 in the working tree, another role's uncommitted change). The doc comment says to change both together. Should gradle read build-native.sh's value instead?
+  * The fix text names OCLJ_GLIBC_MAX=2.28. It exists only in the working tree's uncommitted build-native.sh, not at HEAD [S]. If that change does not land, the variable is ignored, and the command still builds but enforces nothing.
+  * e_machine is not checked. An aarch64 ELF under the x86_64 name would get the floor check and pass if within 2.28, and the fingerprint word (le.p64) cannot tell either. I left it out of scope because aarch64 is parked.
+  * c32-cntshort was added after the build file was edited, so it has no baseline run. It is the same shape as c21-c31, all of which passed HEAD's task [I].
+  * Docs owned by others should mention the gradle gate and the sequencing: README's building section, roadmap row 216 and the glibc row, and jit-guide 7.7, whose last paragraph still says the floor round is next.
+-- scratch
+  * Label impl-gradle. Everything is under C:/Users/astro/claude-tmp/oclj/glibc/impl-gradle/ (fresh, nothing deleted).
+- src: input copies with md5.txt; build.gradle.kts.HEAD; baseline-build.gradle.kts.md5; build-native-md5-before.txt
+- cases: the first 31 cases
+- cases-2: the same 31, byte-identical (checked), plus c32
+- cases-3: c00-empty and c33-dropin-so
+- ref/alma-1, alma-2, alma-cases-1, alma-cases-2: readelf in AlmaLinux 8.10 (binutils 2.30)
+- runs-baseline-1..3, runs-new-1..2, runs-final-1..4: gradle logs plus summary.txt
+  * Installed nothing. In Alma I ran readelf and cp (to copy /usr/lib64/libdl-2.28.so as the GLIBC_PRIVATE fixture) as the default user. Gradle was the repo's wrapper 9.3.1, --offline --no-daemon (no daemon left behind, and no --stop was used), with JDK 25 from JAVA_HOME.
+  * Other roles' uncommitted edits are present in the same working tree: native/build-native.sh, serializer/Makefile, test/native/*, smoke-test.sh, OcljSmoke.scala and LinkProbe.java. I did not touch them, and serializer/eris_lj.c and .h are unchanged, so the fingerprint hash is still 412be694.

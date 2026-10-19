@@ -1,0 +1,37 @@
+run-bitjit: ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts gen floor fix1; results /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-20261019T204956Z
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+seed 1: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5858 raised, 152 after iteration 60; a trace completed in 1372 loops (JIT-on shared run, jit on)
+seed 1: PASS
+seed 2: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5507 raised, 172 after iteration 60; a trace completed in 1400 loops (JIT-on shared run, jit on)
+seed 2: PASS
+seed 3: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5622 raised, 107 after iteration 60; a trace completed in 1352 loops (JIT-on shared run, jit on)
+seed 3: PASS
+seed 4: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5753 raised, 144 after iteration 60; a trace completed in 1349 loops (JIT-on shared run, jit on)
+seed 4: PASS
+
+== 2. the floor: t_rec.lua and t_jit2.lua against -joff, t_jit2.lua against PUC 5.3.6 ==
+PASS t_rec seed 1: jon=0 hl1=0 ms0=0  (2000 runs, 946 raised, 107 after iteration 60)
+PASS t_rec seed 2: jon=0 hl1=0 ms0=0  (2000 runs, 903 raised, 95 after iteration 60)
+PASS t_rec seed 3 (counts): jon=0 hl1=0 ms0=0  (2000 runs, 949 raised, 87 after iteration 60)
+PASS t_rec seed 4 (counts): jon=0 hl1=0 ms0=0  (2000 runs, 804 raised, 76 after iteration 60)
+PASS t_jit2 (27 loops, 9 of them end in a raise): jon=0 O0=0 O1=0 hl1=0 ms0=0 he1=0
+PASS t_jit2: PUC 5.3.6 with U1-B's rule equals -joff in all 26 loops it runs (all but sar)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+    or0	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    xor0	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    andm1	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    shl0	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    shr0	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    sar0	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    notnot	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    mask	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    p4v: 8 of 8 variants compiled without type instability or blacklisting
+PASS fix1: all 8 p4 loops compiled (no type-instability abort, none blacklisted), results equal -joff's
+
+RUN-BITJIT: PASS (results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/bitjit-20261019T204956Z)

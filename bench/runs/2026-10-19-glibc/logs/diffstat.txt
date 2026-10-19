@@ -1,0 +1,20 @@
+ CLAUDE.md                       |   1 +
+ README.md                       |  17 +++-
+ build.gradle.kts                | 167 +++++++++++++++++++++++++++++++-
+ docs/jit-guide.md               |  95 ++++++++++++-------
+ docs/roadmap.md                 |  31 +++++-
+ native/build-native.sh          | 204 +++++++++++++++++++++++++++++++++++++++-
+ serializer/Makefile             |   5 +-
+ test/native/LinkProbe.java      |   2 +-
+ test/native/OcljSmoke.scala     |   3 +-
+ test/native/negative-control.sh |  22 +++--
+ test/native/run-bitop.sh        |   6 +-
+ test/native/run-mem.sh          |   6 +-
+ test/native/run-pack.sh         |   6 +-
+ test/native/run-penalty.sh      |   6 +-
+ test/native/run-security.sh     |   6 +-
+ test/native/run-vgc.sh          |   8 +-
+ test/native/run-wd.sh           |   8 +-
+ test/native/run.sh              |   6 +-
+ test/native/smoke-test.sh       | 128 +++++++++++++++++++++----
+ 19 files changed, 638 insertions(+), 89 deletions(-)

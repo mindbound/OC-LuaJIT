@@ -1,0 +1,120 @@
+[negctl-bitop] work dir /c/Users/astro/Downloads/OC-LuaJIT/build/native/negctl-bitop/20261019T205103Z-6642
+[negctl-bitop] the copy is the repo's: native/luajit's five files, the seven patch scripts' output on /c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit, eris_lj.o from /c/Users/astro/Downloads/OC-LuaJIT/serializer (serializer hash 412be694)
+[negctl-bitop] from /c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh: the bitops gate (50 lines) and stage 4's word check (24 lines)
+[negctl-bitop] canon (-, 54s; objects changed: none): PASS (every catcher passes; every object reproduced)
+    bitop 0; fuzz 0 [jon K 0 V 0 P 0 H 0 U 0; joff K 0 V 0 P 0 H 0 U 0]; bitjit[gen floor fix1] 0 (gen: 0/4 seeds differ, 0-0 cases a seed); security 0; gate 0; stage4 0
+[negctl-bitop] WRAP32-INTERP (vm_x64.dasc, 12s; objects changed: lj_bc.o lj_vm.o host/buildvm.o): PASS (caught by bitop:t_ops fuzz:V)
+    bitop 1 [t_ops,t_fold,BT1a,BT3d,BT3e,BT5]; fuzz 1 [jon K 3315 V 5817 P 5817 H 4277 U 860; joff K 3315 V 5817 P 5817 H 5817 U 1110]
+[negctl-bitop] WRAP32-FOLD (lj_parse.c, 11s; objects changed: lj_parse.o): PASS (caught by bitop:t_fold fuzz:K)
+    bitop 1 [t_fold,t_sar,BT1b,BT3b,BT6]; fuzz 1 [jon K 6637 V 1183 P 1183 H 1183 U 224; joff K 6637 V 1183 P 1183 H 1183 U 224]
+[negctl-bitop] SHIFTMASK (vm_x64.dasc, 11s; objects changed: lj_bc.o lj_vm.o host/buildvm.o): PASS (caught by bitop:t_ops fuzz)
+    bitop 1 [t_ops,t_sar,BT4a]; fuzz 1 [jon K 298 V 2259 P 2259 H 2068 U 245; joff K 298 V 2259 P 2259 H 2259 U 417]
+[negctl-bitop] NEGSHIFT (oclj_bitop.h, 9s; objects changed: lj_meta.o lj_parse.o lj_record.o): PASS (caught by bitop:t_ops)
+    bitop 1 [t_ops]
+[negctl-bitop] SARSHR (oclj_bitop.h, 7s; objects changed: lj_meta.o lj_parse.o lj_record.o): PASS (caught by bitop:t_sar)
+    bitop 1 [t_sar]
+[negctl-bitop] NOINT-FOLD (lj_parse.c, 8s; objects changed: lj_parse.o): PASS (caught by bitop:t_fold)
+    bitop 1 [t_fold,t_sar]
+[negctl-bitop] NOINT-JIT (oclj_bitop_rec.c, 7s; objects changed: lj_record.o): PASS (caught by floor:t_jit2/guard-exit)
+    bitjit[floor] 1 failed: t_jit2
+[negctl-bitop] RANGE-HI (oclj_num53.h, 10s; objects changed: lib_string.o lj_meta.o lj_parse.o lj_record.o): PASS (caught by bitop:t_ops fuzz)
+    bitop 1 [t_ops,t_fold,t_sar]; fuzz 1 [jon K 90 V 90 P 90 H 90 U 19; joff K 90 V 90 P 90 H 90 U 19]
+[negctl-bitop] STRCOERCE (oclj_bitop_meta.c, 7s; objects changed: lj_meta.o): PASS (caught by bitop:t_ops bitop:coerce)
+    bitop 1 [t_ops,t_sar,coerce_agree]
+[negctl-bitop] ERROPERAND (oclj_bitop_meta.c, 7s; objects changed: lj_meta.o): PASS (caught by bitop:t_ops)
+    bitop 1 [t_ops]
+[negctl-bitop] NARROW (lj_opt_fold.c, 7s; objects changed: lj_opt_fold.o): PASS (caught by floor:t_rec floor:t_jit2)
+    bitjit[floor] 1 failed: t_rec-s1,t_rec-s2,t_rec-s3c,t_rec-s4c,t_jit2
+[negctl-bitop] KFOLD64 (lj_opt_fold.c, 11s; objects changed: lj_opt_fold.o): PASS (caught by fuzz:U floor:t_rec)
+    fuzz 1 [jon K 0 V 0 P 0 H 51 U 435; joff K 0 V 0 P 0 H 0 U 0]; bitjit[floor] 1 failed: t_rec-s1,t_rec-s2,t_rec-s3c,t_rec-s4c,t_jit2
+[negctl-bitop] SARCONST (oclj_bitop_rec.c, 11s; objects changed: lj_record.o): PASS (caught by floor:t_rec-counts bitop:t_sar)
+    bitop 1 [t_sar]; bitjit[floor] 1 failed: t_rec-s3c,t_rec-s4c
+[negctl-bitop] BCDUMP (lj_bcdump.h, 3s; objects changed: lj_bcread.o lj_bcwrite.o): PASS (caught by security:FF12 gate:dump)
+    security 1 [FF9,FF10,FF12]; gate 1
+[negctl-bitop] WORDTOKEN (eris_lj.c, 3s; objects changed: none): PASS (caught by stage4)
+    stage4 1
+[negctl-bitop] INEXACT-INTERP (vm_x64.dasc, 12s; objects changed: lj_vm.o host/buildvm.o): PASS (caught by bitop:t_ops fuzz:V)
+    bitop 1 [t_ops,t_fold,BT3a,BT3b,BT3d]; fuzz 1 [jon K 3050 V 3050 P 3050 H 3050 U 575; joff K 3050 V 3050 P 3050 H 3050 U 575]
+[negctl-bitop] INEXACT-BNOT (vm_x64.dasc, 12s; objects changed: lj_vm.o host/buildvm.o): PASS (caught by bitop:t_ops bitop:t_fold fuzz:V)
+    bitop 1 [t_ops,t_fold]; fuzz 1 [jon K 1323 V 1323 P 1323 H 1323 U 246; joff K 1323 V 1323 P 1323 H 1323 U 246]
+[negctl-bitop] INEXACT-SLOW (oclj_bitop_meta.c, 9s; objects changed: lj_meta.o): PASS (caught by bitop:t_ops-str)
+    bitop 1 [t_ops,t_fold,t_sar,BT3a,BT3b,BT3c,BT3d]
+[negctl-bitop] INEXACT-FOLD (lj_parse.c, 10s; objects changed: lj_parse.o): PASS (caught by bitop:t_fold fuzz:K)
+    bitop 1 [t_fold,BT3b]; fuzz 1 [jon K 3052 V 465 P 465 H 465 U 91; joff K 3052 V 465 P 465 H 465 U 91]
+[negctl-bitop] INEXACT-JIT (oclj_bitop_rec.c, 38s; objects changed: lj_record.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 528-569 cases a seed)
+[negctl-bitop] SELFGUARD (lj_opt_fold.c, 38s; objects changed: lj_opt_fold.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 513-585 cases a seed)
+[negctl-bitop] WIDTH55 (lj_opt_fold.c, 38s; objects changed: lj_opt_fold.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 170-184 cases a seed)
+[negctl-bitop] WSHR (oclj_bitop_fold.c, 38s; objects changed: lj_opt_fold.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 68-85 cases a seed)
+[negctl-bitop] WBAND (oclj_bitop_fold.c, 39s; objects changed: lj_opt_fold.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 9-18 cases a seed)
+[negctl-bitop] WADD0 (oclj_bitop_fold.c, 38s; objects changed: lj_opt_fold.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 14-23 cases a seed)
+[negctl-bitop] WSHL0 (oclj_bitop_fold.c, 38s; objects changed: lj_opt_fold.o): PASS (caught by gen)
+    bitjit[gen] 1 (gen: 4/4 seeds differ, 26-30 cases a seed)
+[negctl-bitop] FIX1 (lj_opt_fold.c, 3s; objects changed: lj_opt_fold.o): PASS (caught by fix1)
+    bitjit[fix1] 1 failed: fix1
+[negctl-bitop] restore: PASS (every file put back; every object byte-identical to the shipped build's)
+
+arm             file               verdict
+canon           -                  PASS (every catcher passes; every object reproduced)
+                                       bitop 0; fuzz 0 [jon K 0 V 0 P 0 H 0 U 0; joff K 0 V 0 P 0 H 0 U 0]; bitjit[gen floor fix1] 0 (gen: 0/4 seeds differ, 0-0 cases a seed); security 0; gate 0; stage4 0
+WRAP32-INTERP   vm_x64.dasc        PASS (caught by bitop:t_ops fuzz:V)
+                                       bitop 1 [t_ops,t_fold,BT1a,BT3d,BT3e,BT5]; fuzz 1 [jon K 3315 V 5817 P 5817 H 4277 U 860; joff K 3315 V 5817 P 5817 H 5817 U 1110]
+WRAP32-FOLD     lj_parse.c         PASS (caught by bitop:t_fold fuzz:K)
+                                       bitop 1 [t_fold,t_sar,BT1b,BT3b,BT6]; fuzz 1 [jon K 6637 V 1183 P 1183 H 1183 U 224; joff K 6637 V 1183 P 1183 H 1183 U 224]
+SHIFTMASK       vm_x64.dasc        PASS (caught by bitop:t_ops fuzz)
+                                       bitop 1 [t_ops,t_sar,BT4a]; fuzz 1 [jon K 298 V 2259 P 2259 H 2068 U 245; joff K 298 V 2259 P 2259 H 2259 U 417]
+NEGSHIFT        oclj_bitop.h       PASS (caught by bitop:t_ops)
+                                       bitop 1 [t_ops]
+SARSHR          oclj_bitop.h       PASS (caught by bitop:t_sar)
+                                       bitop 1 [t_sar]
+NOINT-FOLD      lj_parse.c         PASS (caught by bitop:t_fold)
+                                       bitop 1 [t_fold,t_sar]
+NOINT-JIT       oclj_bitop_rec.c   PASS (caught by floor:t_jit2/guard-exit)
+                                       bitjit[floor] 1 failed: t_jit2
+RANGE-HI        oclj_num53.h       PASS (caught by bitop:t_ops fuzz)
+                                       bitop 1 [t_ops,t_fold,t_sar]; fuzz 1 [jon K 90 V 90 P 90 H 90 U 19; joff K 90 V 90 P 90 H 90 U 19]
+STRCOERCE       oclj_bitop_meta.c  PASS (caught by bitop:t_ops bitop:coerce)
+                                       bitop 1 [t_ops,t_sar,coerce_agree]
+ERROPERAND      oclj_bitop_meta.c  PASS (caught by bitop:t_ops)
+                                       bitop 1 [t_ops]
+NARROW          lj_opt_fold.c      PASS (caught by floor:t_rec floor:t_jit2)
+                                       bitjit[floor] 1 failed: t_rec-s1,t_rec-s2,t_rec-s3c,t_rec-s4c,t_jit2
+KFOLD64         lj_opt_fold.c      PASS (caught by fuzz:U floor:t_rec)
+                                       fuzz 1 [jon K 0 V 0 P 0 H 51 U 435; joff K 0 V 0 P 0 H 0 U 0]; bitjit[floor] 1 failed: t_rec-s1,t_rec-s2,t_rec-s3c,t_rec-s4c,t_jit2
+SARCONST        oclj_bitop_rec.c   PASS (caught by floor:t_rec-counts bitop:t_sar)
+                                       bitop 1 [t_sar]; bitjit[floor] 1 failed: t_rec-s3c,t_rec-s4c
+BCDUMP          lj_bcdump.h        PASS (caught by security:FF12 gate:dump)
+                                       security 1 [FF9,FF10,FF12]; gate 1
+WORDTOKEN       eris_lj.c          PASS (caught by stage4)
+                                       stage4 1
+INEXACT-INTERP  vm_x64.dasc        PASS (caught by bitop:t_ops fuzz:V)
+                                       bitop 1 [t_ops,t_fold,BT3a,BT3b,BT3d]; fuzz 1 [jon K 3050 V 3050 P 3050 H 3050 U 575; joff K 3050 V 3050 P 3050 H 3050 U 575]
+INEXACT-BNOT    vm_x64.dasc        PASS (caught by bitop:t_ops bitop:t_fold fuzz:V)
+                                       bitop 1 [t_ops,t_fold]; fuzz 1 [jon K 1323 V 1323 P 1323 H 1323 U 246; joff K 1323 V 1323 P 1323 H 1323 U 246]
+INEXACT-SLOW    oclj_bitop_meta.c  PASS (caught by bitop:t_ops-str)
+                                       bitop 1 [t_ops,t_fold,t_sar,BT3a,BT3b,BT3c,BT3d]
+INEXACT-FOLD    lj_parse.c         PASS (caught by bitop:t_fold fuzz:K)
+                                       bitop 1 [t_fold,BT3b]; fuzz 1 [jon K 3052 V 465 P 465 H 465 U 91; joff K 3052 V 465 P 465 H 465 U 91]
+INEXACT-JIT     oclj_bitop_rec.c   PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 528-569 cases a seed)
+SELFGUARD       lj_opt_fold.c      PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 513-585 cases a seed)
+WIDTH55         lj_opt_fold.c      PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 170-184 cases a seed)
+WSHR            oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 68-85 cases a seed)
+WBAND           oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 9-18 cases a seed)
+WADD0           oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 14-23 cases a seed)
+WSHL0           oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 26-30 cases a seed)
+FIX1            lj_opt_fold.c      PASS (caught by fix1)
+                                       bitjit[fix1] 1 failed: fix1
+restore         -                  PASS (every file put back; every object byte-identical to the shipped build's)
+NEGCTL-BITOP: PASS (canon passes; every sabotage is caught by its catchers; results: /c/Users/astro/Downloads/OC-LuaJIT/build/native/negctl-bitop/20261019T205103Z-6642)

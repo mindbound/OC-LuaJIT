@@ -4,7 +4,7 @@
 >
 > **The pin.** LuaJIT 2.1 at upstream `1ee778a4` (`1ee778a4e37122d8ca7d5733c590a47dafd6b15c`), x64 only, GC64, no FFI, no DUALNUM, with our twelve changes ([section 1](#1-scope-and-the-pin)). Written 2026-10-17, at `2dd5f05`.
 >
-> **Citations.** LuaJIT internals are cited by **function name plus the pin**. A line number is only a hint, written `~:N`: "`simplify_conv_i64_num` (lj_opt_fold.c ~:1140)" means line 1140 of the pristine tree `prototype/watchdog/luajit/src` at `1ee778a4`. The pristine tree is CRLF, and the line numbers are the same with or without the CRs. Lines in the patched build copy are marked "build copy". "Roadmap row N" means line N of [docs/roadmap.md](roadmap.md) at `2dd5f05`.
+> **Citations.** LuaJIT internals are cited by **function name plus the pin**. A line number is only a hint, written `~:N`: "`simplify_conv_i64_num` (lj_opt_fold.c ~:1140)" means line 1140 of the pristine tree `prototype/watchdog/luajit/src` at `1ee778a4`. The pristine tree is CRLF, and the line numbers are the same with or without the CRs. Lines in the patched build copy are marked "build copy". Lines in our own scripts are hints of the same kind; build-native.sh's were re-derived by content on 2026-10-20, against its text of that day (md5 `f3dc7167`). "Roadmap row N" means line N of [docs/roadmap.md](roadmap.md) at `2dd5f05`.
 >
 > **Marks.** Every claim carries one: **[M]** measured (the run, probe or log is named), **[S]** read in source, **[I]** inferred. A claim with two marks rests on both.
 >
@@ -38,7 +38,7 @@ One page, in the order the work goes. Each item links to the section that explai
 **Building**
 
 12. Delete what make cannot see: the objects that `#include` your `oclj_*` file; for a `.dasc` edit, `host/buildvm_arch.h host/buildvm.o lj_vm.o lj_bc.o` ([7.4](#74-running-make-by-hand), P4, P14).
-13. Pass `Q=` (empty), never `Q=.`; on Windows the binary is `mingw32-make` (P5, P45). Pass build-native.sh's `XCFLAGS`.
+13. Pass `Q=` (empty), never `Q=.`; on Windows the binary is `mingw32-make` (P5, P45). Pass build-native.sh's `XCFLAGS`. A Linux .so that may be packaged is built in AlmaLinux 8 with `OCLJ_GLIBC_MAX=2.28`; a Linux build on anything newer gets its own `OCLJ_BUILD`, never `build/native` ([7.7](#77-the-linux-path), P49).
 14. Compare object md5s, not `luajit.exe` (P13). Only the objects your change reaches may differ.
 15. For a new file or script: add it to build-native.sh (re-copy, patch, marker assertions, freshness gates, a `luajit.exe` gate, [7.6](#76-build-nativesh-stage-by-stage)) and to negctl-bitop.sh's lists ([11.7](#117-negctl-one-line-sabotages)).
 
@@ -76,8 +76,8 @@ One page, in the order the work goes. Each item links to the section that explai
   - `LUAJIT_DISABLE_FFI` (with FFI the lexer mints cdata from `1LL`);
   - an `#error` for every other option that changes a structure, the bytecode, the unwinder or what a gate measures, including `LUAJIT_NUMMODE` (so no DUALNUM) and `LUAJIT_NO_UNWIND`;
   - feature words for what we added: `OCLJ_LIB_STRPACK 1`, `OCLJ_OPS_BIT64 1`.
-- **The preprocessor's verdict** (`gcc -E -dM lj_arch.h` on the build copy) [M]: `LJ_HASFFI 0`, `LJ_DUALNUM 0`, `LJ_GC64 1`, `LJ_FR2 1`, `LJ_HASJIT 1`, `LJ_52 1`, and on Windows `LJ_ABI_WIN 1` and `LJ_UNWIND_EXT 1`. What every build checks [S]: the `-dM` gate (build-native.sh ~:859) asserts `LJ_52`, `LJ_HASFFI`, `LJ_HASJIT` and `LJ_GC64` (and the OCLJ_* words); FR2 is held by stage 4's `fr2` token, which luajit.exe's dump flags must agree with; DUALNUM by `oclj_features.h`'s `#error` on `LUAJIT_NUMMODE` (the word's `dn0` is the serializer's compile-time view, not compared with luajit.exe); `LJ_ABI_WIN` and `LJ_UNWIND_EXT` are not gated.
-- **Platforms.** x64 only: build-native.sh refuses any other machine, because the fast path is patched in `vm_x64.dasc` only [S]. Windows (MinGW-w64, PE/COFF, `buildvm -m peobj`) and Linux (ELF, `buildvm -m elfasm`) are both built and gated. macOS and aarch64 are parked as unsupported (roadmap) [S].
+- **The preprocessor's verdict** (`gcc -E -dM lj_arch.h` on the build copy) [M]: `LJ_HASFFI 0`, `LJ_DUALNUM 0`, `LJ_GC64 1`, `LJ_FR2 1`, `LJ_HASJIT 1`, `LJ_52 1`, and on Windows `LJ_ABI_WIN 1` and `LJ_UNWIND_EXT 1`. What every build checks [S]: the `-dM` gate (build-native.sh ~:948) asserts `LJ_52`, `LJ_HASFFI`, `LJ_HASJIT` and `LJ_GC64` (and the OCLJ_* words); FR2 is held by stage 4's `fr2` token, which luajit.exe's dump flags must agree with; DUALNUM by `oclj_features.h`'s `#error` on `LUAJIT_NUMMODE` (the word's `dn0` is the serializer's compile-time view, not compared with luajit.exe); `LJ_ABI_WIN` and `LJ_UNWIND_EXT` are not gated.
+- **Platforms.** x64 only: build-native.sh refuses any other machine, because the fast path is patched in `vm_x64.dasc` only [S]. Windows (MinGW-w64, PE/COFF, `buildvm -m peobj`) and Linux (ELF, `buildvm -m elfasm`) are both built and gated. The Linux library that ships is built in AlmaLinux 8, on glibc 2.28, because a .so can need symbol versions as new as the glibc it was linked against, and the release may need nothing newer than 2.28 ([7.7](#77-the-linux-path)) [S]. macOS and aarch64 are parked as unsupported (roadmap) [S].
 - **What reads LuaJIT internals besides LuaJIT.** `serializer/eris_lj.c`, `native/lj52shim.c`, and the C tests `penalty_test.c`, `race_test.c` and `wd_test.c` compile against the build copy's headers (`oclj_features.h` header) [S]. A change to a LuaJIT structure reaches them. build-native.sh stage 1b compares the archive's `GG_State` size (6376) with the one our headers describe [M] (logs).
 
 ### 1.2 Our twelve changes to LuaJIT
@@ -931,12 +931,12 @@ The Makefile builds DynASM's flags from `TARGET_TESTARCH = $(TARGET_CC) -E lj_ar
 | DUALNUM | `.if DUALNUM` (47) | no | no | LJ_DUALNUM 0; LUAJIT_NUMMODE is `#error`ed |
 | FPU, HFABI | - | yes | yes | x64 |
 | NO_UNWIND | `.if NO_UNWIND` (3, POSIX frame) | no | no | LUAJIT_NO_UNWIND is `#error`ed |
-| SHADOW_STACK | none in the dasc | no | yes | gcc's default `-fcf-protection` (`__CET__ & 2`, lj_arch.h ~:234-243); only a `.note.gnu.property` in lj_vm.S (`emit_asm_debug`) |
+| SHADOW_STACK | none in the dasc | no | yes | gcc's default `-fcf-protection` (`__CET__ & 2`, lj_arch.h ~:234-243); only a `.note.gnu.property` in lj_vm.S (`emit_asm_debug`). Not in AlmaLinux 8, whose gcc 8.5.0 has no CET default (below) |
 | BRANCH_TRACK | `.if BRANCH_TRACK` (`endbr`) | no | no | needs LUAJIT_ENABLE_CET_BR (lj_arch.h ~:222-232) |
 | WIN | `.if WIN` -> `X64WIN` | yes | no | TARGET_SYS=Windows |
 | VER= | - | empty | empty | x64 has no LJ_ARCH_VERSION |
 
-[M] The DynASM command lines in the logs. Windows: `host/minilua.exe ../dynasm/dynasm.lua -D ENDIAN_LE -D P64 -D JIT -D FPU -D HFABI -D VER= -D WIN -o host/buildvm_arch.h vm_x64.dasc` (bench/runs/2026-10-17-bitop/logs/builds-2/luajit_build-additive.log :118). Linux: the same without WIN and with `-D SHADOW_STACK` (logs/linux/luajit_build-additive.log :115); its lj_vm.S ends in `.note.gnu.property` with the value 2.
+[M] The DynASM command lines in the logs. Windows: `host/minilua.exe ../dynasm/dynasm.lua -D ENDIAN_LE -D P64 -D JIT -D FPU -D HFABI -D VER= -D WIN -o host/buildvm_arch.h vm_x64.dasc` (bench/runs/2026-10-17-bitop/logs/builds-2/luajit_build-additive.log :118). Linux: the same without WIN and with `-D SHADOW_STACK` (logs/linux/luajit_build-additive.log :115); its lj_vm.S ends in `.note.gnu.property` with the value 2. In AlmaLinux 8 (gcc 8.5.0), where the release .so is built, the line has neither WIN nor SHADOW_STACK, and lj_vm.S has no `.note.gnu.property` (0 such lines, against 1 in the Ubuntu build) [M] (the glibc round's `alma-2` and `ubuntu-2` builds). The dasc has no SHADOW_STACK branch, so the interpreter's instructions do not depend on it [S].
 
 ### 6.9 Reading what you assembled
 
@@ -974,10 +974,10 @@ The Makefile builds DynASM's flags from `TARGET_TESTARCH = $(TARGET_CC) -E lj_ar
 | A .dasc edit with an older mtime than buildvm_arch.h is invisible to make (a restore with `cp -p`, an editor that keeps mtimes) | [M] dry run: appended a line, set the mtime to 2026-10-01: `Nothing to be done` | delete `host/buildvm_arch.h` and the objects it reaches |
 | `lj_bcdef.h` holds the handler offsets, so a .dasc change that moves any handler changes lj_bc.o (P14) | [M] negctl: WRAP32-INTERP (32-bit `and`, no REX.W) and SHIFTMASK (one `ja` removed) changed `lj_bc.o lj_vm.o host/buildvm.o`; INEXACT-INTERP and INEXACT-BNOT (`cmp r,r`, same length) changed only `lj_vm.o host/buildvm.o`. Same on Windows and Linux | always rebuild lj_bc.o with lj_vm.o |
 | `buildvm -m folddef` reads only lines of lj_opt_fold.c that **start** with `LJFOLD` (`emit_fold`, `strncmp(buf, FOLDDEF_PREFIX, ...)` ~:200) and never follows an `#include` (P14) | [S] | keep LJFOLD lines in lj_opt_fold.c; patch-bitop-fold.sh asserts they are unchanged |
-| `make clean` deletes `host/buildvm_arch.h` (in ALL_HDRGEN, Makefile :544-548), and make regenerates it from whatever .dasc the copy holds (P43) | [S] | re-copy and re-patch the .dasc **before** `make clean`; build-native.sh does (:694-733) |
+| `make clean` deletes `host/buildvm_arch.h` (in ALL_HDRGEN, Makefile :544-548), and make regenerates it from whatever .dasc the copy holds (P43) | [S] | re-copy and re-patch the .dasc **before** `make clean`; build-native.sh does (:783-822) |
 | A .dasc touch remakes far more than it changes | [M] `make -n` after touching it: DynASM, host/buildvm.o and buildvm.exe, lj_vm.o, all six generated files, and 18 more objects. Only lj_vm.o and host/buildvm.o change bytes, plus lj_bc.o if offsets move (negctl) | judge by object md5s, not by what was recompiled |
-| The build copy persists. build-native.sh copies the tree only when `build/native/luajit-<platform>` is missing (:496-501) and re-takes only the 12 patched files and our 7. A hand edit to any other file (say `lj_asm_x86.h`) survives every later build, and `make clean` does not undo it (P44) | [S]; [M] today the Windows copy differs from the pristine sources exactly in those 12 + 7 and the generated files (`diff -rq --strip-trailing-cr` over src, objects excluded) | experiment in scratch copies only; a round that changes a new upstream file adds it to build-native.sh's re-copy list |
-| `luajit_build.log` sits in `$OCLJ_BUILD`, not per platform: the last platform built overwrites it (P19) | [M] on 2026-10-17 it held the WSL build (`-m elfasm`, `-fPIC`) | read each platform's log from the round's archive (round 3: logs/builds-2/, logs/linux/) |
+| The build copy persists. build-native.sh copies the tree only when `build/native/luajit-<platform>` is missing (:585-590) and re-takes only the 12 patched files and our 7. A hand edit to any other file (say `lj_asm_x86.h`) survives every later build, and `make clean` does not undo it (P44) | [S]; [M] today the Windows copy differs from the pristine sources exactly in those 12 + 7 and the generated files (`diff -rq --strip-trailing-cr` over src, objects excluded) | experiment in scratch copies only; a round that changes a new upstream file adds it to build-native.sh's re-copy list |
+| `luajit_build.log` sits in `$OCLJ_BUILD`, not per platform: the last platform built overwrites it (P19) | [M] on 2026-10-17 it held the WSL build (`-m elfasm`, `-fPIC`). Since the glibc round the Linux release build is made into `build/native` too, from AlmaLinux 8 [S] (build-native.sh PREREQUISITES 7) | read each platform's log from the round's archive (round 3: logs/builds-2/, logs/linux/) |
 | `luajit.exe`'s md5 changes on every link (P13) | [M] `objdump -p luajit.exe`: `Time/Date Sat Oct 17 12:29:30 2026`, its link time | compare `*.o host/*.o` |
 
 ### 7.3 Line endings and the Git Bash instrument
@@ -1007,8 +1007,8 @@ make         -C "$W" BUILDMODE=static XCFLAGS=-fPIC Q= -j4 > "$S/build.log" 2>&1
 The layout mirrors `$OCLJ_BUILD`, so the suites run against the scratch build unchanged: they take `$OCLJ_BUILD/luajit-<platform>/src/luajit.exe`, and run-bitop.sh also `$OCLJ_BUILD/obj-<platform>` (run-bitjit.sh ~:117, run-bitop.sh ~:104-121) [S]. For example `OCLJ_BUILD=$S OCLJ_BITJIT_OUT=$S/bitjit-1 sh test/native/run-bitjit.sh`, and likewise run-bitfuzz.sh (`OCLJ_BITFUZZ_OUT`) and run-bitop.sh (`OCLJ_BITOP_OUT`). negctl-bitop.sh accepts the same layout, but it refuses a copy that is not what the repo's files and patch scripts make ([11.7](#117-negctl-one-line-sabotages) item 1), so it proves a change only once the change is in `native/luajit/` and the copy was rebuilt by build-native.sh ([7.6](#76-build-nativesh-stage-by-stage)) [S].
 
 - **`BUILDMODE=static`** builds `libluajit.a` and a statically linked `luajit.exe`. Without it, Windows builds a DLL (`-DLUA_BUILD_AS_DLL`, Makefile ~:568-572). Under static mode `TARGET_DYNCC` is `@:`, so the `_dyn.o` compiles are no-ops [S].
-- **`XCFLAGS` must be build-native.sh's** (`LJ_FLAGS="$PICFLAG"`: empty on Windows, `-fPIC` elsewhere, :292-293), or every recompiled object differs from the shipped build [S]. Rebuilding with the right flags gives byte-identical objects [M] (negctl canon).
-- **`Q=`, empty.** The Makefile's default `Q= @` (:625) hides command lines, and build-native.sh passes `Q=` so its log gates have compile lines to match (:733) [S]. A literal `Q=.` (a report's full stop copied into the command) prefixes every command with a dot: `make -n` prints `.host/minilua.exe ../dynasm/dynasm.lua ...` and `.gcc ...` [M] (P5).
+- **`XCFLAGS` must be build-native.sh's** (`LJ_FLAGS="$PICFLAG"`: empty on Windows, `-fPIC` elsewhere, :329-332), or every recompiled object differs from the shipped build [S]. Rebuilding with the right flags gives byte-identical objects [M] (negctl canon).
+- **`Q=`, empty.** The Makefile's default `Q= @` (:625) hides command lines, and build-native.sh passes `Q=` so its log gates have compile lines to match (:822) [S]. A literal `Q=.` (a report's full stop copied into the command) prefixes every command with a dot: `make -n` prints `.host/minilua.exe ../dynasm/dynasm.lua ...` and `.gcc ...` [M] (P5).
 - **`make` on Windows.** build-native.sh and the negctls call `make`, but WinLibs MinGW-w64 ships only `mingw32-make`, and in a plain Git Bash `command -v make` finds nothing [M]. This machine's launchers prepend `/c/Users/astro/claude-tmp/oclj/bin`, which holds a two-line `make` (`exec mingw32-make "$@"`); `bench/runs/2026-10-13-dispose/scripts/make-shim` is its archived copy [M] (P45).
 - **Cost.** A rebuild takes 1-3 s, a vm_x64.dasc one included; a C object plus the relink about 1 s [M] (negctl-bitop.sh header; impl-C3.json). build-native.sh's whole LuaJIT stage, `make clean` included, takes +17 s on Windows and +6 s in WSL [M] (logs/builds-2, logs/linux).
 
@@ -1045,15 +1045,15 @@ Round 3's seven scripts share one engine; use it for any new change ([8.2](#82-w
 
 ### 7.6 build-native.sh, stage by stage
 
-**Stage 1: the copy and the twelve changes** (:486-733) [S].
+**Stage 1: the copy and the twelve changes** (:575-824) [S].
 
 - `build/native/luajit-<platform>` is created once with `cp -r` from `prototype/watchdog/luajit`, and its `.git` is removed.
 - On every run, for each of the twelve changed files ([1.2](#12-our-twelve-changes-to-luajit)): assert the pristine checkout does not carry the change; re-copy the pristine file over the build copy; assert the change is **absent** after the copy; run the patch script; assert the marker is **present the exact number of times** before make. The counts: the scrub line once, the clamp line twice, the `lj_ffrecord.c` marker once, `#include "oclj_features.h"` once and directly after `lua.h`, the strpack marker and its `#include` once each, and each round-3 file its own marker once, no other round-3 marker, and each new `#include` once.
 - Our seven files are copied and compared with `cmp`; their presence in the pristine checkout is refused [S].
-- Stage 1 refuses any architecture but x86_64 (:691-693) [S].
-- Then `make -C $LJ clean`, then `make -C $LJ BUILDMODE=static XCFLAGS="$LJ_FLAGS" Q= -j$JOBS` (:730-733) [S].
+- Stage 1 refuses any architecture but x86_64 (:780-782) [S].
+- Then `make -C $LJ clean`, then `make -C $LJ BUILDMODE=static XCFLAGS="$LJ_FLAGS" Q= -j$JOBS` (:819-824) [S].
 
-**Running it outside `build/`**, for agents and for any experiment the gates or negctl must see [S] (build-native.sh EXTERNAL INPUTS and USAGE, ~:111-128):
+**Running it outside `build/`**, for agents and for any experiment the gates or negctl must see [S] (build-native.sh EXTERNAL INPUTS and USAGE, ~:112-143):
 
 ```sh
 OCLJ_BUILD=<fresh scratch dir> OCLJ_JNLUA=<OC-JNLua checkout> OCLJ_JNI=<JDK include dir> \
@@ -1062,25 +1062,26 @@ OCLJ_BUILD=<fresh scratch dir> OCLJ_JNLUA=<OC-JNLua checkout> OCLJ_JNI=<JDK incl
 
 - Round 3's values for `OCLJ_JNLUA`, `OCLJ_JNI` and `PATH` are in `bench/runs/2026-10-17-bitop/scripts/build-r3.sh`; `OCLJ_VARIANT=additive` builds the other library.
 - A missing build copy is created from the pristine tree, so the first run builds everything; if it takes more than a minute, run it from the main session ([11.11](#1111-long-runs-and-results-directories)).
+- On Linux, `OCLJ_GLIBC_MAX=2.28` makes step 6's glibc check a BUILD FAIL above the release floor. Set it on any build whose .so may be packaged; leave it unset for a development build on a newer distribution, which then reports the highest version needed and finishes ([7.7](#77-the-linux-path)) [S]. On Windows it only prints a note [M].
 - Point every runner and negctl-bitop.sh at the same `OCLJ_BUILD`. negctl writes its ~445 MB work directory under `$OCLJ_BUILD/negctl-bitop/` (no other knob, ~:647) and needs `obj-<platform>/` (`lj52shim.o`, `eris_lj.o`) as well as the LuaJIT copy (~:180-192).
 
-**Freshness gates** (:739-845) [S]:
+**Freshness gates** (:827-925) [S]:
 
 - Each patched object must be newer (`-nt`) than its source and every round-3 file it includes: lj_parse.o, lj_meta.o, lj_record.o, lj_opt_fold.o, lj_bcwrite.o, lj_bcread.o, lib_jit.o, lib_string.o, lj_func.o, lj_err.o, lj_ffrecord.o.
 - Each object's compile line must be in the log, anchored as `-c -o X[.]o X[.]c[[:cntrl:]]?$`. A bare file name would also match buildvm's five command lines, which list every LJLIB_C file. The `[[:cntrl:]]?` is there because mingw32-make writes 95 of the log's 185 lines with CRLF [M].
 - `host/buildvm_arch.h` must be newer than vm_x64.dasc, and DynASM's command line must be in the log. lj_vm.o must be newer than buildvm_arch.h; on ELF, lj_vm.S must sit between them.
 - buildvm_arch.h must echo exactly 3 `//|` lines carrying `OC-LuaJIT`, 2 of them `OC-LuaJIT: Lua 5.3's`.
 - `lj_ffdef.h` must list `FFDEF(string_pack|packsize|unpack)` once each.
-- **`-f` comes before `-nt`**, because `[ a -nt b ]` is true when b is missing (:801; P15) [S][M].
+- **`-f` comes before `-nt`**, because `[ a -nt b ]` is true when b is missing (:890; P15) [S][M].
 
-**Feature-channel gates** (:847-876) [S]:
+**Feature-channel gates** (:927-963) [S]:
 
 - No `-D LUAJIT_*` may appear on any compile line except `LUAJIT_TARGET` and `LUAJIT_UNWIND_EXTERNAL`, which are platform facts.
-- `gcc -I$LJ -E -dM lj_arch.h` must say `OCLJ_LUAJIT_FEATURES 1`, `LJ_52 1`, `LJ_HASFFI 0`, `LJ_HASJIT 1`, `LJ_GC64 1`, `OCLJ_LIB_STRPACK 1` and `OCLJ_OPS_BIT64 1` (~:859); `lj_bcdump.h -dM` must say `BCDUMP_VERSION 0x80`. `LJ_DUALNUM`, `LJ_FR2`, `LJ_ABI_WIN` and `LJ_UNWIND_EXT` are not in this list ([1.1](#11-what-the-fork-is)).
+- `gcc -I$LJ -E -dM lj_arch.h` must say `OCLJ_LUAJIT_FEATURES 1`, `LJ_52 1`, `LJ_HASFFI 0`, `LJ_HASJIT 1`, `LJ_GC64 1`, `OCLJ_LIB_STRPACK 1` and `OCLJ_OPS_BIT64 1` (~:948); `lj_bcdump.h -dM` must say `BCDUMP_VERSION 0x80`. `LJ_DUALNUM`, `LJ_FR2`, `LJ_ABI_WIN` and `LJ_UNWIND_EXT` are not in this list ([1.1](#11-what-the-fork-is)).
 
 **Warning gates** [S]: the LuaJIT compile is `-Wall`, and no warning may name a patched or added file. Our C also compiles under `-Wall -Wextra` in two throwaway translation units, `strpack_wgate.c` and `bitop_wgate.c`, with zero warnings; each calls the entry points, because an uncalled static inline function is never compiled.
 
-**luajit.exe gates** (:948-1332), each a probe with an exact wanted line [S]:
+**luajit.exe gates** (:1040-1421), each a probe with an exact wanted line [S]:
 
 - `table.unpack` exists (LUA52COMPAT); a count hook fires over a hot loop (CHECKHOOK, more than 100 ticks).
 - FFI / integer-format: `lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=true`.
@@ -1089,9 +1090,9 @@ OCLJ_BUILD=<fresh scratch dir> OCLJ_JNLUA=<OC-JNLua checkout> OCLJ_JNI=<JDK incl
 - **jit tools**: `jitlib f=1 hot=206208 snapend=4278190080 bc=118 bl=118 blerr=0 bldec=3 jd=1/1/0/0 jdb=12/1 jdim=1/1 jdline=1`, run in `$LJ` with `LUA_PATH='./?.lua'`.
 - The JIT gates count loop, stitch and abort traces in the probed function, so they fail with the JIT off.
 
-**Stage 1b** (:1334-1430) [S]: `lua_newstate` with a plain realloc allocator must work (GC64 accepts a foreign allocator); its first allocation must equal `sizeof(GG_State)` as seen through `-I$LJ`, the view the shim and the serializer compile with: 6376 [M]. The **negative arm** recompiles the probe against a header copy with `LUAJIT_DISABLE_FFI` removed and must mismatch: `GG-LAYOUT-MISMATCH lib=6376 tu=6384` on every build [M].
+**Stage 1b** (:1423-1518) [S]: `lua_newstate` with a plain realloc allocator must work (GC64 accepts a foreign allocator); its first allocation must equal `sizeof(GG_State)` as seen through `-I$LJ`, the view the shim and the serializer compile with: 6376 [M]. The **negative arm** recompiles the probe against a header copy with `LUAJIT_DISABLE_FFI` removed and must mismatch: `GG-LAYOUT-MISMATCH lib=6376 tu=6384` on every build [M].
 
-**Stages 2-6** [S]: the shim (`-Wall -Wextra`, zero warnings) and jnlua.c compile; `eris_lj.o` carries the VM-features word, which must agree token by token with luajit.exe's behaviour (today `ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64`, and luajit.exe agrees [M]); the link; then the ABI surface is pinned (PE: exactly 87 `Java_*` + JNI_OnLoad + JNI_OnUnload = 89 names for dropin, 91/93 for additive; ELF: the `Java_*` count).
+**Stages 2-6** [S]: the shim (`-Wall -Wextra`, zero warnings) and jnlua.c compile; `eris_lj.o` carries the VM-features word, which must agree token by token with luajit.exe's behaviour (today `ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64`, and luajit.exe agrees [M]); the link; then the ABI surface is pinned (PE: exactly 87 `Java_*` + JNI_OnLoad + JNI_OnUnload = 89 names for dropin, 91/93 for additive; ELF: the `Java_*` count). On ELF, step 6 then runs the ELF import gate ([7.7](#77-the-linux-path)), before the library is stamped `OK` and, for additive, collected into `dist` [S].
 
 ### 7.7 The Linux path
 
@@ -1100,10 +1101,25 @@ Same script, with these differences [S]:
 - The copy is `luajit-linux-x86_64`, and `PICFLAG=-fPIC` reaches XCFLAGS and our compiles.
 - `buildvm -m elfasm` writes lj_vm.S, which gcc assembles; the freshness gate adds lj_vm.S between buildvm_arch.h and lj_vm.o.
 - The Makefile's unwind probe adds `-DLUAJIT_UNWIND_EXTERNAL`, which the `-D` allowlist permits.
-- DynASM gets `-D SHADOW_STACK` from the compiler's CET default, and loses `-D WIN`.
+- DynASM loses `-D WIN`, and gets `-D SHADOW_STACK` where the compiler defaults to CET: Ubuntu 26.04's gcc 15.2 does, AlmaLinux 8's gcc 8.5.0 does not ([6.8](#68-the--d-flags)) [M].
 - The binary is `luajit` and the library `libjnlua*52-linux-x86_64.so`.
+- **The link** is `-lm $LINK_EXTRA` with `LINK_EXTRA="-static-libgcc -pthread -Wl,--no-undefined"` (build-native.sh :306; the reasons at :267-290) [S]. Before glibc 2.34 the watchdog's six pthread functions live in libpthread; a link without `-pthread` left them undefined with no symbol version and no NEEDED `libpthread.so.0`, so they bound to whatever the host process had loaded [M]. With `-pthread` they are versioned (`pthread_create@GLIBC_2.2.5`); with `--no-undefined`, leaving it out fails the link, naming the six [M]. Not `-ldl`: nothing we link reaches `lib_package`, and the .so imports none of libdl's functions (`dlopen`, `dlsym`, `dlclose`, `dlerror`); its one `dl_` import, `dl_iterate_phdr`, is libc's, and `libdl.so.2` is not NEEDED [M] (`readelf --dyn-syms -W` on both release .so files, 2026-10-20). It comes from libgcc's unwinder, linked in by `-static-libgcc` [I].
+- **The ELF import gate** runs in step 6, between `# BEGIN ELF IMPORT GATE` and `# END ELF IMPORT GATE` (:1883-1984), with readelf, whose `--dyn-syms -W` and `-V -W` output reads the same under binutils 2.30 and 2.46 [S][M]. In order: readelf must list some undefined symbol (on a truncated file it lists none and exits 0); a non-weak undefined symbol with no version is a BUILD FAIL whatever the limit, naming each; the version needs (`.gnu.version_r`) give the highest GLIBC_x.y, compared component by component (2.4 < 2.17 < 2.38). With `OCLJ_GLIBC_MAX` set, a need above it, or outside GLIBC_x.y (GLIBC_PRIVATE, GCC_x.y), is a BUILD FAIL listing the needs, their libraries and up to 12 imports, and nothing reaches `dist`. Unset, it reports the verdict against the release floor, `GLIBC_FLOOR=2.28` (:353), and the build finishes [S]. Its awk ran under gawk only, in both distros [M]; other awks are untested [I].
+- **The test links** take `-pthread -ldl`: every runner's `TEST_EXTRA`, `negative-control.sh`'s six links and `serializer/Makefile`'s `LIBS`. `luaL_openlibs` pulls LuaJIT's `lib_package`, which calls `dlopen`, and before glibc 2.34 both libraries are outside libc [S][M].
 
-Verified 2026-10-17 in WSL (Ubuntu 26.04.1, gcc 15.2.0, glibc 2.43): every gate printed the Windows line, and `negctl-bitop.sh` passed all 27 arms in 6 min 20 s [M] (logs/linux/). Both .so files still need GLIBC_2.38; the glibc floor round is next [M] (round 3 README).
+**Where to build.** Each import carries the newest version of its symbol in the glibc of the host that *links* it, so the build host's glibc caps what the .so can need (P49) [S][M]. The supported floor is a policy on top of that: 2.28, which gradle enforces; today's release .so needs only GLIBC_2.17, and systems below 2.28 are untested and unsupported [M][S]:
+
+| host (WSL distro) | glibc, gcc, binutils | the .so needs | use |
+|---|---|---|---|
+| AlmaLinux 8.10 (`AlmaLinux-8`) | 2.28, 8.5.0, 2.30 | at most GLIBC_2.17; NEEDED `libpthread.so.0` [M] | the release .so, into `build/native`, with `OCLJ_GLIBC_MAX=2.28` and `OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include` |
+| Ubuntu 26.04.1 (`Ubuntu`) | 2.43, 15.2, 2.46 | GLIBC_2.38 (`fmod`, `__isoc23_strtoul`) [M] | development builds only, each in its own `OCLJ_BUILD`; gradle refuses their .so |
+
+- **Driving it from Git Bash**: `MSYS_NO_PATHCONV=1 wsl.exe -d AlmaLinux-8 -- sh /mnt/c/<script>`, with every command in the script file, and every variable passed inside (`-- env X=1 sh ...`) (P51) [M].
+- **The commit in the blob fingerprint** comes from `git_head` (build-native.sh :544-559): git on the checkout's own `.git`, else `.git/HEAD` and its ref file or `packed-refs` line; with neither, the build is refused (:561-565) [S]. So a native never stamps `unknown`, and the release .so stamps `1ee778a4`, as the Windows DLL does [M] (the glibc round's `logs/build-alma/glibc.txt`; the roadmap's blob-compatibility row). AlmaLinux 8 had no git when the round began, and its first builds stamped `unknown`; it has git 2.43.7 now [M].
+- **Binaries do not cross downwards.** Ubuntu's `luajit` and the Ubuntu-built PUC 5.3.6 both stop in AlmaLinux 8 with ``version `GLIBC_2.38' not found`` among others [M]. In AlmaLinux 8, the gates and the kernel patcher use the `luajit` built there, and `run-bitop.sh` and `run-pack.sh` need a PUC 5.3.6 built there. This machine has one at `/mnt/c/Users/astro/claude-tmp/oclj/puc536-alma/lua` (md5 `12136059`), built from `bench/vendor/lua-5.3.6/src`'s `*.c`, `*.h` and Makefile only, because that directory also holds Windows objects, with `make generic MYCFLAGS="-DLUA_USE_POSIX -DLUA_USE_DLOPEN" MYLIBS="-Wl,-E -ldl"`. Its outputs equal the Ubuntu-built PUC's on 20 reference runs, apart from one error text that names the interpreter's path [M]. Pass it as `OCLJ_LUA53`: the runners' default is the Windows `lua.exe`, which passes `-x` on `/mnt/c` (P52) [S].
+- **Packaging.** gradle's `verifyModAssets` reads the same version needs from the file itself and refuses a .so above `glibcFloor` (`build.gradle.kts` :74, the check :223-373). It does not check unversioned imports; only step 6 does [S][M].
+
+Verified 2026-10-17 in WSL (Ubuntu 26.04.1, gcc 15.2.0, glibc 2.43): every gate printed the Windows line, and `negctl-bitop.sh` passed all 27 arms in 6 min 20 s [M] (logs/linux/). Verified 2026-10-19 in AlmaLinux 8.10 (gcc 8.5.0, glibc 2.28) with this section's link and gate: both variants pass every gate, every non-weak import is versioned, and the .so needs at most GLIBC_2.17. The native suites, run-pack, run-bitop and the serializer suite pass there, and the JVM harness passed 82/0 on that .so in AlmaLinux 8 and in Ubuntu 26.04 [M] (the glibc round's evidence; the roadmap's glibc row and its Linux-JVM row). Verified again by the round's chain on the release build (`bench/runs/2026-10-19-glibc/logs`): the .so `6c888050` (dropin `6c0715d1`) needs at most GLIBC_2.17; in AlmaLinux 8 `negctl-bitop.sh` and `negctl-pack.sh` pass, and the seven harness arms pass under JDK 8 with the milestones of the Windows chain, line for line [M]. `negative-control.sh`'s first full run there failed 5 of its 56 RESULT lines, from two faults in the test (a Windows-only sabotage and a shell-assignment leak under bash 4.4's POSIX mode); fixed, it passes 57 of 57 in AlmaLinux 8, Ubuntu and Windows [M] (the roadmap's glibc row, open item 2).
 
 ## 8. Recipes
 
@@ -1140,7 +1156,7 @@ Lessons from round 3 that apply to the next operator:
 ### 8.2 Writing a patch script
 
 0. **Changing a file that a script already patches**, as the CRC32 follow-up does with `lj_opt_fold.c`: extend that file's script; never add a second one [S].
-   - build-native.sh re-copies and patches each file once, and asserts exactly one `OC-LuaJIT (native/luajit/patch-bitop-` marker in it (`BITOP_PATCHES` and its loop, ~:696-722). negctl-bitop.sh rebuilds each patched file from the pristine one with that one `patch-bitop-<x>.sh` (~:661-668).
+   - build-native.sh re-copies and patches each file once, and asserts exactly one `OC-LuaJIT (native/luajit/patch-bitop-` marker in it (`BITOP_PATCHES` and its loop, ~:785-811). negctl-bitop.sh rebuilds each patched file from the pristine one with that one `patch-bitop-<x>.sh` (~:661-668).
    - Add hunks, and update `NH`, `NADD`, `NDEL` and `verify_content`.
    - For `lj_opt_fold.c`, `verify_content` (patch-bitop-fold.sh ~:355-366) requires `oclj_bitwidth(` on exactly one line and the include above `simplify_conv_i64_num`. `simplify_conv_int_num` (~:1129) sits above that include, so a rule there needs the include moved up, or a forward declaration as in review1's `fold-a.diff`, and a rewritten `verify_content`.
    - Then update [1.2](#12-our-twelve-changes-to-luajit)'s row, [7.5](#75-the-patch-script-engine)'s NADD/NDEL list and [3.10](#310-the-two-rules)'s table.
@@ -1507,15 +1523,15 @@ Each pattern gives a rule, the reason it holds, round 3's instance, and what hol
 
 ## 10. Pitfalls
 
-Each entry gives the symptom, the cause with its evidence, and the fix; where a section already holds the evidence, the entry points there. P1-P18 were known going into this guide (the brief's sixteen, its tenth split three ways); P19 onward were found in round 3's evidence or by this guide's probes. The numbers are stable: cite them, and append new ones at the end.
+Each entry gives the symptom, the cause with its evidence, and the fix; where a section already holds the evidence, the entry points there. P1-P18 were known going into this guide (the brief's sixteen, its tenth split three ways); P19-P48 were found in round 3's evidence or by this guide's probes, and P49-P52 in the glibc round (2026-10-19). The numbers are stable: cite them, and append new ones at the end.
 
 | area | pitfalls |
 |---|---|
 | LuaJIT internals without FFI | P1, P3, P9 |
 | IR, folds, loops, exits | P2, P29, P32, P38, P40, P41, P42 |
 | reading dumps and tools | P10, P11, P12, P30, P31, P35, P36, P39, P48 |
-| the build | P4, P5, P13, P14, P15, P19, P43, P44, P45, P46 |
-| text, shells and line endings | P7, P8, P18, P20 |
+| the build | P4, P5, P13, P14, P15, P19, P43, P44, P45, P46, P49, P50 |
+| text, shells and line endings | P7, P8, P18, P20, P51, P52 |
 | tests and measurement | P6, P16, P17, P21, P22, P23, P24, P25, P26, P27, P28, P33, P34, P37, P47 |
 
 **P1. Without FFI, the int64 constant folds are stubbed, and one returns a wrong value.** *Symptom:* `BAND`, `BOR` or `BXOR` of two KINT64 constants folds to its left operand, with no error; most other int64 folds return FAILFOLD, which aborts the trace [S]. *Cause:* `kfold_int64arith` (lj_opt_fold.c ~:368) compiles its bit cases only `#if LJ_HASFFI` (~:376); the operator falls into `default: lj_assertJ(0, ...)`, which a release build compiles to `((void)J)` (lj_jit.h ~:522-525), and returns k1. The seven stubs: `kfold_int64arith` ~:376, `kfold_int64shift` ~:432, `kfold_bnot64` ~:444, `kfold_int64comp` ~:471, `kfold_int64comp0` ~:492, `simplify_andor_k64` ~:1746, `reassoc_intarith_k64` ~:1794 [S]. KFOLD64 (the first stub put back) is caught by fuzz mode U (431-436 mismatches) and t_rec (4-14 lines per seed) [M]. *Fix:* round 3 turns the seven into `#if 1` ([3.10](#310-the-two-rules)). Before relying on a LuaJIT function, grep it for `LJ_HASFFI`, `LJ_DUALNUM` and `LJ_GC64` [I]; `narrow_convert` hid an assumption of the same kind (NARROW) [S].
@@ -1546,7 +1562,7 @@ Each entry gives the symptom, the cause with its evidence, and the fix; where a 
 
 **P14. A `vm_x64.dasc` edit also changes `lj_bc.o`, and `buildvm -m folddef` reads only `lj_opt_fold.c`'s LJFOLD lines.** *Symptom:* an object you did not expect to change does; a fold rule moved into an `#include`d file is silently never registered [M][S]. *Cause:* `lj_bcdef.h` holds the handler offsets, which a 32-bit `and` without REX.W moved [M] (`impl-C3.json`); `buildvm_fold.c` (~:197-220) scans `lj_opt_fold.c` alone for lines that begin `LJFOLD` ([7.2](#72-dependency-traps)) [S]. *Fix:* a `.dasc` change reaches `lj_vm.o`, `lj_bc.o` and `host/buildvm.o`; keep every `LJFOLD` line and rule body in `lj_opt_fold.c` at column 0 and move only helpers out [S].
 
-**P15. bash's `-nt` is true when the second file is missing.** *Symptom:* a freshness gate passes against a file that does not exist. *Cause:* `[ exists -nt missing ]` is true in bash 5.3.15 and in `sh` [M]; build-native.sh ~:801 says so [S]. *Fix:* `[ -f "$src" ] && [ "$obj" -nt "$src" ]` [S].
+**P15. bash's `-nt` is true when the second file is missing.** *Symptom:* a freshness gate passes against a file that does not exist. *Cause:* `[ exists -nt missing ]` is true in bash 5.3.15 and in `sh` [M]; build-native.sh ~:890 says so [S]. *Fix:* `[ -f "$src" ] && [ "$obj" -nt "$src" ]` [S].
 
 **P16. Claims about exactness must be checked on chained idioms and products, not single operators.** *Symptom:* the design said that only `>>` of a negative number is inexact with ordinary operands, and that code masked to 32 bits matches 5.3; both hold for one operator and fail for chains [M] (round 3 README). *Cause:* in 5.3's rotate, `((a >> n) | (a << (32 - n))) & 0xFFFFFFFF`, the `|` joins the pieces into up to 64 - n significant bits before the mask; for a = 0xFFFFFFFF or 0xDEADBEEF it raises for n = 1-10, for a = 0x80000001 never [M] (`design/rotate/`). The harness found it in `p1-sha256` after every unit suite passed [M] (`logs/harness-prefix/`). FNV-1a's double product passes 2^53 before the mask, a wrong value without an error [M] (`fix-results.json`, R3-docs). *Fix:* test real idioms with random words, as the generator and the harness do; write the masked forms (`(a >> n) | ((a << (32 - n)) & 0xFFFFFFFF)`); limit any exactness claim to sums and products below 2^53 [S].
 
@@ -1554,7 +1570,7 @@ Each entry gives the symptom, the cause with its evidence, and the fix; where a 
 
 **P18. Surprising readings are usually the instrument: CRLF from Windows stdout.** *Symptom:* false differences between outputs identical apart from line endings. *Cause:* `luajit.exe -e "print(1)"` and `lua.exe -e "print(1)"` each write 3 bytes, 1 of them a CR; one ad-hoc diff showed 25 false differences [M] (`impl-C2.json`). *Fix:* `tr -d '\r'` on every Windows output before comparing, as each runner's `run()` does; more generally, [11.9](#119-instrument-first) [S].
 
-**P19. `build/native/luajit_build.log` is the last platform's build.** *Symptom:* the DynASM line lacks `-D WIN` and shows `host/minilua` without `.exe` [M]. *Cause:* the log lives in `$OCLJ_BUILD`, not per platform; on 2026-10-17 it held the WSL build while the Windows `luajit.exe` was older [M]. *Fix:* read the log from the round's archive or a per-platform `OCLJ_BUILD`, and check the platform before drawing a conclusion [I].
+**P19. `build/native/luajit_build.log` is the last platform's build.** *Symptom:* the DynASM line lacks `-D WIN` and shows `host/minilua` without `.exe` [M]. *Cause:* the log lives in `$OCLJ_BUILD`, not per platform; on 2026-10-17 it held the WSL build while the Windows `luajit.exe` was older [M]. *Fix:* read the log from the round's archive or a per-platform `OCLJ_BUILD`, and check the platform before drawing a conclusion [I]. Since the glibc round the Linux release build is also made into `build/native`, from AlmaLinux 8, so the log there can be either platform's, and on Linux either distribution's: gcc 8.5.0 and no `-D SHADOW_STACK` in AlmaLinux 8, gcc 15.2 and `-D SHADOW_STACK` in Ubuntu ([6.8](#68-the--d-flags)) [S][M].
 
 **P20. Binaries do not survive `.gitattributes`.** *Symptom:* a committed `libluajit.a` fails `ar t` in a clone. *Cause:* `* text eol=lf` rewrites CRLF byte pairs in binaries [S] (`bench/runs/2026-10-16-noffi/README.md`). *Fix:* archive the md5s of binaries; keep the binaries outside the repo [S].
 
@@ -1602,17 +1618,25 @@ Each entry gives the symptom, the cause with its evidence, and the fix; where a 
 
 **P42. ORDER BIT differs between bytecode and IR.** *Symptom:* a bytecode-to-IR mapping by arithmetic picks the wrong IR op for BNOT or a shift [S]. *Cause:* `IR_BSWAP` sits between `IR_BNOT` and `IR_BAND` (lj_ir.h ~:56-66); `BC_BNOT..BC_BSAR` have no such gap [S]. *Fix:* map by arithmetic only for BAND..BXOR and name the others, as `oclj_rec_bitop` does [S].
 
-**P43. `make clean` deletes `host/buildvm_arch.h`.** *Symptom:* after `make clean`, make regenerates the interpreter from a stale or unpatched .dasc [S]. *Cause:* `buildvm_arch.h` is in ALL_HDRGEN (Makefile :544-548) [S]. *Fix:* re-copy and re-patch the .dasc before `make clean`, as build-native.sh does (:694-733) [S].
+**P43. `make clean` deletes `host/buildvm_arch.h`.** *Symptom:* after `make clean`, make regenerates the interpreter from a stale or unpatched .dasc [S]. *Cause:* `buildvm_arch.h` is in ALL_HDRGEN (Makefile :544-548) [S]. *Fix:* re-copy and re-patch the .dasc before `make clean`, as build-native.sh does (:783-822) [S].
 
-**P44. The build copy persists: hand edits to unpatched files survive.** *Symptom:* a build behaves differently from what the repo describes [I]. *Cause:* build-native.sh copies the tree only when the build copy is missing (:496-501) and re-takes only the 12 patched files and our 7 ([7.2](#72-dependency-traps)) [S][M]. *Fix:* never edit `build/`; a round that changes a new upstream file adds it to the re-copy list. Drift check: `diff -rq --strip-trailing-cr prototype/watchdog/luajit/src build/native/luajit-<platform>/src` with build products filtered out [S][M].
+**P44. The build copy persists: hand edits to unpatched files survive.** *Symptom:* a build behaves differently from what the repo describes [I]. *Cause:* build-native.sh copies the tree only when the build copy is missing (:585-590) and re-takes only the 12 patched files and our 7 ([7.2](#72-dependency-traps)) [S][M]. *Fix:* never edit `build/`; a round that changes a new upstream file adds it to the re-copy list. Drift check: `diff -rq --strip-trailing-cr prototype/watchdog/luajit/src build/native/luajit-<platform>/src` with build products filtered out [S][M].
 
-**P45. build-native.sh calls `make`; WinLibs ships only `mingw32-make`.** *Symptom:* `make: command not found` in a plain Git Bash [M]. *Cause:* the PREREQUISITES footer says "GNU make comes with it", but the binary is `mingw32-make`; this machine's launchers prepend `/c/Users/astro/claude-tmp/oclj/bin`, which holds a `make` that runs `mingw32-make` [M]. *Fix:* copy `bench/runs/2026-10-13-dispose/scripts/make-shim` (`exec mingw32-make "$@"`, the archived copy of that file) as `make` into a directory you put first on PATH, or call `mingw32-make` by hand [M].
+**P45. build-native.sh calls `make`; WinLibs ships only `mingw32-make`.** *Symptom:* `make: command not found` in a plain Git Bash [M]. *Cause:* the PREREQUISITES footer says "GNU make comes with it", but the binary is `mingw32-make`; this machine's launchers prepend `/c/Users/astro/claude-tmp/oclj/bin`, which holds a `make` that runs `mingw32-make` [M]. *Fix:* copy `bench/runs/2026-10-13-dispose/scripts/make-shim` (`exec mingw32-make "$@"`, the archived copy of that file) as `make` into a directory you put first on PATH, or call `mingw32-make` by hand [M]. On Linux the binary is `make` (GNU Make 4.2.1 in AlmaLinux 8 [M]), which PREREQUISITES 7 names [S].
 
 **P46. The DynASM echo proves a line was read, not assembled.** *Symptom:* a sabotaged .dasc line appears in `buildvm_arch.h`, yet nothing changed [I]. *Cause:* DynASM echoes every `|` line as `//|`, including lines in `.if DUALNUM` branches that are not assembled ([6.9](#69-reading-what-you-assembled)) [M]. *Fix:* pair the echo with object checks: lj_vm.o must change (negctl) or be fresh (build-native.sh) [S].
 
 **P47. The lexer rounds a wide literal before any operator sees it.** *Symptom:* `0x00ff00ff00ff00ff & 0xff` is 0; a mask like `0x3fffffffffffff` (54 bits) is really 2^54, so a test built on it is vacuous [M] (S7). *Cause:* every numeral becomes a double in the lexer (U9) [S]. *Fix:* build masks of at most 53 significant bits, or compute them (`2^53 - 1`), and check that a test's operands are what it assumes [S][M].
 
 **P48. Windows `luajit.exe` cannot open MSYS paths inside `-j` arguments.** *Symptom:* `-jdump=+rsT,/c/Users/...` fails to open its file, while the script argument works [M]. *Cause:* Git Bash converts a path that is a whole argument, not one embedded after a comma [I]. *Fix:* pass Windows-style paths (`cygpath -m`) inside `-j` options [M].
+
+**P49. Ubuntu hides a missing link flag, and the glibc floor.** *Symptom:* a Linux link, suite or library passes on Ubuntu and fails on AlmaLinux 8. In Alma, the native suites shim, security, mem and wd failed to link (`dlopen` undefined), and round 3's .so failed to load there (``version `GLIBC_2.38' not found``, `ldd -r`) [M] (the glibc round). *Cause:* from glibc 2.34, libpthread and libdl are part of libc. Ubuntu 26.04's `libpthread.a` and `libdl.a` are 8-byte empty archives (`ls -l`), so every flag combination links there (27 of 27 in the round's link matrix), and every import takes the newest version of its symbol in Ubuntu's glibc [M]. *Fix:* link and test Linux changes in AlmaLinux 8 as well, and build the release .so there ([7.7](#77-the-linux-path)). Step 6's ELF import gate and gradle's floor check read the artifact, not the host [S].
+
+**P50. A Windows DLL's md5 depends on its output path.** *Symptom:* the same sources, built into two `OCLJ_BUILD`s with identical objects, give DLLs of equal size that differ in 1300 bytes (dropin) and 1948 bytes (additive), the image base among them (`0x1ed2e0000` against `0x34c0b0000` for additive, `objdump -p`) [M] (the glibc round's `win-ab`, `cmp -l`). *Cause:* relinking both builds' objects at one output path gave byte-identical DLLs (`win-relink`) [M]; GNU ld's automatic DLL image base follows the output name [I]. At one path across days, the link's time differs too: the glibc round's DLLs in `build/native` (`3174ef37`, `1e9f4ac4`) differ from round 3's at the same path (`9ae455ce`, `2c37a7a1`) in 8 and 9 bytes, the COFF header's time stamp, the PE checksum and the export directory's time stamp, and nowhere else [M] (2026-10-20, a byte compare). *Fix:* compare objects, as for P13, or relink at one path; compare a DLL's md5 only with one linked at the same path [S]. The Linux .so does not show this: five AlmaLinux 8 builds into five `OCLJ_BUILD`s gave one md5 per variant [M].
+
+**P51. Shell code passed inline to `wsl.exe` is expanded before the distro's `sh` sees it.** *Symptom:* from Git Bash, `wsl.exe -d AlmaLinux-8 -- sh -c 'f=inner; echo "[$f]"'` prints `[]`, and `sh -c 'false; echo "rc=$?"'` prints `rc=0` [M]. In the glibc round this made rc echoes report 0 for builds that had failed, and mangled a `sed -n` script containing a `$` [M] (implementation reports). Separately, without `MSYS_NO_PATHCONV=1` Git Bash rewrites a `/mnt/c/x` argument to `C:/Program Files/Git/mnt/c/x` [M]. *Cause:* wsl.exe hands its command line to a shell inside the distro, which expands `$` before `sh -c` runs [I]. *Fix:* put the commands in a script file under `/mnt/c` and run `MSYS_NO_PATHCONV=1 wsl.exe -d <distro> -- sh /mnt/c/<script>`. Read the script's own summary file, never an rc echoed through wsl.exe [S]. **Variables do not cross either:** `X=1 wsl.exe ...` and an `export`ed X both arrive unset in the distro, and only `wsl.exe -d <distro> -- env X=1 sh /mnt/c/<script>` (or naming X in `WSLENV`) delivers it [M] (2026-10-20, scratch `claude-tmp/oclj/glibc/followup/docs-final/lt/env-1`; the review of the glibc round). A harness negative-control arm launched with its switch set on the Git Bash side runs the product and passes (disposeoff reads 82/0 either way), so check the run's `args.txt` [M].
+
+**P52. On `/mnt/c` every file is mode 0777, and WSL interop runs Windows executables.** *Symptom:* in AlmaLinux 8, a Windows `luajit.exe` given as the kernel patcher passed `[ -x ]`, ran, and failed with `cannot open /mnt/c/.../patch-machine-lua.lua`; the harness's message blamed a moved anchor in machine.lua [M] (the glibc round's `ff-patcher-1`). *Cause:* drvfs is mounted without metadata, so `stat` reads 777 for every file, and interop ran the .exe [M]. *Fix:* check what a binary is, not its mode: `smoke-test.sh` refuses a Windows executable on Linux by its first two bytes, `MZ` (:577) [S]. The runners' default `OCLJ_LUA53` is the Windows `lua.exe` (`run-bitop.sh` ~:82), and they fall back to the name without `.exe` only when `-x` fails (~:224), which on `/mnt/c` it never does; pass a Linux PUC explicitly ([7.7](#77-the-linux-path)) [S].
 
 ## 11. Verification discipline
 
@@ -1753,8 +1777,8 @@ Lessons from building the floor [M] (`impl-C2.json`): a loop that raises before 
 - **An arm** is one call, `arm <NAME> <file> '<suite:check ...>' '<old line(s)>' '<new line(s)>'` (the comment above `arm()`, ~:474; the calls, ~:547-630). Its new line must contain `SABOTAGE <NAME>:` (~:495). Add a row to the header's arm list, and its measured margin.
 - **A new catcher** needs a `run_*` function and a case in `runcatchers`, `rcof`, `check` and `info` (~:317-460). An unknown catcher fails setup with "unknown catcher".
 - **A new floor suite** (`t_idx.lua`, `t_cnt33.lua`) goes into `test/native/bitop/` and into run-bitjit.sh's file check and `inputs.md5` (~:120, ~:150). Give it option sets (the runner's own are fixed, ~:183-186), `-joff` as its reference, a PUC twin or a stated reason for none, and a coverage check.
-- **A new native/luajit file** goes into build-native.sh's `BITOP_FILES`, its include assertions and its freshness map (~:695-724, ~:792-795), and into negctl's `NATIVE_FILES`, `ALLFILES` and `objs_of` (~:186-189, ~:243-256).
-- **A newly patched upstream file** goes into `BITOP_PATCHES` (build-native.sh ~:696) and into negctl's `PATCHED`, `ALLFILES` and `objs_of`.
+- **A new native/luajit file** goes into build-native.sh's `BITOP_FILES`, its include assertions and its freshness map (~:784-817, ~:881-886), and into negctl's `NATIVE_FILES`, `ALLFILES` and `objs_of` (~:186-189, ~:243-256).
+- **A newly patched upstream file** goes into `BITOP_PATCHES` (build-native.sh ~:785) and into negctl's `PATCHED`, `ALLFILES` and `objs_of`.
 
 - **Cost**: a full run takes about 8 minutes (7 min 57 s on Windows, 6 min 20 s on Linux), leaves about 445 MB in its work directory and deletes nothing [M]. It belongs to the main session ([11.11](#1111-long-runs-and-results-directories)).
 - **The machinery was fail-firsted too** [M] (`impl-C3.json`, FF1-FF8): setup checks that exit 2 (a copy of the round-2 build, an extra line in `lj_parse.c`, a bogus arm name, a renamed stage-4 block, the wrong `eris_lj.o`); BROKEN arms (a no-op `1 &&`, a missing anchor, a missing marker, a two-line change); an arm held to the wrong catcher (NOT CAUGHT); a restore that skipped one file (FAIL).
@@ -1969,7 +1993,7 @@ What each does [S]:
 | runner | knob | default | meaning |
 |---|---|---|---|
 | all | `OCLJ_BUILD` | `build/native` | where the luajit.exe, the archive and the objects are |
-| all | `OCLJ_LUA53` | `bench/vendor/lua-5.3.6/src/lua.exe` | PUC 5.3.6; refused unless `-v` says "Lua 5.3.6" |
+| all | `OCLJ_LUA53` | `bench/vendor/lua-5.3.6/src/lua.exe` | PUC 5.3.6; refused unless `-v` says "Lua 5.3.6". On Linux, pass one built on that distribution ([7.7](#77-the-linux-path), P52) |
 | `run-bitop.sh` | `OCLJ_BITOP_OUT`, `OCLJ_JNI`, `OCLJ_SHIM`, `CC` | fresh `$OCLJ_BUILD/bitop-<stamp>` | part 3 needs `jni.h`; without PUC, part 2 says SKIPPED |
 | `run-bitjit.sh` | `OCLJ_BITJIT_PARTS` | `gen floor fix1` | a subset proves only its parts, and says so |
 | | `OCLJ_BITJIT_SEED`, `_SEEDS`, `_CASES` | 1, 4, 2000 | the generator's size (about 40 s, about 42 MB) |

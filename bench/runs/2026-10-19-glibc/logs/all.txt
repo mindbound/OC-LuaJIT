@@ -1,0 +1,26 @@
+20:45:52 start; HEAD 3adfeaf7; 20 changed files
+20:46:03 ff gradle on today's dist rc=1 needs GLIBC_2.38, above the glibc floor GLIBC_2.28
+20:46:53 ff alma rc=0
+20:47:22 ff ubuntu rc=0
+  ff-alma: oldlink want=fail rc=1 match=yes [imports these symbols with NO version: pthread_attr_setstacksize pthread_condattr_setclock pthread_create pthread_join pthread_setname_np pthread_sigmask] -> AS-WANTED
+  ff-alma: head want=pass rc=0 match=yes [luajit  = .* @ unknown] -> AS-WANTED
+  ff-alma: nogit want=fail rc=1 match=yes [cannot read the LuaJIT checkout's commit] -> AS-WANTED
+  ff-alma: release want=pass rc=0 match=yes [luajit  = .* @ 1ee778a4] -> AS-WANTED
+  ff-alma: [build] copying /mnt/c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit -> /mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ff-alma/release/build/native/luajit-linux-x86_64 (the source tree is built in place; we never dirty the checkout)
+  ff-alma: relfile want=pass rc=0 match=yes [luajit  = .* @ 1ee778a4] -> AS-WANTED
+  ff-alma: release and relfile .so: byte-identical -> AS-WANTED
+  ff-ubuntu: floor want=fail rc=1 match=yes [needs more than OCLJ_GLIBC_MAX=2.28 allows] -> AS-WANTED
+  ff-ubuntu: dev want=pass rc=0 match=yes [highest version needed GLIBC_2[.]38, NOT within the release floor] -> AS-WANTED
+20:48:23 build windows: build-dropin exit=0 build-additive exit=0 
+20:48:43 build alma (release): build-dropin exit=0 build-additive exit=0 
+20:49:13 build ubuntu (dev): build-dropin exit=0 build-additive exit=0 
+21:10:51 suites windows: mem 0 negctl-bitop 0 negctl-pack 0 negctl 0 penalty 0 race 0 run-bitfuzz 0 run-bitjit 0 run-bitop 0 run-pack 0 run-packfuzz 0 security 0 ser-negctl 0 ser-test 0 shim 0 vgc 0 wd 0 
+21:25:06 suites alma: mem 0 negctl-bitop 0 negctl-pack 0 negctl 1 penalty 0 race 2 run-bitfuzz 0 run-bitjit 0 run-bitop 0 run-packfuzz 0 run-pack 0 security 0 ser-negctl 0 ser-test 2 shim 0 vgc 0 wd 0 
+21:26:21 suites ubuntu: mem 0 penalty 0 race 2 run-bitfuzz 0 run-bitjit 0 run-bitop 0 run-pack 0 run-packfuzz 0 security 0 ser-negctl 0 ser-test 0 shim 0 vgc 0 wd 0 
+21:26:21 frozen /c/Users/astro/claude-tmp/oclj/new-gl-3174ef37 /c/Users/astro/claude-tmp/oclj/new-gl-linux-6c888050
+21:38:27 harness windows: gl-additive-on exit=0 CHECKS: 82   FAILURES: 0   WALL: 93.4s;gl-dropin exit=0 CHECKS: 69   FAILURES: 0   WALL: 100.1s;gl-additive-off exit=0 CHECKS: 80   FAILURES: 0   WALL: 102.7s;gl-sieve exit=0 CHECKS: 76   FAILURES: 0   WALL: 83.4s;gl-stock exit=0 CHECKS: 53   FAILURES: 0   WALL: 100.5s;gl-disposeoff exit=0 CHECKS: 82   FAILURES: 0   WALL: 99.8s;gl-bundleoff exit=1 CHECKS: 82   FAILURES: 3   WALL: 100.8s;
+21:49:02 harness alma: lx-additive-on exit=0 CHECKS: 82   FAILURES: 0   WALL: 83.4s;lx-dropin exit=0 CHECKS: 69   FAILURES: 0   WALL: 85.8s;lx-additive-off exit=0 CHECKS: 80   FAILURES: 0   WALL: 85.7s;lx-sieve exit=0 CHECKS: 76   FAILURES: 0   WALL: 71.8s;lx-stock exit=0 CHECKS: 53   FAILURES: 0   WALL: 75.0s;lx-disposeoff exit=0 CHECKS: 82   FAILURES: 0   WALL: 83.4s;lx-bundleoff exit=1 CHECKS: 82   FAILURES: 3   WALL: 84.6s;
+21:50:34 harness ubuntu additive-on: exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 80.4s
+21:50:36 gradle verifyModAssets rc=0 needs at most GLIBC_2.17
+21:50:52 gradle build rc=0
+21:50:52 done

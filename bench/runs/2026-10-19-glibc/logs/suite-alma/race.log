@@ -1,0 +1,1 @@
+run-race.sh: race_test.c is Win32-only (CreateThread); nothing to run on Linux

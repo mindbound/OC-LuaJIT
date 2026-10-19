@@ -122,10 +122,25 @@
 #                                      libdir-additive for OCLJ_VARIANT=additive)
 #   CC          C compiler              (default gcc; MinGW-w64 on Windows)
 #   JOBS        make -j                 (default 4)
+#   OCLJ_GLIBC_MAX  Linux only: the newest glibc symbol version the .so may
+#               need, as x.y (2.28).  Set, a .so that needs a newer GLIBC_x.y,
+#               or any version outside the GLIBC_x.y family, is a BUILD FAIL.
+#               Unset (default), step 6 reports the highest version needed and
+#               whether it is within the release floor, 2.28, and goes on, so a
+#               development build on a newer distribution still finishes.  The
+#               release build sets 2.28 (PREREQUISITES 7).
 #
 # USAGE
 #   OCLJ_JNLUA=/path/to/OC-JNLua OCLJ_JNI="/c/Program Files/Java/jdk1.8.0_211/include" \
 #     sh build-native.sh
+#
+#   The release Linux .so, in AlmaLinux 8 (glibc 2.28; PREREQUISITES 7):
+#     OCLJ_GLIBC_MAX=2.28 OCLJ_VARIANT=additive OCLJ_JNLUA=/path/to/OC-JNLua \
+#       OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include sh build-native.sh
+#   A Linux build on a newer distribution (Ubuntu 26.04: GLIBC_2.38) is a
+#   development build.  Give it its own OCLJ_BUILD: the additive variant
+#   collects into $OCLJ_BUILD/dist, which gradle packages and which must hold
+#   the release .so.
 #
 # OUTPUT
 #   $OCLJ_OUT/libjnlua52-<os>-<arch><ext>       e.g. -windows-x86_64.dll
@@ -170,6 +185,7 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_JNI:=}"
 : "${CC:=gcc}"
 : "${JOBS:=4}"
+: "${OCLJ_GLIBC_MAX:=}"
 
 # WHICH LIBRARY THIS BUILD PRODUCES, and it is two different products.
 #
@@ -251,6 +267,27 @@ esac
 #   LINK_EXTRA --enable-stdcall-fixup is a PE/MinGW linker option and an ERROR
 #              on ELF.  -static-libgcc keeps us off a libgcc the host may not
 #              have, and is wanted wherever gcc is the compiler.
+#              Linux adds -pthread and -Wl,--no-undefined.  Before glibc 2.34
+#              the watchdog's pthread_create, pthread_join,
+#              pthread_condattr_setclock, pthread_setname_np, pthread_sigmask
+#              and pthread_attr_setstacksize live in libpthread, and a link
+#              without -pthread left all six undefined with NO symbol version
+#              and no NEEDED libpthread: they resolved only because the JVM
+#              had libpthread loaded already (AlmaLinux 8, glibc 2.28,
+#              2026-10-19).  With it they are pthread_create@GLIBC_2.2.5 and
+#              so on, and the highest version needed stays GLIBC_2.17; from
+#              2.34 they are in libc and the .so is byte-identical with or
+#              without it.  --no-undefined makes any such gap a link error
+#              (without -pthread the AlmaLinux 8 link fails, naming the six).
+#              A JNI library may use it: jnlua.c reaches the JVM only through
+#              the JNIEnv tables (javavm.c is not linked), so every undefined
+#              symbol must come from a library this line or -lm names.  NOT
+#              -ldl: nothing we link reaches lib_package's dlopen (the .so
+#              imports none of libdl's functions; its one dl_ import,
+#              dl_iterate_phdr from libgcc's unwinder, is libc's), and
+#              before 2.34 -ldl would only add a
+#              NEEDED libdl.so.2.  The test runners need -ldl (luaL_openlibs);
+#              this library does not.  Step 6 checks the artifact itself.
 #   PICFLAG    LuaJIT's BUILDMODE=static does NOT compile position-independent
 #              code by default, and linking a non-PIC archive into a shared
 #              object fails on x86-64 ELF with a relocation error against .text.
@@ -266,7 +303,7 @@ esac
 case $OCLJ_OS in
   windows) LIBEXT=.dll   ; JNI_MD=win32    ; LINK_EXTRA="-static-libgcc -Wl,--enable-stdcall-fixup" ; PICFLAG= ;;
   darwin)  LIBEXT=.dylib ; JNI_MD=darwin   ; LINK_EXTRA=""                ; PICFLAG=-fPIC ;;
-  *)       LIBEXT=.so    ; JNI_MD=$OCLJ_OS ; LINK_EXTRA="-static-libgcc"  ; PICFLAG=-fPIC ;;
+  *)       LIBEXT=.so    ; JNI_MD=$OCLJ_OS ; LINK_EXTRA="-static-libgcc -pthread -Wl,--no-undefined" ; PICFLAG=-fPIC ;;
 esac
 PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 
@@ -310,6 +347,20 @@ if [ "$OCLJ_OS" != windows ] && [ "$OCLJ_OS" != linux ]; then
   say "    NOTE: on $OCLJ_OS this build is expected to stop in step 2 at lj52shim.c's"
   say "          #error \"lj52 watchdog: only the Win32 and Linux backends exist\"."
   say "          Everything before it works here."
+fi
+# THE GLIBC FLOOR, which step 6 measures a Linux library against (OCLJ_GLIBC_MAX
+# under EXTERNAL INPUTS).  A malformed limit is refused here, before the build.
+GLIBC_FLOOR=2.28   # the release floor; gradle's verifyModAssets refuses a .so above it
+if [ -n "$OCLJ_GLIBC_MAX" ]; then
+  awk -v v="$OCLJ_GLIBC_MAX" 'BEGIN { exit !(v ~ /^[0-9]+([.][0-9]+)+$/) }' \
+    || fail "OCLJ_GLIBC_MAX='$OCLJ_GLIBC_MAX' is not a glibc version written x.y, such as 2.28"
+  if [ "$OCLJ_OS" = linux ]; then
+    say "glibc   = the library may need at most GLIBC_$OCLJ_GLIBC_MAX (OCLJ_GLIBC_MAX; checked in step 6)"
+  else
+    say "glibc   = OCLJ_GLIBC_MAX=$OCLJ_GLIBC_MAX does not apply: a $OCLJ_OS library imports no glibc"
+  fi
+elif [ "$OCLJ_OS" = linux ]; then
+  say "glibc   = reported against the release floor GLIBC_$GLIBC_FLOOR in step 6, not enforced (OCLJ_GLIBC_MAX unset)"
 fi
 command -v "$CC" >/dev/null 2>&1 || fail "no C compiler '$CC' on PATH (MinGW-w64 gcc on Windows, gcc or clang elsewhere)"
 say "cc      = $("$CC" --version | head -1)"
@@ -474,9 +525,47 @@ grep -q 'lj52shim.h' "$OCLJ_SER/eris_lj.c" \
   && fail "serializer/eris_lj.c includes the shim header.  Its internal
          bytecode load path must reach the genuine lua_loadx directly."
 
-LJ_COMMIT=$(git -C "$OCLJ_LUAJIT" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+# THE CHECKOUT'S COMMIT, WITH OR WITHOUT git.  LJ_COMMIT is the first field of
+# the blob fingerprint (ERIS_LJ_COMMIT, step 4), so two natives restore each
+# other's blobs only when they agree on it.  It used to fall back to "unknown"
+# when git was missing, and the AlmaLinux 8 release host had no git (until
+# 2026-10-19): its .so
+# said "unknown|..." where the Windows DLL said "1ee778a4|...", and no blob
+# could move between them (measured 2026-10-19).  So read .git/HEAD when git
+# cannot run (a detached HEAD holds the hash itself; a branch names a ref file
+# or a packed-refs line), and refuse to build a fingerprint without it.  Both
+# ways take the full hash and keep its first 8 digits: git's --short=8 grows a
+# digit when 8 are ambiguous, and the two ways must never disagree.  git is
+# pointed at the checkout's OWN .git (--git-dir, which also takes a worktree's
+# "gitdir:" file): with -C it would walk up from a tree that has no .git of its
+# own into an enclosing repository, and an exported GIT_DIR (as in a git hook)
+# would override -C, either way stamping some other repository's commit
+# (measured 2026-10-20, review of the glibc round).
+git_head() {
+  # git_head <checkout> -- the checkout's HEAD commit, 8 hex digits, or nothing
+  gh_h=$(git --git-dir="$1/.git" rev-parse HEAD 2>/dev/null) || gh_h=
+  if [ -z "$gh_h" ]; then
+    gh_h=$(cat "$1/.git/HEAD" 2>/dev/null) || gh_h=
+    case $gh_h in
+      "ref: "*)
+        gh_r=${gh_h#ref: }
+        gh_h=$(cat "$1/.git/$gh_r" 2>/dev/null) \
+          || gh_h=$(awk -v r="$gh_r" '$2 == r { print $1 }' "$1/.git/packed-refs" 2>/dev/null) \
+          || gh_h= ;;
+    esac
+  fi
+  case $gh_h in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) printf '%s\n' "$gh_h" | cut -c1-8 ;;
+  esac
+}
+LJ_COMMIT=$(git_head "$OCLJ_LUAJIT")
+[ -n "$LJ_COMMIT" ] || fail "cannot read the LuaJIT checkout's commit at $OCLJ_LUAJIT
+         (no git on PATH, and no readable .git/HEAD).  The blob fingerprint
+         names that commit, so a native built without it could never restore a
+         blob another build wrote.  Install git, or keep the checkout's .git."
+JNLUA_COMMIT=$(git_head "$OCLJ_JNLUA")
 say "luajit  = $OCLJ_LUAJIT @ $LJ_COMMIT (feature set: native/luajit/oclj_features.h)"
-say "jnlua   = $OCLJ_JNLUA @ $(git -C "$OCLJ_JNLUA" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)"
+say "jnlua   = $OCLJ_JNLUA @ ${JNLUA_COMMIT:-unknown}"
 say "shim    = $OCLJ_SHIM"
 say "out     = $OCLJ_OUT/$DLL_NAME"
 
@@ -1791,6 +1880,109 @@ else
   say "    (this build has NOT been checked for the dropin/additive mix-up)"
 fi
 
+# BEGIN ELF IMPORT GATE (the markers let a test run this text on any .so)
+# ELF: EVERY IMPORT CARRIES A SYMBOL VERSION, AND THE GLIBC THE LIBRARY NEEDS
+# IS MEASURED.
+#
+# A Linux .so fails to load on an older distribution in one way: it needs a
+# symbol version that glibc lacks ("version `GLIBC_2.38' not found").  Each
+# import carries the newest version the BUILD host's glibc offered for that
+# symbol, so the floor is the build host's: the .so built on Ubuntu 26.04
+# needs GLIBC_2.38 and loads on neither Ubuntu 22.04, Debian 12 nor RHEL 9.
+# The release floor is GLIBC_2.28, the release .so is built in AlmaLinux 8,
+# and gradle's verifyModAssets refuses a .so above the floor.  Here,
+# OCLJ_GLIBC_MAX set makes the limit a BUILD FAIL (the release build); unset,
+# the verdict against the floor is reported and the build goes on (a
+# development build).  A version outside the GLIBC_x.y family counts against
+# the limit too: GLIBC_PRIVATE ties the library to one glibc build, and GCC_x.y
+# means libgcc_s, which -static-libgcc keeps out (measured: a link without it
+# needs GCC_3.0 and GCC_3.3).
+#
+# An UNVERSIONED import is refused whatever the limit.  It names no library and
+# no version, so it binds to whatever the host process has loaded: the six
+# pthread functions of a link without -pthread on glibc 2.28 did, inside a JVM,
+# and in a host without libpthread the same .so loads lazily, then exits at its
+# first pthread_create ("symbol lookup error: undefined symbol: pthread_create";
+# ldd -r shows all six, ldd -d none).  LINK_EXTRA's --no-undefined stops that at
+# the link; this checks the artifact, so a dropped flag cannot pass silently.
+# A WEAK undefined reference (__gmon_start__, the TM clone hooks) is optional
+# by definition: listed, not refused.
+#
+# readelf, not objdump: its "name@GLIBC_x.y" spelling and its columns are the
+# same in binutils 2.30 (AlmaLinux 8) and 2.46 (Ubuntu 26.04), and -V prints
+# the version NEEDS (.gnu.version_r), which are what the loader checks.
+# objdump -T 2.46 puts a reference's version in parentheses and prints an
+# unversioned one as "Base" or as nothing, depending on the file.  -W stops
+# readelf truncating names.  Versions compare component by component (2.4 <
+# 2.17 < 2.38), by the one awk function below, never as strings.
+#
+# FreeBSD is ELF without glibc and stops at the shim's #error before the
+# link, so only Linux is checked.
+if [ "$OCLJ_OS" = linux ]; then
+  SOF=$OCLJ_OUT/$DLL_NAME
+  command -v readelf >/dev/null 2>&1 || fail "no readelf on PATH: it reads the library's imports and the
+       glibc versions they need (binutils, the package the linker comes in)"
+  VGT='function vgt(a, b,   x, y, na, nb, i, p, q) {
+    na = split(a, x, "[.]"); nb = split(b, y, "[.]")
+    for (i = 1; i <= na || i <= nb; i++) {
+      p = (i <= na) ? x[i] + 0 : 0; q = (i <= nb) ? y[i] + 0 : 0
+      if (p != q) return (p > q)
+    }
+    return 0
+  }
+'
+  DYN=$(readelf --dyn-syms -W "$SOF") || fail "readelf --dyn-syms failed on $SOF"
+  UND=$(printf '%s\n' "$DYN" | awk '$1 ~ /^[0-9]+:$/ && $7 == "UND" && NF >= 8')
+  # THE READER FIRST.  On a truncated file readelf prints no symbols and exits
+  # 0, and an empty list would pass every check below vacuously.
+  NUND=$(printf '%s\n' "$UND" | grep -c .)
+  [ "$NUND" -gt 0 ] || fail "readelf listed no undefined dynamic symbols in $SOF: the reader is
+       not reading, and the import checks would pass vacuously"
+  UNV=$(printf '%s\n' "$UND" | awk '$5 != "WEAK" && $8 !~ /@/ {print $8}' | sort -u | tr '\n' ' ')
+  [ -z "$UNV" ] || fail "$DLL_NAME imports these symbols with NO version: $UNV
+       Each binds to whatever the host process happens to have loaded, and a host
+       without it cannot load the library.  The link must name the library that
+       defines them (LINK_EXTRA: -pthread, for the pthread functions before glibc 2.34)."
+  WEAKU=$(printf '%s\n' "$UND" | awk '$5 == "WEAK" && $8 !~ /@/ {print $8}' | sort -u | tr '\n' ' ' | sed 's/ *$//')
+  # The version needs, one "<version> <file>" line each, from the needs section only.
+  NEEDS=$(readelf -V -W "$SOF" | awk '/Version needs section/ {s = 1; next} /Version [a-z]+ section/ {s = 0}
+    s {for (i = 1; i < NF; i++) {if ($i == "File:") f = $(i + 1); if ($i == "Name:") print $(i + 1), f}}')
+  GMAX=$(printf '%s\n' "$NEEDS" | awk "$VGT"'$1 ~ /^GLIBC_[0-9]+([.][0-9]+)+$/ {v = substr($1, 7); if (m == "" || vgt(v, m)) m = v} END {print m}')
+  [ -n "$GMAX" ] || fail "readelf -V found no GLIBC_x.y version need in $SOF: no evidence of
+       which glibc it needs"
+  NEEDED=$(readelf -d -W "$SOF" | awk '$2 == "(NEEDED)" {print $NF}' | tr -d '[]' | tr '\n' ' ' | sed 's/ *$//')
+  say "    ELF imports: $NUND undefined, every non-weak one versioned (weak and unversioned: ${WEAKU:-none})"
+  say "    NEEDED: $NEEDED"
+  LIMIT=${OCLJ_GLIBC_MAX:-$GLIBC_FLOOR}
+  ABOVE=$(printf '%s\n' "$NEEDS" | awk -v lim="$LIMIT" "$VGT"'$1 ~ /^GLIBC_[0-9]+([.][0-9]+)+$/ && vgt(substr($1, 7), lim) {print $1 " (" $2 ")"}' | sort -u | tr '\n' ' ' | sed 's/ *$//')
+  ODD=$(printf '%s\n' "$NEEDS" | awk 'NF && $1 !~ /^GLIBC_[0-9]+([.][0-9]+)+$/ {print $1 " (" $2 ")"}' | sort -u | tr '\n' ' ' | sed 's/ *$//')
+  SYMA=$(printf '%s\n' "$UND" | awk -v lim="$LIMIT" "$VGT"'{n = index($8, "@GLIBC_"); if (n && vgt(substr($8, n + 7), lim)) print $8}' | sort -u)
+  NSYMA=$(printf '%s\n' "$SYMA" | grep -c .)
+  SYMA=$(printf '%s\n' "$SYMA" | head -12 | tr '\n' ' ' | sed 's/ *$//')
+  HA="this host's glibc is too new: the release .so is built in AlmaLinux 8 (glibc 2.28; PREREQUISITES 7)"
+  HO="GLIBC_PRIVATE ties it to one glibc build; GCC_x.y is libgcc_s, which LINK_EXTRA's -static-libgcc keeps out"
+  if [ -n "$OCLJ_GLIBC_MAX" ]; then
+    [ -z "$ABOVE$ODD" ] || fail "$DLL_NAME needs more than OCLJ_GLIBC_MAX=$OCLJ_GLIBC_MAX allows (highest GLIBC_x.y: GLIBC_$GMAX).
+       Needs above GLIBC_$LIMIT: ${ABOVE:-none}
+       Needs outside GLIBC_x.y: ${ODD:-none}
+       $NSYMA imports above GLIBC_$LIMIT${SYMA:+, e.g. }$SYMA${ABOVE:+
+       Above: $HA}${ODD:+
+       Outside: $HO}"
+    say "    glibc: highest version needed GLIBC_$GMAX, within OCLJ_GLIBC_MAX=$OCLJ_GLIBC_MAX"
+  elif [ -z "$ABOVE$ODD" ]; then
+    say "    glibc: highest version needed GLIBC_$GMAX, within the release floor GLIBC_$GLIBC_FLOOR (OCLJ_GLIBC_MAX unset: not enforced)"
+  else
+    say "    glibc: highest version needed GLIBC_$GMAX, NOT within the release floor GLIBC_$GLIBC_FLOOR (OCLJ_GLIBC_MAX unset: not enforced)"
+    [ -z "$ABOVE" ] || say "        needs above the floor: $ABOVE"
+    [ -z "$ABOVE" ] || say "        $NSYMA imports above it, e.g. $SYMA"
+    [ -z "$ABOVE" ] || say "        $HA"
+    [ -z "$ODD" ]   || say "        needs outside GLIBC_x.y: $ODD"
+    [ -z "$ODD" ]   || say "        $HO"
+    say "        A development build: gradle's verifyModAssets refuses to package this .so."
+  fi
+fi
+# END ELF IMPORT GATE
+
 SZ=$(wc -c < "$OCLJ_OUT/$DLL_NAME")
 SHA=$(sha256sum "$OCLJ_OUT/$DLL_NAME" 2>/dev/null | cut -c1-16)
 stamp "OK  $OCLJ_OUT/$DLL_NAME  ${SZ} bytes  sha256:${SHA}..."
@@ -1854,6 +2046,25 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #    committed copy.  Any Python 3; the generator uses the standard library.
 #
 # 6. Nothing else.  eris_lj.c and lj52shim.c are in this repo.
+#
+# 7. On Linux: gcc, GNU make, binutils (readelf, objdump, nm), a JDK's
+#    include/ directory (jni.h and linux/jni_md.h), and item 5's Python 3.
+#    THE RELEASE .so IS BUILT IN ALMALINUX 8 (glibc 2.28, gcc 8.5.0, binutils
+#    2.30; the JDK from java-1.8.0-openjdk-devel), with OCLJ_GLIBC_MAX=2.28:
+#      OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include
+#    Each import carries the version the LINKING host's glibc offers for it,
+#    so the floor is the build host's: Ubuntu 26.04 (glibc 2.43, gcc 15.2)
+#    gives a .so that needs GLIBC_2.38 (fmod, __isoc23_strtoul) and does not
+#    load on Ubuntu 22.04, Debian 12 or RHEL 9 (2026-10-19).  Step 6 reports
+#    it, or enforces OCLJ_GLIBC_MAX.
+#    The LuaJIT checkout's commit goes into the blob fingerprint (git_head):
+#    from git when it can read the checkout's own .git, else from .git/HEAD
+#    (a detached hash, a loose ref or a packed-refs line).  With neither, the
+#    build fails ("cannot read the LuaJIT checkout's commit"): a native that
+#    stamped "unknown" could never restore a blob another build wrote
+#    (eris_lj.c refuses a blob whose fingerprint differs).  AlmaLinux 8 had
+#    no git until 2026-10-19; it has git 2.43.7 now, and both ways give
+#    byte-identical libraries.
 #
 # The smoke test needs three more things (ocelot-brain, its jar deps, and a
 # Scala compiler); see the header of smoke-test.sh.

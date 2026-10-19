@@ -1,0 +1,12 @@
+== libjnlua52-linux-x86_64.so
+GLIBC_2.2.5 GLIBC_2.3 GLIBC_2.3.2 GLIBC_2.3.4 GLIBC_2.4 GLIBC_2.14 GLIBC_2.17 GLIBC_2.29 GLIBC_2.32 GLIBC_2.34 GLIBC_2.35 GLIBC_2.38 
+  NEEDED [libm.so.6]
+  NEEDED [libc.so.6]
+  NEEDED [ld-linux-x86-64.so.2]
+  fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+== libjnluajit52-linux-x86_64.so
+GLIBC_2.2.5 GLIBC_2.3 GLIBC_2.3.2 GLIBC_2.3.4 GLIBC_2.4 GLIBC_2.14 GLIBC_2.17 GLIBC_2.29 GLIBC_2.32 GLIBC_2.34 GLIBC_2.35 GLIBC_2.38 
+  NEEDED [libm.so.6]
+  NEEDED [libc.so.6]
+  NEEDED [ld-linux-x86-64.so.2]
+  fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64

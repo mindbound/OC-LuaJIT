@@ -1,0 +1,2 @@
+floor want=fail rc=1 match=yes [needs more than OCLJ_GLIBC_MAX=2.28 allows] -> AS-WANTED
+dev want=pass rc=0 match=yes [highest version needed GLIBC_2[.]38, NOT within the release floor] -> AS-WANTED

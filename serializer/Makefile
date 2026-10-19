@@ -21,11 +21,12 @@ else ifneq (,$(findstring MSYS,$(UNAME_S)))
 else ifeq (Linux,$(UNAME_S))
   OCLJ_OS := linux
   EXE :=
-  LIBS := -lpthread -lm -ldl
+  # The test runners' one Linux tail (test/native/run.sh says why).
+  LIBS := -lm -pthread -ldl
 else
   OCLJ_OS := unsupported-$(UNAME_S)
   EXE :=
-  LIBS := -lpthread -lm -ldl
+  LIBS := -lm -pthread -ldl
 endif
 ifneq (,$(filter x86_64 amd64,$(UNAME_M)))
   OCLJ_ARCH := x86_64

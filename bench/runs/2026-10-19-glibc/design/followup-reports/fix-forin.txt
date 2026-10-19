@@ -1,0 +1,89 @@
+SUMMARY: I applied inv-forin's fix to the repo's serializer/tests/forin.lua. It is a test-only fix: the serializer, the fixture and run-forin.sh are unchanged. The fix has two parts.
+- diag_suspended takes a new `nojit` argument and calls `jit.off(chunk, true)`. diag_identity, which also feeds the diagblob reference writer, passes true.
+- A new gc64_addr filter requires the payload window to read as a GC64 address in both blobs.
+
+I also updated the known-limitations bullet in serializer/README.md that describes the identity check. The code is byte-identical to inv-forin's v-fixed; only the comments are reworded.
+
+Verified [M] in fresh scratch copies of serializer/, built with the repo Makefile against the scratch archives. The final repo file passed diag/4-identity in 1000 of 1000 fresh processes on AlmaLinux 8, 500 of 500 on Ubuntu and 500 of 500 on Windows. The full tests/run-forin.sh passes on all three (31 OK, rc 0).
+
+The same code, checked earlier before a one-line comment edit, passed 2000/2000 on Alma, 2000/2000 on Ubuntu and 1000/1000 on Windows. Same-session pristine controls failed 20/2000 (Alma), 18/2000 (Ubuntu) and 7/1000 (Windows).
+
+The check still fails on a real identity break, on all three platforms:
+- In-process pair break (coB over a different table): 20 of 20 fail with 'cannot localise ... 0 candidates'.
+- Changed value: 20 of 20 fail with 'body differs from the reference at byte 171'.
+- Changed shape: 20 of 20 fail with 'lengths 521 vs 516'.
+
+Each fix part is also shown to be load-bearing:
+- Under forced tracing (hotloop=1), the final file passes 20 of 20 on every platform. The same file with `nojit` set to false fails 19, 19 and 20 of 20 (Alma, Ubuntu, Windows).
+- A one-line sabotage removing gc64_addr brings back the '2 candidates' failure on a real Ubuntu pair. It also brings back the false accept of a one-ulp difference in a real double.
+
+The fixed reference writer (diagblob) writes a blob matching the committed fixture outside the link payload on all three platforms. The fixture needs no regeneration.
+
+PRODUCT_ISSUE: NONE. The flake was in the test, and it occurs at the same rate on Windows as on Linux: pristine 7/1000 on Windows, 20/2000 on AlmaLinux 8 and 18/2000 on Ubuntu, all in this session [M]. The serializer and the fixture are unchanged; the fixed reference writer reproduces the committed fixture outside the masked link payload on all three platforms [M]. One documentation inaccuracy, already corrected in the README known-limitations bullet, is not a behaviour difference. Thread blobs carry a continuation frame's raw lj_cont_* code address and contpc in its slots. Both are inert because u_thread pass 3 overwrites f-4..f (eris_lj.c:2762-2769) [S][M]. They are platform-independent.
+-- findings
+  * Applied [S]. serializer/tests/forin.lua, final md5 41b0fd3fd609bd5ea7bd3cdbec610613, was 6bf14b5b. 0 CR by bytes, 39975 bytes. Changes: (1) `local function diag_suspended(shape, tbl, nojit)` plus `if nojit and jit then jit.off(chunk, true) end` right after loadstring. (2) diag_identity passes true; the reference writer (ELJ_MODE=diagblob) goes through diag_identity too. (3) `local function gc64_addr(b, p) return p + 7 <= #b and b:byte(p + 5) < 128 and b:byte(p + 6) == 0 and b:byte(p + 7) == 0 end`, and the candidate test becomes `bodyA:byte(p - 1) == 4 and last < p + 8 and gc64_addr(bodyA, p) and gc64_addr(bodyB, p)`. The code is byte-identical to inv-forin's v-fixed; the diff is comments only. I changed 'shared ... in the process' to 'in the VM', named u_thread's pass 3, and gave a precise reason the right-shifted window fails.
+  * The comments' claims, checked [S][M]. HOTCOUNT_SIZE is 64 and counters are indexed by pc (lj_dispatch.h:75,127 of the win-fixed build copy) [S]. LJ_GCVMASK is ((1<<47)-1) (lj_obj.h:291) [S]. Pass 3 writes f-3 (cont address), f-2 (contpc), f (link) and, for a stitch, f-4 = +0.0 (eris_lj.c:2762-2769) [S]. In the fixture, the byte after the payload (body byte 507) is 2, which decode.py reads as 'nframes 2'; so the right-shifted window ends in the frame count and fails `byte(p+7) == 0` [M].
+  * Final-file census [M], runs/final-<plat>-final. Alma: 1000 of 1000 rc=0, identity OK. Ubuntu: 500 of 500. Windows: 500 of 500. Every one of the 2000 processes exited 0, so no other diag case failed either. The required minimum was 100 / 50 / 50.
+  * Earlier census of the same code, before a one-line comment edit (v-fixed, md5 2fb7ca75) [M], runs/<plat>-fixed-census. Alma 2000/2000, Ubuntu 2000/2000, Windows 1000/1000. Same-session pristine control (HEAD's forin.lua, md5 6bf14b5b) [M], runs/<plat>-orig-census. Alma 20/2000 fail (17 'differ in length', 3 'cannot localise: 2 candidates'); Ubuntu 18/2000 (15 + 3); Windows 7/1000 (7 length). This reproduces inv-forin's rate of about 1%. [I] If the fixed code still failed at the pristine rate (about 0.009), 0 failures in the 7000 fixed-code processes would have probability around e^-60.
+  * It fails on a real identity break [M], 20 fresh processes each, every failing process rc=1, so only 4-identity failed. On the final file (runs/final-<plat>-final-sab-pair), coB built over {..,61} fails 20/20 on Alma, Ubuntu and Windows with 'cannot localise the frame-link payload: 0 candidates for diffs at 171..500/501'. On the same code before the comment edit (runs/<plat>-sab-*-arm): changed value fails 20/20 per platform with 'body differs from the reference at byte 171 (lengths 516 vs 516)'; changed shape (yield(k, k)) fails 20/20 with 'body differs from the reference at byte 7 (lengths 521 vs 516)'; the pair break fails 20/20.
+  * The nojit part is load-bearing [M]. The scratch-only instrument adds `jit.opt.start("hotloop=1")` to case 4-identity before diag_identity. Final file plus instrument (runs/final-<plat>-final-hl): 20/20 pass on all three. The same file with `nojit` set to false (final-hl-nojitfalse): Alma 19/20 fail, Ubuntu 19/20, Windows 20/20. The failures read 'lengths 536 vs 516' (both chunks stitched) or 'differ in length' (one stitched). Pristine plus instrument (runs/<plat>-hl-orig-arm): 20/20 fail on each platform.
+  * The gc64 part is load-bearing [M], probe-out/probe-win.txt and probe-win-final.txt. I ran inv-forin's probe-window.lua (md5 4a5f0cee), which slices each file's own diag_link_window, on real pairs: normal (win dump-1), ambiguous (ubuntu-instr2 dump-3) and stitch-one (alma dump-37). It also runs two synthetic pairs. Final file: normal OK 499..506; ambiguous OK 499..506; stitch-one ERR 'differ in length'; double low-bit ERR '0 candidates'; pc low byte 4 OK 6..13. Pristine file and the one-line sabotage that drops the gc64 condition (probe-src/nogc64): ambiguous ERR '2 candidates for diffs at 500..501', double low-bit wrongly OK 6..13, synthetic pc ERR '2 candidates'.
+  * Full suite [M], runs/final-<plat>-full-run-forin.log, with the final file as tests/forin.lua. FOR-IN RESULT 'all cases exact across every pad', rc 0, 31 OK lines on Alma, Ubuntu and Windows. 4-identity reads '516 body bytes identical to tests/fixtures/forin-identity.blob outside the frame-link payload at 499..506 (format 3)'.
+  * The reference writer still writes the fixture's value [M], runs/diagblob/cmp.txt. I ran ELJ_MODE=diagblob with the fixed file on each platform and compared each blob with tests/fixtures/forin-identity.blob (md5 299c8193, unchanged). Header equal, body 516 vs 516, differing only at body bytes 499..504, inside the masked 499..506. So the fixture needs no regeneration, and run-forin.sh's regeneration rule (its lines 95-99) is untouched (md5 94e33301 unchanged).
+  * README [S][M]. I amended serializer/README.md's known-limitations bullet that describes diag/4-identity (md5 now 45ff131c, 0 CR). A continuation frame's slots also carry two raw words, its lj_cont_* code address and its contpc. A stitch continuation's trace slot goes out as nil. Pass 3 rewrites f-4..f, so they are inert. The M3 section's 'becomes a small enum' is true of the record only. The bullet also notes the identity check's GC64-address condition and its JIT-off shape, with the about 1-in-100 rate. Evidence: the decoded Alma stitched blob shows slot8 nil, slot9 0x40d2a8, slot10 a heap pointer and slot12 0x4a = 72|FRAME_CONT [M, inv-forin alma-2000/dump-37.B.txt]. Pass 3 is at eris_lj.c:2762-2769 [S]. That the code address also reveals the shipped library's load address is [I]. I did not edit the M3 section itself.
+  * Binaries [M]. Built with the repo Makefile from byte copies of the repo's serializer sources (eris_lj.c ca2c46b1, SERHASH 412be694): Windows erislj_test.exe cfb666a12cf76bef953f777f61e65ba0 (gcc 16.2.0, win-fixed libluajit.a 0822ad56); Alma erislj_test 6f50744c548b9c508a67e214258914f6 (gcc 8.5.0, glibc 2.28, alma-fixed libluajit.a 21fee2b1); Ubuntu erislj_test dd412f75954293643bbf401e799b7bb3 (gcc 15.2.0, glibc 2.43, ubuntu-build libluajit.a 7051d208). Every build had empty stderr apart from the command echo. The ser2-* copies reuse these binaries; mkser2.py checks that their sources are byte-identical.
+  * Every failure in all arms and censuses was 4-identity alone (rc=1 where the process failed) [M]. The JIT-off change does not disturb the other diag cases (1-wrap-warn, 3-wrap-refuse, 4b...), which still run JIT-on.
+-- recommended_changes
+  * Main session: review and commit serializer/tests/forin.lua and serializer/README.md with the glibc round, or on their own. Suggested commit line: 'serializer/tests/forin.lua: diag/4-identity runs its shape with the JIT off (a trace stitched across coroutine.yield left a continuation frame, about 1 process in 100 on every platform) and its frame-link window must read as a GC64 address; README known limitation names the continuation frame's raw slot words. No fixture or wire change.'
+  * Record in bench/runs/2026-10-19-glibc/ (not done here: I own no file there), as md5s plus summaries. The Alma ser-test FAIL in logs/suite-alma/ser-test.log was this test-side flake, and it is not Linux-specific. Pristine rates this session: 20/2000 Alma, 18/2000 Ubuntu, 7/1000 Windows. With the fix: 0 in 3000 Alma, 0 in 2500 Ubuntu, 0 in 1500 Windows. Evidence dirs: C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/runs/*. Binary md5s are listed in findings.
+  * Optional, outside my files: the M3 paragraph of serializer/README.md (~:245-251, 'No stack address ever reaches the wire ... becomes a small enum') could carry a pointer to the known-limitations bullet. That bullet now qualifies both claims as true of the records only.
+  * Optional follow-up item, a wire change and out of scope: write nil (or zero) in place of the inert raw words, the Lua frame link plus the continuation's lj_cont_* address and contpc. That would make thread blobs deterministic across processes and stop a code address, which shows the library's load address, from reaching saves. The README already lists the link half as its own item.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/tests/forin.lua
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/README.md
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/tests/run-forin.sh
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/tests/fixtures/forin-identity.blob
+  * C:/Users/astro/Downloads/OC-LuaJIT/serializer/eris_lj.c
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/mkser.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/mkser2.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/loop.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/arms.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/final.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/mknogc64.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/cmpblob.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts/probe-window.lua
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/scripts.md5
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/pristine-forin.lua
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/final-alma.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/final-ubuntu.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/final-win.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/alma-census.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/ubuntu-census.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/win-census-fixed.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/win-census-orig.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/linux-arms.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/win-arms.out
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/probe-out/probe-win.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/probe-out/probe-win-final.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/runs/diagblob/cmp.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/runs/final-alma-full-run-forin.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/runs/final-ubuntu-full-run-forin.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/runs/final-win-full-run-forin.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/ser2-win
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/ser2-alma
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin/ser2-ubuntu
+-- checks
+  * Repo files: serializer/tests/forin.lua 0 CR (39975 bytes) and serializer/README.md 0 CR (29624 bytes), counted by bytes in Python. git status shows only these two as newly modified; eris_lj.c (ca2c46b1), run-forin.sh (94e33301) and the fixture (299c8193) are unchanged. Nothing was written under the repo's build/, and no git command that changes anything was run.
+  * Scratch: the fresh dir C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-forin. Every output dir is created fresh (loop.sh and final.sh refuse an existing one); nothing was deleted or cleared. Scripts were written with Write or Python newline="", have no backslashes in patch text, and have 0 CR.
+  * Every variant is a one-line change, enforced by an exactly-once pattern count in mkser.py, mkser2.py and mknogc64.py. Diffs against the base file were printed and checked.
+  * Final file, diag census: Alma 1000/1000, Ubuntu 500/500, Windows 500/500 identity OK, every process rc=0.
+  * Same code before the comment edit: Alma 2000/2000, Ubuntu 2000/2000, Windows 1000/1000. Pristine control in the same session: 20/2000, 18/2000 and 7/1000 fail, which shows the instrument can see the flake in this setup.
+  * Fail-first, real identity breaks: the pair break fails 20/20 per platform on the final file. Value and shape breaks fail 20/20 per platform on the same code.
+  * Fail-first, nojit: under forced hotloop=1, the final file passes 20/20 on every platform and nojit=false fails 19, 19 and 20 of 20. The pristine file fails 20/20 on each platform.
+  * Fail-first, gc64: the window probe on the real ambiguous Ubuntu pair gives OK 499..506 with the fix and '2 candidates' without it. The synthetic one-ulp double difference is rejected with the fix and falsely accepted without it.
+  * The full tests/run-forin.sh with the final file passes on Alma, Ubuntu and Windows: 31 OK, rc 0.
+  * diagblob with the fixed file matches the committed fixture outside body bytes 499..504 on all three platforms, so no regeneration is needed.
+-- open_questions
+  * The other diag shapes (1-wrap-warn, 2c, 3-wrap-refuse and so on) still run JIT-on. They check messages, not bytes, and passed in every one of more than 13000 processes here. Should nojit be applied to them too, for determinism?
+  * The investigation did not pin down which hot counter triggers the unforced stitch: the loop's ITERL, or a function entry at diag_wrap:4. The fix covers both, because jit.off(chunk, true) marks every nested prototype [S lj_dispatch.c setptmode_all, per inv-forin].
+  * Should the inert raw slot words (the link, lj_cont_* and contpc) be nil'd on the wire? That is a format change; it is left as the README's own item.

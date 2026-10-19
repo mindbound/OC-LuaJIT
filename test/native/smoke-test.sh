@@ -14,14 +14,18 @@
 #
 # ---------------------------------------------------------------------
 # PARAMETERS (env)
-#   OCLJ_LIBDIR   dir holding libjnlua52-windows-x86_64.dll   [required]
-#                 (build-native.sh's $OCLJ_OUT)
+#   OCLJ_LIBDIR   dir holding libjnlua52-<platform><ext>      [required]
+#                 (build-native.sh's $OCLJ_OUT; libjnluajit52-* for
+#                 OCLJ_NATIVE=additive).  <platform><ext> is the host's:
+#                 windows-x86_64.dll under Git Bash, linux-x86_64.so on Linux
+#                 (HOST PLATFORMS below).
 #   OCLJ_BRAIN    ocelot-brain checkout                       [required]
 #   OCLJ_BRAIN_CP explicit ocelot-brain classpath entry (classes dir or jar);
 #                 auto-detected under $OCLJ_BRAIN/target if unset
 #   OCLJ_LIBS     dir of dependency jars; fetched with curl if empty
 #                 (default $OCLJ_WORK/lib)
-#   OCLJ_JAVA     JDK home (needs java 11+; verified on 17)     [default: $JAVA_HOME, else `java` on PATH]
+#   OCLJ_JAVA     JDK home, 8 or later (the chains run 8u504, on Windows and
+#                 in AlmaLinux 8)     [default: $JAVA_HOME, else `java` on PATH]
 #   OCLJ_WORK     scratch dir for classes/conf/logs   [default $TMPDIR/ocljit-smoke]
 #   OCLJ_SRC      OcljSmoke.scala                               [default: next to this script]
 #   OCLJ_TIMEOUT  seconds before the run is killed              [default 600]
@@ -64,9 +68,15 @@
 #                 hook: the CONTROL, and the "before" picture in
 #                 docs/research/hook-vs-jit.md.  The k2/k3 milestones only run
 #                 under the watchdog kernel with the JIT on.
-#   OCLJ_LUAJIT_EXE  the luajit.exe that runs the patcher
-#                 [default: $OCLJ_LIBDIR/../luajit/src/luajit.exe, i.e. the
-#                  one build-native.sh built]
+#   OCLJ_LUAJIT_EXE  the luajit that runs the patcher, a binary for THIS host
+#                 (luajit.exe on Windows, luajit on Linux)
+#                 [default: $OCLJ_LIBDIR/../luajit-<platform>/src/luajit[.exe],
+#                  i.e. the one build-native.sh built beside the library, else
+#                  the older layout's $OCLJ_LIBDIR/../luajit/src/]
+#   OCLJ_BENCHDIR the benchmark directory, read by the JVM relative to ITS
+#                 working directory, which is the caller's
+#                 [default: bench/oc if the caller stands in the repository,
+#                  else this checkout's bench/oc as an absolute path]
 #   OCLJ_JIT      on (default) | off.  "off" makes the harness call
 #                 jit.off()+jit.flush() on the machine's state right before
 #                 OpenOS boots -- the control for the JIT PROBE line -- and
@@ -130,6 +140,22 @@
 # USAGE
 #   OCLJ_LIBDIR=.../build/native/libdir OCLJ_BRAIN=~/src/ocelot-brain \
 #     sh smoke-test.sh
+#
+# HOST PLATFORMS
+#   Windows under Git Bash, and Linux (first run 2026-10-19, in AlmaLinux 8
+#   under WSL), x86_64 only.  The host is read from uname exactly as
+#   build-native.sh reads it, and it decides three things: the library's
+#   filename (libjnlua52-windows-x86_64.dll or libjnlua52-linux-x86_64.so,
+#   which is the name ocelot-brain's LuaStateFactory hunts for), the patcher's
+#   binary (luajit.exe or luajit), and the path plumbing (cygpath and ';' for a
+#   Windows JVM, paths as they are and ':' for a Linux one).
+#
+#   The JVM runs in the CALLER'S working directory, and OpenComputers extracts
+#   its stock natives into it (Ocelot-<version>-5x-libjnlua5x-<platform><ext>:
+#   debug.nativeInTmpDir is false).  Windows cannot delete a loaded DLL, so
+#   they stay there; on Linux they are deleted when the JVM exits.  JVMs run
+#   side by side from one directory race on that extraction, so a launcher
+#   that runs several should give each its own directory.
 #
 # ---------------------------------------------------------------------
 # EXTERNAL INPUTS AND HOW TO GET THEM
@@ -229,10 +255,29 @@ stamp() { echo "[smoke] +$(( $(date +%s) - T0 ))s  $*"; }
 #                        falls back.  Both VMs live in one JVM, which is the
 #                        shipped configuration -- and the machine runs on ours
 #                        only because ocljit.arch.OCLuaJITArchitecture is pinned.
+#
+# THE HOST PLATFORM, in build-native.sh's spelling (its uname cases), which is
+# also LuaStateFactory's: libjnlua<version>-<os>-<arch><ext>
+# (ocelot-brain LuaStateFactory.scala:122-156).  The filename IS the selection,
+# so a name the JVM does not hunt for would pass this preflight and then load
+# nothing -- the Windows name hard-coded here let a Windows libdir pass on
+# Linux and refused every Linux one.  Only the two hosts the native is built
+# and run on are accepted: build-native.sh also names darwin and freebsd, but
+# macOS is parked as unsupported and neither has ever booted this harness.
+case $(uname -s) in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT) HOST_OS=windows ; LIBEXT=.dll ; LJ_BIN=luajit.exe ;;
+  Linux)                           HOST_OS=linux   ; LIBEXT=.so  ; LJ_BIN=luajit     ;;
+  *) fail "unsupported host system '$(uname -s)': the harness runs on Windows (under Git Bash) and on Linux";;
+esac
+case $(uname -m) in
+  x86_64|amd64) HOST_ARCH=x86_64 ;;
+  *) fail "unsupported machine '$(uname -m)': build-native.sh builds x86_64 only";;
+esac
+PLATFORM=$HOST_OS-$HOST_ARCH
 case $OCLJ_NATIVE in
-  luajit)   DLL_NAME=libjnlua52-windows-x86_64.dll    ;;
-  additive) DLL_NAME=libjnluajit52-windows-x86_64.dll ;;
-  stock)    DLL_NAME=libjnlua52-windows-x86_64.dll    ;;
+  luajit)   DLL_NAME=libjnlua52-$PLATFORM$LIBEXT    ;;
+  additive) DLL_NAME=libjnluajit52-$PLATFORM$LIBEXT ;;
+  stock)    DLL_NAME=libjnlua52-$PLATFORM$LIBEXT    ;;
   *) fail "OCLJ_NATIVE must be luajit, additive or stock, not '$OCLJ_NATIVE'";;
 esac
 if [ "$OCLJ_NATIVE" = "stock" ]; then
@@ -292,14 +337,21 @@ fi
 : "${OCLJ_TIMEOUT:=600}"
 # Which directory the benchmarks come from.  Defaults to the shipped suite;
 # point it at a scratch copy to try a variant without editing bench/oc/ or its
-# references.txt, which run-standalone.sh checks for drift.
-: "${OCLJ_BENCHDIR:=bench/oc}"
+# references.txt, which run-standalone.sh checks for drift.  The default is
+# resolved below, once the path plumbing exists.
+: "${OCLJ_BENCHDIR:=}"
 
 SCALA_VER=2.13.11
 ASM_VER=9.5.0-scala-1
 
-# Windows/JVM classpath plumbing: java wants native paths and ';'.
-if command -v cygpath >/dev/null 2>&1; then
+# CLASSPATH AND PATH PLUMBING, chosen by the HOST, not by whether a cygpath is
+# on PATH.  A Windows JVM wants native paths and ';'; a Linux JVM wants the
+# paths as they are and ':'.  This used to test `command -v cygpath`, which
+# held on Linux under WSL only by luck: WSL appends the whole Windows PATH,
+# Git's usr/bin with its cygpath.exe included, and it is only Linux's lack of
+# PATHEXT that keeps `command -v` from finding it.
+if [ "$HOST_OS" = windows ]; then
+  command -v cygpath >/dev/null 2>&1 || fail "no cygpath: on Windows this harness runs under Git Bash, which provides it"
   SEP=';'
   w()  { cygpath -w "$1"; }   # C:\dir\file  -- classpath entries
   wm() { cygpath -m "$1"; }   # C:/dir/file  -- HOCON strings and java args
@@ -309,6 +361,23 @@ else
   SEP=':'
   w()  { printf '%s' "$1"; }
   wm() { printf '%s' "$1"; }
+fi
+
+# THE BENCHMARK DIRECTORY'S DEFAULT.  OcljSmoke resolves -Docljit.benchdir
+# against the JVM's working directory, which is the caller's, and reads
+# mandelbrot.lua from it unconditionally, before the machine boots: a launcher
+# that ran the JVM from anywhere but the repository root died there.
+# So the default stays the relative bench/oc when the caller stands in the
+# repository (every launcher before 2026-10-19 did, and their logs read the
+# same as before), and is otherwise this checkout's own bench/oc, absolute.
+if [ -z "$OCLJ_BENCHDIR" ]; then
+  if [ -f bench/oc/references.txt ]; then
+    OCLJ_BENCHDIR=bench/oc
+  elif BENCH_ABS=$(CDPATH= cd -- "$SELF_DIR/../../bench/oc" 2>/dev/null && pwd); then
+    OCLJ_BENCHDIR=$(wm "$BENCH_ABS")
+  else
+    fail "no bench/oc under the working directory and none beside this script: set OCLJ_BENCHDIR"
+  fi
 fi
 
 # --------------------------------------------------------------- 0
@@ -324,11 +393,19 @@ if [ "$OCLJ_NATIVE" != stock ]; then
 fi
 [ -n "$OCLJ_BRAIN" ] || fail "OCLJ_BRAIN is unset (git clone https://gitlab.com/cc-ru/ocelot/ocelot-brain.git)"
 [ -f "$OCLJ_SRC" ] || fail "no harness source at $OCLJ_SRC"
+# Only OcljSmoke reads the benchmarks (the census main does not), and it reads
+# mandelbrot.lua first, unconditionally: refuse here, by name, rather than
+# there with a Java stack trace.
+if [ "$OCLJ_MAIN" = ocljit.smoke.Smoke ]; then
+  [ -f "$OCLJ_BENCHDIR/mandelbrot.lua" ] || fail "no mandelbrot.lua in OCLJ_BENCHDIR=$OCLJ_BENCHDIR (the JVM reads it relative to $(pwd))"
+fi
 
 if [ -n "$OCLJ_JAVA" ] && [ -x "$OCLJ_JAVA/bin/java" ]; then JAVA="$OCLJ_JAVA/bin/java"
 elif command -v java >/dev/null 2>&1; then JAVA=java
-else fail "no java: set OCLJ_JAVA to a JDK 11+ home"; fi
+else fail "no java: set OCLJ_JAVA to a JDK home (8 or later)"; fi
+say "host    = $PLATFORM (library $DLL_NAME, patcher $LJ_BIN)"
 say "java    = $("$JAVA" -version 2>&1 | head -1)"
+say "bench   = $OCLJ_BENCHDIR"
 if [ "$OCLJ_NATIVE" != stock ]; then
   say "dll     = $OCLJ_LIBDIR/$DLL_NAME ($(wc -c < "$OCLJ_LIBDIR/$DLL_NAME") bytes)"
 else
@@ -485,11 +562,22 @@ if [ "$OCLJ_KERNEL" = "watchdog" ]; then
   # classpath entry -- so NativeLuaArchitecture's
   #   getResourceAsStream("/assets/opencomputers/lua/machine.lua")
   # finds ours before ocelot-brain's.  Nothing in ocelot-brain changes.
-  # The LuaJIT build tree is per-platform now (build/native/luajit-<os>-<arch>),
-  # so glob rather than hardcode: this script runs wherever the harness runs.
-  [ -n "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE=$(ls "$OCLJ_LIBDIR"/../luajit*/src/luajit.exe 2>/dev/null | head -1)
-  [ -n "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE="$OCLJ_LIBDIR/../luajit/src/luajit.exe"
-  [ -x "$OCLJ_LUAJIT_EXE" ] || fail "OCLJ_KERNEL=watchdog needs luajit.exe to run the kernel patcher; none at $OCLJ_LUAJIT_EXE (set OCLJ_LUAJIT_EXE)"
+  # The LuaJIT build tree is per-platform (build/native/luajit-<os>-<arch>), and
+  # one build directory can hold both hosts' trees, so the default names THIS
+  # host's rather than globbing; the older layout's luajit/ is the fallback.
+  if [ -z "$OCLJ_LUAJIT_EXE" ]; then
+    OCLJ_LUAJIT_EXE="$OCLJ_LIBDIR/../luajit-$PLATFORM/src/$LJ_BIN"
+    [ -e "$OCLJ_LUAJIT_EXE" ] || OCLJ_LUAJIT_EXE="$OCLJ_LIBDIR/../luajit/src/$LJ_BIN"
+  fi
+  [ -x "$OCLJ_LUAJIT_EXE" ] || fail "OCLJ_KERNEL=watchdog needs $LJ_BIN to run the kernel patcher; none at $OCLJ_LUAJIT_EXE (set OCLJ_LUAJIT_EXE; build-native.sh leaves it at <build>/luajit-$PLATFORM/src/$LJ_BIN)"
+  # A WINDOWS BINARY ON A LINUX HOST is refused by its first two bytes, because
+  # nothing else here can tell.  Under WSL every file on /mnt/c is mode 0777, so
+  # -x passes, and interop RUNS a luajit.exe -- which then cannot open the /mnt/c
+  # paths it is handed, and the failure read as a moved anchor in machine.lua.
+  if [ "$HOST_OS" = linux ] && [ "$(head -c 2 "$OCLJ_LUAJIT_EXE" 2>/dev/null)" = MZ ]; then
+    fail "OCLJ_LUAJIT_EXE=$OCLJ_LUAJIT_EXE is a Windows executable; on Linux the patcher needs the luajit build-native.sh builds there (<build>/luajit-$PLATFORM/src/luajit)"
+  fi
+  say "    patcher = $OCLJ_LUAJIT_EXE"
   # WHICH DELIVERY MECHANISM, and it follows the ARCHITECTURE, not taste.
   #
   #   dropin/stock arm  drives OpenComputers' own NativeLua52Architecture, which
@@ -517,7 +605,7 @@ if [ "$OCLJ_KERNEL" = "watchdog" ]; then
   mkdir -p "$KDIR" || fail "cannot create $KDIR"
   "$OCLJ_LUAJIT_EXE" "$SELF_DIR/../../native/kernel/patch-machine-lua.lua" \
     "$BRAIN_RES/assets/opencomputers/lua/machine.lua" "$KDIR/machine.lua" \
-    || fail "the kernel patcher refused ocelot-brain's machine.lua (an anchor no longer matches)"
+    || fail "the kernel patcher failed on ocelot-brain's machine.lua: an anchor no longer matches, or $OCLJ_LUAJIT_EXE does not run on this host (its own message is above)"
   say "    kernel  = WATCHDOG variant at $KDIR/machine.lua"
   say "              $KHOW"
 else

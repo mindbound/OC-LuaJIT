@@ -1,0 +1,20 @@
+ M CLAUDE.md
+ M README.md
+ M build.gradle.kts
+ M docs/jit-guide.md
+ M docs/roadmap.md
+ M native/build-native.sh
+ M serializer/Makefile
+ M test/native/LinkProbe.java
+ M test/native/OcljSmoke.scala
+ M test/native/negative-control.sh
+ M test/native/run-bitop.sh
+ M test/native/run-mem.sh
+ M test/native/run-pack.sh
+ M test/native/run-penalty.sh
+ M test/native/run-security.sh
+ M test/native/run-vgc.sh
+ M test/native/run-wd.sh
+ M test/native/run.sh
+ M test/native/smoke-test.sh
+?? bench/runs/2026-10-19-glibc/

@@ -1,0 +1,27 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as configuration cache cannot be reused because file 'build.gradle.kts' has changed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.34 available! Run ./gradlew updateBuildScript
+
+> Task :verifyModAssets FAILED
+OC-LuaJIT: packaging 2 native(s): libjnluajit52-linux-x86_64.so (734096 bytes), libjnluajit52-windows-x86_64.dll (739237 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyModAssets'.
+> OC-LuaJIT: libjnluajit52-linux-x86_64.so needs GLIBC_2.38, above the glibc floor GLIBC_2.28 (GLIBC_2.38 from libc.so.6, libm.so.6; GLIBC_2.35 from libc.so.6; GLIBC_2.34 from libc.so.6; GLIBC_2.32 from libc.so.6; GLIBC_2.29 from libm.so.6). The dynamic loader refuses it wherever glibc is older than GLIBC_2.38, and there the LuaJIT architecture would never be offered. It was linked on a newer distribution. Build it in AlmaLinux 8, or on any host whose glibc is 2.28: OCLJ_VARIANT=additive OCLJ_GLIBC_MAX=2.28 sh native/build-native.sh, and package that build's .so.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 10s
+1 actionable task: 1 executed
+Configuration cache entry stored.

@@ -1,0 +1,3 @@
+452d869b580129a6f92627c0a8506d78 *test/native/negative-control.sh
+41b0fd3fd609bd5ea7bd3cdbec610613 *serializer/tests/forin.lua
+3174ef3738215abd437fd1c699dcc56c *build/native/libdir-additive/libjnluajit52-windows-x86_64.dll

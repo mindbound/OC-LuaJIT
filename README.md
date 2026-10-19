@@ -13,7 +13,7 @@ Adds a **LuaJIT** architecture selectable with shift+right-click on any OC CPU, 
 | OpenOS 1.8.9, smoke suite | boots to a shell, **persists and resumes** (same boot nonce, counter still counting), the deadline watchdog fires and the machine survives, the RAM cap holds and OOMs at the cap, the bytecode gate refuses, a `1LL` literal is a syntax error, `string.pack` is in the sandbox and behaves as our Lua 5.3.6 port, with its two decided deviations, 5.3's bitwise operators compute 5.3.6's 64-bit results in the sandbox and raise past 53 significant bits, file handles a program drops unclosed are disposed and free their slots, live, after a restore and at a save — 82 checks, 0 failures (2026-10-17, JIT on) |
 | AxisOS, census | boots to a login prompt over 14000 ticks, emergency collector refusing nothing |
 
-Both run on `ocljit.arch.OCLuaJITArchitecture` over the additive `libjnluajit52` library, which is the shape the mod ships. Both, like every in-game run so far, are on Windows: the jar also carries the Linux library, which no JVM has loaded yet (see the roadmap). The same suite also runs in two control arms — our VM as a drop-in under OpenComputers' own 5.2 architecture, and stock PUC-Lua 5.2 as a baseline — and each arm refuses the others' fingerprint.
+Both run on `ocljit.arch.OCLuaJITArchitecture` over the additive `libjnluajit52` library, which is the shape the mod ships. Both rows, like every in-game run so far, are on Windows. The smoke suite has since passed on the release Linux library too, built on glibc 2.28 (below): in AlmaLinux 8 under JDK 8, every arm of the suite gives the same checks and verdicts as on Windows (82 checks, 0 failures, for the shape the mod ships), and in Ubuntu 26.04 under JDK 17 the shipped shape gives 82 checks, 0 failures, both under WSL (2026-10-19). No Minecraft client or server has loaded the Linux library yet (see the roadmap). The same suite also runs in two control arms — our VM as a drop-in under OpenComputers' own 5.2 architecture, and stock PUC-Lua 5.2 as a baseline — and each arm refuses the others' fingerprint.
 
 The mod-side adapter is the same construction, compiled against the pinned OpenComputers jar (1.12.58-GTNH) and run in game on 1.12.61 and 1.12.64. Its jar carries the patched watchdog kernel under our own asset domain and loads it in place of OpenComputers' after `initialize()`. What is still open, release blockers included, is in [docs/roadmap.md](docs/roadmap.md).
 
@@ -59,6 +59,21 @@ Dev-run the client with OpenComputers present:
 ```bash
 ./gradlew runClient
 ```
+
+### Natives
+
+The jar carries one native for each supported platform, windows-x86_64 and linux-x86_64. `native/build-native.sh` builds each on its own platform (the Windows DLL under Git Bash with MinGW-w64, the Linux .so on Linux; its header lists what each needs), and with `OCLJ_VARIANT=additive` it leaves the library in `build/native/dist/`, from where `./gradlew build` packages it.
+
+**The Linux .so is built on glibc 2.28.** A Linux library can need symbol versions as new as the glibc it was linked against: the .so we linked on Ubuntu 26.04 needed glibc 2.38, and would not have loaded on Ubuntu 22.04, Debian 12 or RHEL 9. So the release .so is built on an AlmaLinux 8 host (ours is AlmaLinux 8 under WSL), with the floor enforced:
+
+```bash
+OCLJ_GLIBC_MAX=2.28 OCLJ_VARIANT=additive OCLJ_JNLUA=/path/to/OC-JNLua \
+  OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include sh native/build-native.sh
+```
+
+For players, the supported systems are x86_64 Linux with glibc 2.28 or newer: RHEL, AlmaLinux and Rocky Linux 8 and later, Debian 10 and later, Ubuntu 20.04 and later. That list comes from those distributions' glibc versions; the library has been tested on AlmaLinux 8 and Ubuntu 26.04. The 2.28 floor is a policy, which the jar build enforces: today's release library needs only glibc 2.17, but older systems are untested and unsupported. Where the system's glibc lacks a version the library needs, the dynamic loader refuses it, so the LuaJIT CPU is not offered there, and OpenComputers' own CPUs are unaffected. Windows is unaffected by any of this.
+
+A Linux build on a newer distribution, Ubuntu for instance, is a development build. `build-native.sh` finishes it and reports which glibc version the .so needs. Give such a build its own `OCLJ_BUILD`, so that its .so never lands in `build/native/dist/`. `./gradlew build` reads the glibc versions every packaged .so needs and refuses one that needs more than 2.28. The floor's evidence and its checks are in the glibc row of [docs/roadmap.md](docs/roadmap.md), and the build details in [docs/jit-guide.md](docs/jit-guide.md) section 7.7.
 
 ## Layout
 

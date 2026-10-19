@@ -1,0 +1,6 @@
+"Ubuntu 26.04.1 LTS"
+glibc 2.43
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+/usr/bin/git
+94c94fb8e2b39a52a2817ac0cd6c67e4  /mnt/c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh
+853f2d5a021d6d84e1c15309deb6bd37  /mnt/c/Users/astro/claude-tmp/oclj/glibc/main/build-native.HEAD.sh

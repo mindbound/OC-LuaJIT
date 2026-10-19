@@ -78,9 +78,13 @@ case "$(uname -m)" in
 esac
 PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 case $OCLJ_OS in
-  windows) JNI_MD=win32 ;;
-  darwin)  JNI_MD=darwin ;;
-  *)       JNI_MD=$OCLJ_OS ;;
+  windows) JNI_MD=win32 ; TEST_EXTRA= ;;
+  darwin)  JNI_MD=darwin ; TEST_EXTRA= ;;
+  # One Linux tail for every test link.  -pthread, not -lpthread: it sets the
+  # preprocessor defines too.  -ldl: luaL_openlibs pulls LuaJIT's lib_package,
+  # which calls dlopen.  Before glibc 2.34 (AlmaLinux 8, the release build's
+  # host) both are outside libc and a link that needs one fails without it.
+  *)       JNI_MD=$OCLJ_OS ; TEST_EXTRA="-pthread -ldl" ;;
 esac
 : "${OCLJ_JNI:=}"
 LJ=$OCLJ_BUILD/luajit-$PLATFORM/src
@@ -113,7 +117,7 @@ build_variant() {
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
   "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
     "$SELF_DIR/security_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
-    "$LJ/libluajit.a" -lm -o "$d/security_test.exe" 2>"$d/test.err" \
+    "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$d/security_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: security_test.c did not link"; }
 }
 
@@ -307,7 +311,7 @@ cmp -s "$LJ/oclj_features.h" "$d/inc/oclj_features.h" && fail "layout: the heade
   || { sed -n '1,25p' "$d/shim.err"; fail "layout: lj52shim.c did not compile"; }
 "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
   "$SELF_DIR/security_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
-  "$LJ/libluajit.a" -lm -o "$d/security_test.exe" 2>"$d/test.err" \
+  "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$d/security_test.exe" 2>"$d/test.err" \
   || { sed -n '1,25p' "$d/test.err"; fail "layout: security_test.c did not link"; }
 expect layout "a shim compiled for another LuaJIT layout gets no state (exit 2, no check runs)" 2
 # The message's three numbers: the archive's GG_State, the shim's, eris_lj's.
@@ -334,7 +338,7 @@ mkdir -p "$e"
   || { sed -n '1,25p' "$e/eris.err"; fail "layout-eris: eris_lj.c did not compile"; }
 "$CC" -O2 -I"$LJ" -I"$WORK/canon" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$WORK/canon/lj52shim.h" \
   "$SELF_DIR/security_test.c" "$WORK/canon/lj52shim.o" "$e/eris_lj.o" \
-  "$LJ/libluajit.a" -lm -o "$e/security_test.exe" 2>"$e/test.err" \
+  "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$e/security_test.exe" 2>"$e/test.err" \
   || { sed -n '1,25p' "$e/test.err"; fail "layout-eris: security_test.c did not link"; }
 expect layout-eris "a serializer compiled for another LuaJIT layout gets no state (exit 2, no check runs)" 2
 set -- $(gg3 "$e/run.log")
@@ -349,16 +353,21 @@ fi
 #    sabotages are invisible to security_test.c and are caught only by
 #    mem_test.c, so they get their own builder and their own expectations.
 # =====================================================================
+# MEMTEST_CFLAGS is this script's own, set per arm below: one exported by the
+# caller would reach every arm.
+MEMTEST_CFLAGS=
 build_variant_mem() {
   v=$1
   d=$WORK/$v
   "$CC" -c -O2 -I"$LJ" -I"$d" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" "$d/lj52shim.c" -o "$d/lj52shim.o" 2>"$d/shim.err" \
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
-  # MEMTEST_CFLAGS: set for one variant only, when a sabotage makes the W16
+  # MEMTEST_CFLAGS: set for two variants only, when a sabotage makes the W16
   # sweeps cost thousands of cycles a cap (nohyst, unbounded): -DW16_N=8 -DW16R_N=8.
+  # Set and cleared on lines of their own around the call (4.8, 4.9), and 4.31
+  # checks which arms it reached.
   "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
     ${MEMTEST_CFLAGS:-} "$SELF_DIR/mem_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
-    "$LJ/libluajit.a" -lm -o "$d/mem_test.exe" 2>"$d/test.err" \
+    "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$d/mem_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: mem_test.c did not link"; }
 }
 
@@ -558,7 +567,14 @@ expect_mem norefusedarm "a refusal that does not arm is caught" 1 W2b W2c
 # cadence: a full cycle per checkpoint pair near the wall (W4), and a fill
 # that costs ~1840 cycles a round (W12).
 # The W16 family at 8 caps: a cycle per checkpoint makes the full sweeps ~3 min.
-MEMTEST_CFLAGS="-DW16_N=8 -DW16R_N=8" sabotage_mem nohyst 's|^  if (!M->gc_hyst) {$|  if (1) {  /* sabotage: no hysteresis */|' 'sabotage: no hysteresis'
+# Set and cleared on lines of their own, never as a prefix to the call: an
+# assignment written before a FUNCTION call outlives the call in bash 4.4's
+# POSIX mode (AlmaLinux 8's /bin/sh; bash 5.3 and dash scope it to the call),
+# and on the first full Linux run (2026-10-19) every arm after this one swept
+# 8 caps.  4.31 checks it.
+MEMTEST_CFLAGS="-DW16_N=8 -DW16R_N=8"
+sabotage_mem nohyst 's|^  if (!M->gc_hyst) {$|  if (1) {  /* sabotage: no hysteresis */|' 'sabotage: no hysteresis'
+MEMTEST_CFLAGS=
 expect_mem nohyst "the per-checkpoint re-arm is caught" 1 W4 W12
 
 # 4.9 unbounded: credit = the whole cap.  The bound is what fails: the
@@ -569,8 +585,11 @@ expect_mem nohyst "the per-checkpoint re-arm is caught" 1 W4 W12
 # Since THE WINDOW: the kernel's burst top is past the whole cap (C6b), the
 # kernel's bound (W7k) and the live fill's refusal near the top (W17) go too.
 # The W16 family at 8 caps: under a credit of the whole cap each sweep cap
-# costs thousands of cycles (d2-lend: past 300 s at 96 caps).
-MEMTEST_CFLAGS="-DW16_N=8 -DW16R_N=8" sabotage_mem unbounded 's|^  c = lj52_gc_odmax(total);$|  c = total;  /* sabotage: credit = total */|' 'sabotage: credit = total'
+# costs thousands of cycles (d2-lend: past 300 s at 96 caps).  Set and
+# cleared on lines of their own, as in 4.8.
+MEMTEST_CFLAGS="-DW16_N=8 -DW16R_N=8"
+sabotage_mem unbounded 's|^  c = lj52_gc_odmax(total);$|  c = total;  /* sabotage: credit = total */|' 'sabotage: credit = total'
+MEMTEST_CFLAGS=
 expect_mem unbounded "an unbounded credit is caught" 1 C3a C6b M5 W1 W11 W12 W16R W16RL W16Rj W16RjL W17 W1L W1j W20 W20L W22 W2b W7 W7k W7m
 
 # 4.10 nokslice: the kernel's slice gone; the kernel's table.pack after the
@@ -708,10 +727,37 @@ expect_mem rsvcreep "a reserve that creeps is caught" 1 W7
 sabotage_mem novmevent 's|^  if (g->hookmask \& HOOK_VMEVENT) return 0;   /\* as a finalizer; see THE CREDIT \*/$|  /* sabotage: a vmevent handler gets credit */|; s|^  if (g->hookmask \& HOOK_VMEVENT) return 0;   /\* as a finalizer \*/$|  /* sabotage: and a window */|; s|^  if (g->hookmask \& HOOK_VMEVENT) return;      /\* as a finalizer: before the arm, as HOOK_GC \*/$|  /* sabotage: and its refusal opens the reserve */|' 'sabotage: and its refusal opens the reserve'
 expect_mem novmevent "a vmevent handler's refusal opening the reserve is caught" 1 W22
 
+# --- 4.31 THE INSTRUMENT (2026-10-20): each arm's W16 sweep ran at the cap
+# count its expected set was measured at.  Every set above was measured at
+# mem_test.c's own W16_N and W16R_N (96 caps, 0..6080 B: one whole step of
+# the fill) except nohyst's and unbounded's, which ask for 8 (0..448 B).  At
+# 8 caps rawverdict, nolook, refusalkeeps and noarm lose the W16 ids whose
+# refusals land past +448 B of the step, so an override that reaches another
+# arm reads as a sabotage missed.  That happened on the first full Linux run
+# (AlmaLinux 8, 2026-10-19; see 4.8).  So read the count each arm's own W16
+# line reports and list every arm that did not sweep 96 caps: exactly nohyst
+# and unbounded, at 8.  A W16 line in another shape lists its arm as
+# "unparsed", and a new default in mem_test.c lists every arm: both fail
+# here, on purpose, since the sets would then need measuring again.
+want8="nohyst:8 unbounded:8 "
+got8=$(cd "$WORK" && grep -E '^  (PASS|FAIL)  W16 ' /dev/null */run.log 2>/dev/null \
+  | sed -e 's|^\([^/]*\)/run.log:.* C mode, \([0-9][0-9]*\) caps, base .*$|\1:\2|' -e 't' -e 's|^\([^/:]*\)/.*$|\1:unparsed|' \
+  | grep -v ':96$' | sort | tr '\n' ' ')
+echo
+say "--- the W16 sweeps: the arms that did not sweep 96 caps"
+say "    arms  want=[$want8]"
+say "          got =[$got8]"
+if [ "$got8" = "$want8" ]; then
+  verdict 0 "every W16 sweep ran at its expected set's cap count (96; nohyst and unbounded 8)"
+else
+  verdict 1 "every W16 sweep ran at its expected set's cap count (96; nohyst and unbounded 8)"
+fi
+
 # =====================================================================
 # 6. THE WATCHDOG.  Two sabotages, each the design's own "before" picture:
 #    one keeps OC's standing hook (the JIT thrashes), one removes the async
-#    injection (the deadline is never enforced).  wd_test.c carries a 10 s
+#    injection (the deadline is never enforced), in the text of the
+#    watchdog backend this host compiles (6.2).  wd_test.c carries a 10 s
 #    process alarm precisely so the second one terminates.
 # =====================================================================
 build_variant_wd() {
@@ -721,7 +767,7 @@ build_variant_wd() {
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
   "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
     "$SELF_DIR/wd_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
-    "$LJ/libluajit.a" -lm -o "$d/wd_test.exe" 2>"$d/test.err" \
+    "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$d/wd_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: wd_test.c did not link"; }
 }
 
@@ -796,16 +842,38 @@ grep -q 'sabotage: OC standing hook' "$WORK/standinghook/lj52shim.c" \
 build_variant_wd standinghook
 expect_wd standinghook "a standing hook is caught by W6b, W8c, W10g and W12" 1 W6b W8c W10g W12
 
-# --- 6.2 notimer: the timer callback never installs the hook -------------
+
+# --- 6.2 notimer: the timer never installs the hook ----------------------
 # Remove the asynchronous injection and nothing ever interrupts
 # `while true do end`: the deadline is simply not enforced.  The only thing
 # that ends W2 is wd_test's own 10 s alarm, and that is what is asserted.
+# ONE SABOTAGE PER BACKEND, picked by $OCLJ_OS as the platform case at the
+# top picks the objects.  Each backend is compiled on one host only -- Win32
+# (lj52_wd_fire, the timer-queue callback) or POSIX (lj52_wd_thread, the
+# condvar thread) -- and the other one's text is still in the file, so its
+# sed still matches and the grep below still passes.  The first Linux run
+# (2026-10-19, AlmaLinux 8) built the Win32 text, W2 fired at 55.5 ms, and
+# this arm failed.  So the preprocessor check after the grep proves that
+# the sabotaged line is in the translation unit THIS host compiles.
+#   windows: lj52_wd_fire returns before it counts or injects.
+#   linux:   lj52_wd_thread still wakes, counts and re-fires, but its one
+#            call into the VM, lj52_wd_inject, is gone.
 mkdir -p "$WORK/notimer"
 cp "$OCLJ_SHIM/lj52shim.c" "$OCLJ_SHIM/lj52shim.h" "$WORK/notimer/"
-sed -i 's|^  (void)timedOut;$|  (void)timedOut; (void)M; return; /* sabotage: the timer never hooks */|' \
-  "$WORK/notimer/lj52shim.c"
+case $OCLJ_OS in
+  windows)
+    sed -i 's|^  (void)timedOut;$|  (void)timedOut; (void)M; return; /* sabotage: the timer never hooks */|' \
+      "$WORK/notimer/lj52shim.c" ;;
+  linux)
+    sed -i 's|^    lj52_wd_inject(M);                   /\* MUTEX HELD -- this IS the cancel \*/$|    /* sabotage: the timer never hooks */|' \
+      "$WORK/notimer/lj52shim.c" ;;
+  *) fail "notimer: no watchdog backend sabotage for $OCLJ_OS" ;;
+esac
 grep -q 'sabotage: the timer never hooks' "$WORK/notimer/lj52shim.c" \
-  || fail "notimer: the sabotage patch did not apply -- lj52_wd_fire has been reworded"
+  || fail "notimer: the sabotage patch did not apply -- lj52_wd_fire or lj52_wd_thread has been reworded"
+"$CC" -E -C -I"$LJ" -I"$WORK/notimer" -I"$OCLJ_SER" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" \
+    "$WORK/notimer/lj52shim.c" 2>"$WORK/notimer/tu.err" | grep -q 'sabotage: the timer never hooks' \
+  || fail "notimer: the sabotage applied but $OCLJ_OS compiles that backend out -- the other platform's text was used (or the preprocessor failed: $WORK/notimer/tu.err)"
 build_variant_wd notimer
 expect_wd_alarm notimer "without the async injection, the deadline is NEVER enforced (the test's alarm ends it)"
 
@@ -834,7 +902,7 @@ build_variant_vgc() {
     || { sed -n '1,25p' "$d/shim.err"; fail "$v: lj52shim.c did not compile"; }
   "$CC" -O2 -I"$LJ" -I"$d" -I"$OCLJ_JNI" -I"$OCLJ_JNI/$JNI_MD" -include "$d/lj52shim.h" \
     "$SELF_DIR/vgc_test.c" "$d/lj52shim.o" "$OBJ/eris_lj.o" \
-    "$LJ/libluajit.a" -lm -o "$d/vgc_test.exe" 2>"$d/test.err" \
+    "$LJ/libluajit.a" -lm $TEST_EXTRA -o "$d/vgc_test.exe" 2>"$d/test.err" \
     || { sed -n '1,25p' "$d/test.err"; fail "$v: vgc_test.c did not link"; }
 }
 

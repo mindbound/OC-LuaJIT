@@ -1,0 +1,7 @@
+"Ubuntu 26.04.1 LTS"
+glibc 2.43
+lrwxrwxrwx 1 root root 4 Feb  2  2026 /bin/sh -> dash
+OCLJ_BUILD=/mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ubuntu-build/build/native
+452d869b580129a6f92627c0a8506d78  /mnt/c/Users/astro/Downloads/OC-LuaJIT/test/native/negative-control.sh
+41b0fd3fd609bd5ea7bd3cdbec610613  /mnt/c/Users/astro/Downloads/OC-LuaJIT/serializer/tests/forin.lua
+7e8b8b89cdde7e2a67ff4fe654f93339  /mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ubuntu-build/build/native/libdir-additive/libjnluajit52-linux-x86_64.so

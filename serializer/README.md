@@ -182,12 +182,23 @@ OC's sanctioned degraded path).
   never byte-identical (found by `diag/4-identity`: the shipping binary's own
   two runs differ in 6 bytes of that one payload and nowhere else), and the
   frame-record comment's "no stack address ever reaches the wire" is true of
-  the records, not of the slots. Writing `nil` there instead would be a
+  the records, not of the slots. A **continuation** frame's slots carry two
+  such words the same way: its raw `lj_cont_*` machine address (a code
+  address, so in the shipped library it also shows where the library was
+  loaded) and its `contpc`; a stitch continuation's trace slot goes out as
+  `nil`, since `lua_type` reports a trace as nil. Pass 3 rewrites all of
+  them too (`f-4..f`), so the M3 section's "becomes a small enum" is likewise
+  true of the record only. Writing `nil` there instead would be a
   harmless wire change; it is deliberately *not* made in a change whose
   contract is "the default mode writes the same bytes", and is left as its
   own item. `diag/4-identity` masks exactly that payload, located
   structurally (the same shape loaded as a second chunk in one process can
-  differ nowhere else), and compares everything else byte for byte.
+  differ nowhere else, and the payload must read as a GC64 address in both
+  blobs), and compares everything else byte for byte. It runs the shape with
+  the JIT off: a trace that stitches across `coroutine.yield` leaves a
+  continuation frame under the yield, a faithfully written but different VM
+  state whose blob is 20 bytes longer, and before the JIT was turned off for
+  the shape that happened in about 1 process in 100 on every platform.
 
 ## Review history
 

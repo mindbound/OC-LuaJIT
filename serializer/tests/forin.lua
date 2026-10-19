@@ -514,9 +514,12 @@ local DIAG_SHAPES = {
     "end" } },
 }
 
--- A coroutine suspended two keys into the shape's loop.
-local function diag_suspended(shape, tbl)
+-- A coroutine suspended two keys into the shape's loop. With `nojit`, no
+-- prototype of the shape ever starts a trace (jit.off with true covers every
+-- nested function); diag_identity says why it needs that.
+local function diag_suspended(shape, tbl, nojit)
   local chunk = assert(loadstring(table.concat(shape.src, "\n"), "=" .. shape.chunk))
+  if nojit and jit then jit.off(chunk, true) end
   local co = coroutine.create(chunk(tbl))
   for _ = 1, 2 do
     local okr, v = coroutine.resume(co)
@@ -535,9 +538,23 @@ end
 -- reseeded from the PRNG every <256 strings, so a string-keyed table's next()
 -- order -- and with it its wire order -- is per-process. That is a property
 -- of the instrument, not of the change under test.)
+--
+-- And with the JIT off for the shape, for the same reason: what the JIT does
+-- is per-process too. The 64 hot counters are hashed by pc and shared by every
+-- loop and function in the VM (JIT guide P6), so a freshly loaded shape can
+-- start one tick from hot. A trace recorded then stitches across
+-- coroutine.yield, which has no recorder, and when it runs on the next
+-- iteration its exit leaves a continuation frame for lj_cont_stitch under the
+-- yield: the coroutine suspends 3 slots higher and its blob is 20 bytes
+-- longer. That is a different VM state, written faithfully (u_thread's pass 3
+-- rewrites the continuation's words on restore), but it is not the value the
+-- fixture holds. Measured without this: about 1 process in 100, on AlmaLinux
+-- 8, Ubuntu and Windows alike, failing as "two in-process blobs of one shape
+-- differ in length" (or, when both chunks stitch, as a body that differs from
+-- the reference).
 local function diag_identity()
   local P = build_perms()
-  return P, diag_suspended(DIAG_SHAPES.wrap, { 10, 20, 30, 40, 50, 60 })
+  return P, diag_suspended(DIAG_SHAPES.wrap, { 10, 20, 30, 40, 50, 60 }, true)
 end
 
 -- The blob body: everything between the fingerprint header
@@ -560,6 +577,22 @@ end
 -- this process can differ from the first nowhere but that pointer, and the
 -- payload must sit behind its own TAG_NUM byte. Anything else is a real
 -- difference and fails. (README, known limitations, records the finding.)
+--
+-- Two pcs in one process can differ in just a byte or two, and the pc's own
+-- low byte can be 4: then the window one byte to the right ALSO follows a 4
+-- and covers the diff. So the payload must also read as a GC64 address in
+-- both blobs: a pc points into a GCproto, and every GC object lies below
+-- 2^47 (LJ_GCVMASK, lj_obj.h), so its top 17 bits are clear. The window
+-- shifted right ends in the next field's first byte (in this shape the frame
+-- count, 2), so it fails that. And a payload with its top 17 bits clear, read
+-- as a double, is +0 or subnormal, so a real number that differs cannot pass
+-- for the link either: the old test accepted one whose last mantissa bit
+-- differed.
+local function gc64_addr(b, p)
+  return p + 7 <= #b and b:byte(p + 5) < 128 and b:byte(p + 6) == 0
+         and b:byte(p + 7) == 0
+end
+
 local function diag_link_window(bodyA, bodyB)
   assert(#bodyA == #bodyB, "two in-process blobs of one shape differ in length")
   local first, last
@@ -569,7 +602,10 @@ local function diag_link_window(bodyA, bodyB)
   if not first then return nil end
   local cands = {}
   for p = math.max(2, last - 7), first do
-    if bodyA:byte(p - 1) == 4 and last < p + 8 then cands[#cands + 1] = p end
+    if bodyA:byte(p - 1) == 4 and last < p + 8
+       and gc64_addr(bodyA, p) and gc64_addr(bodyB, p) then
+      cands[#cands + 1] = p
+    end
   end
   assert(#cands == 1, string.format(
     "cannot localise the frame-link payload: %d candidates for diffs at %d..%d",

@@ -1655,7 +1655,8 @@ object Smoke {
     if (!LuaStateFactory.isAvailable)
       die("LuaStateFactory.isAvailable == false: no native loaded, LuaJ would be substituted. " +
         "Check that debug.forceNativeLibPathFirst points at a directory containing " +
-        "libjnlua52-windows-x86_64.dll and that the DLL's dependencies resolve.")
+        "libjnlua52-<platform><ext> (libjnlua52-windows-x86_64.dll, libjnlua52-linux-x86_64.so) " +
+        "and that the library's dependencies resolve.")
     if (LuaStateFactory.includeLuaJ)
       die("LuaStateFactory.includeLuaJ == true: LuaJ is in play. Refusing to report anything.")
     val arch = machine.architecture

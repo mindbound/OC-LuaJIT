@@ -41,7 +41,7 @@ public final class LinkProbe {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("usage: LinkProbe <path to libocluajit52-*.dll>");
+            System.err.println("usage: LinkProbe <path to libjnluajit52-<platform>.dll|.so>");
             System.exit(2);
         }
         System.out.println("LinkProbe: " + args[0]);

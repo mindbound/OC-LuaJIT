@@ -1,0 +1,82 @@
+SUMMARY: I applied the fixes from inv-wd and inv-mem to test/native/negative-control.sh, the only repo file I edited. md5 went from 7d191b40 to 452d869b; it is LF with 0 CR, and `sh -n` passes on bash 5.3, bash 4.4 and dash.
+
+What changed:
+- **notimer:** it now picks its sabotage by `$OCLJ_OS`. Windows keeps the old lj52_wd_fire text. Linux removes `lj52_wd_inject(M);` from lj52_wd_thread. A preprocessor guard stops the run if the sabotage is in code this host compiles out.
+- **nohyst and unbounded:** MEMTEST_CFLAGS is now set and cleared on lines of its own instead of as a prefix to the function call, and it is cleared once at the top of section 4.
+- **New 4.31 guard:** it reads each arm's W16 cap count from that arm's own output and requires the arms that did not sweep 96 caps to be exactly nohyst and unbounded, both at 8.
+
+inv-mem's product_issue was NONE, so no allocator expectation was changed or made per-platform. The expected id sets are the same on every host.
+
+Full runs [M], each against a fresh md5-checked mirror of the named build:
+- **AlmaLinux 8:** the edited script gives 57 PASS, 0 FAIL, NEGATIVE CONTROL: PASS (10m08s). The original script on the same objects gives 51 PASS, 5 FAIL, which reproduces the chain.
+- **Ubuntu:** the edited script gives 57/0, PASS. The original gives 55 PASS and 1 FAIL (notimer only). This was the first full negative-control.sh run on Ubuntu.
+- **Windows (win-fixed):** the edited script gives 57/0, PASS.
+
+The RESULT labels are identical on all three hosts, and the old runs' 56 labels match the chain's Windows run.
+
+Proof that the new checks can fail [M]:
+- With the case labels swapped, the notimer guard stops with SETUP FAIL, exit 2, on all three hosts (empty tu.err). The block as written is caught on all three (exit 99, ALARM).
+- The 4.31 guard fails on the chain's Alma work dir, on my old Alma run and on inv-mem's A-1. It passes on every new run and on inv-mem's A-2. On synthetic copies it fails for nohyst at 96 caps, for a reshaped W16 line, for a new default of 64 caps, and for a 16-cap leak.
+
+product_issue: NONE.
+
+PRODUCT_ISSUE: NONE. With the harness fixed, the shipped allocator/RAM-cap machinery and the watchdog behave the same on AlmaLinux 8, Ubuntu and Windows. Every arm catches its sabotage with the same expected ids and exit status on all three hosts: 57/57 PASS each in run-alma-new, run-ubuntu-new and run-win-new [M]. The Linux watchdog enforces deadlines: wdcanon passes on all three, and with the old Windows text that Linux compiles out, W2 was still interrupted at 55.6 ms (Alma) and 55.7 ms (Ubuntu) [M].
+-- findings
+  * Old text against new text on Linux, same objects (alma-fixed: libluajit.a 21fee2b1, eris_lj.o d1c665a7) [M] run-alma-old against run-alma-new. rawverdict: old got [W16R W16RL W20 W20L] at 8 caps, FAIL; new got all 8 expected ids at 96 caps, PASS. nolook: old exit 0, ids [], FAIL; new [W16 W16L W16R W16RL], PASS. refusalkeeps: old [W19], FAIL; new [W16Rj W16RjL W19], PASS. noarm: old [W17], FAIL; new [W16Rj W16RjL W17], PASS. notimer: old exit 0 with W2 interrupted at 55.6 ms and the summary reached, FAIL; new exit 99, ALARM 1, summary 0, PASS.
+  * Ubuntu (dash) [M] run-ubuntu-old against run-ubuntu-new (ubuntu-build: libluajit.a 7051d208, eris_lj.o 6acbcab2). With the old script only notimer failed (W2 interrupted at 55.7 ms, exit 0). All four mem arms already swept 96 caps and passed, because dash scopes the prefix assignment. The edited script passes 57/0. This is the first full negative-control.sh run on Ubuntu, which answers inv-wd's open question: the mem failures are specific to bash 4.4's POSIX mode, not to Linux.
+  * Windows [M] run-win-new (win-fixed: libluajit.a 0822ad56, eris_lj.o 6fcb2dcd, gcc 16.2.0) passes 57/0. notimer still uses the lj52_wd_fire text (exit 99, ALARM). The 4.31 line reads nohyst:8 unbounded:8. The original script's Windows result is the chain's 56/0 (logs/suite-win/negctl.log); its 56 labels are identical to my old runs' labels.
+  * No dropin build was needed [S]. negative-control.sh reads only $LJ/*.h, $LJ/libluajit.a and $OBJ/eris_lj.o, and compiles lj52shim.c itself without -DLJ52_ADDITIVE. In build-native.sh the variant only sets SHIMDEF for the shipped shim object (:1529-1533) and the DLL name and output dir (:310-314). eris_lj.o is compiled with no variant flag (:1711-1714), and OCLJ_VARIANT is not read between :330 and :1520, where the LuaJIT archive is built. win-fixed's eris_lj.o is byte-identical to the repo build/native's, which held both variants (6fcb2dcd) [M].
+  * notimer TU guard fail-first [M] (probes/wd-swapped.sh, cut by markers from the frozen edited script with the windows and linux case labels exchanged). On Windows, Alma and Ubuntu it ends with 'NEGATIVE CONTROL SETUP FAIL: notimer: the sabotage applied but <os> compiles that backend out', exit 2 (Windows rc and direct wsl.exe rc), before any build, with tu.err 0 bytes. As written (probes/wd-rec.sh) it passes on all three: exit 99, W1 1, ALARM 1, summary 0. Each sabotaged copy differs from the shim on one line only: 1978 on Linux, 2021 on Windows.
+  * 4.31 differs on purpose from inv-mem's text. Instead of listing the arms at 8 caps, it lists every arm whose W16 line does not say 96 caps, as arm:N, or arm:unparsed if the line's shape changed. It requires exactly 'nohyst:8 unbounded:8'. This also catches a leak of any other value, a changed default in mem_test.c (inv-mem's open question 3: their version would pass silently if the default became 64), and a reshaped line. It uses grep with /dev/null as an extra file so the file-name prefix is always printed, plus sed's POSIX `t`.
+  * 4.31 can fail [M] (probes/guard431.sh is the block verbatim). It FAILS with the same 23 arms at :8 on the chain's Alma work dir (repo build/native/negctl, read only), on my run-alma-old work dir and on inv-mem's A-1, under Git Bash, Alma (GNU sed 4.5) and Ubuntu (GNU sed 4.9). It PASSES on inv-mem's A-2 and on bld-{alma,ubuntu,win}-new. On synthetic copies of A-2's run.logs (src/make-synth.py), unaltered passes, and these fail: nohyst at 96 (got [unbounded:8]), memcanon's line reshaped (memcanon:unparsed), every 96 changed to 64 (all arms listed), rawverdict at 16 caps.
+  * Runtimes [M]: Alma new 10m08s, Ubuntu new 9m41s, Windows new 11m08s, Alma old 6m39s, Ubuntu old 8m43s. The three new runs ran at the same time, and the two old runs overlapped them (24 cores). They ran in the background and I waited on the rc files. Restoring 96 caps is why Alma's section 4 now takes about 4 minutes longer than in the chain's 5m45s run.
+  * Step 5 (build-native.sh refuses dropmode and sniffer) ran on every host and was not SKIPPED [M]: 3 hosts x 2 PASS lines.
+  * Cosmetic [S]: the spliced block left two blank lines before '# --- 6.2 notimer' (rec-notimer.sh starts with an empty line). I kept it so that the repo file stays byte-identical to the frozen copy every run used (md5 452d869b in both places).
+-- recommended_changes
+  * Commit the edited test/native/negative-control.sh (md5 452d869b; diff at C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/negctl-final.diff). The user handles commits. Suggested message: 'negative-control.sh on Linux: notimer sabotages the watchdog backend this host compiles (lj52_wd_thread on POSIX), with a preprocessor guard; MEMTEST_CFLAGS set and cleared on lines of its own (bash 4.4 POSIX mode kept a prefix assignment after a function call, so AlmaLinux 8 swept 8 caps on 23 arms); 4.31 checks every arm's W16 cap count.'
+  * Record the cause in the glibc round's docs or roadmap wherever they describe the Linux negctl result. It was two harness bugs: the Windows-only notimer text, and bash 4.4 POSIX-mode prefix-assignment persistence, which made 23 mem arms sweep 8 caps. It was not a Linux allocator or watchdog difference. The roadmap watchdog row (docs/roadmap.md ~:144) cites stale lines: notimer is now negative-control.sh 6.2 (~:845-877), and the shim's lj52_wd_fire, CreateTimerQueueTimer and lj52_wd_thread are at :2019-2024, :2090 and :1964-1986. It should also name the Linux arm, which counts the fire but never delivers it. docs/ is not my file.
+  * Update the expected result count wherever a doc or chain script assumes 56 RESULT lines: it is now 57 on every host.
+  * Optional, not applied (scope): a backend-compiled-out guard for the other shim-sabotage helpers (sabotage_mem, sabotage_vgc, standinghook). A marker grep on `gcc -E -C` output would wrongly fail flushwhole, because -C drops comments inside #define lines. Comparing each arm's TU with the canonical one (inv-wd's census method) would work. inv-wd's census found no other arm affected today.
+-- files
+  * C:/Users/astro/Downloads/OC-LuaJIT/test/native/negative-control.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/negctl-final.diff
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/old/test/native/negative-control.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/new/test/native/negative-control.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/run-negctl.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/splice-notimer.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/make-probes.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/make-synth.py
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/src/run-probe.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-alma-new/negctl.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-alma-new/summary.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-alma-new/host.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-ubuntu-new/negctl.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-win-new/negctl.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-alma-old/negctl.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/run-ubuntu-old/negctl.log
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/wd-rec.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/wd-swapped.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/guard431.sh
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/log-win-swapped.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/log-alma-swapped.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/log-ubuntu-swapped.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/log-win-rec.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/log-alma-rec.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/probes/log-ubuntu-rec.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/guard/linux-shells.txt
+  * C:/Users/astro/claude-tmp/oclj/glibc/followup/fix-negctl/logs/labels-alma-new.txt
+-- checks
+  * Edited script: LF, 0 CR (byte count). `sh -n` passes on Git Bash sh (bash 5.3.15), Alma sh (bash 4.4.20) and Ubuntu sh (dash). `sh -n` on a deliberately broken file returns 2 on all three, so the syntax check can fail.
+  * The repo file md5 452d869b equals the frozen copy every new run executed. The old runs executed the pre-edit copy, 7d191b40.
+  * Every run used a fresh mirror OCLJ_BUILD in fix-negctl/bld-<host>-<old|new>, with libluajit.a and eris_lj.o md5s matching their source builds (host.txt). No negctl dir in any main/ build was touched. Nothing was written under the repo's build/. No git command that changes anything was run.
+  * AlmaLinux 8, edited: rc 0, 57 PASS / 0 FAIL, NEGATIVE CONTROL: PASS. Original: rc 1, 51/5 (rawverdict, nolook, refusalkeeps, noarm, notimer).
+  * Ubuntu 26.04, edited: rc 0, 57/0, PASS. Original: rc 1, 55/1 (notimer).
+  * Windows, edited: rc 0, 57/0, PASS.
+  * RESULT labels: the new runs are identical across the three hosts and equal the old labels plus the 4.31 line. The old labels equal the chain's suite-win labels.
+  * notimer guard: swapped labels give SETUP FAIL exit 2 on all three hosts. As written, the arm is caught (exit 99, ALARM) on all three.
+  * 4.31 guard: FAILS on the chain's Alma work dir, run-alma-old's work dir and inv-mem's A-1, and on synthetic nohyst96, reshaped, default64 and leak16 copies. PASSES on A-2, the unaltered synthetic copy and every new run. Run under three seds (GNU 4.5, 4.9, 4.9).
+  * Step 5 (build-native.sh refuses dropmode and sniffer) ran and passed on all three hosts; SKIPPED appears 0 times in all five logs.
+-- open_questions
+  * Should the main session rerun the edited script once more, inside its own chain, against the release build/native objects (libluajit.a a0f264d7)? My Alma runs used alma-fixed (21fee2b1), the release-identical build named in the task.
+  * Should 4.31 also check the W16R lines' cap count? The leak sets both W16_N and W16R_N, so checking W16 alone was enough to catch it.
+  * Is a general compiled-out guard for every lj52shim.c sabotage helper wanted now (TU compared with canonical), or only when the next backend-specific arm appears?

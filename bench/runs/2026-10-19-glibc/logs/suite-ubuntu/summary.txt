@@ -1,0 +1,14 @@
+mem 0
+penalty 0
+race 2
+run-bitfuzz 0
+run-bitjit 0
+run-bitop 0
+run-pack 0
+run-packfuzz 0
+security 0
+ser-negctl 0
+ser-test 0
+shim 0
+vgc 0
+wd 0

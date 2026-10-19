@@ -1,0 +1,9 @@
+Ubuntu 26.04.1 LTS
+glibc 2.43
+Linux 6.18.54.1-microsoft-standard-WSL2 x86_64
+OCLJ_JAVA=/usr/lib/jvm/java-17-openjdk-amd64
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment (build 17.0.20.1+1-1-26.04-Ubuntu)
+    file.encoding = UTF-8
+    sun.jnu.encoding = UTF-8
+patcher /mnt/c/Users/astro/claude-tmp/oclj/new-gl-linux-6c888050/libdir-additive/../luajit-linux-x86_64/src/luajit: LuaJIT 2.1.ROLLING -- Copyright (C) 2005-2026 Mike Pall. https://luajit.org/

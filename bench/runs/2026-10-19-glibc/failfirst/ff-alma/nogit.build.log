@@ -1,0 +1,9 @@
+[build] =============== 0. preflight ===============
+[build] host    = linux-x86_64   (lib*.so, jni_md in linux/)
+[build] glibc   = the library may need at most GLIBC_2.28 (OCLJ_GLIBC_MAX; checked in step 6)
+[build] cc      = gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-29)
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+BUILD FAIL: cannot read the LuaJIT checkout's commit at /mnt/c/Users/astro/claude-tmp/oclj/glibc/main/ff-alma/luajit-nogit
+         (no git on PATH, and no readable .git/HEAD).  The blob fingerprint
+         names that commit, so a native built without it could never restore a
+         blob another build wrote.  Install git, or keep the checkout's .git.
