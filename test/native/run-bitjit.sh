@@ -19,7 +19,8 @@
 # default is relative to OCLJ_REPO and a git-archive scratch repo has no
 # bench/vendor (until 2026-10-20 such a run passed: verify-folda F11).
 # OCLJ_LUA53=none runs without PUC on purpose, and the run can pass.
-# Four parts:
+# Five parts (the fifth, sel, is not about the bit operators: it is the
+# JIT-against-interpreter runner's home for the select fix):
 #
 #   1. THE GENERATOR (gen).  bitop/gen.lua, the round-3 width-fold reviewer's
 #      adversarial loop generator, writes OCLJ_BITJIT_SEEDS seeds of
@@ -83,6 +84,24 @@
 #      IR shows it), every loop compiles (no type instability, JFORL), and
 #      the results equal -joff's.  The generator's idx and rg2 modes are not
 #      in the default run: they are campaigns (below).
+#   5. SELECT (sel; roadmap row 213, JIT guide P54: patch-bitop-record.sh's
+#      hunks 4 and 5 bound select's index k in rec_varg, aborting the
+#      recording for a k above 2^27 and, where k is beyond the varargs,
+#      exiting unless 1 <= k <= 2^27 before the 32-bit 8*k+frofs).
+#      bitop/t_select.lua records select(k, ...) loops on each of rec_varg's
+#      paths (a constant k, k within the varargs, k beyond them, '#'; k from
+#      a table, a string, narrowing's unchecked ADD, a bit result, the loop
+#      index; calls with fewer arguments than fixed parameters) and feeds
+#      them k in range, past the end, negative, 0, wrapping, large and out of
+#      int32, under the idx part's nine option sets and six more for exits,
+#      side traces, ABC and narrowing (SELOPTS): each output, results and
+#      raises, must equal -joff's; with PUC its "puc" part (integral k below
+#      2^31, where select's meaning is the same) must equal -joff's.  Its
+#      default run's #cov line must say jit on, a trace in OCLJ_BITJIT_HOTMIN
+#      of the cases, each path's guard and the fix's guard at least once, and
+#      the three loops recorded with k = 2^27 compiled; and in every JIT run
+#      no loop recorded only with k above 2^27 may compile a select trace
+#      (t_select-kmax).
 #
 # Each part's catches, measured on one-line sabotages of the reference build
 # (2026-10-17, role C2's report has the counts): the generator catches every
@@ -95,12 +114,15 @@
 # catch WIDTHIDX33 (the fold's bound at 33) and no other part does; phiidx
 # catches PHIIDX (the fold across a PHI) and NOLOOPFOLD (no fold in a loop
 # body), which change no value, so no differential suite can see them.
+# The sel part (2026-10-20): t_select catches SELGUARD (no guard before
+# the shift: upstream's nil for a wrapping or non-positive k), and
+# t_select-kmax SELRECK (no record-time bound, which changes no value).
 # Proof that the checks can fail: negctl-bitop.sh.
 #
 # Environment:
 #   OCLJ_LUA53            PUC Lua 5.3.6 (default bench/vendor/lua-5.3.6/src/lua[.exe]),
 #                         or "none": no PUC comparison, on purpose
-#   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx"  (default all four)
+#   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx sel"  (default all five)
 #   OCLJ_BITJIT_SEED      the generator's first seed                  (default 1)
 #   OCLJ_BITJIT_SEEDS     how many consecutive seeds                   (default 4)
 #   OCLJ_BITJIT_CASES     loops per seed                               (default 2000)
@@ -111,13 +133,13 @@
 #                         or "rg2": results at and past 2^53 (exact values in
 #                         bits 53-63 among them); each mode passes on any
 #                         build whose results equal the interpreter's
-#   OCLJ_BITJIT_HOTMIN    the generator's and the idx part's coverage gate,
-#                         a fraction                                    (default 0.25)
+#   OCLJ_BITJIT_HOTMIN    the coverage gate of the generator and of the idx
+#                         and sel parts, a fraction                     (default 0.25)
 #   OCLJ_BITJIT_OUT       results directory; must not exist
 #                         (default $OCLJ_BUILD/bitjit-<UTC stamp>)
 #
 # Default: about 50 s (4 seeds x 2000 loops, about 7 s a seed with PUC; the
-# idx part about 10 s).
+# idx part about 10 s; the sel part about 6 s, 2026-10-20).
 # A campaign is OCLJ_BITJIT_PARTS=gen OCLJ_BITJIT_SEED=101
 # OCLJ_BITJIT_SEEDS=20, and again with OCLJ_BITJIT_GENMODE=phi, idx and rg2;
 # a change to the table-index fold runs the idx mode, and one to a result's
@@ -141,7 +163,7 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
 : "${OCLJ_LUA53:=$OCLJ_REPO/bench/vendor/lua-5.3.6/src/lua.exe}"
-: "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx}"
+: "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel}"
 : "${OCLJ_BITJIT_SEED:=1}"
 : "${OCLJ_BITJIT_SEEDS:=4}"
 : "${OCLJ_BITJIT_CASES:=2000}"
@@ -166,11 +188,11 @@ PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 LJEXE=$OCLJ_BUILD/luajit-$PLATFORM/src/luajit$EXE
 B=$SELF_DIR/bitop
 [ -x "$LJEXE" ] || fail "no $LJEXE -- run build-native.sh first (on THIS platform)"
-for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua; do
+for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua t_select.lua; do
   [ -f "$B/$f" ] || fail "no $B/$f"
 done
 for p in $OCLJ_BITJIT_PARTS; do
-  case $p in gen|floor|fix1|idx) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx" ;; esac
+  case $p in gen|floor|fix1|idx|sel) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx, sel" ;; esac
 done
 for v in "$OCLJ_BITJIT_SEED" "$OCLJ_BITJIT_SEEDS" "$OCLJ_BITJIT_CASES"; do
   case "$v" in *[!0-9]*|'') fail "OCLJ_BITJIT_SEED, _SEEDS and _CASES must be whole numbers" ;; esac
@@ -202,7 +224,7 @@ fi
 [ -e "$OCLJ_BITJIT_OUT" ] && fail "$OCLJ_BITJIT_OUT exists; results are never overwritten"
 mkdir -p "$OCLJ_BITJIT_OUT" || fail "cannot create $OCLJ_BITJIT_OUT"
 OUT=$OCLJ_BITJIT_OUT
-md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" > "$OUT/inputs.md5"
+md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" "$B/t_select.lua" > "$OUT/inputs.md5"
 [ "$HAVEPUC" = 1 ] && md5sum "$OCLJ_LUA53" >> "$OUT/inputs.md5"
 # jit.vmdef and jit.util's names (p4v.lua) live beside the build's luajit.exe,
 # in src/jit; the Windows exe needs a C:/ path.
@@ -520,8 +542,82 @@ else
   echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
 fi
 
+# ---------------------------------------------------------------- 5
 echo
-sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
+echo "== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound =="
+# The idx part's nine sets, and six for exits, side traces, ABC and
+# narrowing (guide 11.3's sets for a guard and for an index).
+SELOPTS="$IDXOPTS hx1:-Ohotexit=1 ts1:-Otryside=1_-Ohotexit=2 mx1:-Omaxside=1 hl1ms0:-Ohotloop=1_-Omaxside=0 noabc:-O3_-O-abc nonarrow:-O3_-O-narrow"
+if wanted sel; then
+  D=$OUT/sel; mkdir -p "$D"
+  t=t_select
+  run "$D/$t-joff.txt" "$D/$t-joff.err" "$LJEXE" -joff "$B/$t.lua"; rc=$?
+  nc=$(grep -c . "$D/$t-joff.txt")
+  if [ "$rc" -eq 2 ] && grep -q INSTRUMENT "$D/$t-joff.txt"; then
+    echo "PROVED NOTHING $t:"; sed -n '/INSTRUMENT/,$p' "$D/$t-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+  elif [ "$rc" -ne 0 ] || [ "$nc" -eq 0 ]; then
+    echo "FAIL $t: -joff exited $rc with $nc lines: $(head -c 200 "$D/$t-joff.err")"; bad=1
+  else
+    ne=$(grep -c 'E:' "$D/$t-joff.txt")
+    line="$t ($nc cases, $ne of them with a raise):"; tbad=0; kbad=; knone=
+    for o in $SELOPTS; do
+      n=$(optname "$o")
+      run "$D/$t-$n.txt" "$D/$t-$n.err" "$LJEXE" $(optargs "$o") "$B/$t.lua"; rc=$?
+      set -- $(ndiff "$D/$t-$n.txt" "$D/$t-joff.txt")
+      line="$line $n=$1"
+      [ "$rc" -ne 0 ] && { line="$line(exit $rc)"; tbad=1; }
+      [ "$1" -ne 0 ] && { shift; line="$line[$*]"; tbad=1; }
+      # The record-time bound, in every JIT run: no select trace compiled in
+      # a loop recorded only with k above 2^27.
+      kb=$(sed -n 's/^#cov .* kmaxbad \([0-9]*\) .*/\1/p' "$D/$t-$n.err")
+      if [ -z "$kb" ]; then knone="$knone $n"
+      elif [ "$kb" -gt 0 ]; then kbad="$kbad $n=$kb"; fi
+    done
+    # Coverage, from the default run: traces, each of rec_varg's paths, the
+    # fix's guard, and the 2^27 controls (the kmax check can see a trace).
+    cov=$(grep '^#cov' "$D/$t-jon.err" 2>/dev/null)
+    cv() { echo "$cov" | sed -n "s/.* $1 \([0-9]*\).*/\1/p"; }
+    traced=$(cv traced); sa=$(cv selA); sb=$(cv selB); sc=$(cv selC); kg=$(cv kguard); kc=$(cv kmaxctl); kn=$(cv kctl)
+    case "$cov" in *"jit on"*) jit=on ;; *) jit=off ;; esac
+    covtxt="coverage: a trace completed in ${traced:-?} of $nc cases; guards of select's paths A ${sa:-?}, B ${sb:-?}, C ${sc:-?}; the fix's guard ${kg:-?}; the k = 2^27 loops compiled ${kc:-?} of ${kn:-?} (default options, jit $jit)"
+    if [ "$tbad" = 1 ]; then
+      echo "FAIL $line  ($covtxt)"; bad=1
+    elif [ "$jit" != on ] || [ -z "$traced" ] || [ "${sa:-0}" -eq 0 ] || [ "${sb:-0}" -eq 0 ] || [ "${sc:-0}" -eq 0 ] ||
+         [ "${kg:-0}" -eq 0 ] || [ -z "$kn" ] || [ "$kn" -eq 0 ] || [ "${kc:-0}" -ne "$kn" ] ||
+         ! awk -v t="$traced" -v n="$nc" -v h="$OCLJ_BITJIT_HOTMIN" 'BEGIN { exit !(t >= h * n) }'; then
+      echo "PROVED NOTHING $line  ($covtxt; too few traces for OCLJ_BITJIT_HOTMIN $OCLJ_BITJIT_HOTMIN, a path or the fix's guard never recorded, or a k = 2^27 loop not compiled)"; nothing=1
+    else
+      echo "PASS $line  ($covtxt)"
+    fi
+    if [ -n "$kbad" ]; then
+      echo "FAIL t_select-kmax: a select trace compiled in a loop recorded only with k above 2^27 (loops a set):$kbad"; bad=1
+    elif [ -n "$knone" ]; then
+      echo "PROVED NOTHING t_select-kmax: no #cov line in:$knone"; nothing=1
+    else
+      echo "PASS t_select-kmax: in no option set did a loop recorded only with k above 2^27 compile a select trace"
+    fi
+    if [ "$HAVEPUC" = 1 ]; then
+      # The "puc" part (integral k below 2^31), on PUC and on -joff.
+      run "$D/$t-joff-puc.txt" "$D/$t-joff-puc.err" "$LJEXE" -joff "$B/$t.lua" puc
+      run "$D/$t-puc.txt" "$D/$t-puc.err" "$OCLJ_LUA53" "$B/$t.lua" puc; rc=$?
+      set -- $(ndiff "$D/$t-puc.txt" "$D/$t-joff-puc.txt")
+      if [ "$rc" -ne 0 ] || [ ! -s "$D/$t-joff-puc.txt" ]; then
+        echo "PROVED NOTHING $t on PUC: exited $rc: $(head -c 300 "$D/$t-puc.txt") $(head -c 200 "$D/$t-puc.err")"; nothing=1
+      elif [ "$1" -eq 0 ]; then
+        echo "PASS $t: PUC 5.3.6 equals -joff in all $(grep -c . "$D/$t-puc.txt") cases of its puc part"
+      else
+        nd=$1; shift; echo "FAIL $t: PUC 5.3.6 differs from -joff in $nd cases of its puc part, first:$*"; bad=1
+      fi
+    else
+      echo "$t on PUC: SKIPPED ($PUCSKIP)"
+    fi
+  fi
+else
+  echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
+fi
+
+echo
+sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx sel" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
 if [ "$bad" = 1 ]; then echo "RUN-BITJIT: FAIL$sel (results: $OUT)"; exit 1; fi
 if [ "$nothing" = 1 ]; then echo "RUN-BITJIT: PROVED NOTHING$sel (results: $OUT)"; exit 2; fi
 echo "RUN-BITJIT: PASS$sel (results: $OUT)"

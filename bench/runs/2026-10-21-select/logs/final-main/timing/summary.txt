@@ -1,0 +1,9 @@
+idx     base 0.700 ns  new 0.700 ns  new/base median 1.000 [0.986-1.014] over 7 rounds  result 399999992
+cycle   base 1.210 ns  new 1.210 ns  new/base median 0.992 [0.992-1.008] over 7 rounds  result 399999997
+beyond  base 0.380 ns  new 0.380 ns  new/base median 1.000 [0.949-1.026] over 7 rounds  result 100000000
+vbeyond base 1.190 ns  new 1.210 ns  new/base median 1.017 [1.000-1.017] over 7 rounds  result 100000000
+konst   base 0.390 ns  new 0.380 ns  new/base median 1.000 [0.974-1.000] over 7 rounds  result 300000000
+count   base 0.380 ns  new 0.380 ns  new/base median 1.026 [0.974-1.027] over 7 rounds  result 700000000
+RESULTS: EQUAL
+GROSS: OK (every row's median new/base within [0.5, 2])
+SUMMARY: OK

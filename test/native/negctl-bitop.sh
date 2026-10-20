@@ -1,9 +1,10 @@
 #!/bin/sh
 # =====================================================================
 # negctl-bitop.sh -- PROVE that round 3's tests of the 64-bit bitwise
-# operators, and the CRC32 follow-up's of the table-index fold, have teeth:
-# run-bitop.sh, run-bitjit.sh, run-bitfuzz.sh, run-security.sh's FF12, and
-# build-native.sh's bitops gate and stage-4 VM-features word check.
+# operators, the CRC32 follow-up's of the table-index fold, and the select
+# fix's (2026-10-20) have teeth: run-bitop.sh, run-bitjit.sh,
+# run-bitfuzz.sh, run-security.sh's FF12, and build-native.sh's bitops
+# gate and stage-4 VM-features word check.
 #
 #   OCLJ_BUILD=<build dir used by build-native.sh>  sh test/native/negctl-bitop.sh
 #
@@ -74,6 +75,9 @@
 #   idx:t_idx, :t_cnt33, :t_idx2, :phiidx   run-bitjit.sh's idx part (the
 #                 table-index fold): t_idx, t_cnt33 or t_idx2 against -joff
 #                 under some option set, or phiidx's trace-shape check
+#   sel:t_select, :kmax   run-bitjit.sh's sel part (the select fix):
+#                 t_select against -joff under some option set, or its
+#                 record-time bound's trace count (t_select-kmax)
 #   security:FF12 run-security.sh's FF12 (a version-2 dump is refused)
 #   gate:dump     build-native.sh's bitops gate, its own text, run on the arm's
 #                 luajit.exe: the line differs from build-native.sh's wanted
@@ -114,14 +118,21 @@
 #     WIDTHIDX33      lj_opt_fold.c      [idx:t_idx idx:t_cnt33 idx:t_idx2]
 #     PHIIDX          lj_opt_fold.c      [idx:phiidx]
 #     NOLOOPFOLD      lj_opt_fold.c      [idx:phiidx]   (verify-folda's)
+#   the select fix's (roadmap row 213, 2026-10-20; patch-bitop-record.sh
+#   hunks 4 and 5):
+#     SELGUARD        lj_record.c        [sel:t_select]
+#     SELRECK         lj_record.c        [sel:kmax]
 #   PHIIDX and NOLOOPFOLD change no value (the fold across a PHI; no fold in
 #   a loop body), so only phiidx.lua's IR read sees them: a sabotage that
 #   changes no value needs a catcher that reads the IR's shape or counts
-#   exits.  The follow-up's range guard (rg2) was prototyped with seven arms
-#   of its own and did not ship (2026-10-20); its arms went with it, and its
-#   generator mode stayed as genrg2, which catches non-RG2 arms too: it is
-#   listed on the five it catches in more than 100 cases in every seed
-#   (THE MARGINS, below).
+#   exits.  So does SELRECK: without the record-time bound a loop recorded
+#   with a k above 2^27 compiles and gives the interpreter's values (a
+#   variable k exits at path C's guard; the constant 2^27+1 compiles path
+#   A's guard, a right nil), and only t_select-kmax's trace count sees it.
+#   The follow-up's range guard (rg2) was prototyped with seven arms of its
+#   own and did not ship (2026-10-20), and its arms with it; its generator
+#   mode stayed as genrg2, which catches non-RG2 arms too: it is listed on
+#   the five it catches in over 100 cases in every seed (THE MARGINS, below).
 # Each arm's line, below, says what it breaks.  Not arms: the first design's
 # ROUNDTRUNC and TIESAWAY (nothing rounds under U1-B), and INEXACT-RECABORT,
 # the recorder's record-time abort of an inexact result removed (either of
@@ -164,14 +175,23 @@
 # WADD0 4-7, NARROW 4-7 and SARCONST 1-3 (one run each), too thin to list,
 # and not FIX1 or WIDTHIDX33.  The generator's idx mode was measured too
 # and is no catcher here: WIDTHIDX33 1-5 cases a seed, WIDTH55 49-66 (one
-# run, negctl-probe-genidx-A).  A full run took 7.6 minutes with 27 arms
-# (2026-10-17), 5.1 of them in canon and the seven gen arms; the three idx
-# arms take about 15 s each, and genrg2 adds about 35 s to canon and to
-# each of its five arms (one run of each, 2026-10-20), so a full run now
-# takes about 12 minutes (estimated, not yet measured).  A rebuild takes
-# 1-3 s, a vm_x64.dasc one included.  The work directory grows by about
-# 40 MB a gen or genrg2 run (38.6-41.6 MB measured in the 2026-10-17 runs;
-# 445 MB for the 2026-10-17 sweep), and nothing is deleted.
+# run, negctl-probe-genidx-A).  THE SELECT FIX'S ARMS, four runs on
+# 2026-10-20 (OCLJ_NEGCTL_ARMS=SELGUARD,SELRECK, the select round's
+# implementer, scratch claude-tmp/oclj/sel/impl/runs/s-b2-negctl-1..4):
+# SELGUARD t_select 11-53 cases in each of its 15 option sets (11-15 under
+# -Ohotloop=1 -Omaxside=0, 51-53 under the side-trace sets), every run;
+# SELRECK t_select-kmax 2-3 of its 3 loops in each of the 15 sets, every
+# run, and t_select 0 (it changes no value).
+# A full run took 7.6 minutes with 27 arms (2026-10-17), 5.1 of them in
+# canon and the seven gen arms; the three idx arms take about 15 s each,
+# and genrg2 adds about 35 s to canon and to each of its five arms (one
+# run of each, 2026-10-20).  The CRC32 round's full sweep, 30 arms, took
+# 14 min 3 s (its final check, 2026-10-20).  With the sel part canon took
+# 107-108 s and each sel arm 7-9 s (four runs on the select round's
+# build).  A rebuild takes 1-3 s, a vm_x64.dasc one included.  The work
+# directory grows by about 40 MB a gen or genrg2 run (38.6-41.6 MB
+# measured in the 2026-10-17 runs; 445 MB for the 2026-10-17 sweep, 878
+# MB for the CRC32 round's), and nothing is deleted.
 #
 # Every sabotage is memory-safe by construction: each computes a different
 # value, raises a different message or none, writes a different version
@@ -195,6 +215,10 @@
 # in every suite (through loop_unroll's hint PHI, which no argument may lean
 # on), and NOLOOPFOLD keeps the checked conversion.  NOINT-JIT's unguarded
 # conversion is cvttsd2si, which yields INT64_MIN for what it cannot convert.
+# SELGUARD removes the guard, SELRECK the record-time bound; each leaves
+# rec_varg loading only where upstream's does, for a k within the varargs
+# at record time, behind the unsigned ABC on k-1 (a variable k) or a GE
+# guard of fr (a constant k), so a wrapping k gives a wrong nil, no address.
 #
 # OCLJ_NEGCTL_ARMS (default empty: every arm) runs only the arms it names,
 # separated by spaces or commas; canon always runs.  A name that is no arm is
@@ -428,7 +452,7 @@ run_stage4() {  # eris_lj.c compiled as build-native.sh's stage 4 does, then its
 # rcof <suite>: the exit status of the run that suite is part of ('-': not run).
 rcof() {
   case $1 in
-    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
+    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
     security) echo "$R_security" ;; gate) echo "$R_gate" ;; stage4) echo "$R_stage4" ;; *) echo - ;;
   esac
 }
@@ -445,7 +469,7 @@ runcatchers() {
       gate) [ "$R_gate" = - ] && { run_gate "$1"; R_gate=$?; } ;;
       stage4) [ "$R_stage4" = - ] && { run_stage4 "$1"; R_stage4=$?; } ;;
       genrg2) [ "$R_genrg2" = - ] && { run_genrg2 "$1"; R_genrg2=$?; } ;;
-      gen|floor|fix1|idx) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+      gen|floor|fix1|idx|sel) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
       *) fail "arm $name: unknown catcher '$tk'" ;;
     esac
   done
@@ -503,6 +527,8 @@ check() {
     idx:t_cnt33) grep -q '^FAIL t_cnt33 (' "$1/bitjit.log" ;;
     idx:t_idx2) grep -q '^FAIL t_idx2 (' "$1/bitjit.log" ;;
     idx:phiidx) grep -q '^FAIL phiidx' "$1/bitjit.log" ;;
+    sel:t_select) grep -q '^FAIL t_select (' "$1/bitjit.log" ;;
+    sel:kmax) grep -q '^FAIL t_select-kmax' "$1/bitjit.log" ;;
     genrg2) grep -q '^seed [0-9]*: FAIL' "$1/bitjit-rg2.log" ;;
     security:FF12) grep -q '^FAIL FF12 ' "$1/security.log" ;;
     gate:dump) gatedump "$1" ;;
@@ -536,6 +562,9 @@ info() {
       /^FAIL t_idx2 [(]/ { out = out sep "t_idx2"; sep = "," }
       /^FAIL t_(idx|cnt33|idx2): PUC/ { v = $2; sub(/:$/, "", v); out = out sep v "-PUC"; sep = "," }
       /^FAIL phiidx/ { out = out sep "phiidx"; sep = "," }
+      /^FAIL t_select [(]/ { out = out sep "t_select"; sep = "," }
+      /^FAIL t_select-kmax/ { out = out sep "t_select-kmax"; sep = "," }
+      /^FAIL t_select: PUC/ { out = out sep "t_select-PUC"; sep = "," }
       END { print out }' "$1/bitjit.log")
     s="$s; bitjit[${parts# }] $R_bitjit$g${fl:+ failed: $fl}"
   fi
@@ -635,7 +664,7 @@ arm() {
 }
 
 armlist() {
-arm canon - 'bitop fuzz gen genrg2 floor fix1 idx security gate stage4' '' ''
+arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel security gate stage4' '' ''
 arm WRAP32-INTERP vm_x64.dasc 'bitop:t_ops fuzz:V' \
   '    |  ins RC, RA' \
   '    |  ins RCd, RAd@T@@T@// SABOTAGE WRAP32-INTERP: and/or/xor in 32 bits, as BitOp computed them'
@@ -728,6 +757,12 @@ arm PHIIDX lj_opt_fold.c 'idx:phiidx' \
 arm NOLOOPFOLD lj_opt_fold.c 'idx:phiidx' \
   '  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && !irt_isphi(fleft->t) &&' \
   '  if (!J->chain[IR_LOOP] && (fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && !irt_isphi(fleft->t) &&  /* SABOTAGE NOLOOPFOLD: the table-index fold never fires in a loop body, where the speed is (verify-folda) */'
+arm SELGUARD lj_record.c 'sel:t_select' \
+  '@T@  emitir(IRTGI(IR_ULT), tmp2, lj_ir_kint(J, OCLJ_SELECT_KMAX));  /* OC-LuaJIT: 1 <= k <= 2^27, or exit. */' \
+  "@T@  (void)0;  /* SABOTAGE SELGUARD: no guard on select's k before the shift, upstream's path C: a k whose 8*k wraps, or a k <= 0 in a short call, gives nil */"
+arm SELRECK lj_record.c 'sel:kmax' \
+  '      if (idx > OCLJ_SELECT_KMAX) goto nyivarg;  /* OC-LuaJIT: as for k < 0. */' \
+  "      /* SABOTAGE SELRECK: no record-time bound on select's k, so a loop recorded with k above 2^27 compiles, as upstream's does */"
 }
 
 # The selection, checked against the arm list before anything is copied: a

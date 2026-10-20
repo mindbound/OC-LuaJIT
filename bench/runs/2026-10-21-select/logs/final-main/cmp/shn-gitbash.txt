@@ -1,0 +1,4 @@
+0 native/luajit/patch-bitop-record.sh
+0 test/native/negctl-bitop.sh
+0 test/native/run-bitjit.sh
+0 final-check.sh

@@ -1,0 +1,1 @@
+native=additive lib=/mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive jit=on only=sieve dispose= bundle= javasrc= smoke=/mnt/c/Users/astro/Downloads/OC-LuaJIT/test/native/smoke-test.sh timeout=600 benchdir= confextra=

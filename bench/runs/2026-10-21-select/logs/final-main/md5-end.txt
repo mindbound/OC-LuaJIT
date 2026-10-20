@@ -1,0 +1,14 @@
+29844cd9b36b177e02ff95c33148419c */c/Users/astro/Downloads/OC-LuaJIT/docs/jit-guide.md
+53708b130cf13656919c07a0a9deacc1 */c/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md
+b218585d82e1ed21e294ea9e9cc61650 */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-record.sh
+f60e7948d0bab6fa3f5c6c89ca4d4c32 */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/t_idx2.lua
+b26161082d299435389eafb3e8ab069f */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/t_select.lua
+fbd42f2c6e3e42684336976c3f26eea2 */c/Users/astro/Downloads/OC-LuaJIT/test/native/negctl-bitop.sh
+01cc9a170101007e3cc6c3bc82a6be98 */c/Users/astro/Downloads/OC-LuaJIT/test/native/run-bitjit.sh
+d45910e931ff6e15cf7deb2e0724f08c */c/Users/astro/claude-tmp/oclj/sel/fix/final-check.sh
+74db422b115aeeab59a2e101075220ef */c/Users/astro/claude-tmp/oclj/sel/fix/fc-summarize.py
+70dfdac86f9658d0efafb98b8eb8a9d4 */c/Users/astro/claude-tmp/oclj/sel/fix/fc-bench_sel.lua
+96ffbad1a6e0f8c0777f64f698326065 */c/Users/astro/claude-tmp/oclj/sel/fix/fc-selbug.lua
+e22de2120430e47676c2b937a9b0ce90 */c/Users/astro/claude-tmp/oclj/sel/fix/fc-citecheck.py
+d02e23e4b6f7538949ceffb62cca8d85 */c/Users/astro/claude-tmp/oclj/sel/fix/fc-anchorcheck.py
+8bf1f6167c12ad4707677de502d6f11c */c/Users/astro/claude-tmp/oclj/sel/fix/fc-tablecheck.py

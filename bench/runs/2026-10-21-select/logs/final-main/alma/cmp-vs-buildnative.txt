@@ -1,0 +1,1 @@
+LuaJIT objects 77/77; differing: lj_record.o (1/1 lines); ours 3

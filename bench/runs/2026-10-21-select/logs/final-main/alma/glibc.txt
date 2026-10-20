@@ -1,0 +1,1 @@
+[build]     glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28

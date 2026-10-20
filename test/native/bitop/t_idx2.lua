@@ -39,13 +39,16 @@
 -- previous iteration made: ep, carried across the PHI, where the fold must
 -- not fire).
 --
--- NOT HERE: select(e, ...).  Upstream's rec_varg computes select's bound in
--- 32 bits, so compiled code returns nil for a large negative index where
--- the interpreter raises "index out of range", with no bit operator
--- involved (verify-folda, probes/selbug.lua, 2026-10-20; the shipped build
--- and the 2026-09-01 upstream binary alike).  That divergence is its own
--- roadmap row, to be fixed in its own round; until then a select consumer
--- here would report it, not the fold.
+-- NOT HERE: select(e, ...).  When this file was written, upstream's
+-- rec_varg computed select's bound in 32 bits, so compiled code returned
+-- nil for a large negative index where the interpreter raises "index out
+-- of range", with no bit operator involved (verify-folda,
+-- probes/selbug.lua, 2026-10-20; the shipped build and the 2026-09-01
+-- upstream binary alike), and a select consumer here would have reported
+-- that, not the fold.  The select fix (roadmap row 213, JIT guide P54)
+-- bounds select's index since, and t_select.lua's bx source feeds select a
+-- 32-bit bit result through this fold; whether select joins this file is
+-- open.
 --
 -- ONE TEXT, TWO DIALECTS (bitop/twin.lua).  The reference is -joff.  Part
 -- "puc" prints only the consumers whose meaning is the same on PUC 5.3.6

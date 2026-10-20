@@ -1,0 +1,8 @@
+d490af9bfe2ec6e67b832136b2f9b5b0  out1.c
+d490af9bfe2ec6e67b832136b2f9b5b0  out2.c
+d490af9bfe2ec6e67b832136b2f9b5b0  patched-lj_record.c
+ca88bffbe10163a1d1a347e613cb42c9  pristine-lj_ffrecord.c
+0fec357c5b4712d56af434eecf1d35a2  pristine-lj_opt_narrow.c
+43116dba513c9bb5799179cdb8061ac3  pristine-lj_record.c
+810729e64b7db0154ebbd432ac0c0bc9  pristine-lj_trace.c
+43116dba513c9bb5799179cdb8061ac3  pristine.c

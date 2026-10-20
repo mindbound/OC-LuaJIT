@@ -1,0 +1,1 @@
+patch-bitop-record.sh: out2.c  already records the operators through oclj_rec_bitop and bounds select's index (verified) -- unchanged

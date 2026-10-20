@@ -1,0 +1,45 @@
+chain-linux sel1 started 22:45:39 natives=/mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd
+  host: AlmaLinux 8.10 (Cerulean Leopard), glibc 2.28, 6.18.54.1-microsoft-standard-WSL2
+  patcher: /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/luajit-linux-x86_64/src/luajit (LuaJIT 2.1.ROLLING -- Copyright (C) 2005-2026 Mike Pall. https://luajit.org/)
+  9586ef6fcda531ae38bdd4adac8a6d02  /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir/libjnlua52-linux-x86_64.so
+  9247cbfd578cfcb060f56ddb82674a57  /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive/libjnluajit52-linux-x86_64.so
+  238cdf66a126f1e3e7c5443d7d453c72  /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/luajit-linux-x86_64/src/luajit
+  lx-additive-on env=[-] additive /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive on UNSET
+lx-additive-on exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 81.1s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused (want refused)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> ok/feffffff/-2/5/true/true/l8/short (want ok/feffffff/-2/5/true/true/l8/short)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215 (want ok/1:0/-2147483648:0/inexa
+  lx-dropin env=[-] luajit /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir on UNSET
+lx-dropin exit=0 SMOKE| CHECKS: 69   FAILURES: 0   WALL: 85.7s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused (want refused)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> ok/feffffff/-2/5/true/true/l8/short (want ok/feffffff/-2/5/true/true/l8/short)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215 (want ok/1:0/-2147483648:0/inexa
+  lx-additive-off env=[-] additive /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive off UNSET
+lx-additive-off exit=0 SMOKE| CHECKS: 80   FAILURES: 0   WALL: 86.1s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused (want refused)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> ok/feffffff/-2/5/true/true/l8/short (want ok/feffffff/-2/5/true/true/l8/short)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215 (want ok/1:0/-2147483648:0/inexa
+  lx-sieve env=[-] additive /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive on sieve
+lx-sieve exit=0 SMOKE| CHECKS: 76   FAILURES: 0   WALL: 71.7s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused (want refused)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> ok/feffffff/-2/5/true/true/l8/short (want ok/feffffff/-2/5/true/true/l8/short)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215 (want ok/1:0/-2147483648:0/inexa
+  lx-stock env=[-] stock - on UNSET
+lx-stock exit=0 SMOKE| CHECKS: 53   FAILURES: 0   WALL: 74.5s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused-puc (want refused-puc)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> absent (want absent)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> absent (want absent)
+  lx-disposeoff env=[OCLJ_DISPOSE=off] additive /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive on UNSET
+lx-disposeoff exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 83.5s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused (want refused)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> ok/feffffff/-2/5/true/true/l8/short (want ok/feffffff/-2/5/true/true/l8/short)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215 (want ok/1:0/-2147483648:0/inexa
+  lx-bundleoff env=[OCLJ_PERSIST_BUNDLE=off] additive /mnt/c/Users/astro/claude-tmp/oclj/new-sel-linux-9247cbfd/libdir-additive on UNSET
+lx-bundleoff exit=1 SMOKE| CHECKS: 82   FAILURES: 3   WALL: 84.3s
+      SMOKE| MILESTONE d3-sandbox-ffi-literal-refused: PASS -- load('return 1LL') in the sandbox -> refused (want refused)
+      SMOKE| MILESTONE d4-sandbox-string-pack: PASS -- string.pack in the sandbox -> ok/feffffff/-2/5/true/true/l8/short (want ok/feffffff/-2/5/true/true/l8/short)
+      SMOKE| MILESTONE d5-sandbox-bitwise: PASS -- 5.3's bitwise operators in the sandbox -> ok/1:0/-2147483648:0/inexact>>/inexact|/0:0/0:1/noint/0:16/11:98566144/2097151:4294967295/0:16777215 (want ok/1:0/-2147483648:0/inexa
+      FAIL SMOKE| MILESTONE stk-2-one-reference-space: FAIL -- _kernel=240493 B, _stack=240491 B, ratio 1.00   <- the index-2 root pulled the whole kernel into a SECOND blob: two reference spaces, two universes
+      FAIL SMOKE| MILESTONE stk-3-one-value-per-proxy: FAIL -- proxies persisted (kernel registry after a full GC) = 7; userdata recipes across the blobs written (= host Values the restore mints) = 14 (7 in _kernel, 7 in _stack); a
+      FAIL SMOKE| MILESTONE stk-4-sync-result-recognised: FAIL -- OCLJSTK before=run/0/0/none after=run/3/2/close:bad_file_descriptor (bursts completed after the restore: 3; read/close failures 0 -> 2)   <- the handle the restored 
+chain-linux sel1 finished 22:56:13

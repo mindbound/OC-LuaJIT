@@ -1,0 +1,7 @@
+round 1 done 22:30:24Z order: base new
+round 2 done 22:30:27Z order: new base
+round 3 done 22:30:30Z order: base new
+round 4 done 22:30:34Z order: new base
+round 5 done 22:30:37Z order: base new
+round 6 done 22:30:40Z order: new base
+round 7 done 22:30:43Z order: base new

@@ -1,0 +1,4 @@
+Linux Ultra 6.18.54.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-29)
+/usr/bin/bash
+ldd (GNU libc) 2.28

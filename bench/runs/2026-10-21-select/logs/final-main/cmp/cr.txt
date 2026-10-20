@@ -1,0 +1,7 @@
+0 docs/jit-guide.md
+0 docs/roadmap.md
+0 native/luajit/patch-bitop-record.sh
+0 test/native/bitop/t_idx2.lua
+0 test/native/bitop/t_select.lua
+0 test/native/negctl-bitop.sh
+0 test/native/run-bitjit.sh

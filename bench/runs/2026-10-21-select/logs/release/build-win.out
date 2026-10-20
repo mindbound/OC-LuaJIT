@@ -1,0 +1,44 @@
+build-dropin exit=0
+build-additive exit=0
+patch-bitop-parse.sh: lj_parse.c  foldbitop and the ~ fold use oclj_bitop.h (24 lines added, 18 removed, of 3120); verified by content, diff and reversal
+patch-bitop-vm.sh: vm_x64.dasc  BC_BNOT and ins_bitop compute on int64, exact results only (40 lines added, 15 removed, of 5221); verified by content, diff and reversal
+patch-bitop-meta.sh: lj_meta.c  lj_meta_bitop's no-FFI path calls oclj_meta_bitop (8 lines added, 26 removed, of 540); verified by content, diff and reversal
+patch-bitop-record.sh: lj_record.c  the seven bit-operator cases call oclj_rec_bitop, and select's index is bounded in rec_varg (22 lines added, 36 removed, of 2966); verified by content, diff and reversal
+patch-bitop-fold.sh: lj_opt_fold.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark and width rules, the table-index fold (63 lines added, 8 removed, of 2708); verified by content, diff and reversal
+patch-bitop-bcdump.sh: lj_bcdump.h  BCDUMP_VERSION 2 -> 0x80 (6 lines for 1, of 76); verified by content, diff and reversal
+patch-bitop-jitlib.sh: lib_jit.c  jit.util.funcbc's word and tracesnap's entries unsigned (7 lines added, 3 removed, of 779); verified by content, diff and reversal
+[build]     lj_parse.c vm_x64.dasc lj_meta.c lj_record.c lj_opt_fold.c lj_bcdump.h lib_jit.c: pristine copies re-taken and patched (round 3; markers and includes asserted by content before make)
+[build]     lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)
+[build]     round 3: lj_parse.o lj_meta.o lj_record.o lj_opt_fold.o lj_bcwrite.o lj_bcread.o lib_jit.o recompiled; buildvm_arch.h regenerated from the patched vm_x64.dasc (3 OC-LuaJIT lines echoed); no warnings
+[build]     feature set through -I$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1, OCLJ_OPS_BIT64 1
+[build]     lj_bcdump.h -dM: BCDUMP_VERSION 0x80
+[build]     oclj_strpack.c -Wall -Wextra warnings = 0
+[build]     oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = 0
+[build]     bitwise-operator gate: fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true
+[build]     FOREIGN-ALLOC-OK GG=6376
+[build]     negative arm (FFI toggled back on in a header copy): GG-LAYOUT-MISMATCH lib=6376 tu=6384 -- the gate can fail
+[build]     -Wall -Wextra warnings = 0
+[build]     serializer hash = 412be694  (blobs are pinned to this)
+[build]     VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64 (luajit.exe agrees: ffi0 lua52 fr2 le pack1 bit64)
+[build]     ABI surface: Java_* = 91 (want 91), oclj natives = 4, total = 93
+patch-bitop-parse.sh: lj_parse.c  foldbitop and the ~ fold use oclj_bitop.h (24 lines added, 18 removed, of 3120); verified by content, diff and reversal
+patch-bitop-vm.sh: vm_x64.dasc  BC_BNOT and ins_bitop compute on int64, exact results only (40 lines added, 15 removed, of 5221); verified by content, diff and reversal
+patch-bitop-meta.sh: lj_meta.c  lj_meta_bitop's no-FFI path calls oclj_meta_bitop (8 lines added, 26 removed, of 540); verified by content, diff and reversal
+patch-bitop-record.sh: lj_record.c  the seven bit-operator cases call oclj_rec_bitop, and select's index is bounded in rec_varg (22 lines added, 36 removed, of 2966); verified by content, diff and reversal
+patch-bitop-fold.sh: lj_opt_fold.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark and width rules, the table-index fold (63 lines added, 8 removed, of 2708); verified by content, diff and reversal
+patch-bitop-bcdump.sh: lj_bcdump.h  BCDUMP_VERSION 2 -> 0x80 (6 lines for 1, of 76); verified by content, diff and reversal
+patch-bitop-jitlib.sh: lib_jit.c  jit.util.funcbc's word and tracesnap's entries unsigned (7 lines added, 3 removed, of 779); verified by content, diff and reversal
+[build]     lj_parse.c vm_x64.dasc lj_meta.c lj_record.c lj_opt_fold.c lj_bcdump.h lib_jit.c: pristine copies re-taken and patched (round 3; markers and includes asserted by content before make)
+[build]     lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)
+[build]     round 3: lj_parse.o lj_meta.o lj_record.o lj_opt_fold.o lj_bcwrite.o lj_bcread.o lib_jit.o recompiled; buildvm_arch.h regenerated from the patched vm_x64.dasc (3 OC-LuaJIT lines echoed); no warnings
+[build]     feature set through -I$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1, OCLJ_OPS_BIT64 1
+[build]     lj_bcdump.h -dM: BCDUMP_VERSION 0x80
+[build]     oclj_strpack.c -Wall -Wextra warnings = 0
+[build]     oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = 0
+[build]     bitwise-operator gate: fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true
+[build]     FOREIGN-ALLOC-OK GG=6376
+[build]     negative arm (FFI toggled back on in a header copy): GG-LAYOUT-MISMATCH lib=6376 tu=6384 -- the gate can fail
+[build]     -Wall -Wextra warnings = 0
+[build]     serializer hash = 412be694  (blobs are pinned to this)
+[build]     VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64 (luajit.exe agrees: ffi0 lua52 fr2 le pack1 bit64)
+[build]     ABI surface: Java_* = 87 (want 87), oclj natives = 0, total = 89

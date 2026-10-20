@@ -1,0 +1,90 @@
+BAD run-bitjit.sh:189 LJEXE=$OCLJ_BUILD/luajit-$PLATFORM
+BAD run-bitjit.sh:292 "$nl" -ne "$OCLJ_BITJIT_CASES"
+BAD run-bitjit.sh:349 "$nl" -ne 400
+BAD run-bitjit.sh:467 IDXOPTS="jon
+BAD run-bitjit.sh:270 GENOPTS="jon
+BAD run-bitjit.sh:192 for f in gen.lua
+BAD run-bitjit.sh:228 md5sum "$LJEXE"
+BAD run-bitjit.sh:269 # The JIT option sets
+BAD run-bitjit.sh:272 JIT2OPTS="jon
+BAD run-bitjit.sh:551 SELOPTS="$IDXOPTS
+BAD run-bitjit.sh:546 # -----
+BAD run-bitjit.sh:548 == 5. select(k, ...)
+BAD run-bitjit.sh:618 fi
+BAD run-bitjit.sh:621 "gen floor fix1 idx sel"
+BAD run-bitjit.sh:88 5. SELECT (sel;
+BAD negctl-bitop.sh:783 WORK=$OCLJ_BUILD/negctl-bitop/
+BAD negctl-bitop.sh:262 SRCTREE=$OCLJ_BUILD/luajit-$PLATFORM
+BAD negctl-bitop.sh:283 lj52shim.o
+BAD negctl-bitop.sh:798 for p in $PATCHED; do
+BAD negctl-bitop.sh:805 done
+BAD negctl-bitop.sh:595 # arm <name> <file> <catchers>
+BAD negctl-bitop.sh:596 arm() {
+BAD negctl-bitop.sh:667 armlist() {
+BAD negctl-bitop.sh:767 }
+OK  negctl-bitop.sh:616 SABOTAGE $name:
+BAD negctl-bitop.sh:408 run_bitop() {
+BAD negctl-bitop.sh:544 info() {
+BAD negctl-bitop.sh:583 }
+BAD negctl-bitop.sh:668 arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel
+BAD negctl-bitop.sh:423 run_genrg2() {
+BAD negctl-bitop.sh:276 # serializer's eris_lj.c
+BAD negctl-bitop.sh:279 ALLFILES=
+BAD negctl-bitop.sh:334 objs_of() {
+BAD negctl-bitop.sh:347 }
+BAD negctl-bitop.sh:432 run_gate() {
+BAD negctl-bitop.sh:452 }
+BAD negctl-bitop.sh:454 rcof() {
+BAD negctl-bitop.sh:462 runcatchers() {
+BAD negctl-bitop.sh:511 check() {
+BAD negctl-bitop.sh:761 arm SELGUARD lj_record.c 'sel:t_select'
+BAD negctl-bitop.sh:764 arm SELRECK lj_record.c 'sel:kmax'
+BAD negctl-bitop.sh:179 THE SELECT FIX'S ARMS
+BAD negctl-bitop.sh:219 SELGUARD removes the guard, SELRECK the record-time bound
+BAD patch-bitop-record.sh:35 # THE SELECT FIX, hunks 4 and 5
+BAD patch-bitop-record.sh:170 # 4. The bound on select's index
+BAD patch-bitop-record.sh:190 # 5. select's index
+BAD patch-bitop-record.sh:247 EOF
+BAD patch-bitop-record.sh:352 verify_content() {
+BAD patch-bitop-record.sh:366 # The select fix (hunks 4 and 5).
+BAD patch-bitop-record.sh:384 out of order (OCLJ_SELECT_KMAX
+BAD patch-bitop-record.sh:385   fi
+BAD patch-bitop-record.sh:386 }
+BAD patched-lj_record.c:2001 #define OCLJ_SELECT_KMAX
+BAD patched-lj_record.c:2004 static void rec_varg(
+BAD patched-lj_record.c:2053 select_detect(J)
+BAD patched-lj_record.c:2058 if (idx > OCLJ_SELECT_KMAX) goto nyivarg;
+BAD patched-lj_record.c:2066 frofs+8*(int32_t)idx
+BAD patched-lj_record.c:2075 rec_idx_abc(J, tr, tridx
+BAD patched-lj_record.c:2081 emitir(IRTGI(IR_ULT), tmp2, lj_ir_kint(J, OCLJ_SELECT_KMAX));
+BAD patched-lj_record.c:2082 tmp2 = emitir(IRTI(IR_BSHL), tridx
+BAD patched-lj_record.c:2087 emitir(IRTGI(IR_LT), fr, tmp);
+BAD patched-lj_record.c:2111 static TRef rec_tnew(
+BAD run-bitjit.sh:167 OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel
+BAD run-bitjit.sh:196 case $p in gen|floor|fix1|idx|sel)
+BAD pristine-lj_record.c:1990 static void rec_varg(
+BAD pristine-lj_record.c:2090 }
+BAD pristine-lj_record.c:1999 if (nvararg < 0) nvararg = 0;
+BAD pristine-lj_record.c:2039 select_detect(J)
+BAD pristine-lj_record.c:2047 IRCONV_INT_NUM|IRCONV_INDEX
+BAD pristine-lj_record.c:2051 frofs+8*(int32_t)idx
+BAD pristine-lj_record.c:2055 if (numparams)
+BAD pristine-lj_record.c:2056 emitir(IRTGI(IR_GE), tmp, lj_ir_kint(J, 0));
+BAD pristine-lj_record.c:2062 } else {
+BAD pristine-lj_record.c:2065 IR_BSHL), tridx
+BAD pristine-lj_record.c:2070 emitir(IRTGI(IR_LT), fr, tmp);
+BAD pristine-lj_record.c:1459 lj_opt_narrow_index(J, key)
+BAD pristine-lj_opt_narrow.c:294 checki16
+BAD pristine-lj_opt_narrow.c:387 Omit some overflow checks for array indexing
+BAD pristine-lj_opt_narrow.c:393 mode += IRCONV_CHECK-IRCONV_INDEX;
+BAD pristine-lj_opt_narrow.c:458 Omit some overflow checks for array indexing
+BAD pristine-lj_opt_narrow.c:462 return emitir(IRTI(ir->o - IR_ADDOV + IR_ADD)
+BAD pristine-lj_opt_narrow.c:163 always accompanied by an array bounds-check. The outermost overflow
+BAD pristine-lj_opt_narrow.c:169 an int32_t into the range of valid array indexes [0..2^27+1)
+BAD pristine-lj_trace.c:414 hotcount_set(J2GG(J), pc+1, val);
+BAD pristine-lj_ffrecord.c:505 numberVint(&rd->argv[1])+1
+BAD pristine-lj_ffrecord.c:509 emitir(IRTI(IR_ADD), ix.key, lj_ir_kint(J, 1))
+BAD pristine-lj_ffrecord.c:163 static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
+BAD pristine-lj_ffrecord.c:169 if (J->framedepth && frame_islua(J->L->base-1)) {
+BAD pristine-lj_ffrecord.c:190 }
+cites=89 bad=88 shift=1
