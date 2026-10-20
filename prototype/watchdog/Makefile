@@ -8,7 +8,18 @@
 #  NOT pass -DLUAJIT_DISABLE_GC64.
 # ===========================================================================
 
-LJ_COMMIT := 1ee778a4e37122d8ca7d5733c590a47dafd6b15c
+# THE PIN is one file, native/luajit/upstream.commit: the full 40-digit hash
+# and a newline.  Every reader reads it (this Makefile, build.bat,
+# serializer/Makefile, native/build-native.sh, build.gradle.kts); bump it
+# there, nowhere else.  Found relative to THIS Makefile, so `make -C
+# prototype/watchdog` and a make run in this directory read the same file.
+# build-native.sh holds the byte-exact check of its format and refuses a
+# checkout at any other commit; this only refuses a value that is not one hash.
+LJ_PIN_FILE := $(dir $(lastword $(MAKEFILE_LIST)))../../native/luajit/upstream.commit
+LJ_COMMIT := $(shell cat '$(LJ_PIN_FILE)' 2>/dev/null)
+ifeq ($(shell printf '%s' '$(LJ_COMMIT)' | grep -xE '[0-9a-f]{40}'),)
+  $(error the LuaJIT pin $(LJ_PIN_FILE) must hold one commit, 40 lowercase hex digits and a newline; read '$(LJ_COMMIT)')
+endif
 LJ_REPO   := https://github.com/LuaJIT/LuaJIT.git
 
 CC        ?= cc
@@ -37,9 +48,12 @@ STOCK_BIN     := harness_stock$(EXE)
 all: $(CHECKHOOK_BIN) $(STOCK_BIN)
 
 # --- 1. fetch LuaJIT at the pinned commit ---
-luajit/.stamp:
+# The stamp depends on the pin file, so a bumped pin checks the new commit out
+# on the next `make luajit-src`.  It fetches only when the commit is not there
+# yet, so a checkout already holding it needs no network.
+luajit/.stamp: $(LJ_PIN_FILE)
 	@if [ ! -d luajit ]; then echo "[*] cloning LuaJIT ..."; git clone $(LJ_REPO) luajit; fi
-	cd luajit && git fetch --all --tags && git checkout $(LJ_COMMIT)
+	cd luajit && { git cat-file -e '$(LJ_COMMIT)^{commit}' 2>/dev/null || git fetch --all --tags; } && git checkout $(LJ_COMMIT)
 	@touch luajit/.stamp
 luajit-src: luajit/.stamp
 

@@ -1,0 +1,8 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+BUILD FAIL: OCLJ_SER is /c/Users/astro/claude-tmp/oclj/pin5/final/run-main/t/serdot/ser., one of whose names ends in a dot or a space.
+         This shell keeps such a name as written, and Windows' own programs
+         (make, gcc, ld, git) drop the dot or the space, so they would act on
+         another directory than the one this script checks.  Use a path without
+         such a name; nothing has been created.

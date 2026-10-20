@@ -1,0 +1,42 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] pin     = 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/c/Users/astro/Downloads/OC-LuaJIT/native/luajit/upstream.commit)
+[build] cc      = gcc.exe (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r1) 16.2.0
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+[build] pin     = met: the checkout's HEAD is the pin, whose commit object hashes to it and names the tree 7a0348e88695de3c55b575836ad7ce99e7d2645a; step 1 compiles that tree (git archive, checked), not the working tree
+[build] luajit  = /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/luajit-windows-x86_64 @ 1ee778a4 (feature set: native/luajit/oclj_features.h)
+[build] jnlua   = C:/Users/astro/Downloads/OC-JNLua @ da3d4d45
+[build] shim    = /c/Users/astro/Downloads/OC-LuaJIT/native
+[build] out     = /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../libdir-additive/libjnluajit52-windows-x86_64.dll
+[build] =============== 1. LuaJIT 2.1 (static) ===============
+[build]     XCFLAGS=   BUILDMODE=static
+[build]     features (native/luajit/oclj_features.h): LUAJIT_ENABLE_LUA52COMPAT LUAJIT_ENABLE_CHECKHOOK LUAJIT_DISABLE_FFI 
+[build]     export verified: the commit object hashes to the pin, 8 trees to their names, 232 files to the pin's blob ids
+[build] copying the pin's tree (232 files, git archive 7a0348e88695de3c55b575836ad7ce99e7d2645a) -> /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../luajit-export-windows-x86_64 -> /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../luajit-windows-x86_64
+[build]     working tree: no tracked file differs from the pin's tree (diff -rq --strip-trailing-cr)
+[build]     lj_func.c: pristine copy re-taken from /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../luajit-export-windows-x86_64/src (the build copy is never the patch's input)
+patch-penalty-scrub.sh: lj_func.c  22 lines inserted into lj_func_freeproto (of 213), 0 removed; scrub verified by content
+[build]     lj_func.c: penalty scrub present in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_err.c: pristine copy re-taken from /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../luajit-export-windows-x86_64/src
+patch-fastfunc-errmem-top.sh: lj_err.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+[build]     lj_err.c: ERRMEM top clamp present twice in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_ffrecord.c: pristine copy re-taken from /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../luajit-export-windows-x86_64/src
+patch-strfmt-xint-noffi.sh: lj_ffrecord.c  2 lines (recff_nyiu + return, line 1110) replaced by 7 (of 1674); no-FFI integer-format fallback verified by content and diff
+[build]     lj_ffrecord.c: no-FFI integer-format fallback present in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_arch.h: pristine copy re-taken; oclj_features.h copied from native/luajit
+patch-features-include.sh: lj_arch.h  includes oclj_features.h right after lua.h (1 line inserted, of 779); verified by content and diff
+[build]     lj_arch.h: includes oclj_features.h once, right after lua.h (asserted by content before make)
+[build]     lib_string.c: pristine copy re-taken; oclj_strpack.c copied from native/luajit
+patch-strpack-register.sh: lib_string.c  registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 712); verified by content and diff
+[build]     lib_string.c: registers string.pack/packsize/unpack once (asserted by content before make)
+[build]     oclj_bitop.h oclj_bitop_meta.c oclj_bitop_rec.c oclj_bitop_fold.c oclj_num53.h: copied from native/luajit and compared
+patch-bitop-parse.sh: lj_parse.c  foldbitop and the ~ fold use oclj_bitop.h (24 lines added, 18 removed, of 3120); verified by content, diff and reversal
+patch-bitop-vm.sh: vm_x64.dasc  BC_BNOT and ins_bitop compute on int64, exact results only (40 lines added, 15 removed, of 5221); verified by content, diff and reversal
+patch-bitop-meta.sh: lj_meta.c  lj_meta_bitop's no-FFI path calls oclj_meta_bitop (8 lines added, 26 removed, of 540); verified by content, diff and reversal
+patch-bitop-record.sh: lj_record.c  the seven bit-operator cases call oclj_rec_bitop (7 lines added, 35 removed, of 2952); verified by content, diff and reversal
+patch-bitop-fold.sh: lj_opt_fold.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark and width rules (45 lines added, 8 removed, of 2690); verified by content, diff and reversal
+patch-bitop-bcdump.sh: lj_bcdump.h  BCDUMP_VERSION 2 -> 0x80 (6 lines for 1, of 76); verified by content, diff and reversal
+patch-bitop-jitlib.sh: lib_jit.c  jit.util.funcbc's word and tracesnap's entries unsigned (7 lines added, 3 removed, of 779); verified by content, diff and reversal
+[build]     lj_parse.c vm_x64.dasc lj_meta.c lj_record.c lj_opt_fold.c lj_bcdump.h lib_jit.c: pristine copies re-taken and patched (round 3; markers and includes asserted by content before make)
+BUILD FAIL: no /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/u2l/x/link/../luajit-windows-x86_64/src/libluajit.a after make

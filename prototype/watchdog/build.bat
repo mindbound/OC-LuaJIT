@@ -14,8 +14,25 @@ rem  default) left ON and LUA52COMPAT enabled.
 rem ===========================================================================
 setlocal enabledelayedexpansion
 
-rem --- pinned LuaJIT v2.1 commit (tip of v2.1 as of 2026-08-19) ---
-set LJ_COMMIT=1ee778a4e37122d8ca7d5733c590a47dafd6b15c
+rem --- pinned LuaJIT v2.1 commit: native\luajit\upstream.commit ----------
+rem  THE PIN is that one file, the full 40-digit hash and a newline, and every
+rem  reader reads it: this script, the Makefile here, serializer\Makefile,
+rem  native\build-native.sh and build.gradle.kts. Bump it there, nowhere else.
+rem  Found relative to this script (%~dp0), from any working directory.
+rem  build-native.sh holds the byte-exact check of the file's format; this
+rem  takes the first line and refuses anything but 40 lowercase hex digits.
+rem  Delayed expansion is off for the block (a ! in a message or a path would
+rem  be eaten), and only the checked value leaves it.
+rem  findstr: /x and $ never match an LF-only line, so look for a bad character.
+setlocal disabledelayedexpansion
+set "LJ_PIN_FILE=%~dp0..\..\native\luajit\upstream.commit"
+set "LJ_COMMIT="
+if exist "%LJ_PIN_FILE%" for /f "usebackq delims=" %%c in ("%LJ_PIN_FILE%") do if not defined LJ_COMMIT set "LJ_COMMIT=%%c"
+if not defined LJ_COMMIT (echo [!] cannot read the LuaJIT pin "%LJ_PIN_FILE%" & exit /b 1)
+findstr /r "[^0123456789abcdef]" "%LJ_PIN_FILE%" >nul && (echo [!] the LuaJIT pin "%LJ_PIN_FILE%" holds a character that is not a lowercase hex digit & exit /b 1)
+if "%LJ_COMMIT:~39,1%"=="" (echo [!] the LuaJIT pin "%LJ_PIN_FILE%" holds fewer than 40 hex digits: %LJ_COMMIT% & exit /b 1)
+if not "%LJ_COMMIT:~40%"=="" (echo [!] the LuaJIT pin "%LJ_PIN_FILE%" holds more than 40 hex digits: %LJ_COMMIT% & exit /b 1)
+endlocal & set "LJ_COMMIT=%LJ_COMMIT%"
 set LJ_REPO=https://github.com/LuaJIT/LuaJIT.git
 
 where cl >nul 2>nul || (echo [!] cl.exe not found. Run from a VS x64 Native Tools prompt. & exit /b 1)

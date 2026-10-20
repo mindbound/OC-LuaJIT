@@ -1,0 +1,2 @@
+7c3c2683a935f37fa1a7059e650c9258 */c/Users/astro/claude-tmp/oclj/pin5/copies/7c3c/native/build-native.sh
+52f404b1513588fce124023f5777f79b */c/Users/astro/claude-tmp/oclj/pin5/final/final-check2.sh

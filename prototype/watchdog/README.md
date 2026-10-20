@@ -63,8 +63,15 @@ and PASS/FAIL against `--expect`.
 The pinned LuaJIT commit is **`1ee778a4e37122d8ca7d5733c590a47dafd6b15c`**
 (tip of branch `v2.1`, dated 2026-08-19, *"Add FOLD rule for ALEN of
 TNEW/TDUP."*). Both build scripts clone `https://github.com/LuaJIT/LuaJIT.git`
-and `git checkout` that commit. Repin by editing `LJ_COMMIT` in `build.bat`
-and `Makefile`.
+and `git checkout` that commit, which they read from
+`native/luajit/upstream.commit` at the repository root, the one file that
+holds the pin (since 2026-10-20). Repin there, and only there:
+`native/build-native.sh` refuses a checkout whose HEAD is any other commit
+and compiles exactly the pin's committed tree, exported from this checkout's
+`.git` and checked object by object against the pin's 40 digits, never this
+checkout's working tree (an edit here is reported and not built), and the
+jar build refuses a native stamped with another commit.
+`docs/jit-guide.md` section 8.2a is the procedure.
 
 Both scripts build LuaJIT **twice**, as a **static** lib, with
 `XCFLAGS='-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK'` for the
@@ -123,7 +130,7 @@ only `-lm`.
 
 ```sh
 git clone https://github.com/LuaJIT/LuaJIT.git luajit
-cd luajit && git checkout 1ee778a4e37122d8ca7d5733c590a47dafd6b15c && cd ..
+cd luajit && git checkout "$(cat ../../../native/luajit/upstream.commit)" && cd ..   # the pin, from the repo root
 # Linux static lib, CHECKHOOK build:
 make -C luajit clean
 make -C luajit BUILDMODE=static XCFLAGS='-DLUAJIT_ENABLE_LUA52COMPAT -DLUAJIT_ENABLE_CHECKHOOK'

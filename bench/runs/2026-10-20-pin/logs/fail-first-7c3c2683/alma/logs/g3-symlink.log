@@ -1,0 +1,11 @@
+[build] =============== 0. preflight ===============
+[build] host    = linux-x86_64   (lib*.so, jni_md in linux/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] glibc   = reported against the release floor GLIBC_2.28 in step 6, not enforced (OCLJ_GLIBC_MAX unset)
+[build] pin     = 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/g3repo/native/luajit/upstream.commit)
+BUILD FAIL: OCLJ_BUILD=/mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/g3link/tests (/mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/g3repo/serializer/tests) is, or lies inside, the repository
+         /mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/g3repo, outside its build/ directory.  The build writes files of fixed
+         names into OCLJ_BUILD (strpack.lua, bitops.lua, luajit_build.log and more),
+         and the repository tracks files of such names (serializer/tests/strpack.lua),
+         which it would overwrite.  Leave OCLJ_BUILD unset (build/native), or set it
+         under /mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/g3repo/build or outside the repository; nothing has been created.

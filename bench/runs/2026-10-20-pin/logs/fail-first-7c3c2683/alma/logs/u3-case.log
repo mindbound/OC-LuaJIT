@@ -1,0 +1,10 @@
+[build] =============== 0. preflight ===============
+[build] host    = linux-x86_64   (lib*.so, jni_md in linux/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] glibc   = reported against the release floor GLIBC_2.28 in step 6, not enforced (OCLJ_GLIBC_MAX unset)
+[build] pin     = 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/mnt/c/Users/astro/Downloads/OC-LuaJIT/native/luajit/upstream.commit), OCLJ_LUAJIT_UNPINNED=1
+BUILD FAIL: OCLJ_OUT=/mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/u3case/BÄU/dist (/mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/u3case/BÄU/dist) is, or lies inside, /mnt/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/alma/t/u3case/Bäu/dist,
+         the collection point build.gradle.kts packages the jar from.  OCLJ_OUT is
+         where the link writes the library, and a build that wrote there would
+         replace the release library whatever it is.  Leave OCLJ_OUT unset, or point
+         it elsewhere; an additive pinned build collects into dist by itself.

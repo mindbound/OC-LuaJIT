@@ -1,0 +1,1 @@
+script /c/Users/astro/claude-tmp/oclj/pin5/copies/7c3c/native/build-native.sh (WSL /mnt/c/Users/astro/claude-tmp/oclj/pin5/copies/7c3c/native/build-native.sh) FC_SCRIPT=/c/Users/astro/claude-tmp/oclj/pin5/copies/7c3c/native/build-native.sh

@@ -1,0 +1,79 @@
+PASS W1-win-additive-rc: the canonical additive build succeeds
+PASS W1-win-dropin-rc: the canonical dropin build succeeds
+PASS W1-win-additive-objects: additive: 77 LuaJIT objects and 3 of ours equal build/native's
+PASS W1-win-dropin-objects: dropin: 77 and 3 equal round 2's dropin reference (pin2/impl/win-v1/canon-dropin)
+PASS W1-win-stamp: the additive's fingerprint is 1ee778a4|LuaJIT 2.1.ROLLING|412be694
+PASS W1-win-ignored-none: both logs: 'ignored from the environment: none'
+PASS W1-win-export: the export is verified (8 trees, 232 files)
+PASS W1-win-dist: the additive's dist copy has the md5 of its own libdir-additive output
+PASS W1-alma-ran: the AlmaLinux 8 part ran to its end
+PASS W1-alma-additive-rc: AlmaLinux 8 additive build (OCLJ_GLIBC_MAX=2.28) succeeds
+PASS W1-alma-dropin-rc: AlmaLinux 8 dropin build (OCLJ_GLIBC_MAX=2.28) succeeds
+PASS W1-alma-so-additive: additive .so md5 is the release's 6c88805001bae0cd2b385803f5d857c7
+PASS W1-alma-so-dropin: dropin .so md5 is the release's 6c0715d11344c5fe075cd33f4f93cdbc
+PASS W1-alma-objects: AlmaLinux 8 additive: 77 and 3 objects equal build/native's Linux ones
+PASS W1-alma-ignored-none: both AlmaLinux 8 logs: 'ignored from the environment: none'
+PASS ALMA-U2-symlink-dotdot: AlmaLinux 8: OCLJ_BUILD <symlink>/..: refused (a directory this script removes), the throwaway intact
+PASS ALMA-U2-nonascii-case: AlmaLinux 8, on /mnt/c: OCLJ_LUAJIT in non-ASCII other case: refused, the throwaway intact
+PASS ALMA-U3-symlink-dotdot: AlmaLinux 8: OCLJ_OUT <symlink>/../dist: refused (the collection point), dist intact
+PASS ALMA-U3-nonascii-case: AlmaLinux 8, on /mnt/c: OCLJ_OUT <BÄU>/dist for OCLJ_BUILD <Bäu>: refused, dist intact
+FAIL ALMA-T4: AlmaLinux 8, on /mnt/c: OCLJ_BUILD <Bäu> and OCLJ_OUT <BÄU>/dist, neither made: refused, nothing created
+PASS ALMA-G3-in: AlmaLinux 8: OCLJ_BUILD inside a scratch OCLJ_REPO outside build/ (in): refused
+PASS ALMA-G3-case: AlmaLinux 8: OCLJ_BUILD inside a scratch OCLJ_REPO outside build/ (case): refused
+PASS ALMA-G3-symlink: AlmaLinux 8: OCLJ_BUILD inside a scratch OCLJ_REPO outside build/ (symlink): refused
+PASS ALMA-G3-nothing-created: AlmaLinux 8: the scratch repository is unchanged
+PASS ALMA-G3-under-build-allowed: AlmaLinux 8: OCLJ_BUILD under OCLJ_REPO/build: not refused by the guard (stops at OCLJ_JNLUA), nothing created
+PASS G2-rc: the build with CFLAGS, cpath and MAKEFLAGS set succeeds
+PASS G2-ignored-line: the log names them: 'ignored from the environment: CFLAGS MAKEFLAGS cpath'
+PASS G2-objects: every object equals the canonical additive's (W1)
+PASS G2-no-marker: no injected marker in the DLL, the objects or the LuaJIT log
+PASS MO-rc: the build with MAKEOVERRIDES=CFLAGS=-O0 set succeeds
+FAIL MO-ignored-line: the log names it: 'ignored from the environment: MAKEOVERRIDES'
+FAIL MO-objects: every object equals the canonical additive's (W1)
+FAIL MO-no-O0: no -O0 on any LuaJIT compile line
+PASS R1-replace: replace ref: builds the pin, WARNING names lj_opt_mem.c
+PASS R1-replace-objects: replace ref: objects equal W1's
+PASS R2-envcfg: environment-config filter: BUILD FAIL naming src/lj_opt_mem.c
+PASS R3-forgeblob: forged blob: BUILD FAIL naming src/lj_opt_mem.c
+PASS F7-forged-head: HEAD forged to 1ee778a4 and 32 zeros: refused
+PASS F2-dirty: dirty checkout: builds the pin, WARNING names lj_opt_mem.c
+PASS F2-dirty-objects: dirty checkout: objects equal W1's
+PASS EI-infoattr: export-ignore in .git/info/attributes: BUILD FAIL, 231 files against 232
+PASS EI-tree: export-ignore in the tree: BUILD FAIL, 231 files against 232
+PASS U2-junction-dotdot: OCLJ_BUILD <junction>/..: refused (a directory this script removes), the throwaway intact
+PASS U2-nonascii-case: OCLJ_LUAJIT in non-ASCII other case: refused, the throwaway intact
+PASS U3-nonascii-case: OCLJ_OUT <BÄU>/dist for OCLJ_BUILD <Bäu>: refused (the collection point), dist intact, nothing built
+PASS U3-nonascii-case-nodist: OCLJ_OUT <Bäu>/dist, dist not made yet, OCLJ_BUILD <BÄU>: refused, nothing created
+PASS U3-junction-dotdot: OCLJ_OUT <junction>/../dist (physically dist): refused, dist intact
+FAIL U2L-clone-untouched: OCLJ_BUILD <x>/<junction>/..: the clone at the lexical <x>/luajit-windows-x86_64 unchanged (files, untracked marker, .git)
+FAIL U2L-build: the same build succeeds in the junction's target <E>/y and collects into <E>/y/dist
+FAIL U2L-objects: its 77 and 3 objects (in <E>/y) equal W1's
+FAIL T1-trailing-dot: OCLJ_OUT <B>/dist.: refused (a name ending in a dot), dist intact, no dist. made
+FAIL T2-junction-dotdot: OCLJ_OUT <B>/<junction>/../dist: B/dist intact; the library is linked into the junction's parent <E>/else/dist, where the shell reads the path
+FAIL T4-nonascii-both-new: OCLJ_BUILD <Bäu>, OCLJ_OUT <BÄU>/dist, neither made: refused (the collection point), nothing created
+FAIL SHIM-dot: OCLJ_SHIM <E>/shim.: refused (a name ending in a dot), nothing built
+FAIL SER-dot: OCLJ_SER <E>/ser.: refused (a name ending in a dot), nothing created
+PASS G3-in: OCLJ_BUILD inside OCLJ_REPO outside build/ (in): refused
+PASS G3-case: OCLJ_BUILD inside OCLJ_REPO outside build/ (case): refused
+PASS G3-junction: OCLJ_BUILD inside OCLJ_REPO outside build/ (junction): refused
+PASS G3-nothing-created: the scratch repository is unchanged: strpack.lua intact, no file or directory added
+PASS G3-under-build-allowed: OCLJ_BUILD under OCLJ_REPO/build: not refused by the guard (stops later, at OCLJ_JNLUA), nothing created
+FAIL H2-self-repo: OCLJ_REPO the real repository, OCLJ_BUILD in the script's own repository's serializer/tests: refused, that repository unchanged
+FAIL H2-self-repo-dist: OCLJ_OUT the script's own repository's build/native/dist (OCLJ_REPO the real one), unpinned: refused, that dist intact
+PASS UNP-build: an unpinned build of the clean clone: stamped unpinned, not collected into dist
+PASS GRADLE-accepts-pinned: verifyModAssets accepts W1's pinned DLL
+PASS GRADLE-refuses-unpinned: verifyModAssets refuses the unpinned DLL
+PASS NEGCTL-SARCONST: negctl-bitop SARCONST passes, its pristine files from W1's export
+PASS SHN-gitbash: sh -n build-native.sh (Git Bash)
+PASS SHN-alma: sh -n build-native.sh (AlmaLinux 8's sh)
+PASS SHN-ubuntu: sh -n build-native.sh (Ubuntu's dash)
+PASS CR0-native/build-native.sh: native/build-native.sh has 0 CR bytes
+PASS CR0-README.md: README.md has 0 CR bytes
+PASS CR0-docs/jit-guide.md: docs/jit-guide.md has 0 CR bytes
+PASS CR0-docs/roadmap.md: docs/roadmap.md has 0 CR bytes
+PASS CR0-CLAUDE.md: CLAUDE.md has 0 CR bytes
+PASS GIT-DIFF-CHECK: git diff --check is clean
+PASS CENSUS-build: every file under build/ has its md5 of the start, none added or removed (38985 files)
+PASS CENSUS-pristine-stat: the pristine checkout's stat list (mtimes included) is unchanged
+PASS CENSUS-pristine-git: the pristine checkout's .git md5 list is unchanged
+PASS SCRIPTS-unchanged: build-native.sh and this script are unchanged since the start

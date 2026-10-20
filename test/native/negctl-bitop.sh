@@ -15,8 +15,15 @@
 # ($OCLJ_BUILD/negctl-bitop/<stamp>-<pid>; nothing else is written), after
 # checking that the copy holds what the repo ships: native/luajit's five
 # round-3 files byte for byte, each of the seven patched LuaJIT files equal to
-# what its patch-bitop-*.sh makes of the pristine checkout (OCLJ_LUAJIT), and
-# an eris_lj.o that carries the hash of OCLJ_SER's eris_lj.[ch].  The seventh,
+# what its patch-bitop-*.sh makes of the pristine file, and an eris_lj.o that
+# carries the hash of OCLJ_SER's eris_lj.[ch].  The pristine files are the
+# ones the build compiled: $OCLJ_BUILD/luajit-export-<platform>/src, the pin's
+# export, when it exists (the last build was pinned, and build-native.sh
+# checked it against the pin), and OCLJ_LUAJIT's src otherwise (an unpinned
+# build removes the export and copies that working tree); the run says
+# which.  Until 2026-10-20 it was always OCLJ_LUAJIT's working tree, so one
+# uncommitted line there failed the setup with "rebuild with
+# build-native.sh", which a pinned rebuild could not cure.  The seventh,
 # lib_jit.c (patch-bitop-jitlib.sh: jit.util's words unsigned for LuaJIT's
 # own tools), changes no operator and has no arm here: its catcher is
 # build-native.sh's jit tools gate, which this script does not run; it is
@@ -179,6 +186,14 @@ esac
 PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 SRCTREE=$OCLJ_BUILD/luajit-$PLATFORM
 SRCOBJ=$OCLJ_BUILD/obj-$PLATFORM
+# THE PRISTINE FILES are the ones the build compiled (the header).
+if [ -d "$OCLJ_BUILD/luajit-export-$PLATFORM/src" ]; then
+  PRISTINE=$OCLJ_BUILD/luajit-export-$PLATFORM
+  PRISTINE_WHAT="the pin's export, which the last build (pinned) compiled"
+else
+  PRISTINE=$OCLJ_LUAJIT
+  PRISTINE_WHAT="OCLJ_LUAJIT's working tree: no export in $OCLJ_BUILD, so the last build was unpinned"
+fi
 BN=$OCLJ_REPO/native/build-native.sh
 # The files the copy is checked against and an arm may change: native/luajit's
 # five (copied into the build copy as they are), the seven that
@@ -200,8 +215,9 @@ for f in $NATIVE_FILES; do
   [ -f "$OCLJ_REPO/native/luajit/$f" ] || fail "no $OCLJ_REPO/native/luajit/$f"
 done
 for p in $PATCHED; do
-  [ -f "$OCLJ_LUAJIT/src/${p%%:*}" ] || fail "no $OCLJ_LUAJIT/src/${p%%:*} (the pristine checkout; set OCLJ_LUAJIT)"
+  [ -f "$PRISTINE/src/${p%%:*}" ] || fail "no $PRISTINE/src/${p%%:*} (the pristine file: $PRISTINE_WHAT; set OCLJ_LUAJIT, or rebuild)"
 done
+echo "[negctl-bitop] pristine files from $PRISTINE/src ($PRISTINE_WHAT)"
 command -v make >/dev/null 2>&1 || fail "no make on PATH"
 command -v "$CC" >/dev/null 2>&1 || fail "no $CC on PATH"
 [ -x "$OCLJ_LUA53" ] || OCLJ_LUA53=${OCLJ_LUA53%.exe}
@@ -661,8 +677,8 @@ for f in $NATIVE_FILES; do
 done
 for p in $PATCHED; do
   f=${p%%:*}; s=patch-bitop-${p#*:}.sh
-  TMPDIR=$WORK/tmp sh "$OCLJ_REPO/native/luajit/$s" "$OCLJ_LUAJIT/src/$f" "$WORK/tmp/$f" > "$WORK/tmp/$s.log" 2>&1 \
-    || fail "native/luajit/$s refused the pristine $OCLJ_LUAJIT/src/$f (log: $WORK/tmp/$s.log)"
+  TMPDIR=$WORK/tmp sh "$OCLJ_REPO/native/luajit/$s" "$PRISTINE/src/$f" "$WORK/tmp/$f" > "$WORK/tmp/$s.log" 2>&1 \
+    || fail "native/luajit/$s refused the pristine $PRISTINE/src/$f (log: $WORK/tmp/$s.log)"
   cmp -s "$WORK/tmp/$f" "$W/$f" \
     || fail "$W/$f is not what native/luajit/$s makes of the pristine file: rebuild with build-native.sh"
   cp -p "$W/$f" "$WORK/canon/$f" || fail "cannot save $f"
@@ -678,7 +694,7 @@ grep -a -q -F "|$SH|ffi" "$WB/obj-$PLATFORM/eris_lj.o" \
 for f in $ALLFILES; do
   [ "$(tr -cd '\r' < "$WORK/canon/$f" | wc -c | tr -d ' ')" = 0 ] || fail "$WORK/canon/$f carries CR characters"
 done
-echo "[negctl-bitop] the copy is the repo's: native/luajit's five files, the seven patch scripts' output on $OCLJ_LUAJIT, eris_lj.o from $OCLJ_SER (serializer hash $SH)"
+echo "[negctl-bitop] the copy is the repo's: native/luajit's five files, the seven patch scripts' output on $PRISTINE/src, eris_lj.o from $OCLJ_SER (serializer hash $SH)"
 
 # build-native.sh's own gate and stage-4 text, so that a weakened gate there
 # is a weakened catcher here.

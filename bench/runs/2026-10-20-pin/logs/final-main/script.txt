@@ -1,0 +1,1 @@
+script /c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh (WSL /mnt/c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh) FC_SCRIPT=unset

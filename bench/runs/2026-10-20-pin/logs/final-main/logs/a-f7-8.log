@@ -1,0 +1,14 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] pin     = 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/c/Users/astro/Downloads/OC-LuaJIT/native/luajit/upstream.commit)
+[build] cc      = gcc.exe (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r1) 16.2.0
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+BUILD FAIL: the LuaJIT checkout /c/Users/astro/claude-tmp/oclj/pin3/impl/clones/lj-f7-8 is at 1ee778a400000000000000000000000000000000,
+         and the pin is 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/c/Users/astro/Downloads/OC-LuaJIT/native/luajit/upstream.commit).
+         Check the pin out (make -C prototype/watchdog luajit-src does, for the
+         default checkout), or bump the pin deliberately (docs/jit-guide.md 8.2a).
+         For a local experiment only, OCLJ_LUAJIT_UNPINNED=1 builds the checkout's
+         working tree anyway: such a native carries 'unpinned' in its blob
+         fingerprint, gradle refuses to package it, and its blobs do not restore
+         on a pinned native.

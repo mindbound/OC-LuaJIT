@@ -37,7 +37,16 @@ endif
 OCLJ_BUILD ?= ../build/native
 LJSRC := $(OCLJ_BUILD)/luajit-$(OCLJ_OS)-$(OCLJ_ARCH)/src
 LJLIB := $(LJSRC)/libluajit.a
-LJ_COMMIT := 1ee778a4e37122d8ca7d5733c590a47dafd6b15c
+# The pinned LuaJIT commit, all 40 digits, stamped into this test host's blob
+# fingerprint (the native stamps the checkout's first 8).  THE PIN is one
+# file, native/luajit/upstream.commit, found relative to THIS Makefile so
+# `make -C serializer` and a make run in this directory read the same file;
+# build-native.sh holds the byte-exact check of its format.
+LJ_PIN_FILE := $(dir $(lastword $(MAKEFILE_LIST)))../native/luajit/upstream.commit
+LJ_COMMIT := $(shell cat '$(LJ_PIN_FILE)' 2>/dev/null)
+ifeq ($(shell printf '%s' '$(LJ_COMMIT)' | grep -xE '[0-9a-f]{40}'),)
+  $(error the LuaJIT pin $(LJ_PIN_FILE) must hold one commit, 40 lowercase hex digits and a newline; read '$(LJ_COMMIT)')
+endif
 
 # The blob fingerprint must name THIS serializer, not just the LuaJIT tree;
 # build-native.sh does the same. Without it this path would compile with the

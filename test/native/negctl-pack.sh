@@ -42,9 +42,12 @@
 # written within its bounds, and no case packs that total there (the fuzzer
 # keeps pack's c at 2^20 or less).
 #
-# The last arm, unregistered, compiles the PRISTINE lib_string.c from the
-# pinned checkout (OCLJ_LUAJIT): string.pack is then simply missing, as on
-# every build before 2026-10-17.
+# The last arm, unregistered, compiles the PRISTINE lib_string.c, the one the
+# build compiled: from $OCLJ_BUILD/luajit-export-<platform>/src, the pin's
+# export, when it exists (the last build was pinned), and from OCLJ_LUAJIT's
+# src otherwise (an unpinned build removes the export); the run says which.
+# string.pack is then simply missing, as on every build before 2026-10-17.
+# Until 2026-10-20 it was always OCLJ_LUAJIT's working tree.
 #
 # OCLJ_NEGCTL_ARMS (default empty: every arm) runs only the arms it names,
 # separated by spaces or commas.  canon always runs; the unregistered arm
@@ -90,7 +93,15 @@ CANON_C=$OCLJ_REPO/native/luajit/oclj_strpack.c
 [ -f "$CANON_C" ] || fail "no $CANON_C"
 cmp -s "$CANON_C" "$SRCTREE/src/oclj_strpack.c" \
   || fail "$SRCTREE/src/oclj_strpack.c is not $CANON_C: rebuild with build-native.sh before proving anything about it"
-[ -f "$OCLJ_LUAJIT/src/lib_string.c" ] || fail "no $OCLJ_LUAJIT/src/lib_string.c (the unregistered arm's pristine file; set OCLJ_LUAJIT)"
+if [ -d "$OCLJ_BUILD/luajit-export-$PLATFORM/src" ]; then
+  PRISTINE=$OCLJ_BUILD/luajit-export-$PLATFORM
+  PRISTINE_WHAT="the pin's export, which the last build (pinned) compiled"
+else
+  PRISTINE=$OCLJ_LUAJIT
+  PRISTINE_WHAT="OCLJ_LUAJIT's working tree: no export in $OCLJ_BUILD, so the last build was unpinned"
+fi
+[ -f "$PRISTINE/src/lib_string.c" ] || fail "no $PRISTINE/src/lib_string.c (the unregistered arm's pristine file: $PRISTINE_WHAT; set OCLJ_LUAJIT, or rebuild)"
+echo "[negctl-pack] the unregistered arm's pristine lib_string.c: $PRISTINE/src ($PRISTINE_WHAT)"
 command -v make >/dev/null 2>&1 || fail "no make on PATH"
 
 rebuild() {  # rebuild <log>: lib_string.o, the archive and luajit.exe
@@ -276,7 +287,7 @@ if wanted unregistered; then
   d=$WORK/$name
   mkdir -p "$d"
   cp -p "$CANON_C" "$W/oclj_strpack.c"
-  cp -f "$OCLJ_LUAJIT/src/lib_string.c" "$W/lib_string.c" || fail "cannot copy the pristine lib_string.c"
+  cp -f "$PRISTINE/src/lib_string.c" "$W/lib_string.c" || fail "cannot copy the pristine $PRISTINE/src/lib_string.c"
   if make -C "$W" BUILDMODE=static XCFLAGS="$PICFLAG" Q= -j"$JOBS" > "$d/build.log" 2>&1; then
     runsuites "$d"
     if [ "$RP" = 1 ] && [ "$RF" = 1 ]; then v="PASS (both suites fail: string.pack missing)"

@@ -1,0 +1,26 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because the set of Gradle properties has changed: the value of 'ocljit.nativesDir' was changed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+
+> Task :verifyModAssets FAILED
+OC-LuaJIT: packaging 1 native(s): libjnluajit52-windows-x86_64.dll (739237 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyModAssets'.
+> OC-LuaJIT: libjnluajit52-windows-x86_64.dll (LuaJIT unpinned) was NOT built from the pinned LuaJIT commit 1ee778a4 (native/luajit/upstream.commit: 1ee778a4e37122d8ca7d5733c590a47dafd6b15c). Its blob fingerprint names the commit it was built from, so its blobs and a pinned native's would not restore on each other. build-native.sh refuses a LuaJIT checkout at another commit and compiles the pin's committed tree; 'unpinned' is from an OCLJ_LUAJIT_UNPINNED=1 build of a checkout's working tree, which is for local experiments only; 'unknown' is from a build that could not read the commit. Rebuild it from the pinned checkout (make -C prototype/watchdog luajit-src): OCLJ_VARIANT=additive sh native/build-native.sh
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 4s
+1 actionable task: 1 executed
+Configuration cache entry stored.

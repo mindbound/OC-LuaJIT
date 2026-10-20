@@ -116,12 +116,51 @@
 #   OCLJ_JNI    a JDK's include/ dir    any JDK 8+ (jni.h + <os>/jni_md.h, where
 #                                      <os> is win32, linux or darwin to match the HOST)
 #   OCLJ_SHIM   dir holding lj52shim.c and lj52shim.h  (default $OCLJ_REPO/native)
-#   OCLJ_LUAJIT LuaJIT source tree      (default $OCLJ_REPO/prototype/watchdog/luajit)
-#   OCLJ_BUILD  scratch build dir       (default $OCLJ_REPO/build/native)
+#   OCLJ_SER    dir holding eris_lj.c and eris_lj.h    (default $OCLJ_REPO/serializer)
+#   OCLJ_LUAJIT LuaJIT source tree      (default $OCLJ_REPO/prototype/watchdog/luajit),
+#               a git checkout whose HEAD is THE PIN: the commit
+#               native/luajit/upstream.commit names (the one file every reader
+#               of the pin reads; THE PIN, in the preflight).  A pinned build
+#               needs git and refuses any other HEAD.  The LuaJIT source it
+#               starts from is exactly the tree the pin's 40 digits name, exported
+#               from the checkout's .git with git archive and checked object by
+#               object against them (the commit object must hash to the pin,
+#               every tree object to its name, every exported file to its blob
+#               id), then changed by the twelve patch scripts below, and
+#               compiled with this script's flags only (THE BUILD ENVIRONMENT);
+#               never the checkout's working tree: a local edit there is named
+#               in a WARNING and is not built (THE BUILD COPY, step 1).
+#               Anything that would change the export (a filter, ident, eol or
+#               export attribute, a forged object, GIT_* variables) is a BUILD
+#               FAIL; replace refs are ignored.  The toolchain is not pinned.
+#   OCLJ_LUAJIT_UNPINNED  1 builds the checkout's WORKING TREE instead, at
+#               whatever commit and with whatever edits, for a local
+#               experiment, with a warning at the check and at the end.  Its
+#               blob fingerprint names the commit "unpinned", so gradle's
+#               verifyModAssets refuses to package it, its blobs do not restore
+#               on a pinned native, nor a pinned native's on it, and it is not
+#               collected into $OCLJ_BUILD/dist.  Unset or empty (default),
+#               the build is pinned; any other value is refused.
+#   OCLJ_BUILD  scratch build dir       (default $OCLJ_REPO/build/native).  It
+#               may not lie inside OCLJ_LUAJIT, nor inside OCLJ_REPO or the
+#               repository this script lives in except under its build/, and
+#               OCLJ_LUAJIT may not be, or lie inside, a directory this script
+#               removes in it (THE DIRECTORIES THIS SCRIPT REMOVES, in the
+#               preflight).
 #   OCLJ_OUT    where the library lands (default $OCLJ_BUILD/libdir, or
-#                                      libdir-additive for OCLJ_VARIANT=additive)
-#   CC          C compiler              (default gcc; MinGW-w64 on Windows)
+#                                      libdir-additive for OCLJ_VARIANT=additive).
+#               Never $OCLJ_BUILD/dist, nor build/native/dist of OCLJ_REPO or
+#               of the repository this script lives in, nor inside one: dist is
+#               the collection point the jar is packaged from.
+#   Every directory above is taken at its physical path, once, before anything
+#   reads it (THE INPUT DIRECTORIES, in the preflight), and on Windows one
+#   whose path has a name ending in a dot or a space is refused.
+#   CC          C compiler              (default gcc; MinGW-w64 on Windows) for
+#               our three translation units and the probes; LuaJIT's Makefile
+#               calls gcc whatever CC says.  Not pinned (THE BUILD ENVIRONMENT).
 #   JOBS        make -j                 (default 4)
+#   The environment's compiler and linker variables (CFLAGS, CPATH, MAKEFLAGS
+#   and the rest) are NOT inputs: they are dropped (THE BUILD ENVIRONMENT).
 #   OCLJ_GLIBC_MAX  Linux only: the newest glibc symbol version the .so may
 #               need, as x.y (2.28).  Set, a .so that needs a newer GLIBC_x.y,
 #               or any version outside the GLIBC_x.y family, is a BUILD FAIL.
@@ -171,9 +210,85 @@ set -u
 LC_ALL=C
 export LC_ALL
 
-SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# THE BUILD ENVIRONMENT CANNOT ADD FLAGS, HEADERS OR LIBRARIES.  make takes
+# every environment variable as a make variable, and LuaJIT's src/Makefile uses
+# its flag and path variables without assigning them, so a value set in the
+# shell reached the compile and link lines as it was: with CFLAGS='-include
+# <header>' in the environment a pinned build put the header into 76 of the 77
+# LuaJIT compile lines, stamped the DLL 1ee778a4, collected it into dist, and
+# gradle accepted it (measured 2026-10-20, the export-check round's review).
+# So the variables below, the ones make, gcc and ld were measured, or read in
+# their manuals and LuaJIT's Makefiles, to take from the environment and change
+# what is compiled or linked, are removed here, before anything reads one, in
+# both modes:
+#   the conventions     CFLAGS CPPFLAGS CXXFLAGS LDFLAGS LDLIBS LIBS
+#   LuaJIT's Makefiles  every variable the pin's src/Makefile and top Makefile
+#                       use without assigning it, or assign with ?= or only in
+#                       some branches (a census of the two files, 2026-10-20):
+#                       HOST_CFLAGS HOST_LDFLAGS HOST_LIBS TARGET_CFLAGS
+#                       TARGET_FLAGS TARGET_LDFLAGS TARGET_SHLDFLAGS TARGET_LIBS
+#                       TARGET_ARCH TARGET_SYS CROSS PREFIX MULTILIB LMULTILIB
+#                       INSTALL_LJLIBD DESTDIR HOST_MSYS HOST_RM MAKE, and
+#                       CFLAGS LDFLAGS LIBS.  Set one at a time, 17 of them
+#                       changed what `make -n` runs for this build, on Windows
+#                       and in AlmaLinux 8, HOST_RM what `make clean` runs, and
+#                       MAKE what the amalg target runs
+#   make's own          MAKEFLAGS MAKEFILES GNUMAKEFLAGS MFLAGS MAKEOVERRIDES
+#                       (MAKEFLAGS, GNUMAKEFLAGS and MAKEFILES each added a
+#                       flag to every compile line; MAKEOVERRIDES=CFLAGS=-O0
+#                       put -O0 on 76 of them with mingw32-make 4.4.1, and
+#                       nothing with AlmaLinux 8's make 4.2.1: pin round 4's
+#                       review)
+#   gcc's               CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+#                       LIBRARY_PATH GCC_EXEC_PREFIX COMPILER_PATH
+#                       DEPENDENCIES_OUTPUT SUNPRO_DEPENDENCIES
+#   ld's                LD_RUN_PATH (it gave a shared object an RPATH) and
+#                       GNUTARGET (it changed the object's layout; AlmaLinux 8,
+#                       2026-10-20)
+# whatever the case of the name: MinGW gcc reads its variables through the
+# Windows C runtime, whose getenv ignores case, and found a header through
+# cpath and Cpath as through CPATH, and through cpath after the shell's
+# `unset CPATH` (measured 2026-10-20).  The names that were set are printed in
+# the preflight ("ignored from the environment"), never their values.  Kept:
+# this script's own inputs (EXTERNAL INPUTS: CC, JOBS, OCLJ_* and the rest),
+# PATH, and OS, MSYSTEM and TERM, which src/Makefile reads only to tell a
+# cmd.exe host from an MSYS or POSIX one (~:157), which Windows and the
+# terminal set on every host, and none of which changed the dry run alone.
+# The list is what was found, not a proof that nothing else reaches the build:
+# a name that is not a shell identifier cannot be unset by sh (none of these is
+# one), and make takes such names from the environment too (its own
+# -*-command-variables-*- is one, not measured).  THE TOOLCHAIN IS NOT PINNED:
+# CC, and the make, gcc and binutils that PATH finds, compile the pin's tree
+# with this script's flags (PREREQUISITES 1 and 7 name the compilers the
+# release is built with).
+OCLJ_ENV_DROP="CFLAGS CPPFLAGS CXXFLAGS LDFLAGS LDLIBS LIBS"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP HOST_CFLAGS HOST_LDFLAGS HOST_LIBS TARGET_CFLAGS TARGET_FLAGS"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP TARGET_LDFLAGS TARGET_SHLDFLAGS TARGET_LIBS TARGET_ARCH TARGET_SYS"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP CROSS PREFIX MULTILIB LMULTILIB INSTALL_LJLIBD DESTDIR HOST_MSYS"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP HOST_RM MAKE MAKEFLAGS MAKEFILES GNUMAKEFLAGS MFLAGS MAKEOVERRIDES"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP LIBRARY_PATH GCC_EXEC_PREFIX COMPILER_PATH DEPENDENCIES_OUTPUT"
+OCLJ_ENV_DROP="$OCLJ_ENV_DROP SUNPRO_DEPENDENCIES LD_RUN_PATH GNUTARGET"
+OCLJ_ENV_DROPPED=
+# env lists the names (a value holding a newline can fake a line, so each name
+# must also be a set variable); awk's toupper, under LC_ALL=C, folds A-Z only.
+for oclj_n in $(env | cut -d= -f1 | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | sort -u \
+    | awk -v drop="$OCLJ_ENV_DROP" 'BEGIN { n = split(drop, d, " "); for (i = 1; i <= n; i++) w[d[i]] = 1 }
+      toupper($0) in w'); do
+  eval 'oclj_v=${'"$oclj_n"'+set}'
+  [ "$oclj_v" = set ] || continue
+  unset "$oclj_n"
+  OCLJ_ENV_DROPPED="${OCLJ_ENV_DROPPED:+$OCLJ_ENV_DROPPED }$oclj_n"
+done
+unset oclj_n oclj_v
 
-: "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/.." && pwd)}"
+SELF_DIR=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P)
+# The repository this script lives in: OCLJ_REPO's default, and guarded as
+# OCLJ_REPO is when OCLJ_REPO names another (THE DIRECTORIES THIS SCRIPT
+# REMOVES).
+SELF_REPO=$(CDPATH= cd -P -- "$SELF_DIR/.." && pwd -P)
+
+: "${OCLJ_REPO:=$SELF_REPO}"
 : "${OCLJ_LUAJIT:=$OCLJ_REPO/prototype/watchdog/luajit}"
 : "${OCLJ_SHIM:=$OCLJ_REPO/native}"
 : "${OCLJ_SER:=$OCLJ_REPO/serializer}"
@@ -186,6 +301,7 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${CC:=gcc}"
 : "${JOBS:=4}"
 : "${OCLJ_GLIBC_MAX:=}"
+: "${OCLJ_LUAJIT_UNPINNED:=}"
 
 # WHICH LIBRARY THIS BUILD PRODUCES, and it is two different products.
 #
@@ -330,11 +446,11 @@ esac
 # oclj_features.h (THE LUAJIT FEATURE SET, above).  PICFLAG is codegen only and
 # changes no structure, so it alone still reaches XCFLAGS.
 LJ_FLAGS="$PICFLAG"
-LJ_FEATURES_H=$OCLJ_REPO/native/luajit/oclj_features.h
 
 # --------------------------------------------------------------- 0
 say "=============== 0. preflight ==============="
 say "host    = $PLATFORM   (lib*$LIBEXT, jni_md in $JNI_MD/)"
+say "ignored from the environment: ${OCLJ_ENV_DROPPED:-none} (THE BUILD ENVIRONMENT)"
 if [ "$OCLJ_OS" != windows ] && [ "$OCLJ_OS" != linux ]; then
   # NOT A REFUSAL -- the build script is portable and everything up to the shim
   # works here (LuaJIT with -fPIC, the naming, the ELF postflight).  What is not
@@ -362,15 +478,259 @@ if [ -n "$OCLJ_GLIBC_MAX" ]; then
 elif [ "$OCLJ_OS" = linux ]; then
   say "glibc   = reported against the release floor GLIBC_$GLIBC_FLOOR in step 6, not enforced (OCLJ_GLIBC_MAX unset)"
 fi
-command -v "$CC" >/dev/null 2>&1 || fail "no C compiler '$CC' on PATH (MinGW-w64 gcc on Windows, gcc or clang elsewhere)"
-say "cc      = $("$CC" --version | head -1)"
-[ -n "$OCLJ_JNLUA" ] || fail "OCLJ_JNLUA is unset: point it at an OC-JNLua checkout (git clone https://github.com/MightyPirates/OC-JNLua.git)"
-[ -f "$OCLJ_JNLUA/native/src/jnlua.c" ] || fail "no $OCLJ_JNLUA/native/src/jnlua.c"
+# THE INPUT DIRECTORIES ARE TAKEN AT THEIR PHYSICAL PATHS, HERE, BEFORE ANYTHING
+# READS THEM.  Every directory this script is given -- OCLJ_REPO, OCLJ_LUAJIT,
+# OCLJ_SHIM, OCLJ_SER, OCLJ_JNLUA, OCLJ_JNI, OCLJ_BUILD and OCLJ_OUT, and its own
+# directory -- becomes the physical path this shell resolves it to (cd -P and
+# pwd -P: no symlink or junction, no "." or ".."), and the guards below and
+# every tool after them get that one path.  This shell and Windows' own
+# programs do not read every spelling alike (measured 2026-10-20, pin round 4's
+# review): "<junction>/.." is taken where the junction points by cd -P, rm, cp
+# and mkdir, and by its spelling, the junction's own parent, by mingw32-make
+# -C, gcc -o, ld -o and git; and a name ending in "." or " " is kept by this
+# shell and dropped by them.  In round 4 the guards checked the shell's
+# reading and the tools were handed the spelling: an unpinned build replaced
+# dist's library through OCLJ_OUT=<build>/<junction>/../dist (which round 3's
+# string comparison had refused) and through OCLJ_OUT=<build>/dist., and a
+# pinned build ran make clean and the LuaJIT build inside a throwaway clone at
+# <dir>/luajit-<platform> through OCLJ_BUILD=<dir>/<junction>/.., which the
+# guards had read as the junction's target.  A physical path has no ".." to
+# read two ways, and on Windows a name ending in a dot or a space is refused
+# (winname), so the shell's gates and the native tools read one file.
+# OCLJ_BUILD and OCLJ_OUT need not exist yet: physpath resolves their deepest
+# existing ancestor and appends the names below it.  An input that names no
+# directory is left as it was given, for the check that reads it to refuse it
+# below; OCLJ_JNI gets its default first.
+# physpath <path>: the physical absolute path of <path>, which need not exist
+# yet.  The deepest ancestor that is a directory is resolved with cd -P and
+# pwd -P; the rest is appended name by name, "." skipped, ".." taking the
+# parent, and a prefix that then names a directory is resolved again.
+physpath() {
+  pp_p=$1 pp_t=
+  while [ ! -d "$pp_p" ]; do
+    pp_t=$(basename -- "$pp_p")/$pp_t
+    pp_p=$(dirname -- "$pp_p")
+  done
+  pp_p=$(CDPATH= cd -P -- "$pp_p" && pwd -P) || return 1
+  pp_ifs=$IFS; IFS=/; set -f
+  for pp_c in $pp_t; do
+    case $pp_c in
+      ''|.) ;;
+      ..) pp_p=$(dirname -- "$pp_p") ;;
+      *) pp_p=${pp_p%/}/$pp_c
+         if [ -d "$pp_p" ]; then pp_p=$(CDPATH= cd -P -- "$pp_p" && pwd -P) || pp_p=; fi ;;
+    esac
+    [ -n "$pp_p" ] || break
+  done
+  IFS=$pp_ifs; set +f
+  [ -n "$pp_p" ] || return 1
+  printf '%s\n' "$pp_p"
+}
+# winname <physical path> <what>: on Windows, refuse a path one of whose names
+# ends in a dot or a space.  This shell keeps such a name as written, and
+# Windows' own programs drop the dot or the space and act on the name without
+# it: an unpinned build replaced dist's library through OCLJ_OUT=<build>/dist.
+# (pin round 4's review).
+winname() {
+  [ "$OCLJ_OS" = windows ] || return 0
+  case "$1/" in
+    *./*|*' /'*) fail "$2 is $1, one of whose names ends in a dot or a space.
+         This shell keeps such a name as written, and Windows' own programs
+         (make, gcc, ld, git) drop the dot or the space, so they would act on
+         another directory than the one this script checks.  Use a path without
+         such a name; nothing has been created." ;;
+  esac
+}
+# physdir <variable>: when the variable names a directory, its value becomes
+# that directory's physical path, checked by winname.  What was given is kept
+# in <variable>_GIVEN, for the messages.
+physdir() {
+  eval 'pd_g=$'"$1"
+  eval "$1"'_GIVEN=$pd_g'
+  [ -d "$pd_g" ] || return 0
+  pd_p=$(CDPATH= cd -P -- "$pd_g" && pwd -P) || fail "cannot enter $1=$pd_g"
+  winname "$pd_p" "$1"
+  eval "$1"'=$pd_p'
+}
 if [ -z "$OCLJ_JNI" ]; then
   for c in "$JAVA_HOME/include" "/c/Program Files/Java/jdk1.8.0_211/include"; do
     [ -f "$c/jni.h" ] && OCLJ_JNI="$c" && break
   done
 fi
+winname "$SELF_DIR" "this script's directory"
+for oclj_n in OCLJ_REPO OCLJ_LUAJIT OCLJ_SHIM OCLJ_SER OCLJ_JNLUA OCLJ_JNI; do
+  physdir "$oclj_n"
+done
+unset oclj_n
+OCLJ_BUILD_GIVEN=$OCLJ_BUILD
+OCLJ_BUILD=$(physpath "$OCLJ_BUILD_GIVEN") || fail "cannot resolve OCLJ_BUILD=$OCLJ_BUILD_GIVEN"
+winname "$OCLJ_BUILD" OCLJ_BUILD
+OCLJ_OUT_GIVEN=$OCLJ_OUT
+OCLJ_OUT=$(physpath "$OCLJ_OUT_GIVEN") || fail "cannot resolve OCLJ_OUT=$OCLJ_OUT_GIVEN"
+winname "$OCLJ_OUT" OCLJ_OUT
+LJ_FEATURES_H=$OCLJ_REPO/native/luajit/oclj_features.h
+# THE PIN.  Our LuaJIT is upstream LuaJIT 2.1 at ONE commit, and that commit is
+# ONE file, native/luajit/upstream.commit: the full 40-digit hash and a newline.
+# Every reader reads it.  prototype/watchdog/Makefile (and the older build.bat)
+# check the pristine checkout out at it; serializer/Makefile stamps all 40
+# digits into its test host's blob fingerprint; this script refuses a checkout
+# whose HEAD is not the pin, all 40 digits, and compiles the tree the pin's 40
+# digits name, checked object by object, with the twelve changes and this
+# script's flags only, not the checkout's working tree (THE CHECKOUT MUST BE AT
+# THE PIN, right after git_head below, THE BUILD COPY, step 1, and THE BUILD
+# ENVIRONMENT, at the top); and build.gradle.kts
+# refuses a native whose fingerprint names another commit.  Until 2026-10-20
+# the hash was written out in the three build files and nothing compared the
+# checkout with it: a checkout at another commit built a native stamped with
+# that commit, and the jar build packaged it.
+# The file is held to one spelling here, byte for byte, before anything reads
+# it: exactly 40 lowercase hex digits, then one LF or nothing.  One spelling,
+# so that every reader reads the same value: make and cmd drop a CR, build.bat
+# reads only the first line, and the Makefiles refuse a short or upper-case
+# hash.
+LJ_PIN_FILE=$OCLJ_REPO/native/luajit/upstream.commit
+[ -f "$LJ_PIN_FILE" ] || fail "no $LJ_PIN_FILE: the pinned LuaJIT commit, 40 lowercase hex
+         digits and a newline, which every reader of the pin reads"
+LJ_PIN=$(cat "$LJ_PIN_FILE") || fail "cannot read $LJ_PIN_FILE"
+LJ_PIN_BYTES=$(wc -c < "$LJ_PIN_FILE" | tr -d ' ')
+LJ_PIN_OK=
+case $LJ_PIN in
+  *[!0-9a-f]*) ;;
+  *) if [ "${#LJ_PIN}" = 40 ]; then
+       # $(cat) dropped the trailing newlines; the byte count and the last byte
+       # say there was at most one, and that it was an LF.
+       case $LJ_PIN_BYTES in
+         40) LJ_PIN_OK=1 ;;
+         41) [ "$(tail -c 1 "$LJ_PIN_FILE" | od -An -tx1 | tr -d ' ')" = 0a ] && LJ_PIN_OK=1 ;;
+       esac
+     fi ;;
+esac
+[ -n "$LJ_PIN_OK" ] || fail "$LJ_PIN_FILE is not one LuaJIT commit.  It must hold exactly 40
+         lowercase hex digits and an optional newline (LF), the full hash
+         prototype/watchdog/Makefile checks out; it holds $LJ_PIN_BYTES bytes:
+$(od -An -c "$LJ_PIN_FILE" | head -4)"
+LJ_PIN8=$(printf '%s' "$LJ_PIN" | cut -c1-8)
+case $OCLJ_LUAJIT_UNPINNED in
+  ''|1) ;;
+  *) fail "OCLJ_LUAJIT_UNPINNED='$OCLJ_LUAJIT_UNPINNED' must be 1 (build the LuaJIT checkout's
+         working tree, whatever its commit and edits, instead of the pin, for a
+         local experiment) or unset" ;;
+esac
+say "pin     = $LJ_PIN ($LJ_PIN_FILE)${OCLJ_LUAJIT_UNPINNED:+, OCLJ_LUAJIT_UNPINNED=1}"
+# THE DIRECTORIES THIS SCRIPT REMOVES, AND WHERE THE LIBRARY LANDS.  Every run
+# removes three directories in $OCLJ_BUILD before it remakes them: the build
+# copy LJ_WORK and the pin's export LJ_EXPORT (THE BUILD COPY, step 1), and the
+# layout gate's header copy NEGI (stage 1b).  rm -rf follows no symlink at the
+# end of the path it is given, but it does follow one in the middle, and a ".."
+# after a symlink or a Windows junction goes where the link points, so what it
+# deletes is a PHYSICAL directory, whatever spelling named it.  Measured
+# 2026-10-20 (the build-copy round's review): an unpinned build whose
+# OCLJ_LUAJIT was $OCLJ_BUILD/luajit-<platform> deleted that checkout before
+# copying it.  So the checkout may not be, or lie inside, any of the three, and
+# $OCLJ_BUILD may not be, or lie inside, the checkout, whose working tree it
+# would then copy into itself and build in.  The same review measured an
+# unpinned build with OCLJ_OUT set to $OCLJ_BUILD/dist replacing the release
+# library there while it printed "dist left as it was": OCLJ_OUT is where the
+# link writes, and dist is the collection point build.gradle.kts packages, so
+# OCLJ_OUT may not be, or lie inside, $OCLJ_BUILD/dist or build/native/dist, in
+# either mode.  And $OCLJ_BUILD may not be, or lie inside, $OCLJ_REPO, except
+# under $OCLJ_REPO/build: the build writes files of fixed names into
+# $OCLJ_BUILD (strpack.lua, bitops.lua, luajit_build.log and more), and the
+# repository tracks files of those names, so an OCLJ_BUILD of serializer/tests
+# would overwrite serializer/tests/strpack.lua (the export-check round's
+# review).  The repository this script lives in, SELF_REPO, is guarded the
+# same way when OCLJ_REPO names another: neither OCLJ_BUILD outside its build/
+# nor OCLJ_OUT in its build/native/dist (since pin round 5).  All of this is
+# refused here, before anything is created, removed or built.
+# THE COMPARISON IS BY IDENTITY, NOT BY SPELLING.  Until the export-check round
+# it compared strings, the physical paths that a plain cd and pwd -P gave, with
+# A-Z folded on Windows, and its review got past both refusals two ways: an
+# OCLJ_BUILD written <dir>/<junction>/.. (a plain cd takes ".." by the
+# spelling, every other call goes where the junction points) and a
+# different-case spelling of a non-ASCII letter (Bäu and BÄU are one directory
+# on NTFS, and tr folds A-Z only).  The build then deleted the throwaway
+# checkout at the copy's real path, and replaced dist's DLL with one stamped
+# unpinned (measured 2026-10-20).  Since round 4 every path compared is a
+# physical one (THE INPUT DIRECTORIES, above), and two directories that exist
+# are compared with test -ef, which is true only for one file: through a
+# symlink, a junction, and other case, ASCII or not, it held in Git Bash's
+# bash, AlmaLinux 8's sh (bash 4.4 in POSIX mode) and Ubuntu's dash
+# (2026-10-20).  Only a path that does not exist yet is compared by spelling,
+# on every host (/mnt/c, where the AlmaLinux 8 release build runs, is NTFS),
+# with A-Z folded and every byte outside printable ASCII read as "?": the
+# folding alone let OCLJ_BUILD=<dir>/Bäu and OCLJ_OUT=<dir>/BÄU/dist, neither
+# made yet and one directory on NTFS, through, and the unpinned library landed
+# in that dist (pin round 4's review).  Read so, two different names compare
+# equal when they differ only in bytes outside printable ASCII, as many of
+# them, or only in A-Z case on a case-sensitive file system: that can refuse a
+# path that was in fact elsewhere, and never passes one that was not.
+# pathkey <path>: the spelling compared where a directory does not exist yet.
+pathkey() { printf '%s\n' "$1" | tr 'A-Z' 'a-z' | tr -c '[:print:][:space:]' '?'; }
+# inside <a> <b>: true when the directory at the physical path <a> is the one at
+# <b>, or lies inside it, whether or not either exists yet.  <b> is split into
+# its deepest existing ancestor E and the names below E.  Each ancestor of <a>,
+# <a> itself first, that exists is compared with E by test -ef; when they are
+# one directory, <a> lies inside <b> if the names below that ancestor begin
+# with <b>'s names below E (pathkey).  An ancestor of <a> that does not exist
+# is compared with <b> by spelling (pathkey).
+inside() {
+  in_b=${2%/} in_bt=
+  in_be=$in_b
+  while [ -n "$in_be" ] && [ ! -e "$in_be" ]; do
+    in_bt=/${in_be##*/}$in_bt
+    in_be=${in_be%/*}
+  done
+  in_a=${1%/} in_at=
+  while [ -n "$in_a" ]; do
+    if [ -e "$in_a" ]; then
+      if [ -n "$in_be" ] && [ "$in_a" -ef "$in_be" ]; then
+        case "$(pathkey "$in_at")/" in "$(pathkey "$in_bt")/"*) return 0 ;; esac
+      fi
+    elif [ "$(pathkey "$in_a")" = "$(pathkey "$in_b")" ]; then
+      return 0
+    fi
+    in_at=/${in_a##*/}$in_at
+    in_a=${in_a%/*}
+  done
+  return 1
+}
+[ -d "$OCLJ_LUAJIT" ] || fail "no LuaJIT checkout at $OCLJ_LUAJIT (OCLJ_LUAJIT must be a directory:
+         make -C prototype/watchdog luajit-src clones the default one)"
+LJ_CHECKOUT=$OCLJ_LUAJIT
+for r in "$OCLJ_REPO" "$SELF_REPO"; do
+  if inside "$OCLJ_BUILD" "$r" && ! inside "$OCLJ_BUILD" "$r/build"; then
+    fail "OCLJ_BUILD=$OCLJ_BUILD_GIVEN ($OCLJ_BUILD) is, or lies inside, the repository
+         $r, outside its build/ directory (OCLJ_REPO is $OCLJ_REPO, and this
+         script lives in $SELF_REPO).  The build writes files of fixed names into
+         OCLJ_BUILD (strpack.lua, bitops.lua, luajit_build.log and more), and the
+         repository tracks files of such names (serializer/tests/strpack.lua),
+         which it would overwrite.  Leave OCLJ_BUILD unset (build/native), or set it
+         under $r/build or outside the repository; nothing has been created."
+  fi
+done
+LJ_WORK=$OCLJ_BUILD/luajit-$PLATFORM
+LJ_EXPORT=$OCLJ_BUILD/luajit-export-$PLATFORM
+NEGI=$OCLJ_BUILD/layoutneg-$PLATFORM
+for d in "luajit-$PLATFORM" "luajit-export-$PLATFORM" "layoutneg-$PLATFORM"; do
+  inside "$LJ_CHECKOUT" "$OCLJ_BUILD/$d" && fail "the LuaJIT checkout $OCLJ_LUAJIT_GIVEN ($LJ_CHECKOUT)
+         is, or lies inside, $OCLJ_BUILD/$d, a directory this script
+         removes and remakes on every run.  Move the checkout, or set OCLJ_BUILD to
+         another directory; nothing has been removed."
+done
+inside "$OCLJ_BUILD" "$LJ_CHECKOUT" && fail "OCLJ_BUILD=$OCLJ_BUILD_GIVEN ($OCLJ_BUILD) is, or lies inside, the LuaJIT
+         checkout $OCLJ_LUAJIT_GIVEN ($LJ_CHECKOUT): the build would write, remove and
+         copy inside the tree it reads.  Set OCLJ_BUILD to a directory outside it."
+for d in "$OCLJ_BUILD/dist" "$OCLJ_REPO/build/native/dist" "$SELF_REPO/build/native/dist"; do
+  inside "$OCLJ_OUT" "$d" && fail "OCLJ_OUT=$OCLJ_OUT_GIVEN ($OCLJ_OUT) is, or lies inside, $d,
+         the collection point build.gradle.kts packages the jar from.  OCLJ_OUT is
+         where the link writes the library, and a build that wrote there would
+         replace the release library whatever it is.  Leave OCLJ_OUT unset, or point
+         it elsewhere; an additive pinned build collects into dist by itself."
+done
+command -v "$CC" >/dev/null 2>&1 || fail "no C compiler '$CC' on PATH (MinGW-w64 gcc on Windows, gcc or clang elsewhere)"
+say "cc      = $("$CC" --version | head -1)"
+[ -n "$OCLJ_JNLUA" ] || fail "OCLJ_JNLUA is unset: point it at an OC-JNLua checkout (git clone https://github.com/MightyPirates/OC-JNLua.git)"
+[ -f "$OCLJ_JNLUA/native/src/jnlua.c" ] || fail "no $OCLJ_JNLUA/native/src/jnlua.c"
 [ -n "$OCLJ_JNI" ] && [ -f "$OCLJ_JNI/jni.h" ] || fail "OCLJ_JNI must name a JDK include dir containing jni.h"
 [ -f "$OCLJ_JNI/$JNI_MD/jni_md.h" ] || fail "no $OCLJ_JNI/$JNI_MD/jni_md.h -- that JDK include
        directory belongs to a different platform than this build ($PLATFORM)"
@@ -378,11 +738,9 @@ fi
 [ -f "$OCLJ_SHIM/lj52shim.h" ] || fail "no $OCLJ_SHIM/lj52shim.h"
 [ -f "$OCLJ_SER/eris_lj.c" ]   || fail "no $OCLJ_SER/eris_lj.c"
 [ -f "$LJ_FEATURES_H" ]        || fail "no $LJ_FEATURES_H: the LuaJIT feature set"
-[ -f "$OCLJ_LUAJIT/src/lj_record.c" ] || fail "no LuaJIT source at $OCLJ_LUAJIT"
-grep -q LUAJIT_ENABLE_CHECKHOOK "$OCLJ_LUAJIT/src/lj_record.c" \
-  || fail "$OCLJ_LUAJIT/src/lj_record.c has no LUAJIT_ENABLE_CHECKHOOK option: not a
-         LuaJIT 2.x tree.  Use the pinned checkout (prototype/watchdog/luajit, upstream
-         1ee778a4; make -C prototype/watchdog luajit-src)."
+# (The checkout's CHECKHOOK option is checked in step 1, in the tree that is
+# compiled: the pin's export, or the working tree when unpinned.  Here the
+# checkout need only be a directory, checked above.)
 # --- ONE BEHAVIOUR, NO ESCAPE HATCHES -------------------------------------
 # The abandoned shim variants each carried a switch that selected a known-
 # broken path: OCLJ_NOMODECHECK disabled the chunk-mode (allowBytecode) gate,
@@ -425,25 +783,8 @@ for tok in OCLJ_NOMODECHECK LJ52_DROP_LOAD_MODE OCLJ_TRACE OCLJ_JITOFF OCLJ_JITO
     fail "escape hatch '$tok' is back in the shim (line above).  The canonical"
   fi
 done
-# THE COLLECTOR-STATE ENUM MUST STILL BEGIN WITH GCSpause.
-# lj52shim.c spells GCSpause as the literal 0 (LJ52_GCS_PAUSE) rather than
-# including lj_gc.h, because that header also declares lj_gc_step and
-# lj_gc_fullgc and the gate below forbids those from reaching the shim's scope.
-# That trade is only safe if the assumption is checked, so check it.  The enum
-# is lj_gc.h:11-14 and its own comment says "Order matters."
-LJGC_H="$OCLJ_LUAJIT/src/lj_gc.h"
-if [ -f "$LJGC_H" ]; then
-  if ! tr -d ' 	' < "$LJGC_H" | grep -q '^GCSpause,GCSpropagate,'; then
-    grep -n -A3 'Garbage collector states' "$LJGC_H"
-    fail "lj_gc.h's collector-state enum no longer begins 'GCSpause, GCSpropagate'
-         (see above).  lj52shim.c hardcodes GCSpause as 0 via LJ52_GCS_PAUSE and
-         that is now wrong -- the emergency collector would disarm on the wrong
-         state and hand the collector an unbounded budget it never gives back."
-  fi
-else
-  fail "cannot find $LJGC_H to verify the collector-state enum that
-         lj52shim.c's LJ52_GCS_PAUSE depends on."
-fi
+# (THE COLLECTOR-STATE ENUM check, which reads lj_gc.h, runs in step 1 on the
+# build copy, the tree that is compiled: see THE BUILD COPY.)
 
 # THE SHIM MUST NEVER DRIVE THE COLLECTOR DIRECTLY.  lj52_gc_pressure writes
 # two scalars (gc.threshold, gc.stepmul) and latches a third (gc.currentwhite);
@@ -525,45 +866,161 @@ grep -q 'lj52shim.h' "$OCLJ_SER/eris_lj.c" \
   && fail "serializer/eris_lj.c includes the shim header.  Its internal
          bytecode load path must reach the genuine lua_loadx directly."
 
-# THE CHECKOUT'S COMMIT, WITH OR WITHOUT git.  LJ_COMMIT is the first field of
-# the blob fingerprint (ERIS_LJ_COMMIT, step 4), so two natives restore each
-# other's blobs only when they agree on it.  It used to fall back to "unknown"
-# when git was missing, and the AlmaLinux 8 release host had no git (until
-# 2026-10-19): its .so
-# said "unknown|..." where the Windows DLL said "1ee778a4|...", and no blob
-# could move between them (measured 2026-10-19).  So read .git/HEAD when git
-# cannot run (a detached HEAD holds the hash itself; a branch names a ref file
-# or a packed-refs line), and refuse to build a fingerprint without it.  Both
-# ways take the full hash and keep its first 8 digits: git's --short=8 grows a
-# digit when 8 are ambiguous, and the two ways must never disagree.  git is
-# pointed at the checkout's OWN .git (--git-dir, which also takes a worktree's
-# "gitdir:" file): with -C it would walk up from a tree that has no .git of its
-# own into an enclosing repository, and an exported GIT_DIR (as in a git hook)
-# would override -C, either way stamping some other repository's commit
-# (measured 2026-10-20, review of the glibc round).
+# THE CHECKOUT'S COMMIT.  git_head prints a checkout's HEAD, all 40 digits, or
+# nothing when git cannot read it.  git is pointed at the checkout's OWN .git
+# (--git-dir, which also takes a worktree's "gitdir:" file): with -C it would
+# walk up from a tree that has no .git of its own into an enclosing repository,
+# and an exported GIT_DIR (as in a git hook) would override -C, either way
+# reading some other repository's commit (measured 2026-10-20, review of the
+# glibc round).  Until 2026-10-20 it fell back to reading .git/HEAD by hand when
+# git could not run, because the commit it read was stamped into the blob
+# fingerprint and AlmaLinux 8 had no git; that fallback is gone.  A pinned
+# build needs git anyway (it exports the pin's tree with git archive) and
+# stamps the pin, an unpinned build stamps "unpinned", and what is left is
+# reporting: an unpinned checkout's and OC-JNLua's commits, "unknown" without
+# git.  The pinned path reads the checkout's HEAD through ljgit, below.
 git_head() {
-  # git_head <checkout> -- the checkout's HEAD commit, 8 hex digits, or nothing
+  # git_head <checkout> -- the checkout's HEAD commit, 40 hex digits, or nothing
   gh_h=$(git --git-dir="$1/.git" rev-parse HEAD 2>/dev/null) || gh_h=
-  if [ -z "$gh_h" ]; then
-    gh_h=$(cat "$1/.git/HEAD" 2>/dev/null) || gh_h=
-    case $gh_h in
-      "ref: "*)
-        gh_r=${gh_h#ref: }
-        gh_h=$(cat "$1/.git/$gh_r" 2>/dev/null) \
-          || gh_h=$(awk -v r="$gh_r" '$2 == r { print $1 }' "$1/.git/packed-refs" 2>/dev/null) \
-          || gh_h= ;;
-    esac
-  fi
   case $gh_h in
-    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) printf '%s\n' "$gh_h" | cut -c1-8 ;;
+    *[!0-9a-f]*|'') ;;
+    *) [ "${#gh_h}" = 40 ] && printf '%s\n' "$gh_h" ;;
   esac
 }
-LJ_COMMIT=$(git_head "$OCLJ_LUAJIT")
-[ -n "$LJ_COMMIT" ] || fail "cannot read the LuaJIT checkout's commit at $OCLJ_LUAJIT
-         (no git on PATH, and no readable .git/HEAD).  The blob fingerprint
-         names that commit, so a native built without it could never restore a
-         blob another build wrote.  Install git, or keep the checkout's .git."
-JNLUA_COMMIT=$(git_head "$OCLJ_JNLUA")
+# EVERY GIT CALL ON THE PINNED PATH GOES THROUGH ljgit: the HEAD comparison,
+# the commit, tree and blob checks, ls-tree, archive and hash-object.  The
+# review of the build-copy round (2026-10-20) shipped another commit's code
+# under the stamp 1ee778a4, and gradle accepted it, through the export itself:
+# a replace ref on the pin (refs/replace; rev-parse, cat-file, ls-tree and
+# archive all honour it) exported the parent's tree; a smudge filter, set
+# through .git/info/attributes, the repo's config or the environment alone
+# (GIT_CONFIG_COUNT), was applied by git archive; and a forged loose blob or
+# subtree object exported the parent's file.  So ljgit turns replace objects
+# off, reads the checkout's own .git by its physical path (--git-dir: never an
+# enclosing repository, never an exported GIT_DIR), and archives with no
+# line-ending conversion, and the export is then checked against the pin's 40
+# digits link by link, so that whatever git or its configuration does, the
+# source tree the build copy is made from is exactly the tree the pin names,
+# up to a SHA-1 collision, or the build fails (what is then compiled is that
+# tree with the twelve changes, under this script's flags: THE BUILD
+# ENVIRONMENT):
+#   1. the pin's commit object hashes to the pin (cat-file | hash-object);
+#   2. the root tree is the one that commit object names on its "tree" line,
+#      and rev-parse <pin>^{tree} agrees;
+#   3. every tree object under it hashes to its name (step 1), so ls-tree's
+#      list of paths and blob ids is the pin's;
+#   4. every exported file's bytes hash to the blob id that list gives it
+#      (hash-object --no-filters), and the export holds exactly as many files.
+# Not compared: the exported files' modes (the tree records 100644 or 100755
+# and tar applies them; nothing compiled depends on the executable bit) and
+# their timestamps (a tree records none).
+ljgit() {
+  git --no-replace-objects --git-dir="$LJ_CHECKOUT/.git" -c core.autocrlf=false -c core.eol=lf "$@"
+}
+# ljgitenv: the names (never the values) of the GIT_* variables set now, for
+# the messages below.
+ljgitenv() {
+  lge=$(env | cut -d= -f1 | grep -E '^GIT_[A-Za-z0-9_]+$' | sort -u | tr '\n' ' ')
+  lge=${lge% }
+  printf '%s' "${lge:-none}"
+}
+# THE CHECKOUT MUST BE AT THE PIN (THE PIN, above).  LJ_COMMIT is the first
+# field of the blob fingerprint (ERIS_LJ_COMMIT, step 4): two natives restore
+# each other's blobs only when they agree on it, and build.gradle.kts packages
+# a native only when it is the pin's first 8 digits.  So it must name what was
+# compiled, and a commit name is only as good as the tree behind it.  Until
+# 2026-10-20 it was the checkout's HEAD, 8 digits, and the tree compiled was the
+# checkout's working tree, copied once into the build copy and then kept: a
+# checkout at the pin with uncommitted edits, and a build copy left from an
+# earlier build of another commit, both shipped another commit's code stamped
+# 1ee778a4, and gradle accepted it (measured 2026-10-20, the pin round's
+# review).  Now:
+#   PINNED (OCLJ_LUAJIT_UNPINNED unset or empty): git must run, the checkout's
+#     HEAD must be the pin, all 40 digits (an 8-digit prefix can be forged into
+#     .git/HEAD and git rev-parse prints it back), the pin's commit must be in
+#     the checkout's .git, and its commit object must hash to the pin and name
+#     the root tree (links 1 and 2 of ljgit's chain, above).  Step 1 exports
+#     that tree with git archive, checks it (links 3 and 4) and compiles it with
+#     the twelve changes (THE BUILD COPY), so the stamp, LJ_PIN8, names the
+#     source tree that is compiled; the working tree only feeds a WARNING.
+#   UNPINNED (OCLJ_LUAJIT_UNPINNED=1): step 1 copies the checkout's working
+#     tree, at whatever commit and with whatever edits, and the stamp is the
+#     literal "unpinned": gradle refuses it whatever the checkout's commit, and
+#     its blobs never pass for the pin's.  How far such a build gets is up to
+#     the twelve patch scripts' exactly-once anchors and the gates below: they
+#     refuse a tree that changed shape, and a tree that kept its shape builds.
+#     The native is not collected into $OCLJ_BUILD/dist.
+LJ_UNPINNED_NOTE=
+if [ -z "$OCLJ_LUAJIT_UNPINNED" ]; then
+  command -v git >/dev/null 2>&1 || fail "no git on PATH.  A pinned build compiles the pin's committed tree, which
+         it exports from the LuaJIT checkout's .git ($OCLJ_LUAJIT/.git) with git
+         archive, and it checks that the checkout's HEAD is the pin.  Install git
+         (AlmaLinux 8: dnf install git).  OCLJ_LUAJIT_UNPINNED=1 builds the
+         working tree without git, for a local experiment whose native never ships."
+  LJ_HEAD=$(ljgit rev-parse HEAD 2>/dev/null) || LJ_HEAD=
+  case $LJ_HEAD in *[!0-9a-f]*) LJ_HEAD= ;; esac
+  [ "${#LJ_HEAD}" = 40 ] || LJ_HEAD=
+  [ -n "$LJ_HEAD" ] || fail "git cannot read the HEAD of the LuaJIT checkout $OCLJ_LUAJIT
+         (git --git-dir=$LJ_CHECKOUT/.git rev-parse HEAD).  A pinned build needs the
+         checkout's own .git: make -C prototype/watchdog luajit-src clones it."
+  [ "$LJ_HEAD" = "$LJ_PIN" ] || fail "the LuaJIT checkout $OCLJ_LUAJIT is at $LJ_HEAD,
+         and the pin is $LJ_PIN ($LJ_PIN_FILE).
+         Check the pin out (make -C prototype/watchdog luajit-src does, for the
+         default checkout), or bump the pin deliberately (docs/jit-guide.md 8.2a).
+         For a local experiment only, OCLJ_LUAJIT_UNPINNED=1 builds the checkout's
+         working tree anyway: such a native carries 'unpinned' in its blob
+         fingerprint, gradle refuses to package it, and its blobs do not restore
+         on a pinned native."
+  ljgit cat-file -e "$LJ_PIN^{commit}" \
+    || fail "the LuaJIT checkout $OCLJ_LUAJIT names the pin $LJ_PIN as its HEAD, but its .git
+         holds no such commit (git --no-replace-objects cat-file -e $LJ_PIN^{commit}).
+         Likely causes: HEAD written by hand, the pin's commit pruned, a replace
+         ref standing in for it (this build ignores replace refs), a shallow or
+         partial clone, or a forged commit object (git's own error above, if any,
+         says hash mismatch).  Re-clone it (move it aside, then make -C
+         prototype/watchdog luajit-src)."
+  # Link 1: the commit object hashes to the pin.  A pipeline's status is its
+  # last command's, so a cat-file that fails hashes nothing and cannot match.
+  LJ_CHASH=$(ljgit cat-file commit "$LJ_PIN" | ljgit hash-object -t commit --stdin 2>/dev/null) || LJ_CHASH=
+  [ "$LJ_CHASH" = "$LJ_PIN" ] || fail "the commit object $LJ_PIN in $LJ_CHECKOUT/.git hashes to
+         '$LJ_CHASH', not to its name: git does not hold the pin's commit there.
+         Likely causes: a forged or corrupted object in that .git, or GIT_*
+         variables that point git at other objects (GIT_OBJECT_DIRECTORY,
+         GIT_ALTERNATE_OBJECT_DIRECTORIES, GIT_COMMON_DIR; set now: $(ljgitenv)).
+         Re-clone the checkout (move it aside, then make -C prototype/watchdog
+         luajit-src)."
+  # Link 2: the root tree is the one the commit object names on its first line,
+  # "tree <40 digits>", and git's own resolution of <pin>^{tree} agrees.
+  LJ_TREE_LINE=$(ljgit cat-file commit "$LJ_PIN" | head -n 1)
+  LJ_TREE=${LJ_TREE_LINE#tree }
+  case $LJ_TREE_LINE in "tree "*) ;; *) LJ_TREE= ;; esac
+  case $LJ_TREE in *[!0-9a-f]*) LJ_TREE= ;; esac
+  [ "${#LJ_TREE}" = 40 ] || fail "the pin's commit object does not begin with a tree line
+         ('$LJ_TREE_LINE')"
+  LJ_TREE_RP=$(ljgit rev-parse --verify -q "$LJ_PIN^{tree}") || LJ_TREE_RP=
+  [ "$LJ_TREE_RP" = "$LJ_TREE" ] || fail "git resolves $LJ_PIN^{tree} to '$LJ_TREE_RP', and the pin's commit object
+         names the tree $LJ_TREE.  Likely causes: a forged or corrupted tree
+         object in $LJ_CHECKOUT/.git (git's own error above, if any, names it),
+         or GIT_* variables in the environment (set now: $(ljgitenv)).
+         Re-clone the checkout."
+  LJ_COMMIT=$LJ_PIN8
+  say "pin     = met: the checkout's HEAD is the pin, whose commit object hashes to it and names the tree $LJ_TREE; step 1 compiles that tree (git archive, checked), not the working tree"
+else
+  LJ_HEAD=$(git_head "$OCLJ_LUAJIT")
+  LJ_COMMIT=unpinned
+  LJ_UNPINNED_NOTE="OCLJ_LUAJIT_UNPINNED=1: this native is the working tree of $OCLJ_LUAJIT (HEAD ${LJ_HEAD:-unknown, git cannot read it}), NOT the pin $LJ_PIN8 ($LJ_PIN_FILE)"
+  {
+    echo "WARNING: =========================================================="
+    echo "WARNING: $LJ_UNPINNED_NOTE."
+    echo "WARNING: Its blob fingerprint names the commit 'unpinned': gradle's verifyModAssets"
+    echo "WARNING: refuses to package it, its blobs do not restore on a pinned native, nor a"
+    echo "WARNING: pinned native's blobs on it, and it is not collected into $OCLJ_BUILD/dist."
+    echo "WARNING: A local experiment only; never ship it."
+    echo "WARNING: =========================================================="
+  } >&2
+  say "pin     = NOT MET: OCLJ_LUAJIT_UNPINNED=1 builds the checkout's working tree (HEAD ${LJ_HEAD:-unknown}), stamped 'unpinned'"
+fi
+JNLUA_COMMIT=$(git_head "$OCLJ_JNLUA" | cut -c1-8)
 say "luajit  = $OCLJ_LUAJIT @ $LJ_COMMIT (feature set: native/luajit/oclj_features.h)"
 say "jnlua   = $OCLJ_JNLUA @ ${JNLUA_COMMIT:-unknown}"
 say "shim    = $OCLJ_SHIM"
@@ -582,16 +1039,195 @@ say "    features (native/luajit/oclj_features.h): $(grep -E '^#define LUAJIT_' 
 # leaves luajit.exe here and BOTH the harness and build-kernel.sh run it, so a
 # Linux build in the same tree would replace it with an ELF binary and the next
 # kernel patch would fail with a format error a long way from its cause.
-LJ_WORK=$OCLJ_BUILD/luajit-$PLATFORM
-if [ ! -d "$LJ_WORK" ]; then
-  say "copying $OCLJ_LUAJIT -> $LJ_WORK (the source tree is built in place; we never dirty the checkout)"
-  cp -r "$OCLJ_LUAJIT" "$LJ_WORK" || fail "copy failed"
+# (LJ_WORK, LJ_EXPORT and NEGI are set in the preflight's THE DIRECTORIES THIS
+# SCRIPT REMOVES, which refuses a checkout inside any of them.)
+# THE BUILD COPY IS MADE AFRESH ON EVERY RUN, from the tree this build names.
+# Until 2026-10-20 it was copied from the checkout once, when missing, and kept:
+# only the twelve patched files and our seven were re-taken, so every other
+# file stayed whatever the first build (or a hand edit) left there.  After an
+# OCLJ_LUAJIT_UNPINNED=1 build of the pin's parent 8c23d6aa, the next pinned
+# build in the same OCLJ_BUILD compiled the parent's lj_opt_mem.c under the
+# stamp 1ee778a4; and a checkout at the pin with an uncommitted edit compiled
+# the edit (both measured 2026-10-20; gradle accepted both natives).  Keeping
+# the copy saved nothing worth that: `make clean` below rebuilds every object
+# on every run anyway, so it saved one copy of an ~8 MB tree.  So:
+#   PINNED: the tree the pin's commit object names (LJ_TREE, links 1 and 2 in
+#     the preflight's ljgit chain) is exported from the checkout's .git with
+#     git archive into a fresh $LJ_EXPORT, checked (links 3 and 4: every tree
+#     object hashes to its name, every exported file to its blob id, and the
+#     export holds as many files as the tree lists), the build copy is made
+#     from it, and every pristine re-take below reads it.  It is a TREE that
+#     is archived, not the commit: archiving a commit applies the tree's
+#     export-subst attribute, and LuaJIT's .gitattributes sets it on .relver,
+#     which then holds the commit's date where the committed file holds
+#     "$Format:%ct$" -- src/Makefile copies that into luajit_relver.txt, and
+#     host/genversion.lua into LUAJIT_VERSION, so the version string, and the
+#     blob fingerprint's second field with it, would change from "LuaJIT
+#     2.1.ROLLING" (measured 2026-10-20).  A tree carries no commit, so nothing
+#     is substituted.  ljgit archives with core.autocrlf=false and core.eol=lf,
+#     so the export is the committed bytes on every host: every source file
+#     and Makefile LF, as committed (only src/*build.bat, CRLF, and one PNG
+#     hold a CR); until the build-copy round's review it followed the host's
+#     git (CRLF under Windows' core.autocrlf=true, LF in AlmaLinux 8).  Any
+#     conversion that is left -- a filter, ident, eol or working-tree-encoding
+#     attribute, from the tree, .git/info/attributes, a user or system
+#     attributes file, or configuration in the environment -- changes a
+#     file's bytes, so its hash, and is a BUILD FAIL naming the file; an
+#     export-ignore attribute drops a file, and is one too.  Then the
+#     checkout's working tree is compared with
+#     the export: a tracked file that differs or is missing is named in a
+#     WARNING and is NOT built; files only in the checkout (build products,
+#     .git) and line-ending differences do not count.
+#   UNPINNED: the build copy is the checkout's working tree: a fresh directory
+#     the checkout's contents are copied into (never the checkout's path
+#     itself: GNU cp -r copies a symlinked source as the symlink, and the copy's
+#     .git, removed next, was then the checkout's own, measured 2026-10-20 in
+#     AlmaLinux 8).  It may hold no symlink either: cp -R copies a symlink in
+#     the tree as a symlink, and the rm -f src/host/*.o that make clean runs,
+#     run in a copy whose src/host was one, deleted the files of the directory
+#     it named (a probe, 2026-10-20, AlmaLinux 8); make, the re-takes and the
+#     patch scripts would write through one the same way.  The re-takes read
+#     the checkout.
+# Either way the previous copy and export are removed first.  They are build
+# products of this script, never results: no runner writes into them.
+LJ_DIRTY_NOTE=
+rm -rf "$LJ_WORK" "$LJ_EXPORT"
+rm -f "$LJ_EXPORT.tar" "$LJ_EXPORT.ls" "$LJ_EXPORT.got"
+[ -e "$LJ_WORK" ] || [ -e "$LJ_EXPORT" ] && fail "cannot remove the previous build copy $LJ_WORK or $LJ_EXPORT"
+if [ -z "$LJ_UNPINNED_NOTE" ]; then
+  LJ_SRC=$LJ_EXPORT
+  mkdir -p "$LJ_EXPORT" || fail "cannot create $LJ_EXPORT"
+  # Link 3: every tree object under the root hashes to its name.  ls-tree's
+  # list is written to a file first, so that its own failure is seen.
+  ljgit ls-tree -r -d "$LJ_TREE" > "$LJ_EXPORT.ls" || fail "git ls-tree -r -d $LJ_TREE (the pin's tree) failed in $LJ_CHECKOUT/.git"
+  LJ_TREES="$LJ_TREE $(cut -f1 "$LJ_EXPORT.ls" | cut -d' ' -f3 | tr '\n' ' ')"
+  N_TREES=0
+  for t in $LJ_TREES; do
+    h=$(ljgit cat-file tree "$t" | ljgit hash-object -t tree --stdin 2>/dev/null) || h=
+    [ "$h" = "$t" ] || fail "the tree object $t in $LJ_CHECKOUT/.git, which the pin's tree
+         $LJ_TREE names, hashes to '$h', not to its name: git does not hold the
+         pin's tree there.  Likely causes: a forged or corrupted object in that
+         .git, or GIT_* variables that point git at other objects
+         (GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES, GIT_COMMON_DIR;
+         set now: $(ljgitenv)).  Re-clone the checkout."
+    N_TREES=$((N_TREES + 1))
+  done
+  ljgit archive --format=tar "$LJ_TREE" > "$LJ_EXPORT.tar" \
+    || fail "git archive of the pin's tree $LJ_TREE from $LJ_CHECKOUT/.git failed"
+  tar -x -C "$LJ_EXPORT" < "$LJ_EXPORT.tar" || fail "cannot unpack the pin's tree into $LJ_EXPORT"
+  rm -f "$LJ_EXPORT.tar"
+  # Link 4: the export holds exactly the files the tree lists, and each one's
+  # bytes hash to the blob id the tree gives it.  hash-object reads the paths
+  # relative to the export (--work-tree=. after the cd) and applies no filter.
+  ljgit ls-tree -r "$LJ_TREE" > "$LJ_EXPORT.ls" || fail "git ls-tree -r $LJ_TREE (the pin's tree) failed in $LJ_CHECKOUT/.git"
+  N_TREE=$(wc -l < "$LJ_EXPORT.ls" | tr -d ' ')
+  N_EXP=$(find "$LJ_EXPORT" -type f -o -type l | wc -l | tr -d ' ')
+  [ "$N_TREE" -gt 0 ] && [ "$N_EXP" = "$N_TREE" ] \
+    || fail "the export $LJ_EXPORT holds $N_EXP files, and the pin's tree lists $N_TREE
+         (git ls-tree -r $LJ_TREE): it is not the pin's committed tree.  Likely
+         cause: an export-ignore attribute (the tree's .gitattributes,
+         $LJ_CHECKOUT/.git/info/attributes, core.attributesFile, the system
+         gitattributes, or configuration from the environment, GIT_* set now:
+         $(ljgitenv)).  A pin whose tree sets one needs this step changed
+         deliberately."
+  cut -f2- "$LJ_EXPORT.ls" | ( CDPATH= cd -P -- "$LJ_EXPORT" && ljgit --work-tree=. hash-object --no-filters --stdin-paths ) \
+    > "$LJ_EXPORT.got" || fail "cannot hash the files of the export $LJ_EXPORT (git hash-object --no-filters)"
+  # paste: the id the tree lists, the id of the exported bytes, the ls-tree
+  # line ("<mode> blob <id>", then a tab and the path).
+  LJ_BAD=$(cut -f1 "$LJ_EXPORT.ls" | cut -d' ' -f3 | paste - "$LJ_EXPORT.got" "$LJ_EXPORT.ls" \
+    | awk -F '\t' '$1 != $2 { print $4 }')
+  N_GOT=$(wc -l < "$LJ_EXPORT.got" | tr -d ' ')
+  if [ -n "$LJ_BAD" ] || [ "$N_GOT" != "$N_TREE" ]; then
+    printf '%s\n' "$LJ_BAD" | head -20 | sed 's/^/    not the pin'"'"'s bytes: /'
+    fail "the export $LJ_EXPORT is not the pin's committed tree byte for byte:
+         $N_GOT of $N_TREE files hashed, and the files above do not hash to the
+         blob ids the pin's tree gives them.  Likely causes: a filter, ident, eol
+         or working-tree-encoding attribute (the tree's .gitattributes,
+         $LJ_CHECKOUT/.git/info/attributes, core.attributesFile, the system
+         gitattributes), configuration from the environment (GIT_CONFIG_COUNT,
+         GIT_CONFIG_PARAMETERS, GIT_ATTR_SOURCE; GIT_* set now: $(ljgitenv)), or a
+         forged or corrupted blob in $LJ_CHECKOUT/.git.  Re-clone the checkout, or
+         remove the attribute or variable."
+  fi
+  rm -f "$LJ_EXPORT.ls" "$LJ_EXPORT.got"
+  say "    export verified: the commit object hashes to the pin, $N_TREES trees to their names, $N_GOT files to the pin's blob ids"
+  say "copying the pin's tree ($N_EXP files, git archive $LJ_TREE) -> $LJ_EXPORT -> $LJ_WORK"
+  LJ_DIRTY=$(diff -rq --strip-trailing-cr "$LJ_EXPORT" "$LJ_CHECKOUT" 2>&1 | while IFS= read -r l; do
+      case $l in
+        "Only in $LJ_CHECKOUT: "*|"Only in $LJ_CHECKOUT/"*) ;;
+        *) printf '%s\n' "$l" ;;
+      esac
+    done)
+  if [ -n "$LJ_DIRTY" ]; then
+    LJ_NDIRTY=$(printf '%s\n' "$LJ_DIRTY" | wc -l | tr -d ' ')
+    LJ_DIRTY_NOTE="the LuaJIT checkout's working tree differs from the pin's committed tree in $LJ_NDIRTY tracked path(s), and those edits are NOT built"
+    {
+      echo "WARNING: =========================================================="
+      echo "WARNING: $LJ_DIRTY_NOTE."
+      echo "WARNING: This build compiles the pin's committed tree (git archive, checked against"
+      echo "WARNING: the pin's 40 digits), and $OCLJ_LUAJIT's working tree differs from it here:"
+      printf '%s\n' "$LJ_DIRTY" | head -20 | sed 's/^/WARNING:   /'
+      [ "$LJ_NDIRTY" -le 20 ] || echo "WARNING:   ... and $((LJ_NDIRTY - 20)) more"
+      echo "WARNING: To build the edits, for a local experiment whose native never ships,"
+      echo "WARNING: set OCLJ_LUAJIT_UNPINNED=1."
+      echo "WARNING: =========================================================="
+    } >&2
+    say "    working tree: $LJ_NDIRTY tracked path(s) differ from the pin's tree; NOT built (WARNING above)"
+  else
+    say "    working tree: no tracked file differs from the pin's tree (diff -rq --strip-trailing-cr)"
+  fi
+  cp -r "$LJ_EXPORT" "$LJ_WORK" || fail "cannot copy $LJ_EXPORT to $LJ_WORK"
+else
+  LJ_SRC=$OCLJ_LUAJIT
+  say "copying the working tree $OCLJ_LUAJIT -> $LJ_WORK (OCLJ_LUAJIT_UNPINNED=1; the checkout itself is never built in or dirtied)"
+  mkdir "$LJ_WORK" || fail "cannot create $LJ_WORK"
+  cp -R "$OCLJ_LUAJIT/." "$LJ_WORK/" || fail "cannot copy the contents of $OCLJ_LUAJIT into $LJ_WORK"
+  [ -L "$LJ_WORK" ] && fail "$LJ_WORK is a symlink after the copy: removing its .git could
+         delete the checkout's.  Nothing was removed."
   rm -rf "$LJ_WORK/.git"
+  LJ_LINKS=$(find "$LJ_WORK" -type l | head -10)
+  [ -z "$LJ_LINKS" ] || fail "the copy of $OCLJ_LUAJIT holds symlinks:
+$LJ_LINKS
+         The build copy is built in: make clean deletes, and make, the re-takes
+         and the patch scripts write, inside it, and through a symlink they would
+         do it in whatever the link names, the checkout included.  Replace the
+         links with the files, in a scratch clone.  Nothing was built."
 fi
 LJ=$LJ_WORK/src
+# THE CHECKHOOK OPTION, in the tree that is compiled (the pin's export, or the
+# working tree when unpinned).  It was a preflight check of the checkout's
+# working tree until 2026-10-20, so a pinned build of a checkout that had
+# lost src/lj_record.c failed "no LuaJIT source", though the export held the
+# file; now that file is named in the WARNING above, and the pin builds.
+[ -f "$LJ_SRC/src/lj_record.c" ] || fail "no $LJ_SRC/src/lj_record.c: not a LuaJIT source tree"
+grep -q LUAJIT_ENABLE_CHECKHOOK "$LJ_SRC/src/lj_record.c" \
+  || fail "$LJ_SRC/src/lj_record.c has no LUAJIT_ENABLE_CHECKHOOK option: not a
+         LuaJIT 2.x tree.  Use the pinned checkout (prototype/watchdog/luajit, upstream
+         $LJ_PIN8, native/luajit/upstream.commit; make -C prototype/watchdog luajit-src)."
+# THE COLLECTOR-STATE ENUM MUST STILL BEGIN WITH GCSpause.
+# lj52shim.c spells GCSpause as the literal 0 (LJ52_GCS_PAUSE) rather than
+# including lj_gc.h, because that header also declares lj_gc_step and
+# lj_gc_fullgc and the gate below forbids those from reaching the shim's scope.
+# That trade is only safe if the assumption is checked, so check it, in the
+# copy that is compiled.  The enum is lj_gc.h:11-14 and its own comment says
+# "Order matters."
+LJGC_H="$LJ/lj_gc.h"
+if [ -f "$LJGC_H" ]; then
+  if ! tr -d ' 	' < "$LJGC_H" | grep -q '^GCSpause,GCSpropagate,'; then
+    grep -n -A3 'Garbage collector states' "$LJGC_H"
+    fail "lj_gc.h's collector-state enum no longer begins 'GCSpause, GCSpropagate'
+         (see above).  lj52shim.c hardcodes GCSpause as 0 via LJ52_GCS_PAUSE and
+         that is now wrong -- the emergency collector would disarm on the wrong
+         state and hand the collector an unbounded budget it never gives back."
+  fi
+else
+  fail "cannot find $LJGC_H to verify the collector-state enum that
+         lj52shim.c's LJ52_GCS_PAUSE depends on."
+fi
 # THE FIRST OF THE TWELVE LUAJIT CHANGES, on the copy, every
 # build.  The copy
-# persists between builds, and the patch script's "already patched" path
+# persisted between builds until 2026-10-20 (THE BUILD COPY, above), and the
+# patch script's "already patched" path
 # verifies only four marker lines -- so a stale or hand-edited block on the
 # copy (say `pc < bcend` turned into `pc < bc`) would be ACCEPTED and ship
 # silently, and a revised block in the script would never reach a copy that
@@ -599,24 +1235,26 @@ LJ=$LJ_WORK/src
 # run in place on such a mangling, exits 0 "already carries the penalty
 # scrub" and leaves the mangled line in.
 #
-# So the copy's lj_func.c is never the patch's input.  The PRISTINE checkout's
-# file is re-copied over it first, every build, on every platform, and the
+# So the copy's lj_func.c is never the patch's input.  The PRISTINE source's
+# file ($LJ_SRC: the pin's export, or the checkout when unpinned) is re-copied
+# over it first, every build, on every platform, and the
 # patch is applied to that: the file make compiles is then a pure function of
-# (checkout, patch script), byte-identical to a fresh patch of the pristine
+# (source tree, patch script), byte-identical to a fresh patch of the pristine
 # source, and the "already patched" path is never taken here (asserted: the
 # scrub must be ABSENT right after the re-copy).  The pre-make content
-# assertion and the lj_func.o -nt check below pin the rest.
+# assertion and the lj_func.o -nt check below pin the rest.  The copy is now
+# fresh on every run as well, so the re-take is a second guard, kept.
 SCRUB_LINE='setmref(J->penalty[i].pc, NULL);'
-grep -q -F -- "$SCRUB_LINE" "$OCLJ_LUAJIT/src/lj_func.c" \
-  && fail "$OCLJ_LUAJIT/src/lj_func.c carries the penalty scrub: the pinned
-         checkout must stay pristine.  The patch belongs on the build copy only."
-cp -f "$OCLJ_LUAJIT/src/lj_func.c" "$LJ/lj_func.c" \
-  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_func.c over $LJ/lj_func.c"
+grep -q -F -- "$SCRUB_LINE" "$LJ_SRC/src/lj_func.c" \
+  && fail "$LJ_SRC/src/lj_func.c carries the penalty scrub: the LuaJIT
+         source must stay pristine.  The patch belongs on the build copy only."
+cp -f "$LJ_SRC/src/lj_func.c" "$LJ/lj_func.c" \
+  || fail "cannot re-copy the pristine $LJ_SRC/src/lj_func.c over $LJ/lj_func.c"
 grep -q -F -- "$SCRUB_LINE" "$LJ/lj_func.c" \
   && fail "$LJ/lj_func.c still carries the penalty scrub right after the pristine
          re-copy -- the copy did not take, and the patch step would have been
          verifying a stale block instead of applying the current one"
-say "    lj_func.c: pristine copy re-taken from $OCLJ_LUAJIT/src (the build copy is never the patch's input)"
+say "    lj_func.c: pristine copy re-taken from $LJ_SRC/src (the build copy is never the patch's input)"
 sh "$OCLJ_REPO/native/luajit/patch-penalty-scrub.sh" "$LJ/lj_func.c" "$LJ/lj_func.c" \
   || fail "the penalty-scrub patch refused (see above)"
 # And it must be IN THE FILE MAKE IS ABOUT TO COMPILE, asserted by content
@@ -636,21 +1274,21 @@ say "    lj_func.c: penalty scrub present in the freshly re-derived build copy (
 # LuaJIT's unwinder dereferenced it: the process died, in a game the JVM.
 # Inside an xpcall message handler lj_err_mem hands to lj_err_err, which pushes
 # with no refresh at all.  Same steps as the scrub, for the same reasons:
-# pristine checkout asserted, re-copied, the clamp ABSENT after the copy,
+# pristine source asserted, re-copied, the clamp ABSENT after the copy,
 # patched, present exactly twice (once per push) before make, lj_err.o newer
-# after.  The absence checks match any form of the guard, so a checkout that a
+# after.  The absence checks match any form of the guard, so a source tree that a
 # different version of the patch dirtied is refused for that reason.
 ERRMEM_ANY='L->top < L->base'
 ERRMEM_LINE='  if (LJ_UNLIKELY(L->top < L->base))'
-grep -q -F -- "$ERRMEM_ANY" "$OCLJ_LUAJIT/src/lj_err.c" \
-  && fail "$OCLJ_LUAJIT/src/lj_err.c carries the ERRMEM top clamp: the pinned
-         checkout must stay pristine.  The patch belongs on the build copy only."
-cp -f "$OCLJ_LUAJIT/src/lj_err.c" "$LJ/lj_err.c" \
-  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_err.c over $LJ/lj_err.c"
+grep -q -F -- "$ERRMEM_ANY" "$LJ_SRC/src/lj_err.c" \
+  && fail "$LJ_SRC/src/lj_err.c carries the ERRMEM top clamp: the LuaJIT
+         source must stay pristine.  The patch belongs on the build copy only."
+cp -f "$LJ_SRC/src/lj_err.c" "$LJ/lj_err.c" \
+  || fail "cannot re-copy the pristine $LJ_SRC/src/lj_err.c over $LJ/lj_err.c"
 grep -q -F -- "$ERRMEM_ANY" "$LJ/lj_err.c" \
   && fail "$LJ/lj_err.c still carries the ERRMEM top clamp right after the
          pristine re-copy -- the copy did not take"
-say "    lj_err.c: pristine copy re-taken from $OCLJ_LUAJIT/src"
+say "    lj_err.c: pristine copy re-taken from $LJ_SRC/src"
 sh "$OCLJ_REPO/native/luajit/patch-fastfunc-errmem-top.sh" "$LJ/lj_err.c" "$LJ/lj_err.c" \
   || fail "the ERRMEM top-clamp patch refused (see above)"
 [ "$(grep -c -F -- "$ERRMEM_LINE" "$LJ/lj_err.c")" = "2" ] \
@@ -663,20 +1301,20 @@ say "    lj_err.c: ERRMEM top clamp present twice in the freshly re-derived buil
 # on an int-typed operand: the trace stitches around the call, and a hot loop
 # runs 1.6-2.1x slower when its strings repeat, 1.2x when each is new
 # (2026-10-16).  Same steps as the scrub and the clamp:
-# pristine checkout asserted, re-copied, the fallback ABSENT after the copy,
+# pristine source asserted, re-copied, the fallback ABSENT after the copy,
 # patched, present exactly once before make, lj_ffrecord.o newer after; the
 # FFI / integer-format gate after the CHECKHOOK probe proves the loop compiles
 # and prints what the interpreter prints.
 FMTX_MARK='OC-LuaJIT (native/luajit/patch-strfmt-xint-noffi.sh)'
-grep -q -F -- "$FMTX_MARK" "$OCLJ_LUAJIT/src/lj_ffrecord.c" \
-  && fail "$OCLJ_LUAJIT/src/lj_ffrecord.c carries the no-FFI integer-format fallback:
-         the pinned checkout must stay pristine.  The patch belongs on the build copy only."
-cp -f "$OCLJ_LUAJIT/src/lj_ffrecord.c" "$LJ/lj_ffrecord.c" \
-  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_ffrecord.c over $LJ/lj_ffrecord.c"
+grep -q -F -- "$FMTX_MARK" "$LJ_SRC/src/lj_ffrecord.c" \
+  && fail "$LJ_SRC/src/lj_ffrecord.c carries the no-FFI integer-format fallback:
+         the LuaJIT source must stay pristine.  The patch belongs on the build copy only."
+cp -f "$LJ_SRC/src/lj_ffrecord.c" "$LJ/lj_ffrecord.c" \
+  || fail "cannot re-copy the pristine $LJ_SRC/src/lj_ffrecord.c over $LJ/lj_ffrecord.c"
 grep -q -F -- "$FMTX_MARK" "$LJ/lj_ffrecord.c" \
   && fail "$LJ/lj_ffrecord.c still carries the integer-format fallback right after the
          pristine re-copy -- the copy did not take"
-say "    lj_ffrecord.c: pristine copy re-taken from $OCLJ_LUAJIT/src"
+say "    lj_ffrecord.c: pristine copy re-taken from $LJ_SRC/src"
 sh "$OCLJ_REPO/native/luajit/patch-strfmt-xint-noffi.sh" "$LJ/lj_ffrecord.c" "$LJ/lj_ffrecord.c" \
   || fail "the no-FFI integer-format patch refused (see above)"
 [ "$(grep -c -F -- "$FMTX_MARK" "$LJ/lj_ffrecord.c")" = "1" ] \
@@ -687,17 +1325,17 @@ say "    lj_ffrecord.c: no-FFI integer-format fallback present in the freshly re
 # (native/luajit/patch-features-include.sh), the one file that names the
 # feature set (THE LUAJIT FEATURE SET, in this script's header).  The header
 # is copied in from native/luajit and compared; lj_arch.h is re-taken from the
-# pristine checkout and patched like the three .c files; and the include must
+# pristine source and patched like the three .c files; and the include must
 # be there exactly once, directly after lua.h, before make runs.
 FEAT_INC='#include "oclj_features.h"'
-grep -q -F -- "$FEAT_INC" "$OCLJ_LUAJIT/src/lj_arch.h" \
-  && fail "$OCLJ_LUAJIT/src/lj_arch.h includes oclj_features.h: the pinned checkout must
+grep -q -F -- "$FEAT_INC" "$LJ_SRC/src/lj_arch.h" \
+  && fail "$LJ_SRC/src/lj_arch.h includes oclj_features.h: the LuaJIT source must
          stay pristine.  The include belongs on the build copy only."
-[ -e "$OCLJ_LUAJIT/src/oclj_features.h" ] \
-  && fail "$OCLJ_LUAJIT/src/oclj_features.h exists: the pinned checkout must stay pristine.
+[ -e "$LJ_SRC/src/oclj_features.h" ] \
+  && fail "$LJ_SRC/src/oclj_features.h exists: the LuaJIT source must stay pristine.
          The feature header lives in native/luajit and is copied to the build copy only."
-cp -f "$OCLJ_LUAJIT/src/lj_arch.h" "$LJ/lj_arch.h" \
-  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lj_arch.h over $LJ/lj_arch.h"
+cp -f "$LJ_SRC/src/lj_arch.h" "$LJ/lj_arch.h" \
+  || fail "cannot re-copy the pristine $LJ_SRC/src/lj_arch.h over $LJ/lj_arch.h"
 grep -q -F -- "$FEAT_INC" "$LJ/lj_arch.h" \
   && fail "$LJ/lj_arch.h still includes oclj_features.h right after the pristine re-copy --
          the copy did not take"
@@ -721,7 +1359,7 @@ say "    lj_arch.h: includes oclj_features.h once, right after lua.h (asserted b
 # LuaJIT is a fork that may take 5.3 functions (decided 2026-10-13), and
 # luaopen_string is the one opener that jnlua's openlib(STRING), luajit.exe's
 # luaL_openlibs and every native test reach.  Same steps as the four above:
-# pristine checkout asserted (no registration, no oclj_strpack.c), lib_string.c
+# pristine source asserted (no registration, no oclj_strpack.c), lib_string.c
 # re-copied, the registration ABSENT after the copy, the code copied and
 # compared, patched, present exactly once before make; after make,
 # lib_string.o newer than both files, the fast-function table naming all
@@ -729,14 +1367,14 @@ say "    lj_arch.h: includes oclj_features.h once, right after lua.h (asserted b
 STRPACK_MARK='OC-LuaJIT (native/luajit/patch-strpack-register.sh)'
 STRPACK_C=$OCLJ_REPO/native/luajit/oclj_strpack.c
 [ -f "$STRPACK_C" ] || fail "no $STRPACK_C: the code of string.pack/packsize/unpack"
-grep -q -F -- "$STRPACK_MARK" "$OCLJ_LUAJIT/src/lib_string.c" \
-  && fail "$OCLJ_LUAJIT/src/lib_string.c registers string.pack: the pinned checkout must stay
+grep -q -F -- "$STRPACK_MARK" "$LJ_SRC/src/lib_string.c" \
+  && fail "$LJ_SRC/src/lib_string.c registers string.pack: the LuaJIT source must stay
          pristine.  The registration belongs on the build copy only."
-[ -e "$OCLJ_LUAJIT/src/oclj_strpack.c" ] \
-  && fail "$OCLJ_LUAJIT/src/oclj_strpack.c exists: the pinned checkout must stay pristine.
+[ -e "$LJ_SRC/src/oclj_strpack.c" ] \
+  && fail "$LJ_SRC/src/oclj_strpack.c exists: the LuaJIT source must stay pristine.
          The code lives in native/luajit and is copied to the build copy only."
-cp -f "$OCLJ_LUAJIT/src/lib_string.c" "$LJ/lib_string.c" \
-  || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/lib_string.c over $LJ/lib_string.c"
+cp -f "$LJ_SRC/src/lib_string.c" "$LJ/lib_string.c" \
+  || fail "cannot re-copy the pristine $LJ_SRC/src/lib_string.c over $LJ/lib_string.c"
 grep -q -F -- "$STRPACK_MARK" "$LJ/lib_string.c" \
   && fail "$LJ/lib_string.c still registers string.pack right after the pristine re-copy --
          the copy did not take"
@@ -765,7 +1403,7 @@ say "    lib_string.c: registers string.pack/packsize/unpack once (asserted by c
 # and five tracked files copied next to them: those three, oclj_bitop.h (the
 # rules) and oclj_num53.h (5.3.6's number readers, which oclj_strpack.c
 # includes too, so it is copied before any make).  Same steps as the five
-# above, per file: the pristine checkout asserted (no round-3 marker, none of
+# above, per file: the pristine source asserted (no round-3 marker, none of
 # the five files), the file re-copied, no round-3 marker after the copy,
 # patched, its own script's marker exactly once and no other script's before
 # make, and each include it gained present once; the five files copied and
@@ -785,8 +1423,8 @@ BITOP_FILES='oclj_bitop.h oclj_bitop_meta.c oclj_bitop_rec.c oclj_bitop_fold.c o
 BITOP_PATCHES='lj_parse.c:parse vm_x64.dasc:vm lj_meta.c:meta lj_record.c:record lj_opt_fold.c:fold lj_bcdump.h:bcdump lib_jit.c:jitlib'
 for f in $BITOP_FILES; do
   [ -f "$OCLJ_REPO/native/luajit/$f" ] || fail "no $OCLJ_REPO/native/luajit/$f: round 3's bitwise operators"
-  [ -e "$OCLJ_LUAJIT/src/$f" ] \
-    && fail "$OCLJ_LUAJIT/src/$f exists: the pinned checkout must stay pristine.
+  [ -e "$LJ_SRC/src/$f" ] \
+    && fail "$LJ_SRC/src/$f exists: the LuaJIT source must stay pristine.
          The file lives in native/luajit and is copied to the build copy only."
   cp -f "$OCLJ_REPO/native/luajit/$f" "$LJ/$f" || fail "cannot copy native/luajit/$f into $LJ"
   cmp -s "$OCLJ_REPO/native/luajit/$f" "$LJ/$f" \
@@ -796,11 +1434,11 @@ say "    $BITOP_FILES: copied from native/luajit and compared"
 for p in $BITOP_PATCHES; do
   f=${p%%:*}
   s=patch-bitop-${p#*:}.sh
-  grep -q -F -- "$BITOP_ANY" "$OCLJ_LUAJIT/src/$f" \
-    && fail "$OCLJ_LUAJIT/src/$f carries a round-3 bit-operator patch: the pinned checkout must
+  grep -q -F -- "$BITOP_ANY" "$LJ_SRC/src/$f" \
+    && fail "$LJ_SRC/src/$f carries a round-3 bit-operator patch: the LuaJIT source must
          stay pristine.  The patch belongs on the build copy only."
-  cp -f "$OCLJ_LUAJIT/src/$f" "$LJ/$f" \
-    || fail "cannot re-copy the pristine $OCLJ_LUAJIT/src/$f over $LJ/$f"
+  cp -f "$LJ_SRC/src/$f" "$LJ/$f" \
+    || fail "cannot re-copy the pristine $LJ_SRC/src/$f over $LJ/$f"
   grep -q -F -- "$BITOP_ANY" "$LJ/$f" \
     && fail "$LJ/$f still carries a round-3 patch right after the pristine re-copy -- the copy did not take"
   sh "$OCLJ_REPO/native/luajit/$s" "$LJ/$f" "$LJ/$f" || fail "the round-3 patch $s refused (see above)"
@@ -1379,13 +2017,14 @@ end
 local fr, hr = f({ true, false, true }), hot(300)
 print("jitlib f=" .. fr .. " hot=" .. hr .. " snapend=" .. snapend() .. " bc=" .. count(debug.getinfo(1, "f").func))
 EOF
-# Absolute paths: the three runs cd into $LJ first.
-JL_DIR=$(CDPATH= cd -- "$OCLJ_BUILD" && pwd)
+# Absolute paths: the three runs cd into $LJ first (cd -P, as everywhere here;
+# $OCLJ_BUILD is physical already: THE INPUT DIRECTORIES, in the preflight).
+JL_DIR=$(CDPATH= cd -P -- "$OCLJ_BUILD" && pwd -P)
 JL_PROBE=$JL_DIR/jitlib.lua
 JL_EXE=./$(basename "$LJEXE")
-JL_LINE=$(cd "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" "$JL_PROBE" 2>&1 | tr -d '\r')
-JL_BL=$(cd "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" -bl "$JL_PROBE" 2>"$JL_DIR/jitlib-bl.err" | tr -d '\r')
-JL_JD=$(cd "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" -jdump=T "$JL_PROBE" 2>&1 | tr -d '\r')
+JL_LINE=$(CDPATH= cd -P -- "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" "$JL_PROBE" 2>&1 | tr -d '\r')
+JL_BL=$(CDPATH= cd -P -- "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" -bl "$JL_PROBE" 2>"$JL_DIR/jitlib-bl.err" | tr -d '\r')
+JL_JD=$(CDPATH= cd -P -- "$LJ" && LUA_PATH='./?.lua' "$JL_EXE" -jdump=T "$JL_PROBE" 2>&1 | tr -d '\r')
 jl_n() { printf '%s\n' "$1" | grep -c -E -- "$2" || true; }
 jl_x() { printf '%s\n' "$1" | grep -c -x -F -- "$2" || true; }
 JL_DEC=$(( $(jl_x "$JL_BL" '0001    KSHORT   1  -1') + $(jl_x "$JL_BL" '0005    FORI     2 => 0011') + $(jl_x "$JL_BL" '0008    JMP      7 => 0010') ))
@@ -1495,7 +2134,8 @@ case "$PROBE" in
     fail "the allocator/layout probe said '$PROBE'" ;;
 esac
 case $LJ_GG in ''|*[!0-9]*) fail "the allocator/layout probe said '$PROBE'" ;; esac
-NEGI=$OCLJ_BUILD/layoutneg-$PLATFORM
+# NEGI is $OCLJ_BUILD/layoutneg-<platform>, set in the preflight's THE
+# DIRECTORIES THIS SCRIPT REMOVES, which refuses a checkout inside it.
 rm -rf "$NEGI"
 mkdir -p "$NEGI" || fail "cannot create $NEGI"
 cp "$LJ"/*.h "$NEGI"/ || fail "cannot copy $LJ/*.h for the layout gate's negative arm"
@@ -1685,7 +2325,7 @@ fi
 say "=============== 4. eris_lj.c ==============="
 
 # THE BLOB FINGERPRINT HAS TO COVER THE SERIALIZER, and it did not.  LJ_COMMIT
-# above is the LUAJIT tree's HEAD, so every edit to eris_lj.c shipped under an
+# above names the LUAJIT tree (the pin), so every edit to eris_lj.c shipped under an
 # unchanged fingerprint: a blob written by the old restore code loaded silently
 # under the new one, which is precisely the failure the fingerprint exists to
 # refuse.  Hash the sources rather than trust a commit id -- this repo is built
@@ -1986,6 +2626,8 @@ fi
 SZ=$(wc -c < "$OCLJ_OUT/$DLL_NAME")
 SHA=$(sha256sum "$OCLJ_OUT/$DLL_NAME" 2>/dev/null | cut -c1-16)
 stamp "OK  $OCLJ_OUT/$DLL_NAME  ${SZ} bytes  sha256:${SHA}..."
+[ -z "$LJ_UNPINNED_NOTE" ] || echo "WARNING: $LJ_UNPINNED_NOTE.  gradle refuses to package it, its blobs do not restore on a pinned native, and it is not collected into dist." >&2
+[ -z "$LJ_DIRTY_NOTE" ] || echo "WARNING: $LJ_DIRTY_NOTE: this native is the pin's committed tree (see the WARNING in step 1)." >&2
 
 # COLLECT ADDITIVE ARTIFACTS FOR PACKAGING.
 #
@@ -2000,7 +2642,13 @@ stamp "OK  $OCLJ_OUT/$DLL_NAME  ${SZ} bytes  sha256:${SHA}..."
 # name, which is right for the benchmark harness and catastrophic in a jar --
 # OC own factory would find it and replace the 5.2 VM for every computer. The
 # gradle side refuses it by name as well; this is the first of the two gates.
-if [ "$OCLJ_VARIANT" = additive ]; then
+#
+# Nor is an UNPINNED native (OCLJ_LUAJIT_UNPINNED=1): gradle refuses it, so in
+# dist it would only displace the release library, and the next jar build
+# would fail until a pinned rebuild.
+if [ "$OCLJ_VARIANT" = additive ] && [ -n "$LJ_UNPINNED_NOTE" ]; then
+  say "NOT collected into $OCLJ_BUILD/dist: an OCLJ_LUAJIT_UNPINNED=1 native never ships (dist left as it was)"
+elif [ "$OCLJ_VARIANT" = additive ]; then
   DIST="$OCLJ_BUILD/dist"
   mkdir -p "$DIST" || fail "cannot create $DIST"
   cp "$OCLJ_OUT/$DLL_NAME" "$DIST/$DLL_NAME" || fail "cannot collect $DLL_NAME into $DIST"
@@ -2016,8 +2664,13 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 # =====================================================================
 # PREREQUISITES -- how to obtain every external input, from nothing
 # ---------------------------------------------------------------------
-# 1. MinGW-w64 x86_64 gcc (msvcrt or ucrt).  Verified with 15.2.0 at
-#    C:/mingw64/bin/gcc.  Add it to PATH.  GNU make comes with it.
+# 1. MinGW-w64 x86_64 gcc (msvcrt or ucrt), on PATH.  GNU make comes with it
+#    as mingw32-make; this script calls `make`, so put a two-line `make` that
+#    runs mingw32-make on PATH too.  THE RELEASE DLL IS BUILT WITH WinLibs'
+#    gcc 16.2.0 (x86_64-msvcrt-posix-seh, "built by Brecht Sanders, r1", which
+#    the DLL's own GCC strings name), binutils 2.47 and GNU make 4.4.1
+#    (2026-10-20).  The toolchain is not pinned (THE BUILD ENVIRONMENT): another
+#    gcc builds, and gives other objects.
 #
 # 2. A Windows JDK's include/ directory, for jni.h and win32/jni_md.h.
 #    Any JDK 8 or newer works; the DLL only uses JNI 1.6 surface.
@@ -2030,16 +2683,23 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #    Only native/src/jnlua.c is consumed.  Its gradle build is not used.
 #
 # 4. LuaJIT: a checkout at prototype/watchdog/luajit (gitignored; `make -C
-#    prototype/watchdog luajit-src` clones it), pinned to upstream 1ee778a4,
-#    whose LUAJIT_ENABLE_CHECKHOOK is upstream's own option (lj_record.c:691,
-#    :2953).  The checkout stays pristine: this script builds a COPY with
+#    prototype/watchdog luajit-src` clones it and checks the pin out), at the
+#    upstream commit native/luajit/upstream.commit names (1ee778a4 when this
+#    was written; THE PIN, in the preflight, which refuses any other HEAD
+#    unless OCLJ_LUAJIT_UNPINNED=1), with git on PATH and the checkout's own
+#    .git, from which step 1 exports the pin's committed tree (git archive,
+#    checked object by object against the pin's 40 digits: EVERY GIT CALL ON
+#    THE PINNED PATH, in the preflight), whose LUAJIT_ENABLE_CHECKHOOK is
+#    upstream's own option (lj_record.c:691, :2953).  The checkout stays
+#    pristine: this script builds a COPY with
 #    native/luajit/oclj_features.h and the twelve changes in native/luajit/
 #    (the fifth adds native/luajit/oclj_strpack.c to lib_string.c; the sixth
 #    to the twelfth, round 3's seven patch-bitop-*.sh, patch seven files and
 #    add oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c
-#    and oclj_num53.h to them).  Another LuaJIT commit is untested: the
-#    twelve patch scripts' exactly-once anchors and the behaviour gates are
-#    what refuse a tree that changed shape.
+#    and oclj_num53.h to them).  Another LuaJIT commit is untested, and
+#    refused unless OCLJ_LUAJIT_UNPINNED=1; past that, the twelve patch
+#    scripts' exactly-once anchors and the behaviour gates are what refuse a
+#    tree that changed shape.  Bumping the pin: docs/jit-guide.md 8.2a.
 #
 # 5. For OCLJ_VARIANT=additive only: Python 3 (python3 or python on PATH, or
 #    OCLJ_PYTHON), to regenerate LuaStateLuaJIT.java and compare it with the
@@ -2049,22 +2709,23 @@ echo "  OCLJ_LIBDIR=$OCLJ_OUT sh $OCLJ_REPO/test/native/smoke-test.sh"
 #
 # 7. On Linux: gcc, GNU make, binutils (readelf, objdump, nm), a JDK's
 #    include/ directory (jni.h and linux/jni_md.h), and item 5's Python 3.
-#    THE RELEASE .so IS BUILT IN ALMALINUX 8 (glibc 2.28, gcc 8.5.0, binutils
-#    2.30; the JDK from java-1.8.0-openjdk-devel), with OCLJ_GLIBC_MAX=2.28:
+#    THE RELEASE .so IS BUILT IN ALMALINUX 8 (glibc 2.28, gcc 8.5.0 20210514
+#    "Red Hat 8.5.0-29", which the .so's .comment names, binutils 2.30, GNU
+#    make 4.2.1; the JDK from java-1.8.0-openjdk-devel), with
+#    OCLJ_GLIBC_MAX=2.28 (the toolchain is not pinned, as on Windows):
 #      OCLJ_JNI=/usr/lib/jvm/java-1.8.0-openjdk/include
 #    Each import carries the version the LINKING host's glibc offers for it,
 #    so the floor is the build host's: Ubuntu 26.04 (glibc 2.43, gcc 15.2)
 #    gives a .so that needs GLIBC_2.38 (fmod, __isoc23_strtoul) and does not
 #    load on Ubuntu 22.04, Debian 12 or RHEL 9 (2026-10-19).  Step 6 reports
 #    it, or enforces OCLJ_GLIBC_MAX.
-#    The LuaJIT checkout's commit goes into the blob fingerprint (git_head):
-#    from git when it can read the checkout's own .git, else from .git/HEAD
-#    (a detached hash, a loose ref or a packed-refs line).  With neither, the
-#    build fails ("cannot read the LuaJIT checkout's commit"): a native that
-#    stamped "unknown" could never restore a blob another build wrote
-#    (eris_lj.c refuses a blob whose fingerprint differs).  AlmaLinux 8 had
-#    no git until 2026-10-19; it has git 2.43.7 now, and both ways give
-#    byte-identical libraries.
+#    And git (AlmaLinux 8: dnf install git; it has git 2.43.7): a pinned
+#    build refuses to run without it ("no git on PATH"), because it exports
+#    the pin's tree with git archive and checks the checkout's HEAD.  The
+#    blob fingerprint's commit is the pin's first 8 digits, as on Windows; a
+#    native that stamped "unknown" (AlmaLinux 8 before 2026-10-19) could
+#    never restore a blob another build wrote (eris_lj.c refuses a blob whose
+#    fingerprint differs).
 #
 # The smoke test needs three more things (ocelot-brain, its jar deps, and a
 # Scala compiler); see the header of smoke-test.sh.

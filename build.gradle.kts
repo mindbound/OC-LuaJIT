@@ -104,6 +104,8 @@ val verifyModAssets by tasks.registering {
     val serC = project.file("serializer/eris_lj.c")
     val serH = project.file("serializer/eris_lj.h")
     val floor = glibcFloor
+    val pinName = "native/luajit/upstream.commit"
+    val pinFile = project.file(pinName)
 
     doLast {
         val present = (nativesFile.listFiles() ?: emptyArray()).sortedBy { it.name }
@@ -183,6 +185,63 @@ val verifyModAssets by tasks.registering {
                 )
             }
             logger.lifecycle("OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (" + want + ")")
+        }
+
+        // THE NATIVE MUST HAVE BEEN BUILT FROM THE PINNED LUAJIT.  The blob
+        // fingerprint's first field names the LuaJIT tree the native was built
+        // from, and the pin is native/luajit/upstream.commit, the one file every
+        // reader of the pin reads (since 2026-10-20).  A pinned build-native.sh run
+        // refuses a checkout whose HEAD is not the pin, compiles the pin's committed
+        // tree (git archive, never the working tree) and stamps the pin's first 8 hex
+        // digits; OCLJ_LUAJIT_UNPINNED=1, for local experiments, builds the checkout's
+        // working tree and stamps 'unpinned', so a native built that way is refused
+        // here; so is one that names 'unknown', from before build-native.sh could
+        // read the commit without git (AlmaLinux 8, 2026-10-19), or one that names
+        // another commit, from before 2026-10-20.  Either way its blobs and a pinned
+        // native's would not restore on each other: eris_lj.c compares the whole
+        // fingerprint.  The fingerprint is <commit>|LuaJIT <version>|<serializer
+        // hash>|<word>, one literal in the binary, and the field is read from it as
+        // the whole run of printable characters, '|' excepted, directly before
+        // "|LuaJIT <version>|<8 hex digits>|": every place that shape occurs must name
+        // the pin's first 8 digits, and a native in which it occurs nowhere is refused
+        // too.  This runs after the serializer check, so a native from another
+        // serializer is refused in that check's words, as before.
+        if (ours.isNotEmpty()) {
+            val pinBytes = if (pinFile.isFile) pinFile.readBytes() else ByteArray(0)
+            val pinText = String(pinBytes, Charsets.ISO_8859_1)
+            if (!Regex("[0-9a-f]{40}\n?").matches(pinText)) {
+                throw GradleException(
+                    "OC-LuaJIT: the LuaJIT pin $pinName " +
+                        (if (pinFile.isFile) "(${pinBytes.size} bytes) is not one commit" else "is missing") +
+                        ": it must hold exactly 40 lowercase hex digits and an optional newline (LF), " +
+                        "and every native's fingerprint is checked against its first 8. build-native.sh " +
+                        "refuses the same file before it builds anything."
+                )
+            }
+            val pin = pinText.take(40)
+            val pin8 = pin.take(8)
+            val shape = Regex("(?<![!-{}~])([!-{}~]{0,64})[|]LuaJIT [ -{}~]{1,64}[|][0-9a-f]{8}[|]")
+            val unpinned = ours.mapNotNull { f ->
+                val named = shape.findAll(String(f.readBytes(), Charsets.ISO_8859_1))
+                    .map { m -> m.groupValues[1] }.toSortedSet()
+                if (named.size == 1 && named.first() == pin8) null else f.name to named
+            }
+            if (unpinned.isNotEmpty()) {
+                throw GradleException(
+                    "OC-LuaJIT: " + unpinned.joinToString { (n, named) ->
+                        n + " (" + (if (named.isEmpty()) "no LuaJIT commit found in its fingerprint" else
+                            "LuaJIT " + named.joinToString(", ") { c -> if (c.isEmpty()) "''" else c }) + ")"
+                    } + " was NOT built from the pinned LuaJIT commit " + pin8 + " (" + pinName + ": " + pin +
+                        "). Its blob fingerprint names the commit it was built from, so its blobs and a " +
+                        "pinned native's would not restore on each other. build-native.sh refuses a LuaJIT " +
+                        "checkout at another commit and compiles the pin's committed tree; " +
+                        "'unpinned' is from an OCLJ_LUAJIT_UNPINNED=1 build of a checkout's working tree, " +
+                        "which is for local experiments only; 'unknown' is from a build that could not read the commit. " +
+                        "Rebuild it from the pinned checkout (make -C prototype/watchdog luajit-src): " +
+                        "OCLJ_VARIANT=additive sh native/build-native.sh"
+                )
+            }
+            logger.lifecycle("OC-LuaJIT: native fingerprint names the pinned LuaJIT commit $pin8 ($pinName)")
         }
 
         // THE NATIVE MUST BACK THE CLASS IN THIS TREE.  LuaStateLuaJIT declares four

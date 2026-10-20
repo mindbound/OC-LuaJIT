@@ -1,0 +1,17 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because the set of Gradle properties has changed: the values of 'ocljit.kernelDir' and 'ocljit.nativesDir' were changed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+
+> Task :verifyModAssets
+OC-LuaJIT: packaging 1 native(s): libjnluajit52-windows-x86_64.dll (739237 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+OC-LuaJIT: native fingerprint names the pinned LuaJIT commit 1ee778a4 (native/luajit/upstream.commit)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+OC-LuaJIT: no patched kernel in 'C:/Users/astro/claude-tmp/oclj/pin5/final/run-main/gradle/no-kernel-here' -- this jar will carry none, so machines will run on OpenComputers' own machine.lua and its standing deadline hook. They will work; the JIT will thrash. Build one with 'sh native/kernel/build-kernel.sh'. (Expected on CI.)
+
+BUILD SUCCESSFUL in 4s
+1 actionable task: 1 executed
+Configuration cache entry stored.

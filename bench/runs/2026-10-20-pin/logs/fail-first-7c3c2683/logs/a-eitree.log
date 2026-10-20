@@ -1,0 +1,21 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] pin     = 7d1132fb162efbd8375d13f5925fb5a7fcb3288c (/c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/t/fakerepo-eitree/native/luajit/upstream.commit)
+[build] cc      = gcc.exe (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r1) 16.2.0
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+[build] pin     = met: the checkout's HEAD is the pin, whose commit object hashes to it and names the tree 01dece0c626305f3cac3bad6d46042fda0ac2520; step 1 compiles that tree (git archive, checked), not the working tree
+[build] luajit  = /c/Users/astro/claude-tmp/oclj/pin3/impl/clones/lj-eitree @ 7d1132fb (feature set: native/luajit/oclj_features.h)
+[build] jnlua   = C:/Users/astro/Downloads/OC-JNLua @ da3d4d45
+[build] shim    = /c/Users/astro/Downloads/OC-LuaJIT/native
+[build] out     = /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/b/a-eitree/libdir-additive/libjnluajit52-windows-x86_64.dll
+[build] =============== 1. LuaJIT 2.1 (static) ===============
+[build]     XCFLAGS=   BUILDMODE=static
+[build]     features (native/luajit/oclj_features.h): LUAJIT_ENABLE_LUA52COMPAT LUAJIT_ENABLE_CHECKHOOK LUAJIT_DISABLE_FFI 
+BUILD FAIL: the export /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/b/a-eitree/luajit-export-windows-x86_64 holds 231 files, and the pin's tree lists 232
+         (git ls-tree -r 01dece0c626305f3cac3bad6d46042fda0ac2520): it is not the pin's committed tree.  Likely
+         cause: an export-ignore attribute (the tree's .gitattributes,
+         /c/Users/astro/claude-tmp/oclj/pin3/impl/clones/lj-eitree/.git/info/attributes, core.attributesFile, the system
+         gitattributes, or configuration from the environment, GIT_* set now:
+         GIT_EDITOR).  A pin whose tree sets one needs this step changed
+         deliberately.

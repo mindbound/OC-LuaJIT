@@ -1,0 +1,33 @@
+build w1-add rc=0 secs=32
+build w1-drop rc=0 secs=35
+wsl alma secs=30
+build g2-inject rc=0 secs=35
+build mo rc=0 secs=35
+build a-replace rc=0 secs=36
+build a-envcfg rc=1 secs=4
+build a-forgeblob rc=1 secs=4
+build a-f7-8 rc=1 secs=4
+build a-dirty rc=0 secs=33
+build a-infoattr rc=1 secs=4
+build a-eitree rc=1 secs=5
+build u2-dd rc=1 secs=1
+build u2-case rc=1 secs=1
+build u3-case rc=1 secs=1
+build u3-new rc=1 secs=1
+build u3-dd rc=1 secs=1
+build u2l rc=0 secs=34
+build t1 rc=1 secs=0
+build t2 rc=0 secs=33
+build t4 rc=1 secs=1
+build shimdot rc=1 secs=0
+build serdot rc=1 secs=0
+build g3-in rc=1 secs=0
+build g3-case rc=1 secs=2
+build g3-junction rc=1 secs=1
+build g3-build rc=1 secs=3
+build h2 rc=1 secs=1
+build h2dist rc=1 secs=1
+build unpinned rc=0 secs=33
+gradle pinned secs=5
+gradle unpinned secs=5
+negctl-bitop secs=80

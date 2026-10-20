@@ -1,0 +1,4 @@
+[build]     export verified: the commit object hashes to the pin, 8 trees to their names, 232 files to the pin's blob ids
+[build]     glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28
+[build]     export verified: the commit object hashes to the pin, 8 trees to their names, 232 files to the pin's blob ids
+[build]     glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28

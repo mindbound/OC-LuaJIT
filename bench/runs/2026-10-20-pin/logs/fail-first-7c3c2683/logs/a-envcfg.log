@@ -1,0 +1,24 @@
+[build] =============== 0. preflight ===============
+[build] host    = windows-x86_64   (lib*.dll, jni_md in win32/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] pin     = 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/c/Users/astro/Downloads/OC-LuaJIT/native/luajit/upstream.commit)
+[build] cc      = gcc.exe (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r1) 16.2.0
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+[build] pin     = met: the checkout's HEAD is the pin, whose commit object hashes to it and names the tree 7a0348e88695de3c55b575836ad7ce99e7d2645a; step 1 compiles that tree (git archive, checked), not the working tree
+[build] luajit  = /c/Users/astro/claude-tmp/oclj/pin3/impl/clones/lj-clean @ 1ee778a4 (feature set: native/luajit/oclj_features.h)
+[build] jnlua   = C:/Users/astro/Downloads/OC-JNLua @ da3d4d45
+[build] shim    = /c/Users/astro/Downloads/OC-LuaJIT/native
+[build] out     = /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/b/a-envcfg/libdir-additive/libjnluajit52-windows-x86_64.dll
+[build] =============== 1. LuaJIT 2.1 (static) ===============
+[build]     XCFLAGS=   BUILDMODE=static
+[build]     features (native/luajit/oclj_features.h): LUAJIT_ENABLE_LUA52COMPAT LUAJIT_ENABLE_CHECKHOOK LUAJIT_DISABLE_FFI 
+    not the pin's bytes: src/lj_opt_mem.c
+BUILD FAIL: the export /c/Users/astro/claude-tmp/oclj/pin5/ff-7c3c/b/a-envcfg/luajit-export-windows-x86_64 is not the pin's committed tree byte for byte:
+         232 of 232 files hashed, and the files above do not hash to the
+         blob ids the pin's tree gives them.  Likely causes: a filter, ident, eol
+         or working-tree-encoding attribute (the tree's .gitattributes,
+         /c/Users/astro/claude-tmp/oclj/pin3/impl/clones/lj-clean/.git/info/attributes, core.attributesFile, the system
+         gitattributes), configuration from the environment (GIT_CONFIG_COUNT,
+         GIT_CONFIG_PARAMETERS, GIT_ATTR_SOURCE; GIT_* set now: GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_KEY_1 GIT_CONFIG_VALUE_0 GIT_CONFIG_VALUE_1 GIT_EDITOR), or a
+         forged or corrupted blob in /c/Users/astro/claude-tmp/oclj/pin3/impl/clones/lj-clean/.git.  Re-clone the checkout, or
+         remove the attribute or variable.
