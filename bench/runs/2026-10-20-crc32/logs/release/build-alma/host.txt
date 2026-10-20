@@ -1,0 +1,7 @@
+"AlmaLinux 8.10 (Cerulean Leopard)"
+glibc 2.28
+gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-29)
+GNU ld version 2.30-128.el8_10
+/usr/bin/git
+OCLJ_BUILD=/mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native OCLJ_GLIBC_MAX=2.28
+47b9c52eecce550b57871d8448593bc3  /mnt/c/Users/astro/Downloads/OC-LuaJIT/native/build-native.sh

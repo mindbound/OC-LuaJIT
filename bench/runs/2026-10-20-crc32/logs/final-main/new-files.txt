@@ -1,0 +1,6 @@
+test/native/bitop/phiidx.lua
+test/native/bitop/t_cnt33.lua
+test/native/bitop/t_idx.lua
+test/native/bitop/t_idx2.lua
+test/native/bitop/t_rg2.lua
+test/native/bitop/twin.lua

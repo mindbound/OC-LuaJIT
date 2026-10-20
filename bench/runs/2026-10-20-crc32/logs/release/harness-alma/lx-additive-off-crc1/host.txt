@@ -1,0 +1,9 @@
+AlmaLinux 8.10 (Cerulean Leopard)
+glibc 2.28
+Linux 6.18.54.1-microsoft-standard-WSL2 x86_64
+OCLJ_JAVA=/usr/lib/jvm/java-1.8.0-openjdk
+openjdk version "1.8.0_504"
+OpenJDK Runtime Environment (build 1.8.0_504-b01)
+    file.encoding = UTF-8
+    sun.jnu.encoding = UTF-8
+patcher /mnt/c/Users/astro/claude-tmp/oclj/new-crc-linux-da5a3b13/luajit-linux-x86_64/src/luajit: LuaJIT 2.1.ROLLING -- Copyright (C) 2005-2026 Mike Pall. https://luajit.org/

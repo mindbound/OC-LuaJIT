@@ -1,0 +1,7 @@
+round 1 done 17:51:41Z order: base new b0 puc
+round 2 done 17:52:25Z order: new b0 puc base
+round 3 done 17:53:08Z order: b0 puc base new
+round 4 done 17:53:52Z order: puc base new b0
+round 5 done 17:54:35Z order: base new b0 puc
+round 6 done 17:55:19Z order: new b0 puc base
+round 7 done 17:56:02Z order: b0 puc base new

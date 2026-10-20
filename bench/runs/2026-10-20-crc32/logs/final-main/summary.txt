@@ -1,0 +1,57 @@
+PASS W-rc: build-native.sh (additive) into a fresh OCLJ_BUILD succeeds
+PASS W-pin: the pin is met and the export verified (8 trees, 232 files)
+PASS W-ignored-none: nothing ignored from the environment
+PASS W-patch: patch-bitop-fold.sh reports the table-index fold, 63 added and 8 removed
+PASS W-objects: 77 LuaJIT objects, only lj_opt_fold.o differs from build/native's; our 3 objects equal
+PASS W-fold-object: lj_opt_fold.o is the implementer's (1d018acc8b2ce53076dfbb2e63aa5cdd)
+PASS ALMA-ran: the AlmaLinux 8 part ran to its end
+PASS ALMA-rc: build-native.sh (additive, OCLJ_GLIBC_MAX=2.28) succeeds
+PASS ALMA-ignored-none: nothing ignored from the environment
+PASS ALMA-patch: patch-bitop-fold.sh reports the table-index fold, 63 added and 8 removed
+PASS ALMA-glibc: the library needs GLIBC 2.28 at most (needs 2.17)
+PASS ALMA-objects: 77 LuaJIT objects, only lj_opt_fold.o differs from build/native's Linux tree; our 3 objects equal
+PASS ALMA-fold-object: lj_opt_fold.o is the implementer's AlmaLinux 8 one (33a2cc50e40803c75555753124faa06f)
+PASS ALMA-bitjit: run-bitjit.sh, all four parts, the Linux PUC: PASS
+PASS ALMA-gen-idx: the generator in its idx mode, seeds 1-4: PASS
+PASS ALMA-gen-rg2: the generator in its rg2 mode, seeds 1-4: PASS
+PASS BITJIT-all: run-bitjit.sh, all four parts (gen, floor with t_rg2, fix1, idx), PUC set: PASS
+PASS BITJIT-gen-idx: the generator in its idx mode, seeds 1-4, PUC set: PASS
+PASS BITJIT-gen-rg2: the generator in its rg2 mode, seeds 1-4, PUC set: PASS
+PASS BITJIT-gen-phi: the generator in its phi mode, seeds 201-204, PUC set: PASS
+PASS BITOP: run-bitop.sh: PASS
+PASS BITFUZZ: run-bitfuzz.sh: PASS
+PASS NEGCTL-rc: negctl-bitop.sh, every arm: exit 0 and the full-sweep PASS line
+PASS NEGCTL-canon: canon passes, every object reproduced, pristine files from the build's export
+PASS NEGCTL-30-arms: exactly the 30 arms, each caught by its catchers
+PASS NEGCTL-restore: restore: every file put back, every object as shipped
+PASS RUNNER-run.sh: run.sh on the new build: exit 0
+PASS RUNNER-run-mem.sh: run-mem.sh on the new build: exit 0
+PASS RUNNER-run-vgc.sh: run-vgc.sh on the new build: exit 0
+PASS RUNNER-run-wd.sh: run-wd.sh on the new build: exit 0
+PASS RUNNER-run-penalty.sh: run-penalty.sh on the new build: exit 0
+PASS RUNNER-run-race.sh: run-race.sh on the new build: exit 0
+PASS RUNNER-run-security.sh: run-security.sh on the new build: exit 0
+PASS RUNNER-run-pack.sh: run-pack.sh on the new build: exit 0
+PASS RUNNER-run-packfuzz.sh: run-packfuzz.sh on the new build: exit 0
+PASS GEN-identity: gen.lua writes what each mode's reference wrote: 24 mode-seed pairs byte-identical, and phi, idx and rg2 differ from default
+PASS CR0: 0 CR bytes in each of the 14 changed files (cmp/cr.txt)
+PASS GIT-DIFF-CHECK: git diff --check HEAD is clean (staged and unstaged changes)
+PASS GIT-DIFF-CHECK-NEW: git diff --no-index --check finds nothing in each of the 6 new files
+PASS SHN-gitbash: sh -n of every changed shell script and this one (Git Bash)
+PASS SHN-alma: sh -n of the same (AlmaLinux 8's sh)
+PASS SHN-ubuntu: sh -n of the same (Ubuntu's dash)
+PASS ENGINE: the hunk engine of all seven patch-bitop-*.sh is unchanged (077d1dbebe056d59691d7f7f93307b2d)
+PASS BUILD-NATIVE-UNCHANGED: native/build-native.sh is HEAD's (47b9c52eecce550b57871d8448593bc3)
+PASS PATCH-NO-TAB-BS: patch-bitop-fold.sh holds no tab and no backslash
+PASS PATCH-PRISTINE: on the pin's pristine blob: 63 added, 8 removed, verified by content, diff and reversal
+PASS PATCH-IDEMPOTENT: on its own output: verified, unchanged, the same bytes
+PASS PATCH-IS-BUILD-COPY: its output is the build copy's lj_opt_fold.c, byte for byte
+PASS TIMING-benches: the six benches are the main session's chain-1 inputs, byte for byte
+PASS TIMING-base: base is the chain-1 base: its luajit.exe and lj_opt_fold.o have the md5s chain-1 recorded
+PASS TIMING-complete: all 7 rounds ran (no Java process appeared)
+PASS TIMING-results-equal: every result of the new build equals base's, in every round (timing/summary.txt)
+PASS TIMING-fold-active: crc-table: new/base median below 0.75 (the fold is in the timed build; the main session read 0.51)
+PASS CENSUS-build: every file under build/ has its md5 of the start, none added or removed (38985 files)
+PASS CENSUS-pristine-stat: the pristine checkout's stat list (mtimes included) is unchanged
+PASS CENSUS-pristine-git: the pristine checkout's .git md5 list and HEAD are unchanged
+PASS FILES-unchanged: the changed files (the same list), this script and fc-summarize.py are unchanged since the start; the repo's HEAD too

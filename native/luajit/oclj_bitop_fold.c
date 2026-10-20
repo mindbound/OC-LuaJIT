@@ -1,17 +1,23 @@
 /*
 ** native/luajit/oclj_bitop_fold.c -- the bound behind the fold engine's
-** width rule for Lua 5.3.6's bitwise operators.  native/build-native.sh
-** copies this file into the LuaJIT build copy's src/, and native/luajit/
-** patch-bitop-fold.sh makes that copy's lj_opt_fold.c #include it directly
-** above simplify_conv_i64_num (lj_opt_fold.c:1138), whose rule body calls
-** oclj_bitwidth.  The rule itself stays in lj_opt_fold.c: buildvm -m folddef
+** width rule and table-index fold for Lua 5.3.6's bitwise operators.
+** native/build-native.sh copies this file into the LuaJIT build copy's
+** src/, and native/luajit/patch-bitop-fold.sh makes that copy's
+** lj_opt_fold.c #include it directly above simplify_conv_int_num
+** (lj_opt_fold.c:1128), whose table-index fold calls oclj_bitwidth with a
+** bound of 32 (an int64 that is exactly an int32), as simplify_conv_i64_num's
+** width rule (lj_opt_fold.c:1138) does with 54 (an int64 that is exactly a
+** double).  The rules themselves stay in lj_opt_fold.c: buildvm -m folddef
 ** reads that one file for its LJFOLD lines (host/buildvm_fold.c:172, :200)
 ** and never follows an #include, so this file holds no LJFOLD line.
 **
 ** THE BOUND.  oclj_bitwidth(J, ref, 0) is a w such that the int64 IR value
 ** ref lies in [-2^(w-1), 2^(w-1)); 64 means unknown.  With w <= 54 the value
 ** is in [-2^53, 2^53), where every integer is a double, so the round trip
-** (i64)(num)y is y and simplify_conv_i64_num folds it.  Round 3's recorder
+** (i64)(num)y is y and simplify_conv_i64_num folds it.  With w <= 32 it is
+** in [-2^31, 2^31), an int32, so (int)(num)y is y's low 32 bits and
+** simplify_conv_int_num folds it to CONV int.i64 y (the table-index fold,
+** the CRC32 follow-up).  Round 3's recorder
 ** (oclj_bitop_rec.c) follows every operator's result with a guard that it
 ** equals a double: the guard's own conversion back is such a round trip, so
 ** where the bound is 54 or less it folds to the result, EQ.i64 res, res

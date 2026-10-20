@@ -1,0 +1,12 @@
+total 28
+drwxrwxrwx 1 mindbound mindbound  4096 Oct 20 21:18 .
+drwxrwxrwx 1 mindbound mindbound  4096 Oct 20 21:17 ..
+-rwxrwxrwx 1 mindbound mindbound   167 Oct 20 21:17 args.txt
+-rwxrwxrwx 1 mindbound mindbound     0 Oct 20 21:18 cwd-after.txt
+-rwxrwxrwx 1 mindbound mindbound     2 Oct 20 21:18 exit.txt
+-rwxrwxrwx 1 mindbound mindbound    21 Oct 20 21:18 finished.txt
+-rwxrwxrwx 1 mindbound mindbound   267 Oct 20 21:17 host.txt
+-rwxrwxrwx 1 mindbound mindbound   204 Oct 20 21:17 native.md5
+-rwxrwxrwx 1 mindbound mindbound 26895 Oct 20 21:18 run.log
+-rwxrwxrwx 1 mindbound mindbound    21 Oct 20 21:17 started.txt
+drwxrwxrwx 1 mindbound mindbound  4096 Oct 20 21:17 work

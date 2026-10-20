@@ -1,0 +1,16 @@
+45b861fb4b7e9b194dd85dc3a4a5d573 */c/Users/astro/Downloads/OC-LuaJIT/CLAUDE.md
+2c1d57a58e0d6b33a6888d008b3fe65a */c/Users/astro/Downloads/OC-LuaJIT/docs/jit-guide.md
+6fa66b3ce91570caac052b6f37dee2a5 */c/Users/astro/Downloads/OC-LuaJIT/docs/roadmap.md
+1ac93081decd6549cd6e5a5d951a89ee */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/oclj_bitop_fold.c
+149187d8df67c33e87096d359fcd83dc */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-fold.sh
+ce4671e933b010ffc58efaac00611a34 */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/gen.lua
+c3e47b74a756e1e5edb3ab1f567c39e1 */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/phiidx.lua
+b5dc9e14808c6aee4d254675319847b4 */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/t_cnt33.lua
+1281747f0e6d3e8e3d37973adea4e206 */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/t_idx.lua
+b739335907b7d40fb559fba6fbd3b83e */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/t_idx2.lua
+c690d89c65f54174116a2d6e5fcbfabe */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/t_rg2.lua
+216a844b4614a8def97fb1610ecc74a8 */c/Users/astro/Downloads/OC-LuaJIT/test/native/bitop/twin.lua
+7d12517766922b7e61accc370a78d3b4 */c/Users/astro/Downloads/OC-LuaJIT/test/native/negctl-bitop.sh
+103529a41834da1f09d106917e016155 */c/Users/astro/Downloads/OC-LuaJIT/test/native/run-bitjit.sh
+ea8360ca8ba248d2e533b97ddde3dffc */c/Users/astro/claude-tmp/oclj/crc2/fix/final-check.sh
+adbedfd1d37b06fc5596a9f0272205c3 */c/Users/astro/claude-tmp/oclj/crc2/fix/fc-summarize.py

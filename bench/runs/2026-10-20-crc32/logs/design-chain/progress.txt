@@ -1,0 +1,9 @@
+round 1 done 14:18:04Z order: base folda rg2 both puc
+round 2 done 14:18:54Z order: folda rg2 both puc base
+round 3 done 14:19:43Z order: rg2 both puc base folda
+round 4 done 14:20:33Z order: both puc base folda rg2
+round 5 done 14:21:22Z order: puc base folda rg2 both
+round 6 done 14:22:12Z order: base folda rg2 both puc
+round 7 done 14:23:02Z order: folda rg2 both puc base
+round 8 done 14:23:52Z order: rg2 both puc base folda
+round 9 done 14:24:43Z order: both puc base folda rg2

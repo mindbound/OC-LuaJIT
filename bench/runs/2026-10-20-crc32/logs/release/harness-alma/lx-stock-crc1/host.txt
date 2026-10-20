@@ -1,0 +1,8 @@
+AlmaLinux 8.10 (Cerulean Leopard)
+glibc 2.28
+Linux 6.18.54.1-microsoft-standard-WSL2 x86_64
+OCLJ_JAVA=/usr/lib/jvm/java-1.8.0-openjdk
+openjdk version "1.8.0_504"
+OpenJDK Runtime Environment (build 1.8.0_504-b01)
+    file.encoding = UTF-8
+    sun.jnu.encoding = UTF-8

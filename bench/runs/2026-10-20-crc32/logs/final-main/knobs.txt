@@ -1,0 +1,1 @@
+FC_PARTS=build alma bitjit suites negctl runners gen hygiene timing FC_USE_BUILD=unset FC_TASKLIST=unset FC_ROUNDS=7 FC_NDIV=1

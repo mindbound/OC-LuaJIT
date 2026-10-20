@@ -1,0 +1,176 @@
+final-check timing summary: 7 rounds, VMs base new b0 puc
+  round 1 order: base new b0 puc
+  round 2 order: new b0 puc base
+  round 3 order: b0 puc base new
+  round 4 order: puc base new b0
+  round 5 order: base new b0 puc
+  round 6 order: new b0 puc base
+  round 7 order: b0 puc base new
+os.clock steps 1 ms: 0.1 ns a unit at N=1e7, 0.05 at 2e7 (at full N; FC_NDIV scales it)
+
+RESULTS (r=): new must equal base in every round, and both stay the same across rounds
+RESULTS: EQUAL (every result of new equals base's, in every round)
+  PUC 5.3.6 differs (our numbers are doubles, PUC's integers; expected where plain
+  arithmetic passes 2^53: bench_bit2's rgb and ref, ident's big rows):
+    bench_bit2:ref (ours 1748186903, PUC 1077108609) expected
+    bench_bit2:rgb (ours 1748186903, PUC 1077108609) expected
+    ident:andm1-big (ours 25000000, PUC 42500000) expected
+    ident:or0-big (ours 25000000, PUC 42500000) expected
+    ident:shl0-big (ours 25000000, PUC 42500000) expected
+    ident:shr0-big (ours 25000000, PUC 42500000) expected
+    ident:xor0-big (ours 25000000, PUC 42500000) expected
+  b0's results are not compared (round 2's 32-bit operators differ by design)
+
+MEDIANS (ns per iteration or byte); ratios IN THE SAME ROUND: median [min-max]
+metric                     base      new  new/base                 b0  b0/base                 puc
+bench_bit2:crc-table       7.30     3.70  0.51 [0.49-0.52]       2.90  0.40 [0.37-0.40]      32.50
+bench_bit2:ref             5.10     5.00  1.00 [0.98-1.00]       5.10  1.00 [0.98-1.02]      54.60
+bench_bit2:rgb             3.80     3.70  0.97 [0.97-1.03]       3.70  0.97 [0.97-1.00]      25.70
+bench_bit:bit              0.40     0.40  1.00 [1.00-1.14]       0.35  1.00 [0.87-1.14]       4.85
+bench_bit:crc             70.00    70.50  1.01 [0.99-1.01]      49.00  0.70 [0.69-0.70]     120.50
+bench_bit:ref              3.65     3.70  1.01 [1.00-1.01]       3.70  1.01 [0.99-1.03]       6.90
+bench_crcx:crcmb           7.30     3.80  0.53 [0.52-0.59]          -  -                     35.80
+bench_crcx:crcprobe        7.30     3.70  0.51 [0.51-0.52]          -  -                     32.70
+bench_crcx:ref             5.00     5.10  1.00 [0.86-1.02]          -  -                     55.20
+bench_idx:cnt              3.70     3.70  1.00 [0.97-1.00]          -  -                     12.30
+bench_idx:crct             7.30     3.70  0.51 [0.50-0.52]          -  -                     32.50
+bench_idx:crctm            7.50     4.00  0.53 [0.52-0.53]          -  -                     34.00
+bench_idx:idx              3.70     3.70  1.00 [0.95-1.03]          -  -                     12.80
+bench_idx:phi              3.70     3.70  1.00 [0.97-1.06]          -  -                     11.90
+bench_idx:phi2             4.20     4.10  0.98 [0.95-1.00]          -  -                     16.60
+bench_idx:ref              5.00     5.10  1.00 [0.84-1.02]          -  -                     55.30
+bench_spec:flag63          1.50     0.75  0.50 [0.48-0.53]          -  -                     13.30
+bench_spec:half            0.65     0.70  1.08 [0.93-1.08]          -  -                     11.50
+bench_spec:hi60            0.65     0.70  1.00 [0.93-1.08]          -  -                     11.05
+bench_spec:lo50            0.50     0.50  1.00 [0.91-1.11]          -  -                     10.95
+bench_spec:mix             4.30     2.80  0.65 [0.64-0.67]          -  -                     19.45
+bench_spec:ref             5.10     5.10  1.00 [0.92-1.01]          -  -                     55.15
+bench_spec:sh40            0.70     0.70  1.00 [0.93-1.08]          -  -                      9.25
+bench_spec:top8            0.70     0.65  0.93 [0.93-1.08]          -  -                     11.05
+ident:andm1-big            1.80     1.10  0.61 [0.58-0.67]          -  -                     14.00
+ident:andm1-small          1.80     1.10  0.61 [0.58-0.67]          -  -                     13.60
+ident:or0-big              1.90     1.10  0.58 [0.58-0.67]          -  -                     13.90
+ident:or0-small            1.80     1.10  0.61 [0.61-0.67]          -  -                     13.90
+ident:shl0-big             1.80     1.10  0.61 [0.58-0.61]          -  -                     15.80
+ident:shl0-small           1.80     1.10  0.61 [0.58-0.67]          -  -                     15.80
+ident:shr0-big             1.90     1.10  0.61 [0.58-0.67]          -  -                     15.90
+ident:shr0-small           1.80     1.10  0.61 [0.58-0.67]          -  -                     17.20
+ident:xor0-big             1.90     1.10  0.58 [0.56-0.67]          -  -                     13.90
+ident:xor0-small           1.80     1.10  0.61 [0.61-0.67]          -  -                     15.50
+
+ROW 209 (crc-table, ns/byte): new against round 2's b0 in the same round
+  bench_bit2:crc-table   new/b0 1.31 [1.24-1.33]
+  bench_bit:crc          new/b0 1.45 [1.44-1.45]
+CRCTABLE_NEW_OVER_BASE 0.507
+
+EVERY ROUND'S RAW ns (rounds in order):
+  bench_bit2:crc-table   base  7.30 7.20 7.30 7.30 7.30 7.30 7.30
+  bench_bit2:crc-table   new   3.60 3.70 3.70 3.70 3.60 3.70 3.80
+  bench_bit2:crc-table   b0    2.70 2.90 2.80 2.80 2.90 2.90 2.90
+  bench_bit2:crc-table   puc   32.60 32.60 32.50 32.20 32.70 32.50 32.40
+  bench_bit2:ref         base  5.10 5.10 5.10 5.00 5.00 5.10 5.10
+  bench_bit2:ref         new   5.00 5.10 5.00 5.00 5.00 5.00 5.10
+  bench_bit2:ref         b0    5.00 5.10 5.10 5.10 5.10 5.10 5.10
+  bench_bit2:ref         puc   54.40 55.20 54.40 55.10 54.60 54.60 54.80
+  bench_bit2:rgb         base  3.80 3.80 3.70 3.70 3.70 3.80 3.80
+  bench_bit2:rgb         new   3.70 3.70 3.70 3.70 3.80 3.70 3.70
+  bench_bit2:rgb         b0    3.70 3.70 3.60 3.70 3.70 3.70 3.70
+  bench_bit2:rgb         puc   26.00 25.80 25.50 25.70 25.50 25.70 25.70
+  bench_bit:bit          base  0.35 0.35 0.40 0.40 0.35 0.40 0.40
+  bench_bit:bit          new   0.35 0.40 0.40 0.40 0.40 0.40 0.40
+  bench_bit:bit          b0    0.35 0.35 0.40 0.35 0.40 0.35 0.35
+  bench_bit:bit          puc   4.85 4.90 4.80 4.80 4.80 4.85 4.85
+  bench_bit:crc          base  70.50 70.50 70.50 70.00 70.00 70.00 69.50
+  bench_bit:crc          new   70.00 70.50 71.00 70.50 70.50 71.00 70.50
+  bench_bit:crc          b0    48.50 49.00 49.00 49.00 48.50 49.00 48.50
+  bench_bit:crc          puc   121.50 121.50 120.00 119.50 120.00 121.00 120.50
+  bench_bit:ref          base  3.65 3.65 3.65 3.65 3.65 3.70 3.65
+  bench_bit:ref          new   3.70 3.65 3.65 3.70 3.70 3.70 3.70
+  bench_bit:ref          b0    3.65 3.70 3.70 3.70 3.65 3.65 3.75
+  bench_bit:ref          puc   6.85 6.90 6.90 6.85 6.85 6.95 6.95
+  bench_crcx:crcmb       base  7.20 7.30 7.20 7.20 7.30 7.30 7.30
+  bench_crcx:crcmb       new   3.80 3.80 3.80 3.80 3.80 3.80 4.30
+  bench_crcx:crcmb       puc   38.80 35.10 45.90 35.40 35.80 36.10 35.20
+  bench_crcx:crcprobe    base  7.30 7.30 7.20 7.30 7.30 7.10 7.30
+  bench_crcx:crcprobe    new   3.70 3.70 3.70 3.70 3.70 3.60 3.80
+  bench_crcx:crcprobe    puc   33.70 32.50 36.30 32.70 32.30 32.50 32.80
+  bench_crcx:ref         base  5.00 5.00 5.00 5.10 5.10 5.00 5.00
+  bench_crcx:ref         new   5.00 5.10 5.10 5.10 5.00 5.10 4.30
+  bench_crcx:ref         puc   55.20 55.20 58.10 55.50 54.50 55.60 55.10
+  bench_idx:cnt          base  3.70 3.70 3.80 3.70 3.80 3.80 3.70
+  bench_idx:cnt          new   3.70 3.70 3.70 3.70 3.80 3.70 3.70
+  bench_idx:cnt          puc   11.70 12.30 12.50 13.20 12.30 11.10 13.10
+  bench_idx:crct         base  7.20 7.30 7.30 7.30 7.30 7.30 7.30
+  bench_idx:crct         new   3.60 3.70 3.70 3.70 3.70 3.70 3.80
+  bench_idx:crct         puc   35.10 32.40 32.40 32.40 32.60 32.50 32.50
+  bench_idx:crctm        base  7.50 7.60 7.50 7.50 7.60 7.50 7.50
+  bench_idx:crctm        new   3.90 4.00 4.00 3.90 4.00 4.00 4.00
+  bench_idx:crctm        puc   41.90 33.90 34.70 33.90 33.80 34.40 34.00
+  bench_idx:idx          base  3.70 3.80 3.70 3.70 3.70 3.70 3.60
+  bench_idx:idx          new   3.70 3.60 3.80 3.60 3.70 3.70 3.70
+  bench_idx:idx          puc   13.30 12.80 13.60 12.30 12.30 10.90 13.00
+  bench_idx:phi          base  3.70 3.80 3.70 3.70 3.70 3.80 3.60
+  bench_idx:phi          new   3.70 3.70 3.70 3.70 3.70 3.90 3.80
+  bench_idx:phi          puc   12.20 11.80 11.90 11.80 13.30 11.70 11.90
+  bench_idx:phi2         base  4.20 4.20 4.20 4.20 4.20 4.20 4.20
+  bench_idx:phi2         new   4.10 4.20 4.00 4.10 4.10 4.00 4.00
+  bench_idx:phi2         puc   16.60 16.60 16.60 16.70 17.00 16.60 16.70
+  bench_idx:ref          base  5.00 5.00 5.10 5.00 5.10 5.10 5.00
+  bench_idx:ref          new   5.10 5.10 5.10 5.10 5.10 5.10 4.20
+  bench_idx:ref          puc   68.20 55.00 55.70 55.50 54.90 55.30 55.20
+  bench_spec:flag63      base  1.45 1.50 1.50 1.50 1.50 1.50 1.50
+  bench_spec:flag63      new   0.70 0.75 0.75 0.75 0.75 0.80 0.75
+  bench_spec:flag63      puc   13.35 14.60 13.00 13.00 13.30 13.10 13.55
+  bench_spec:half        base  0.70 0.65 0.65 0.65 0.65 0.65 0.70
+  bench_spec:half        new   0.70 0.70 0.70 0.70 0.70 0.70 0.65
+  bench_spec:half        puc   12.30 11.80 10.95 11.85 10.90 11.50 9.50
+  bench_spec:hi60        base  0.65 0.65 0.70 0.65 0.65 0.70 0.70
+  bench_spec:hi60        new   0.70 0.70 0.70 0.65 0.65 0.70 0.65
+  bench_spec:hi60        puc   11.05 12.00 10.95 11.15 10.95 11.35 10.95
+  bench_spec:lo50        base  0.50 0.50 0.50 0.45 0.55 0.50 0.50
+  bench_spec:lo50        new   0.50 0.50 0.55 0.50 0.50 0.50 0.55
+  bench_spec:lo50        puc   11.25 11.00 10.95 11.05 10.95 10.90 10.95
+  bench_spec:mix         base  4.25 4.30 4.35 4.25 4.30 4.30 4.30
+  bench_spec:mix         new   2.80 2.80 2.80 2.85 2.80 2.80 2.80
+  bench_spec:mix         puc   19.90 19.65 18.90 19.75 18.20 19.45 18.95
+  bench_spec:ref         base  5.05 5.05 5.10 5.10 5.15 5.05 5.10
+  bench_spec:ref         new   5.05 5.10 5.10 5.10 5.10 4.65 5.10
+  bench_spec:ref         puc   54.80 54.75 55.55 54.55 55.65 55.25 55.15
+  bench_spec:sh40        base  0.70 0.65 0.70 0.70 0.70 0.65 0.70
+  bench_spec:sh40        new   0.65 0.70 0.70 0.65 0.70 0.65 0.70
+  bench_spec:sh40        puc   9.75 9.15 8.80 9.60 9.40 8.75 9.25
+  bench_spec:top8        base  0.70 0.70 0.70 0.70 0.70 0.70 0.65
+  bench_spec:top8        new   0.70 0.70 0.65 0.65 0.65 0.65 0.70
+  bench_spec:top8        puc   11.20 11.50 10.80 10.70 11.05 11.40 11.05
+  ident:andm1-big        base  1.80 1.90 1.90 1.80 1.80 1.80 1.90
+  ident:andm1-big        new   1.10 1.20 1.10 1.20 1.10 1.10 1.20
+  ident:andm1-big        puc   13.90 13.90 14.10 14.00 13.80 14.10 14.10
+  ident:andm1-small      base  1.90 1.80 1.90 1.80 1.80 1.80 1.80
+  ident:andm1-small      new   1.10 1.10 1.10 1.10 1.10 1.20 1.10
+  ident:andm1-small      puc   13.70 13.60 13.80 13.50 13.60 13.60 13.50
+  ident:or0-big          base  1.90 1.80 1.90 1.90 1.90 1.80 1.80
+  ident:or0-big          new   1.10 1.20 1.10 1.10 1.10 1.10 1.10
+  ident:or0-big          puc   13.80 13.80 14.10 13.90 13.90 14.10 14.00
+  ident:or0-small        base  1.80 1.80 1.80 1.80 1.80 1.80 1.80
+  ident:or0-small        new   1.10 1.20 1.10 1.20 1.10 1.10 1.10
+  ident:or0-small        puc   14.00 13.70 13.90 14.00 13.90 14.00 13.90
+  ident:shl0-big         base  1.90 1.80 1.80 1.90 1.80 1.80 1.90
+  ident:shl0-big         new   1.10 1.10 1.10 1.10 1.10 1.10 1.10
+  ident:shl0-big         puc   15.90 14.70 15.80 15.80 16.00 15.80 15.80
+  ident:shl0-small       base  1.80 1.90 1.80 1.90 1.90 1.80 1.80
+  ident:shl0-small       new   1.10 1.10 1.10 1.10 1.10 1.20 1.10
+  ident:shl0-small       puc   16.40 15.70 15.70 15.70 16.00 15.80 17.00
+  ident:shr0-big         base  1.80 1.90 1.80 1.90 1.90 1.80 1.90
+  ident:shr0-big         new   1.10 1.10 1.10 1.10 1.10 1.20 1.20
+  ident:shr0-big         puc   17.10 16.00 17.50 15.90 15.80 14.40 15.70
+  ident:shr0-small       base  1.80 1.90 1.90 1.80 1.80 1.80 1.90
+  ident:shr0-small       new   1.10 1.20 1.10 1.20 1.10 1.20 1.10
+  ident:shr0-small       puc   17.20 17.30 17.30 17.40 16.10 14.90 16.00
+  ident:xor0-big         base  1.90 1.80 1.80 1.90 1.90 1.90 1.80
+  ident:xor0-big         new   1.10 1.20 1.00 1.10 1.10 1.10 1.20
+  ident:xor0-big         puc   13.90 13.90 14.00 13.80 13.80 14.10 13.90
+  ident:xor0-small       base  1.80 1.80 1.90 1.90 1.80 1.80 1.80
+  ident:xor0-small       new   1.10 1.10 1.20 1.20 1.10 1.20 1.10
+  ident:xor0-small       puc   15.30 13.90 15.60 15.60 15.50 16.60 15.00
+
+SUMMARY: OK

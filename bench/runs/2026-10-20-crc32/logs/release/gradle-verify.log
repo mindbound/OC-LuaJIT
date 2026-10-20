@@ -1,0 +1,18 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as configuration cache cannot be reused because file 'build.gradle.kts' has changed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.34 available! Run ./gradlew updateBuildScript
+
+> Task :verifyModAssets
+OC-LuaJIT: packaging 2 native(s): libjnluajit52-linux-x86_64.so (681392 bytes), libjnluajit52-windows-x86_64.dll (739749 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+OC-LuaJIT: native fingerprint names the pinned LuaJIT commit 1ee778a4 (native/luajit/upstream.commit)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+OC-LuaJIT: libjnluajit52-linux-x86_64.so needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28); 110 imports, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable, _ITM_registerTMCloneTable, __gmon_start__)
+OC-LuaJIT: packaging the patched kernel (52904 bytes)
+
+BUILD SUCCESSFUL in 7s
+1 actionable task: 1 executed
+Configuration cache entry stored.

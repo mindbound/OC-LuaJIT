@@ -1,0 +1,33 @@
+b0 companion: 5 rounds
+metric                       b0     base    folda     both   ratios to b0 in the same round: median [min-max]
+bench_bit2:crc-table       2.90     7.20     3.70     3.60   base 2.48 [2.48-2.52]  folda 1.28 [1.24-1.28]  both 1.24 [1.24-1.28]
+bench_bit2:ref             5.00     5.10     5.00     5.00   base 1.00 [0.98-1.02]  folda 1.00 [0.98-1.02]  both 1.00 [0.98-1.02]
+bench_bit2:rgb             3.70     3.80     3.70     3.70   base 1.03 [1.00-1.06]  folda 1.00 [1.00-1.06]  both 1.00 [0.97-1.03]
+bench_bit:bit              0.35     0.35     0.35     0.35   base 1.00 [1.00-1.14]  folda 1.00 [1.00-1.14]  both 1.00 [1.00-1.14]
+bench_bit:crc             48.50    70.00    70.00    69.50   base 1.44 [1.43-1.46]  folda 1.44 [1.43-1.47]  both 1.43 [1.42-1.45]
+bench_bit:ref              3.65     3.65     3.70     3.65   base 1.00 [0.99-1.00]  folda 1.00 [1.00-1.01]  both 1.00 [0.99-1.01]
+
+  bench_bit2:crc-table   b0     2.90 2.90 2.90 2.90 2.90
+  bench_bit2:crc-table   base   7.20 7.20 7.20 7.30 7.30
+  bench_bit2:crc-table   folda  3.70 3.70 3.70 3.60 3.70
+  bench_bit2:crc-table   both   3.60 3.70 3.60 3.60 3.60
+  bench_bit2:ref         b0     5.00 5.10 5.00 5.10 5.00
+  bench_bit2:ref         base   5.00 5.00 5.10 5.10 5.10
+  bench_bit2:ref         folda  5.10 5.00 5.00 5.00 5.00
+  bench_bit2:ref         both   5.00 5.00 5.10 5.10 5.00
+  bench_bit2:rgb         b0     3.70 3.70 3.60 3.70 3.70
+  bench_bit2:rgb         base   3.70 3.80 3.80 3.70 3.80
+  bench_bit2:rgb         folda  3.70 3.70 3.80 3.70 3.70
+  bench_bit2:rgb         both   3.60 3.60 3.70 3.70 3.70
+  bench_bit:bit          b0     0.35 0.35 0.35 0.35 0.35
+  bench_bit:bit          base   0.35 0.40 0.35 0.35 0.35
+  bench_bit:bit          folda  0.35 0.35 0.40 0.35 0.40
+  bench_bit:bit          both   0.35 0.35 0.40 0.35 0.40
+  bench_bit:crc          b0     48.50 49.00 48.00 48.50 48.50
+  bench_bit:crc          base   70.00 70.00 70.00 70.00 70.00
+  bench_bit:crc          folda  69.50 70.00 70.50 70.00 70.50
+  bench_bit:crc          both   69.00 69.50 69.50 69.50 69.50
+  bench_bit:ref          b0     3.65 3.70 3.65 3.65 3.70
+  bench_bit:ref          base   3.65 3.65 3.65 3.65 3.65
+  bench_bit:ref          folda  3.70 3.70 3.70 3.65 3.70
+  bench_bit:ref          both   3.65 3.65 3.70 3.65 3.70

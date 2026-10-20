@@ -1,0 +1,5 @@
+round 1 done 14:25:00Z order: b0 base folda both
+round 2 done 14:25:04Z order: base folda both b0
+round 3 done 14:25:09Z order: folda both b0 base
+round 4 done 14:25:14Z order: both b0 base folda
+round 5 done 14:25:18Z order: b0 base folda both

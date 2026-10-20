@@ -1,9 +1,9 @@
 #!/bin/sh
 # =====================================================================
 # negctl-bitop.sh -- PROVE that round 3's tests of the 64-bit bitwise
-# operators have teeth: run-bitop.sh, run-bitjit.sh, run-bitfuzz.sh,
-# run-security.sh's FF12, and build-native.sh's bitops gate and stage-4
-# VM-features word check.
+# operators, and the CRC32 follow-up's of the table-index fold, have teeth:
+# run-bitop.sh, run-bitjit.sh, run-bitfuzz.sh, run-security.sh's FF12, and
+# build-native.sh's bitops gate and stage-4 VM-features word check.
 #
 #   OCLJ_BUILD=<build dir used by build-native.sh>  sh test/native/negctl-bitop.sh
 #
@@ -62,10 +62,18 @@
 #                 loop (the JIT's fold engine); bare fuzz: any MISMATCH
 #   gen           run-bitjit.sh's generator (seeds 1..NEGCTL_GEN_SEEDS of 2000
 #                 loops): a seed FAILs
+#   genrg2        the same in OCLJ_BITJIT_GENMODE=rg2 (results at and past
+#                 2^53, where a result's guard decides between a value and a
+#                 raise; its own run of run-bitjit.sh): a seed FAILs
 #   floor:t_rec, :t_rec-counts, :t_jit2, :t_jit2/<loop>   run-bitjit.sh's
 #                 floor: t_rec in any seed, in its counts seeds (3 and 4),
-#                 t_jit2 against -joff, and that one t_jit2 loop's line
+#                 t_jit2 against -joff, and that one t_jit2 loop's line (the
+#                 floor's t_rg2 runs in canon and in every arm that runs the
+#                 floor; no arm names it)
 #   fix1          run-bitjit.sh's p4 check
+#   idx:t_idx, :t_cnt33, :t_idx2, :phiidx   run-bitjit.sh's idx part (the
+#                 table-index fold): t_idx, t_cnt33 or t_idx2 against -joff
+#                 under some option set, or phiidx's trace-shape check
 #   security:FF12 run-security.sh's FF12 (a version-2 dump is refused)
 #   gate:dump     build-native.sh's bitops gate, its own text, run on the arm's
 #                 luajit.exe: the line differs from build-native.sh's wanted
@@ -82,12 +90,12 @@
 #     NEGSHIFT        oclj_bitop.h       [bitop:t_ops]
 #     SARSHR          oclj_bitop.h       [bitop:t_sar]
 #     NOINT-FOLD      lj_parse.c         [bitop:t_fold]
-#     NOINT-JIT       oclj_bitop_rec.c   [floor:t_jit2/guard-exit]
+#     NOINT-JIT       oclj_bitop_rec.c   [floor:t_jit2/guard-exit genrg2]
 #     RANGE-HI        oclj_num53.h       [bitop:t_ops fuzz]
 #     STRCOERCE       oclj_bitop_meta.c  [bitop:t_ops bitop:coerce]
 #     ERROPERAND      oclj_bitop_meta.c  [bitop:t_ops]
 #     NARROW          lj_opt_fold.c      [floor:t_rec floor:t_jit2]
-#     KFOLD64         lj_opt_fold.c      [fuzz:U floor:t_rec]
+#     KFOLD64         lj_opt_fold.c      [fuzz:U floor:t_rec genrg2]
 #     SARCONST        oclj_bitop_rec.c   [floor:t_rec-counts bitop:t_sar]
 #     BCDUMP          lj_bcdump.h        [security:FF12 gate:dump]
 #     WORDTOKEN       eris_lj.c          [stage4]
@@ -96,12 +104,24 @@
 #     INEXACT-BNOT    vm_x64.dasc        [bitop:t_ops bitop:t_fold fuzz:V]
 #     INEXACT-SLOW    oclj_bitop_meta.c  [bitop:t_ops-str]
 #     INEXACT-FOLD    lj_parse.c         [bitop:t_fold fuzz:K]
-#     INEXACT-JIT     oclj_bitop_rec.c   [gen]
-#     SELFGUARD       lj_opt_fold.c      [gen]
+#     INEXACT-JIT     oclj_bitop_rec.c   [gen genrg2]
+#     SELFGUARD       lj_opt_fold.c      [gen genrg2]
 #   the width rule's, from its review, and fix1:
-#     WIDTH55         lj_opt_fold.c      [gen]
+#     WIDTH55         lj_opt_fold.c      [gen genrg2]
 #     WSHR, WBAND, WADD0, WSHL0   oclj_bitop_fold.c   [gen]
 #     FIX1            lj_opt_fold.c      [fix1]
+#   the table-index fold's (the CRC32 follow-up, roadmap row 209, 2026-10-20):
+#     WIDTHIDX33      lj_opt_fold.c      [idx:t_idx idx:t_cnt33 idx:t_idx2]
+#     PHIIDX          lj_opt_fold.c      [idx:phiidx]
+#     NOLOOPFOLD      lj_opt_fold.c      [idx:phiidx]   (verify-folda's)
+#   PHIIDX and NOLOOPFOLD change no value (the fold across a PHI; no fold in
+#   a loop body), so only phiidx.lua's IR read sees them: a sabotage that
+#   changes no value needs a catcher that reads the IR's shape or counts
+#   exits.  The follow-up's range guard (rg2) was prototyped with seven arms
+#   of its own and did not ship (2026-10-20); its arms went with it, and its
+#   generator mode stayed as genrg2, which catches non-RG2 arms too: it is
+#   listed on the five it catches in more than 100 cases in every seed
+#   (THE MARGINS, below).
 # Each arm's line, below, says what it breaks.  Not arms: the first design's
 # ROUNDTRUNC and TIESAWAY (nothing rounds under U1-B), and INEXACT-RECABORT,
 # the recorder's record-time abort of an inexact result removed (either of
@@ -129,22 +149,52 @@
 # one-line copy of round 3's build and by this script (canon and that arm),
 # with the same counts (it changes lj_vm.o and host/buildvm.o): t_ops 7
 # lines (the six inexact ~u cases and a naming case), t_fold 2, fuzz 1323
-# tuples in each of K, V, P and H and 246 in U, JIT on and -joff alike.  A full run
-# took 7.6 minutes, 5.1 of them in canon and the seven gen arms; a rebuild
-# takes 1-3 s, a vm_x64.dasc one included.  It leaves about 445 MB in its
-# work directory, most of it the generator's loops (about 40 MB a gen run:
-# 38.6-41.2 MB measured in the 2026-10-17 runs, 41.6 MB with the hint), and
-# deletes nothing.
+# tuples in each of K, V, P and H and 246 in U, JIT on and -joff alike.
+# THE TABLE-INDEX FOLD'S ARMS, three runs on 2026-10-20 (crc2: impl's
+# negctl-idx-arms-1, verify-code's negctl-idx-arms, fix's negctl-sel-1):
+# WIDTHIDX33 t_idx 20-51 under the seven option sets that compile with the
+# fold (0 under -O0 and -O-fold, which have none), t_cnt33 10, t_idx2
+# 92-138; PHIIDX phiidx 3 of 7 variants (phi and phicnt cross=1, phi2
+# keep=0); NOLOOPFOLD phiidx 1 of 7 (ctl1 fold=0).  genrg2, measured
+# on 2026-10-20 (crc2/impl: the probes negctl-probe-genrg2-A and -B, then
+# negctl-genrg2-arms-1 for the five it is listed on), the fewest and most
+# differing cases in a seed, every seed differing: INEXACT-JIT 603-655,
+# SELFGUARD 595-654, KFOLD64 513-586, NOINT-JIT 361-408, WIDTH55 154-162
+# (two runs each); it also catches WSHR 37-43, WSHL0 10-19, WBAND 12-14,
+# WADD0 4-7, NARROW 4-7 and SARCONST 1-3 (one run each), too thin to list,
+# and not FIX1 or WIDTHIDX33.  The generator's idx mode was measured too
+# and is no catcher here: WIDTHIDX33 1-5 cases a seed, WIDTH55 49-66 (one
+# run, negctl-probe-genidx-A).  A full run took 7.6 minutes with 27 arms
+# (2026-10-17), 5.1 of them in canon and the seven gen arms; the three idx
+# arms take about 15 s each, and genrg2 adds about 35 s to canon and to
+# each of its five arms (one run of each, 2026-10-20), so a full run now
+# takes about 12 minutes (estimated, not yet measured).  A rebuild takes
+# 1-3 s, a vm_x64.dasc one included.  The work directory grows by about
+# 40 MB a gen or genrg2 run (38.6-41.6 MB measured in the 2026-10-17 runs;
+# 445 MB for the 2026-10-17 sweep), and nothing is deleted.
 #
 # Every sabotage is memory-safe by construction: each computes a different
 # value, raises a different message or none, writes a different version
-# byte or word token, or (FIX1) only blacklists loops.  None touches a bound
-# that guards a read or a write.  The JIT arms change int64 IR whose results
-# become doubles; a table index made from one is still converted by a checked
-# IRCONV_INDEX conversion and bounds-checked (lj_record.c:2046), since no fold
-# removes that conversion from an int64 source (simplify_conv_int_num,
-# lj_opt_fold.c:1128-1136).  NOINT-JIT's unguarded conversion is cvttsd2si,
-# which yields INT64_MIN for what it cannot convert.
+# byte or word token, only blacklists loops (FIX1), or changes the IR's
+# shape and, in every suite run, no value (PHIIDX, NOLOOPFOLD).  None
+# touches a bound that guards a read or a write.  The JIT arms change int64
+# IR whose results become doubles or ints.  The safety of what such a value
+# reaches does not rest on its conversion to an int: since the table-index
+# fold (patch-bitop-fold.sh hunk 11), "no fold removes the int conversion
+# from an int64 source" is false, and the fold removes it when y has 32
+# bits or fewer.  It rests on the checks after the conversion.  A table
+# index is bounds-checked as an int before any load or store uses it (ABC,
+# lj_record.c rec_idx_abc, or ULE for an array extension; a hash key is
+# looked up, not addressed); string.byte, sub and find check their int
+# arguments against the string's length, and the other library functions
+# take a wrong int as they take any int argument; and a variable shift
+# count passes ULT 64.  The conversion's own check is INDEX's, ANY's or
+# CHECK's exactness, not a bound, so WIDTHIDX33's 33-bit y, truncated to
+# its low 32 bits, is a different int checked by the same ABC, length check
+# or ULT: a wrong value, never an address.  PHIIDX computed the same values
+# in every suite (through loop_unroll's hint PHI, which no argument may lean
+# on), and NOLOOPFOLD keeps the checked conversion.  NOINT-JIT's unguarded
+# conversion is cvttsd2si, which yields INT64_MIN for what it cannot convert.
 #
 # OCLJ_NEGCTL_ARMS (default empty: every arm) runs only the arms it names,
 # separated by spaces or commas; canon always runs.  A name that is no arm is
@@ -345,6 +395,11 @@ run_bitjit() {  # run_bitjit <dir> <parts>
     OCLJ_BITJIT_SEED=1 OCLJ_BITJIT_SEEDS=$NEGCTL_GEN_SEEDS OCLJ_BITJIT_CASES=2000 OCLJ_BITJIT_GENMODE= \
     OCLJ_BITJIT_HOTMIN=0.25 OCLJ_BITJIT_OUT=$1/bitjit sh "$SELF_DIR/run-bitjit.sh" > "$1/bitjit.log" 2>&1
 }
+run_genrg2() {  # the generator in its rg2 mode (results at and past 2^53)
+  OCLJ_BUILD=$WB OCLJ_REPO=$OCLJ_REPO OCLJ_LUA53=$OCLJ_LUA53 OCLJ_BITJIT_PARTS=gen \
+    OCLJ_BITJIT_SEED=1 OCLJ_BITJIT_SEEDS=$NEGCTL_GEN_SEEDS OCLJ_BITJIT_CASES=2000 OCLJ_BITJIT_GENMODE=rg2 \
+    OCLJ_BITJIT_HOTMIN=0.25 OCLJ_BITJIT_OUT=$1/bitjit-rg2 sh "$SELF_DIR/run-bitjit.sh" > "$1/bitjit-rg2.log" 2>&1
+}
 run_security() {
   OCLJ_BUILD=$WB OCLJ_REPO=$OCLJ_REPO OCLJ_JNI=$OCLJ_JNI CC=$CC \
     sh "$SELF_DIR/run-security.sh" > "$1/security.log" 2>&1
@@ -373,14 +428,14 @@ run_stage4() {  # eris_lj.c compiled as build-native.sh's stage 4 does, then its
 # rcof <suite>: the exit status of the run that suite is part of ('-': not run).
 rcof() {
   case $1 in
-    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1) echo "$R_bitjit" ;;
+    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
     security) echo "$R_security" ;; gate) echo "$R_gate" ;; stage4) echo "$R_stage4" ;; *) echo - ;;
   esac
 }
 # runcatchers <dir> <catchers>: each suite they name runs once (run-bitjit.sh
 # once, with the parts they name).
 runcatchers() {
-  R_bitop=- R_fuzz=- R_bitjit=- R_security=- R_gate=- R_stage4=-
+  R_bitop=- R_fuzz=- R_bitjit=- R_security=- R_gate=- R_stage4=- R_genrg2=-
   parts=
   for tk in $2; do
     case ${tk%%:*} in
@@ -389,7 +444,8 @@ runcatchers() {
       security) [ "$R_security" = - ] && { run_security "$1"; R_security=$?; } ;;
       gate) [ "$R_gate" = - ] && { run_gate "$1"; R_gate=$?; } ;;
       stage4) [ "$R_stage4" = - ] && { run_stage4 "$1"; R_stage4=$?; } ;;
-      gen|floor|fix1) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+      genrg2) [ "$R_genrg2" = - ] && { run_genrg2 "$1"; R_genrg2=$?; } ;;
+      gen|floor|fix1|idx) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
       *) fail "arm $name: unknown catcher '$tk'" ;;
     esac
   done
@@ -443,6 +499,11 @@ check() {
     floor:t_jit2) grep -q '^FAIL t_jit2 (' "$1/bitjit.log" ;;
     floor:t_jit2/*) jit2loop "$1/bitjit/floor" "${2#floor:t_jit2/}" ;;
     fix1) grep -q '^FAIL fix1' "$1/bitjit.log" ;;
+    idx:t_idx) grep -q '^FAIL t_idx (' "$1/bitjit.log" ;;
+    idx:t_cnt33) grep -q '^FAIL t_cnt33 (' "$1/bitjit.log" ;;
+    idx:t_idx2) grep -q '^FAIL t_idx2 (' "$1/bitjit.log" ;;
+    idx:phiidx) grep -q '^FAIL phiidx' "$1/bitjit.log" ;;
+    genrg2) grep -q '^seed [0-9]*: FAIL' "$1/bitjit-rg2.log" ;;
     security:FF12) grep -q '^FAIL FF12 ' "$1/security.log" ;;
     gate:dump) gatedump "$1" ;;
     *) return 1 ;;
@@ -468,8 +529,22 @@ info() {
       /^FAIL t_jit2 [(]/ { out = out sep "t_jit2"; sep = "," }
       /^FAIL t_jit2: PUC/ { out = out sep "t_jit2-PUC"; sep = "," }
       /^FAIL fix1/ { out = out sep "fix1"; sep = "," }
+      /^FAIL t_rg2 [(]/ { out = out sep "t_rg2"; sep = "," }
+      /^FAIL t_rg2: PUC/ { out = out sep "t_rg2-PUC"; sep = "," }
+      /^FAIL t_idx [(]/ { out = out sep "t_idx"; sep = "," }
+      /^FAIL t_cnt33 [(]/ { out = out sep "t_cnt33"; sep = "," }
+      /^FAIL t_idx2 [(]/ { out = out sep "t_idx2"; sep = "," }
+      /^FAIL t_(idx|cnt33|idx2): PUC/ { v = $2; sub(/:$/, "", v); out = out sep v "-PUC"; sep = "," }
+      /^FAIL phiidx/ { out = out sep "phiidx"; sep = "," }
       END { print out }' "$1/bitjit.log")
     s="$s; bitjit[${parts# }] $R_bitjit$g${fl:+ failed: $fl}"
+  fi
+  if [ "$R_genrg2" != - ]; then
+    g=$(awk '/^seed [0-9]+: shared[/]/ { m = 0
+        for (i = 3; i <= NF; i++) if ($i !~ /puc=/) { v = $i; sub(/^.*=/, "", v); if (v + 0 > m) m = v + 0 }
+        n++; if (m > 0) c++; if (n == 1 || m < lo) lo = m; if (m > hi) hi = m }
+      END { if (n) printf " (%d/%d seeds differ, %d-%d cases a seed)", c, n, lo, hi }' "$1/bitjit-rg2.log")
+    s="$s; genrg2 $R_genrg2$g"
   fi
   [ "$R_security" = - ] || s="$s; security $R_security$(failids "$1/security.log")"
   [ "$R_gate" = - ] || s="$s; gate $R_gate"
@@ -560,7 +635,7 @@ arm() {
 }
 
 armlist() {
-arm canon - 'bitop fuzz gen floor fix1 security gate stage4' '' ''
+arm canon - 'bitop fuzz gen genrg2 floor fix1 idx security gate stage4' '' ''
 arm WRAP32-INTERP vm_x64.dasc 'bitop:t_ops fuzz:V' \
   '    |  ins RC, RA' \
   '    |  ins RCd, RAd@T@@T@// SABOTAGE WRAP32-INTERP: and/or/xor in 32 bits, as BitOp computed them'
@@ -579,7 +654,7 @@ arm SARSHR oclj_bitop.h 'bitop:t_sar' \
 arm NOINT-FOLD lj_parse.c 'bitop:t_fold' \
   '    if (!oclj_flt2int(expr_numberV(e1), &k1) ||' \
   '    if (!oclj_flt2int(__builtin_floor(expr_numberV(e1)), &k1) ||  /* SABOTAGE NOINT-FOLD: a fractional left operand is floored and folded */'
-arm NOINT-JIT oclj_bitop_rec.c 'floor:t_jit2/guard-exit' \
+arm NOINT-JIT oclj_bitop_rec.c 'floor:t_jit2/guard-exit genrg2' \
   '    emitir(IRTG(IR_EQ, IRT_NUM), back, tr);' \
   '    (void)back;  /* SABOTAGE NOINT-JIT: no guard that the operand is an integer */'
 arm RANGE-HI oclj_num53.h 'bitop:t_ops fuzz' \
@@ -594,7 +669,7 @@ arm ERROPERAND oclj_bitop_meta.c 'bitop:t_ops' \
 arm NARROW lj_opt_fold.c 'floor:t_rec floor:t_jit2' \
   '  if (fins->o == IR_CONV && irt_is64(fins->t))' \
   '  if (0 && fins->o == IR_CONV && irt_is64(fins->t))  /* SABOTAGE NARROW: an operand conversion to int64 is narrowed */'
-arm KFOLD64 lj_opt_fold.c 'fuzz:U floor:t_rec' \
+arm KFOLD64 lj_opt_fold.c 'fuzz:U floor:t_rec genrg2' \
   '#if 1  /* OC-LuaJIT: the 64-bit bit operators, without FFI. */
   case IR_BAND: k1 &= k2; break;' \
   '#if LJ_HASFFI  /* SABOTAGE KFOLD64: the int64 constant folds are FFI-only again */
@@ -620,13 +695,13 @@ arm INEXACT-SLOW oclj_bitop_meta.c 'bitop:t_ops-str' \
 arm INEXACT-FOLD lj_parse.c 'bitop:t_fold fuzz:K' \
   '      if (!oclj_bit2num(oclj_bitop64((int)opr-OPR_BAND+BC_BAND, k1, k2), &d))' \
   '      if (d = (double)oclj_u2s(oclj_bitop64((int)opr-OPR_BAND+BC_BAND, k1, k2)), 0)  /* SABOTAGE INEXACT-FOLD: the parser folds the rounded double */'
-arm INEXACT-JIT oclj_bitop_rec.c 'gen' \
+arm INEXACT-JIT oclj_bitop_rec.c 'gen genrg2' \
   '  if (!tref_isk(res)) {' \
   '  if (0) {  /* SABOTAGE INEXACT-JIT: no guard after a recorded result */'
-arm SELFGUARD lj_opt_fold.c 'gen' \
+arm SELFGUARD lj_opt_fold.c 'gen genrg2' \
   '@T@!(fins->op2 & OCLJ_IRCONV_EXACT))' \
   "@T@1)  /* SABOTAGE SELFGUARD: the exact-mark rule also folds a result guard's own check */"
-arm WIDTH55 lj_opt_fold.c 'gen' \
+arm WIDTH55 lj_opt_fold.c 'gen genrg2' \
   '    if (oclj_bitwidth(J, fleft->op1, 0) <= 54)' \
   '    if (oclj_bitwidth(J, fleft->op1, 0) <= 55)  /* SABOTAGE WIDTH55: a bound of 55 bits passes */'
 arm WSHR oclj_bitop_fold.c 'gen' \
@@ -644,6 +719,15 @@ arm WSHL0 oclj_bitop_fold.c 'gen' \
 arm FIX1 lj_opt_fold.c 'fix1' \
   '      (irt_isi64(IR(fleft->op1)->t) || !irt_isphi(fleft->t))) {' \
   '      (1 || !irt_isphi(fleft->t))) {  /* SABOTAGE FIX1: across a PHI, the fold takes any y */'
+arm WIDTHIDX33 lj_opt_fold.c 'idx:t_idx idx:t_cnt33 idx:t_idx2' \
+  '      oclj_bitwidth(J, fleft->op1, 0) <= 32) {' \
+  '      oclj_bitwidth(J, fleft->op1, 0) <= 33) {  /* SABOTAGE WIDTHIDX33: the table-index fold takes a 33-bit y, whose low 32 bits are not y */'
+arm PHIIDX lj_opt_fold.c 'idx:phiidx' \
+  '  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && !irt_isphi(fleft->t) &&' \
+  '  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && (1 || !irt_isphi(fleft->t)) &&  /* SABOTAGE PHIIDX: the table-index fold crosses a PHI */'
+arm NOLOOPFOLD lj_opt_fold.c 'idx:phiidx' \
+  '  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && !irt_isphi(fleft->t) &&' \
+  '  if (!J->chain[IR_LOOP] && (fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && !irt_isphi(fleft->t) &&  /* SABOTAGE NOLOOPFOLD: the table-index fold never fires in a loop body, where the speed is (verify-folda) */'
 }
 
 # The selection, checked against the arm list before anything is copied: a

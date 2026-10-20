@@ -1,0 +1,14 @@
+0 CLAUDE.md
+0 docs/jit-guide.md
+0 docs/roadmap.md
+0 native/luajit/oclj_bitop_fold.c
+0 native/luajit/patch-bitop-fold.sh
+0 test/native/bitop/gen.lua
+0 test/native/bitop/phiidx.lua
+0 test/native/bitop/t_cnt33.lua
+0 test/native/bitop/t_idx.lua
+0 test/native/bitop/t_idx2.lua
+0 test/native/bitop/t_rg2.lua
+0 test/native/bitop/twin.lua
+0 test/native/negctl-bitop.sh
+0 test/native/run-bitjit.sh

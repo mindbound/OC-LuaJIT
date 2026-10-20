@@ -6,7 +6,7 @@
 -- X and the iteration converter by role C2 of the round-3 implementation.
 -- test/native/run-bitjit.sh drives it; bitop/drv.lua runs the cases.
 --
---   luajit gen.lua <seed> <count> <outdir> [phi]
+--   luajit gen.lua <seed> <count> <outdir> [phi|idx|rg2]
 --
 -- Writes <outdir>/cases_lj.lua (our LuaJIT's text) and <outdir>/cases_puc.lua
 -- (the same loops for PUC 5.3.6: every bit operator's result goes through
@@ -15,7 +15,18 @@
 -- operand to 32 bits first)", X as drv.lua defines it; ~>> becomes
 -- SAR(); loop indices are floats so all arithmetic is double arithmetic, as
 -- on our VM).  "phi" makes half the statements carry a finitely-bounded value
--- across the loop's PHI.
+-- across the loop's PHI.  "idx" (proto-folda, 2026-10-20, for the CRC32
+-- follow-up's table-index fold) makes a third of the atoms index expressions
+-- bounded at exactly 32 or 33 bits used as table keys, string.byte arguments
+-- and shift counts, or slots used as keys, and a third of the statements set
+-- a slot to such an index (below, at IDXMODE).  "rg2" (proto-rg2,
+-- 2026-10-20) puts results at and past 2^53, where a result's guard decides
+-- between a value and a raise (below, bigatom: a quarter of the atoms and
+-- half the statements).  The modes exclude each other, and each one's draws
+-- sit behind its own flag (MODE and rnd(n), so a mode that is off draws
+-- nothing), so every mode's seeds generate what that mode's prototype
+-- generated, and the default and phi modes what they generated before idx
+-- and rg2 existed (checked byte for byte, 2026-10-20).
 -- Each case is a chunk returning run(n, x0, y0, z0), the getter of the loop
 -- variable's last value, and a converter from that value to the iteration
 -- count; carried values live in slots (x, y, z, h), a table t, an upvalue u;
@@ -63,8 +74,52 @@ local function U(a) return { "(~" .. a[1] .. ")", "X(~" .. a[2] .. ", '~')" } en
 local function K(t) local s = pick(t); return P(s) end
 local function KA(t) local s = pick(t); return P(s, "(" .. s .. " + 0.0)") end
 
+-- "rg2" (proto-rg2, 2026-10-20, for the CRC32 follow-up's range guard, a
+-- loop-body guard that a result lies in [-2^53, 2^53), which speculated: an
+-- exact result outside it left the trace; prototyped, measured and not
+-- shipped).  These atoms put results at and past 2^53, which every build's
+-- result guards must handle as the interpreter does: exact values in bits
+-- 53-63, exact values just outside [-2^53, 2^53), inexact ones just past it
+-- (they raise), and values that cross it late, after the loop compiled.
+-- They are drawn only in this mode, so the default and phi seeds generate
+-- the loops they did.
+local RG2MODE = arg[4] == "rg2"
+local function bigatom()
+  local r = rnd(12)
+  local i7 = B("&", P("i"), P("7"))
+  -- (i & 255) >> 6 is 0 below 64, then 1, 2, 3: past 2^53 late, after the
+  -- loop compiled; a descending or negative index crosses the other way.
+  local hi = B(">>", B("&", P("i"), P("255")), P("6"))
+  if r == 1 then return B("<<", i7, K({ "53", "56", "60", "61" })) end   -- counters in bits 53-63
+  if r == 2 then return B("<<", B("&", P("i"), P("1")), P("63")) end     -- 0 or -2^63
+  if r == 3 then  -- flags 2^50 .. 2^57: 2^53 when i & 7 is 3
+    return B("<<", P("1"), P("(50 + " .. i7[1] .. ")", "(50 + " .. i7[2] .. ")"))
+  end
+  if r == 4 then return B("<<", hi, P("52")) end  -- 2^52, then 2^53 and 3 * 2^52: exact, outside
+  if r == 5 then return B("|", B("<<", hi, P("52")), K({ "1", "2", "3" })) end  -- 2^53 + 1 raises, 2^53 + 2 not
+  if r == 6 then  -- -2^53 + 1 exact and inside; -3 * 2^52 + 1 raises
+    return B("~", P("(" .. hi[1] .. " * -2^52)", "(" .. hi[2] .. " * -2^52)"), P("1"))
+  end
+  if r == 7 then  -- -2^53 (inside, the bound), -3 * 2^52 (exact, outside)
+    return B("|", P("(" .. hi[1] .. " * -2^52)", "(" .. hi[2] .. " * -2^52)"), P("0"))
+  end
+  if r == 8 then  -- -2^63 ~>> k: -2^53 at k = 10, exact and outside below it
+    return B("~>>", K({ "-2^63", "-2^62", "2^62" }), B("&", P("i"), P("15")))
+  end
+  if r == 9 then return B("&", P(pick(VARS)), K({ "-2^53", "-2^56", "-2^60" })) end  -- top-bit masks
+  local i3 = B("&", P("i"), P("3"))
+  if r == 10 then  -- 2^53 - 2, 2^53 - 1 (inside); 2^53 (exact, outside; 2^53 + 1 rounds to it)
+    return B("|", P("(2^53 - 2 + " .. i3[1] .. ")", "(2^53 - 2 + " .. i3[2] .. ")"), P("0"))
+  end
+  if r == 11 then  -- -2^53 - 2 (exact, outside), -2^53, -2^53 + 2, -2^53 + 4
+    return B("~", P("(-2^53 - 2 + " .. i3[1] .. " * 2)", "(-2^53 - 2 + " .. i3[2] .. " * 2)"), P("0"))
+  end
+  return B("<<", P("i"), K({ "44", "45", "46" }))  -- past 2^53 from i = 512, 256, 128
+end
+
 local INNERJ = false  -- inside an inner loop, j is an atom
-local function atom()
+local function atom0()
+  if RG2MODE and rnd(4) == 1 then return bigatom() end
   local r = rnd(INNERJ and 17 or 16)
   if r <= 5 then return P(pick(VARS)) end
   if r == 6 then return P("i") end
@@ -84,6 +139,48 @@ local function atom()
   if r == 13 then return KA(KM) end
   if r >= 14 and r <= 16 then return P(pick(VARS)) end
   return P("j")
+end
+
+-- "idx" mode (OCLJ_BITJIT_GENMODE=idx; the CRC32 follow-up's table-index
+-- fold, patch-bitop-fold.sh hunk 11, which folds CONV int.num (CONV num.i64
+-- y) to CONV int.i64 y when oclj_bitwidth(y) <= 32): index expressions whose
+-- bound is exactly 32 (fold) or 33 (no fold: a fold would keep only y's low
+-- 32 bits), used where LuaJIT converts a number to an int32 -- a table key
+-- (tk, which holds keys at and past +-2^31 and +-2^32), string.byte's
+-- argument and a variable shift count -- and a slot read as a table key, so
+-- that an index set by an idx statement crosses the loop's PHI.  Every draw
+-- of this mode is behind IDXMODE, so the other modes' seeds generate what
+-- they generated before (gen.lua's header).
+local IDXMODE = arg[4] == "idx"
+local IDXE = {
+  function(a) return B("~>>", a, P("32")) end,                       -- 32
+  function(a) return B("&", a, P("0x7fffffff")) end,                 -- 32
+  function(a) return B("<<", B("&", a, P("0xffff")), P("15")) end,   -- 32
+  function(a) return B(">>", a, P("33")) end,                        -- 32
+  function(a) return U(B("&", a, P("0x7fffffff"))) end,              -- 32
+  function(a) return B("~>>", a, P("31")) end,                       -- 33
+  function(a) return B("&", a, P("0xffffffff")) end,                 -- 33
+  function(a) return B("<<", B("&", a, P("0xffff")), P("16")) end,   -- 33
+  function(a) return B(">>", a, P("32")) end,                        -- 33
+  function(a) return U(B("&", a, P("0xffffffff"))) end,              -- 33
+  function(a) return U(B("~>>", a, P("31"))) end,                    -- 33
+}
+local function idxatom()
+  local r = rnd(7)
+  if r == 7 then  -- a slot as a key: set by an idx statement, across the PHI
+    local v = pick(VARS)
+    return P("(tk[" .. v .. "] or 0)", "(tk[" .. v .. "] or 0.0)")
+  end
+  local e = IDXE[rnd(#IDXE)](atom0())
+  if r <= 2 then return P("(tk[" .. e[1] .. "] or 0)", "(tk[" .. e[2] .. "] or 0.0)") end
+  if r == 3 then return P("(s:byte(" .. e[1] .. ") or 0)", "((s:byte(" .. e[2] .. ") or 0) + 0.0)") end
+  if r == 4 then return B("<<", P("3"), e) end
+  if r == 5 then return B(">>", P("0x7fffffff"), e) end
+  return B("~>>", P("-0x40000000"), e)
+end
+local function atom()
+  if IDXMODE and rnd(3) == 1 then return idxatom() end
+  return atom0()
 end
 
 -- Boundary shapes: each one's correct bound is exactly 55 (no fold), and an
@@ -183,10 +280,24 @@ local function finite(e)
   if r == 5 then return B(pick({ "|", "~" }), B(">>", e, K(KSF)), B("&", expr(1), K(KMF))) end
   return B("<<", B("&", e, K(KMF)), K({ "1", "2", "8", "20", "37", "38" }))
 end
+-- rg2 mode: a statement whose result sits at or past 2^53.
+local function rg2stmt(v)
+  local r = rnd(6)
+  local b = bigatom()
+  if r == 1 then return assign(v, b) end
+  if r == 2 then return assign(v, B("~", B("&", P(v), P("-2^50")), b)) end  -- carried, high bits only
+  if r == 3 then return assign(v, B(pick({ ">>", "~>>" }), b, K({ "0", "1", "3", "9", "10", "11" }))) end
+  if r == 4 then return assign(v, B("|", b, B("&", E(), P("0xff")))) end  -- low bits joined: raises past 2^53
+  if r == 5 then return assign(v, B("~", P(v), b)) end  -- carried as it is
+  return assign(v, B(pick({ "&", "|", "~" }), b, bigatom()))
+end
 stmt = function(depth)
   local r = rnd(20)
   local v = pick(VARS)
   if PHIMODE and rnd(2) == 1 then return assign(v, finite(E())) end
+  if RG2MODE and rnd(2) == 1 then return rg2stmt(v) end
+  -- idx: a slot set to an index-shaped value, read as a key next iteration
+  if IDXMODE and rnd(3) == 1 then return assign(v, IDXE[rnd(#IDXE)](E())) end
   if r <= 7 then return assign(v, E()) end
   if r == 8 then  -- double arithmetic on a bit result
     local e = E()
@@ -290,9 +401,20 @@ for id = 1, COUNT do
     if hk == 6 then return "  local i = 0" .. z .. "\n  while i < n do\n      i = i + 1\n", "  end\n", "v" end
     return "  for i = 1" .. z .. ", n do\n", "  end\n", "v"
   end
+  -- idx mode's key table: 0..15, and keys at and past +-2^31 and +-2^32,
+  -- among them the ones whose low 32 bits are small (-2^32 + 5, + 40, + 49).
+  local function tkline(z)
+    if not IDXMODE then return "" end
+    local kv = {}
+    for k = 0, 15 do kv[#kv + 1] = "[" .. k .. "] = " .. (100 + k) .. z end
+    local H = { "-1", "-5", "2^31", "(2^31 + 5)", "(2^32 - 6)", "-2^31", "(-2^31 - 1)",
+      "(-2^32 + 5)", "(2^32 + 5)", "(2^31 - 1)", "2^32", "-2^32", "(-2^32 + 40)", "(-2^32 + 49)" }
+    for j, k in ipairs(H) do kv[#kv + 1] = "[" .. k .. "] = " .. (-j) .. z end
+    return "local tk = { " .. table.concat(kv, ", ") .. " }\n"
+  end
   local function chunk(body, helperline, istart, z)
     local hd, ft, iter = header(z)
-    return "local SAR, NY = ...\nlocal EMPTY = {}\n" ..
+    return "local SAR, NY = ...\nlocal EMPTY = {}\n" .. tkline(z) ..
       "local t = { 0" .. z .. ", 1" .. z .. ", 2" .. z .. ", 3" .. z .. ", 4" .. z ..
       ", 5" .. z .. ", 6" .. z .. ", 7" .. z .. " }\nlocal u = 0" .. z .. "\n" ..
       "local s = '\\1\\255\\128\\0\\7\\63\\64\\200\\3\\254\\17\\129\\99\\31\\32\\33'\n" ..

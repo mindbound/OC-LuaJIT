@@ -1,0 +1,57 @@
+== W-rc: rcis build-win 0
+== W-pin: sh -c grep -q "pin     = met" "$1" && grep -q -F "8 trees to their names, 232 files to the pin" "$1" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/build-win.log
+== W-ignored-none: grep -q ignored from the environment: none  /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/build-win.log
+== W-patch: grep -q -F the table-index fold (63 lines added, 8 removed, of 2708) /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/build-win.log
+== W-objects: objcmp /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/b/win /c/Users/astro/Downloads/OC-LuaJIT/build/native windows-x86_64 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/cmp/win-vs-buildnative
+== W-fold-object: sh -c [ "$(md5sum < "$1" | cut -c1-32)" = "$2" ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/b/win/luajit-windows-x86_64/src/lj_opt_fold.o 1d018acc8b2ce53076dfbb2e63aa5cdd
+== ALMA-ran: [ -f /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma/part.done ]
+== ALMA-rc: [ 0 = 0 ]
+== ALMA-ignored-none: grep -q ignored from the environment: none  /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma/build.log
+== ALMA-patch: grep -q -F the table-index fold (63 lines added, 8 removed, of 2708) /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma/build.log
+== ALMA-glibc: sh -c [ -n "$1" ] && [ "$1" -le 28 ] x 17
+== ALMA-objects: [ 0 = 0 ]
+== ALMA-fold-object: [ 33a2cc50e40803c75555753124faa06f = 33a2cc50e40803c75555753124faa06f ]
+== ALMA-bitjit: sh -c [ "$(cat "$1/rc/bitjit-all.rc")" = 0 ] && grep -q "^RUN-BITJIT: PASS (results" "$1/bitjit-all.log" && grep -q "^PASS phiidx" "$1/bitjit-all.log" && grep -q "^PASS t_idx2: PUC" "$1/bitjit-all.log" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma
+== ALMA-gen-idx: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma idx
+== ALMA-gen-rg2: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma rg2
+== BITJIT-all: sh -c [ "$(cat "$1/rc/bitjit-all.rc")" = 0 ] && grep -q "^RUN-BITJIT: PASS (results" "$2" && [ "$(grep -c "^seed [0-9]*: PASS" "$2")" = 4 ] && grep -q "^PASS t_rg2 (" "$2" && grep -q "^PASS t_rg2: PUC" "$2" && grep -q "^PASS fix1" "$2" && grep -q "^PASS t_idx (" "$2" && grep -q "^PASS t_cnt33 (" "$2" && grep -q "^PASS t_idx2 (" "$2" && grep -q "^PASS t_idx2: PUC" "$2" && grep -q "^PASS phiidx" "$2" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/bitjit-all.log
+== BITJIT-gen-idx: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/logs/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 idx
+== BITJIT-gen-rg2: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/logs/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 rg2
+== BITJIT-gen-phi: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/logs/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 phi
+== BITOP: sh -c [ "$(cat "$1/rc/bitop.rc")" = 0 ] && grep -q "^RUN-BITOP: PASS" "$1/logs/bitop.log" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1
+== BITFUZZ: sh -c [ "$(cat "$1/rc/bitfuzz.rc")" = 0 ] && grep -q "^BITFUZZ PASS" "$1/logs/bitfuzz.log" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1
+== NEGCTL-rc: sh -c [ "$(cat "$1/rc/negctl-bitop.rc")" = 0 ] && grep -q "^NEGCTL-BITOP: PASS (canon passes; every sabotage is caught" "$2" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/negctl-bitop.log
+== NEGCTL-canon: sh -c grep -q "^.negctl-bitop. canon (-, .*: PASS (every catcher passes; every object reproduced)" "$1" && grep -q "pristine files from .*luajit-export-windows-x86_64/src" "$1" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/negctl-bitop.log
+== NEGCTL-30-arms: cmp -s /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/cmp/negctl-caught.txt /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/cmp/negctl-want.txt
+== NEGCTL-restore: grep -q ^.negctl-bitop. restore: PASS /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/logs/negctl-bitop.log
+== RUNNER-run.sh: rcis runner-run.sh 0
+== RUNNER-run-mem.sh: rcis runner-run-mem.sh 0
+== RUNNER-run-vgc.sh: rcis runner-run-vgc.sh 0
+== RUNNER-run-wd.sh: rcis runner-run-wd.sh 0
+== RUNNER-run-penalty.sh: rcis runner-run-penalty.sh 0
+== RUNNER-run-race.sh: rcis runner-run-race.sh 0
+== RUNNER-run-security.sh: rcis runner-run-security.sh 0
+== RUNNER-run-pack.sh: rcis runner-run-pack.sh 0
+== RUNNER-run-packfuzz.sh: rcis runner-run-packfuzz.sh 0
+== GEN-identity: [ 0 = 0 ]
+== CR0: [ 0 = 0 ]
+== GIT-DIFF-CHECK: rcis git-diff-check 0
+== GIT-DIFF-CHECK-NEW: [ 0 = 0 ]
+== SHN-gitbash: [ 0 = 0 ]
+== SHN-alma: sh -c [ -s "$1" ] && ! grep -v "^0 " "$1" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/alma/shn.txt
+== SHN-ubuntu: sh -c [ -s "$1" ] && ! grep -v "^0 " "$1" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/ubuntu/shn.txt
+== ENGINE: sh -c [ "$1" = 0 ] && [ "$(wc -l < "$2" | tr -d " ")" = 7 ] x 0 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/cmp/engine.txt
+== BUILD-NATIVE-UNCHANGED: sh -c git -C "$1" diff --quiet HEAD -- native/build-native.sh && [ "$(md5sum < "$1/native/build-native.sh" | cut -c1-32)" = "$2" ] x /c/Users/astro/Downloads/OC-LuaJIT 47b9c52eecce550b57871d8448593bc3
+== PATCH-NO-TAB-BS: sh -c [ "$1" = 0 ] && [ "$2" = 0 ] x 0 0
+== PATCH-PRISTINE: sh -c [ "$(cat "$1/rc/ps-run1.rc")" = 0 ] && grep -q -F "$2" "$1/ps/run1.log" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 the table-index fold (63 lines added, 8 removed, of 2708)
+== PATCH-IDEMPOTENT: sh -c [ "$(cat "$1/rc/ps-run2.rc")" = 0 ] && grep -q "already folds the 64-bit bit operators without FFI (verified) -- unchanged" "$1/ps/run2.log" && cmp -s "$1/ps/out1.c" "$1/ps/out2.c" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1
+== PATCH-IS-BUILD-COPY: cmp -s /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/ps/out1.c /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/b/win/luajit-windows-x86_64/src/lj_opt_fold.c
+== TIMING-benches: sh -c [ "$(wc -l < "$1" | tr -d " ")" = 6 ] && cmp -s "$1" "$2" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/timing/bench-chain1.md5 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/timing/bench-now.md5
+== TIMING-base: sh -c for f in luajit.exe lj_opt_fold.o; do m=$(md5sum < "$1/luajit-windows-x86_64/src/$f" | cut -c1-32); grep -q "^$m .*/b-base/luajit-windows-x86_64/src/$f$" "$2" || exit 1; done x /c/Users/astro/claude-tmp/oclj/crc/combine/b-base /c/Users/astro/claude-tmp/oclj/crc/main/chain-1/inputs.md5
+== TIMING-complete: sh -c [ "$1" = 0 ] && [ "$(grep -c "^round [0-9]* done" "$2")" = "$3" ] x 0 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/timing/progress.txt 7
+== TIMING-results-equal: sh -c grep -q "^RESULTS: EQUAL" "$1" && grep -q "^SUMMARY: OK" "$1" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/timing/summary.txt
+== TIMING-fold-active: sh -c v=$(sed -n "s/^CRCTABLE_NEW_OVER_BASE //p" "$1"); [ -n "$v" ] && awk -v v="$v" "BEGIN { exit !(v + 0 > 0 && v + 0 < 0.75) }" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/timing/summary.txt
+== CENSUS-build: cmp -s /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/census/before-build.md5 /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/census/after-build.md5
+== CENSUS-pristine-stat: cmp -s /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/census/before-pristine-stat.txt /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/census/after-pristine-stat.txt
+== CENSUS-pristine-git: sh -c cmp -s "$1-pristine-git.md5" "$2-pristine-git.md5" && cmp -s "$1-pristine-head.txt" "$2-pristine-head.txt" x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/census/before /c/Users/astro/claude-tmp/oclj/crc2/main/final-1/census/after
+== FILES-unchanged: sh -c cmp -s "$1/changed-files.txt" "$1/changed-files-end.txt" && cmp -s "$1/md5-start.txt" "$1/md5-end.txt" && [ "$(git -C "$2" rev-parse HEAD)" = "$(cat "$1/repo-head.txt")" ] x /c/Users/astro/claude-tmp/oclj/crc2/main/final-1 /c/Users/astro/Downloads/OC-LuaJIT

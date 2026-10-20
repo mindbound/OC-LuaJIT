@@ -30,8 +30,12 @@
 #   change (2026-10-17).
 #   - Speed: each operator's result is a double that the next operator
 #     converts back to int64, behind a guard; each would cost a round trip.
+#     And a result used as an int (a table key, a library integer argument,
+#     a variable shift count) is converted from its double by a guarded
+#     CONV int.num, a round trip on the loop's dependency chain in table-
+#     driven CRC32 (roadmap row 209).
 #
-# THE CHANGE, ten hunks.
+# THE CHANGE, eleven hunks.
 #   1. lj_opt_fold.c includes oclj_bitop.h, for OCLJ_IRCONV_EXACT.
 #   2-6, 9, 10. The seven #if LJ_HASFFI become #if 1.  kfold_int64shift
 #      computes the shift itself: FFI's lj_carith_shift64 (lj_carith.c:302)
@@ -59,20 +63,41 @@
 #        integer is a double (oclj_bitwidth's bound of 54 or less).  This is
 #        what removes the guard of a result that fits.  oclj_bitwidth and
 #        its soundness argument are in native/luajit/oclj_bitop_fold.c,
-#        #included directly above the rule: buildvm -m folddef reads the
-#        LJFOLD lines of this file only, so the rule must stay here.
+#        #included above simplify_conv_int_num (hunk 11), the first of its
+#        two callers: buildvm -m folddef reads the LJFOLD lines of this file
+#        only, so the rules must stay here.
 #      Across a PHI both rules fold only to an int64-typed y: an int-typed y
 #      is the int loop index after simplify_conv_sext's x64 LEFTFOLD
 #      (:1242), and an int64 PHI of it makes loop_unroll raise TYPEINS and
 #      blacklist the loop (found by the round-3 review, 2026-10-17).
 #   8. narrow_convert returns NEXTFOLD for an int64 CONV.
+#   11. The table-index fold (the CRC32 follow-up, roadmap row 209):
+#      simplify_conv_int_num, the owner of LJFOLD(CONV CONV IRCONV_INT_NUM),
+#      turns (int)(num)y into the unguarded CONV int.i64 y when y is an
+#      int64 that oclj_bitwidth bounds at 32 bits or fewer, i.e. y lies in
+#      [-2^31, 2^31).  Such a y is its double exactly and an int32 exactly,
+#      so the num->int conversion gives y whatever its check mode (INDEX for
+#      a table key, ANY for a library integer argument, CHECK for round 3's
+#      variable shift count and narrowing's leaves) and its guard cannot
+#      fail; y's low 32 bits are y.  The proof is the bound alone: no guard
+#      and no exact mark is read, so no guard justifies its own removal.  The
+#      new mode is exactly (IRT_INT<<IRCONV_DSH)|IRT_I64, with no check bits:
+#      x64's asm_conv then emits mov r32, r32 (with IRCONV_NONE set it would
+#      emit nothing and keep y's upper half).  Never across a PHI: the new
+#      instruction is built on fleft->op1, which for a PHI-marked fleft is a
+#      pre-roll ref (lj_opt_fold.c's requirement 2).  The bound is tight: at
+#      33, y = -(2^32 - 5) truncates to 5, a different table key and a
+#      variable shift count that passes its ULT 64 guard (round 3's review,
+#      verify:tablefold:0).  The #include of oclj_bitop_fold.c moves from
+#      hunk 7 to here, above both callers.
 #
 # Anchored, refusing otherwise, on the line `#include "lj_strfmt.h"`
 # (lj_opt_fold.c:31 at 1ee778a4); on each of the seven #if LJ_HASFFI lines
 # together with the line or lines after it that make it unique (:376-377,
 # :432-436, :444-445, :471-472, :492-493, :1746-1749, :1794-1796); on
-# simplify_conv_i64_num's first five lines (:1138-1142); and on
-# narrow_convert's comment and loop check (:1315-1317); each exactly once.
+# simplify_conv_i64_num's first five lines (:1138-1142); on
+# narrow_convert's comment and loop check (:1315-1317); and on
+# simplify_conv_int_num whole (:1128-1136); each exactly once.
 # No LJFOLD line is added or removed (checked), so buildvm's fold table
 # keeps its rules.  Verified by content, by diff, and by putting upstream's
 # text back and comparing with the input.  CRLF is stripped (the pinned tree
@@ -88,8 +113,8 @@ OUT=$2
 ME=patch-bitop-fold.sh
 MARK='OC-LuaJIT (native/luajit/patch-bitop-fold.sh)'
 NMARK=1     # the marker occurs once in a patched file
-NH=10       # hunks
-NADD=45     # lines diff -d reports added on the pristine file ...
+NH=11       # hunks
+NADD=63     # lines diff -d reports added on the pristine file ...
 NDEL=8      # ... and removed
 NOFFI='#if 1  /* OC-LuaJIT: the 64-bit bit operators, without FFI. */'
 
@@ -178,11 +203,6 @@ LJFOLDF(simplify_conv_i64_num)
   PHIBARRIER(fleft);
 EOF
 cat > "$D/n7" <<'EOF'
-/* OC-LuaJIT: oclj_bitwidth, the bound the width rule below reads, is in
-** native/luajit/oclj_bitop_fold.c; buildvm reads LJFOLD lines from this file
-** only, so the rule stays here. */
-#include "oclj_bitop_fold.c"
-
 LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32 */
 LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _INT or _U32 */
 LJFOLDF(simplify_conv_i64_num)
@@ -247,6 +267,52 @@ cat > "$D/n10" <<'EOF'
 #if 1  /* OC-LuaJIT: the 64-bit bit operators, without FFI. */
   IRIns *irk = IR(fleft->op2);
   if (irk->o == IR_KINT64) {
+EOF
+# 11. simplify_conv_int_num: the table-index fold; the bound's #include.
+cat > "$D/o11" <<'EOF'
+LJFOLD(CONV CONV IRCONV_INT_NUM)  /* _INT */
+LJFOLDF(simplify_conv_int_num)
+{
+  /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+  if ((fleft->op2 & IRCONV_SRCMASK) ==
+      ((fins->op2 & IRCONV_DSTMASK) >> IRCONV_DSH))
+    return fleft->op1;
+  return NEXTFOLD;
+}
+EOF
+cat > "$D/n11" <<'EOF'
+/* OC-LuaJIT: oclj_bitwidth, the bound that the table-index fold below and
+** simplify_conv_i64_num's width rule read, is in native/luajit/
+** oclj_bitop_fold.c; buildvm reads LJFOLD lines from this file only, so the
+** rules stay here. */
+#include "oclj_bitop_fold.c"
+
+LJFOLD(CONV CONV IRCONV_INT_NUM)  /* _INT */
+LJFOLDF(simplify_conv_int_num)
+{
+  /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+  if ((fleft->op2 & IRCONV_SRCMASK) ==
+      ((fins->op2 & IRCONV_DSTMASK) >> IRCONV_DSH))
+    return fleft->op1;
+  /* OC-LuaJIT, the table-index fold: (int)(num)y ==> the unguarded CONV
+  ** int.i64 y, for an int64 y in [-2^31, 2^31) (oclj_bitwidth's bound of 32
+  ** or less): a bit result used as a table key (INDEX), a library integer
+  ** argument (ANY) or a variable shift count (CHECK).  Such a y is its
+  ** double exactly and an int32 exactly, so this conversion, checked or
+  ** not, gives y, and its check cannot fail; y's low 32 bits are y.  The
+  ** proof is the bound alone, which reads no guard and no exact mark.  The
+  ** mode has no check bits, so x64's asm_conv emits mov r32, r32, which
+  ** zero-extends as every int does.  Not across a PHI: the new instruction
+  ** would take fleft->op1, a pre-roll ref, into the loop body. */
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_I64 && !irt_isphi(fleft->t) &&
+      oclj_bitwidth(J, fleft->op1, 0) <= 32) {
+    fins->ot = IRTI(IR_CONV);
+    fins->op1 = fleft->op1;
+    fins->op2 = (IRT_INT<<IRCONV_DSH)|IRT_I64;
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
+}
 EOF
 
 # --- THE HUNK ENGINE (the same text in all seven patch-bitop-*.sh) ---------
@@ -350,18 +416,30 @@ verify_patched() {
 # --- end of the hunk engine ----------------------------------------------
 
 # What the hunks cannot say on their own: seven #if 1 lines; the bound is
-# included once, before the one rule that calls it; and the include is not
-# itself a line buildvm would read (it does not start with LJFOLD).
+# included once, before the two rules that call it, each rule calling it
+# once inside its own function (the table-index fold with 32, the width rule
+# with 54); and the include is not itself a line buildvm would read (it does
+# not start with LJFOLD).  Which checks fail alone (every check run on ten
+# mutations, 2026-10-20): when every hunk's text matched, the #if 1 count,
+# the oclj_bitwidth( count (a stray line), and the link "the 32 call above
+# simplify_conv_i64_num" (hunk 11 above hunk 7: the pristine file's order);
+# on an edit of this script's n11 or n7, the order links inside that hunk.
+# Implied, and kept for their messages: the include count and both calls'
+# counts (an extra one also fails an order link, and none the missing check).
 verify_content() {
   [ "$(countx "$NOFFI" "$1")" = 7 ] || fail "$1: '$NOFFI' occurs $(countx "$NOFFI" "$1") times, expected 7"
   [ "$(countx '#include "oclj_bitop_fold.c"' "$1")" = 1 ] || fail "$1: oclj_bitop_fold.c is included $(countx '#include "oclj_bitop_fold.c"' "$1") times, expected 1"
-  [ "$(countsub 'oclj_bitwidth(' "$1")" = 1 ] || fail "$1: oclj_bitwidth is named on $(countsub 'oclj_bitwidth(' "$1") lines, expected 1 (the rule's call; the definition is in oclj_bitop_fold.c)"
+  [ "$(countsub 'oclj_bitwidth(' "$1")" = 2 ] || fail "$1: oclj_bitwidth is named on $(countsub 'oclj_bitwidth(' "$1") lines, expected 2 (the two rules' calls; the definition is in oclj_bitop_fold.c)"
+  [ "$(countsub 'oclj_bitwidth(J, fleft->op1, 0) <= 32)' "$1")" = 1 ] || fail "$1: the table-index fold's call (32) does not occur exactly once"
+  [ "$(countsub 'oclj_bitwidth(J, fleft->op1, 0) <= 54)' "$1")" = 1 ] || fail "$1: the width rule's call (54) does not occur exactly once"
   LI=$(grep -n -x -F '#include "oclj_bitop_fold.c"' "$1" | cut -d: -f1)
-  LR=$(grep -n -x -F 'LJFOLDF(simplify_conv_i64_num)' "$1" | cut -d: -f1)
-  LC=$(grep -n -F 'oclj_bitwidth(J, fleft->op1, 0)' "$1" | cut -d: -f1)
-  [ -n "$LI" ] && [ -n "$LR" ] && [ -n "$LC" ] || fail "$1: missing the include, the rule or its call"
-  if [ "$LI" -lt "$LR" ] && [ "$LR" -lt "$LC" ]; then :; else
-    fail "$1: out of order (include $LI, simplify_conv_i64_num $LR, the call $LC)"
+  LR1=$(grep -n -x -F 'LJFOLDF(simplify_conv_int_num)' "$1" | cut -d: -f1)
+  LC1=$(grep -n -F 'oclj_bitwidth(J, fleft->op1, 0) <= 32)' "$1" | cut -d: -f1)
+  LR2=$(grep -n -x -F 'LJFOLDF(simplify_conv_i64_num)' "$1" | cut -d: -f1)
+  LC2=$(grep -n -F 'oclj_bitwidth(J, fleft->op1, 0) <= 54)' "$1" | cut -d: -f1)
+  [ -n "$LI" ] && [ -n "$LR1" ] && [ -n "$LC1" ] && [ -n "$LR2" ] && [ -n "$LC2" ] || fail "$1: missing the include, a rule or its call"
+  if [ "$LI" -lt "$LR1" ] && [ "$LR1" -lt "$LC1" ] && [ "$LC1" -lt "$LR2" ] && [ "$LR2" -lt "$LC2" ]; then :; else
+    fail "$1: out of order (include $LI, simplify_conv_int_num $LR1, its call $LC1, simplify_conv_i64_num $LR2, its call $LC2)"
   fi
 }
 
@@ -418,4 +496,4 @@ cmp -s "$D/back" "$D/in" || fail "putting each hunk's upstream text back does no
 
 mv -f "$TMP" "$OUT" || fail "cannot write $OUT"
 trap 'rm -rf "$D"' EXIT
-echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark and width rules ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"
+echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark and width rules, the table-index fold ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"
