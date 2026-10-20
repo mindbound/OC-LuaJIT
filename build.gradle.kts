@@ -87,7 +87,7 @@ val glibcFloor = "2.28"
 val verifyModAssets by tasks.registering {
     group = "verification"
     description = "Refuse to package a library in OpenComputers' own name, or a Linux native above " +
-        "the glibc floor; report what will ship"
+        "the glibc floor or with an unversioned import; report what will ship"
 
     // Captured at configuration time so the action holds values, not references
     // to this script, which the configuration cache cannot serialize. The paths
@@ -293,12 +293,12 @@ val verifyModAssets by tasks.registering {
                 bad(".gnu.version_r links to section $link, which is not a string table")
             }
             val (stStart, stEnd) = section(link.toInt(), "the string table of .gnu.version_r")
-            fun name(o: Long): String {
-                if (o >= stEnd - stStart) bad("a name at offset $o lies outside its string table")
-                var p = stStart + o
-                while (p < stEnd && b[p.toInt()] != 0.toByte()) p++
-                if (p >= stEnd) bad("a name runs past the end of its string table")
-                return String(b, (stStart + o).toInt(), (p - stStart - o).toInt(), Charsets.ISO_8859_1)
+            fun name(o: Long, start: Long = stStart, end: Long = stEnd): String {
+                if (o >= end - start) bad("a name at offset $o lies outside its string table")
+                var p = start + o
+                while (p < end && b[p.toInt()] != 0.toByte()) p++
+                if (p >= end) bad("a name runs past the end of its string table")
+                return String(b, (start + o).toInt(), (p - start - o).toInt(), Charsets.ISO_8859_1)
             }
 
             // Elf64_Verneed {u16 version, u16 cnt, u32 file, u32 aux, u32 next} and
@@ -309,6 +309,7 @@ val verifyModAssets by tasks.registering {
             val libs = u32(sh(vr[0]) + 44)
             if (libs < 1 || libs > room) bad(".gnu.version_r claims $libs libraries in room for $room records")
             val needs = mutableListOf<Pair<String, String>>()
+            val assigned = mutableSetOf<Int>()
             var read = libs
             var vn = vrStart
             for (k in 1..libs) {
@@ -322,6 +323,7 @@ val verifyModAssets by tasks.registering {
                     if (++read > room) bad("more version records than .gnu.version_r holds")
                     if (aux > vrEnd - 16) bad("a version needed from $lib lies outside .gnu.version_r")
                     needs.add(lib to name(u32(aux + 8)))
+                    assigned.add(u16(aux + 6))
                     val next = u32(aux + 12)
                     if (next == 0L && j < cnt) bad("the versions needed from $lib end after $j of the $cnt vn_cnt claims")
                     if (next != 0L && j == cnt) bad("the versions needed from $lib run on past the $cnt vn_cnt claims")
@@ -332,6 +334,84 @@ val verifyModAssets by tasks.registering {
                 if (next != 0L && k == libs) bad("the library chain runs on past the $libs sh_info claims")
                 vn += next
             }
+
+            // EVERY IMPORT MUST CARRY A SYMBOL VERSION.  An undefined dynamic symbol
+            // with none names no library and no version, so it binds to whatever the
+            // host process has loaded.  The AlmaLinux 8 trial .so, linked without
+            // -pthread (2026-10-19), imported six pthread functions so: they resolved
+            // inside a JVM, which had libpthread loaded already, and in a host without
+            // it the same .so stops at its first pthread_create.  build-native.sh's
+            // ELF import gate refuses such a .so, but this task packages whatever is
+            // in the natives directory, and that one passes every other check here:
+            // its fingerprint and exports are this tree's, and its needs are within
+            // the floor.  So the imports are read from the file too: .dynsym, the one
+            // SHT_DYNSYM section (24-byte Elf64_Sym {u32 name, u8 info, u8 other, u16
+            // shndx, u64 value, u64 size}), and .gnu.version, SHT_GNU_versym, one u16
+            // per symbol whose low 15 bits are its version index (the top bit is the
+            // hidden flag, not part of it): 0 is local, 1 the unversioned global
+            // base, and any other index must be one a Vernaux record above assigns
+            // (vna_other), since that is the version the loader checks.  Without a
+            // .gnu.version every import is unversioned.  An import is a symbol with
+            // shndx SHN_UNDEF and a name; a WEAK one (st_info >> 4 == STB_WEAK:
+            // __gmon_start__, the TM clone hooks) is optional by definition, so it is
+            // listed, not refused.
+            // This reading runs here, before any verdict, so a file whose symbols do
+            // not parse is refused as unreadable; its verdict runs after the floor's,
+            // so every .so the floor refuses is refused with the same words as
+            // before, and the floor's fix -- build-native.sh in AlmaLinux 8 -- also
+            // clears an unversioned import, which its import gate refuses.  Names are
+            // read only to tell an empty one and to report, so one pass over the
+            // symbols suffices for a table of any size.
+            val dsAt = (0 until shnum).filter { u32(sh(it) + 4) == 11L }
+            if (dsAt.size != 1) bad("${dsAt.size} .dynsym sections, not 1")
+            val ds = dsAt[0]
+            val (dsStart, dsEnd) = section(ds, ".dynsym")
+            if (u64(sh(ds) + 56) != 24L) bad(".dynsym has sh_entsize ${u64(sh(ds) + 56)}, not 24")
+            if ((dsEnd - dsStart) % 24 != 0L) {
+                bad(".dynsym's ${dsEnd - dsStart} bytes are not a whole number of 24-byte symbols")
+            }
+            val syms = (dsEnd - dsStart) / 24
+            val dsLink = u32(sh(ds) + 40)
+            if (dsLink < 1 || dsLink >= shnum || u32(sh(dsLink.toInt()) + 4) != 3L) {
+                bad(".dynsym links to section $dsLink, which is not a string table")
+            }
+            val (dnStart, dnEnd) = section(dsLink.toInt(), "the string table of .dynsym")
+            val vsAt = (0 until shnum).filter { u32(sh(it) + 4) == 0x6fffffffL }
+            if (vsAt.size > 1) bad("${vsAt.size} .gnu.version sections, not 1")
+            val vsStart = if (vsAt.isEmpty()) -1L else {
+                val (vs, ve) = section(vsAt[0], ".gnu.version")
+                if (ve - vs != syms * 2) bad(".gnu.version holds ${ve - vs} bytes, not 2 for each of the $syms symbols")
+                val vsLink = u32(sh(vsAt[0]) + 40)
+                if (vsLink != ds.toLong()) bad(".gnu.version links to section $vsLink, not to .dynsym (section $ds)")
+                vs
+            }
+            // A name at or before the table's last NUL ends inside the table.
+            var lastNul = dnEnd - 1
+            while (lastNul >= dnStart && b[lastNul.toInt()] != 0.toByte()) lastNul--
+            var imports = 0
+            val unversioned = mutableListOf<Long>()
+            val optional = mutableListOf<Long>()
+            for (i in 0 until syms) {
+                val sym = dsStart + i * 24
+                if (u16(sym + 6) != 0) continue
+                val o = u32(sym)
+                if (o >= dnEnd - dnStart) bad("a name at offset $o lies outside its string table")
+                if (dnStart + o > lastNul) bad("a name runs past the end of its string table")
+                if (b[(dnStart + o).toInt()] == 0.toByte()) continue
+                imports++
+                val v = if (vsStart < 0) 0 else u16(vsStart + i * 2) and 0x7fff
+                if (v >= 2 && v !in assigned) {
+                    bad("import ${name(o, dnStart, dnEnd)} has version index $v, which no " +
+                        ".gnu.version_r record assigns")
+                }
+                if (v < 2) {
+                    if ((u8(sym + 4) shr 4) == 2) optional.add(o) else unversioned.add(o)
+                }
+            }
+            if (imports == 0) bad(".dynsym has no undefined symbols, though .gnu.version_r names versions they need")
+            fun listed(offs: List<Long>): String =
+                offs.take(12).map { name(it, dnStart, dnEnd) }.sorted().joinToString() +
+                    (if (offs.size > 12) ", and ${offs.size - 12} more" else "")
 
             val release = Regex("GLIBC_([0-9]{1,4}(?:[.][0-9]{1,4})+)")
             fun ver(v: String): List<Int>? =
@@ -369,7 +449,24 @@ val verifyModAssets by tasks.registering {
                         "linked on a newer distribution. $rebuild, and package that build's .so."
                 )
             }
-            logger.lifecycle("OC-LuaJIT: ${f.name} needs at most $top (the glibc floor is GLIBC_$floor)")
+            if (unversioned.isNotEmpty()) {
+                throw GradleException(
+                    "OC-LuaJIT: ${f.name} imports " +
+                        (if (unversioned.size == 1) "a symbol" else "${unversioned.size} symbols") +
+                        " with NO version: ${listed(unversioned)}. " +
+                        (if (unversioned.size == 1) "It binds" else "Each binds") + " to whatever the " +
+                        "host process has loaded, and a host without it cannot load the library. A .so " +
+                        "this tree builds has none: build-native.sh's Linux LINK_EXTRA names -pthread, " +
+                        "which gives the pthread functions their versions on a glibc older than 2.34, and " +
+                        "its ELF import gate refuses a .so that imports any symbol without one. $rebuild, " +
+                        "and package that build's .so."
+                )
+            }
+            logger.lifecycle(
+                "OC-LuaJIT: ${f.name} needs at most $top (the glibc floor is GLIBC_$floor); $imports imports, " +
+                    "every non-weak one versioned" +
+                    (if (optional.isEmpty()) "" else " (weak and unversioned: ${listed(optional)})")
+            )
         }
 
         if (!kernelFile.isFile) {

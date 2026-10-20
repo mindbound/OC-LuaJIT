@@ -1,0 +1,9 @@
+trial rc=1 > OC-LuaJIT: libjnluajit52-linux-x86_64.so imports 6 symbols with NO version: pthread_attr_setstacksize, pthread_condattr_setclock, pthread_create, pthread_join, pthread_setname_np, pthread_sigmask. Each binds to whatever the host process has loaded, and a hos 
+release rc=0 OC-LuaJIT: libjnluajit52-linux-x86_64.so needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28); 110 imports, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable, _ITM_registerTMCloneTable, __gmon_start__) 
+dist rc=0 OC-LuaJIT: libjnluajit52-linux-x86_64.so needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28); 110 imports, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable, _ITM_registerTMCloneTable, __gmon_start__) 
+head-trial rc=0 OC-LuaJIT: libjnluajit52-linux-x86_64.so needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28) BUILD SUCCESSFUL in 5s 
+restored build.gradle.kts: 942605fc
+build rc=0
+700997c7bf72f1999931d2f0b2283cd4 *build/libs/ocluajit-c813296-master+c8132963ba-dirty-dev.jar
+316c22162b97235a8a067c3480aa396e *build/libs/ocluajit-c813296-master+c8132963ba-dirty-sources.jar
+bb1bf51fb3e2daa72ef389f4045b522d *build/libs/ocluajit-c813296-master+c8132963ba-dirty.jar

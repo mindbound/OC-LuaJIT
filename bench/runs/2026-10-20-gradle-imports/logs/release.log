@@ -1,0 +1,17 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because the set of Gradle properties has changed: the value of 'ocljit.nativesDir' was changed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+
+> Task :verifyModAssets
+OC-LuaJIT: packaging 1 native(s): libjnluajit52-linux-x86_64.so (681392 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+OC-LuaJIT: libjnluajit52-linux-x86_64.so needs at most GLIBC_2.17 (the glibc floor is GLIBC_2.28); 110 imports, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable, _ITM_registerTMCloneTable, __gmon_start__)
+OC-LuaJIT: packaging the patched kernel (52904 bytes)
+
+BUILD SUCCESSFUL in 5s
+1 actionable task: 1 executed
+Configuration cache entry stored.

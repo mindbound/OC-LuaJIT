@@ -1,0 +1,27 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because the set of Gradle properties has changed: the value of 'ocljit.nativesDir' was changed and 'ocljit.kernelDir' was removed.
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+
+> Task :verifyModAssets FAILED
+OC-LuaJIT: packaging 1 native(s): libjnluajit52-linux-x86_64.so (681288 bytes)
+OC-LuaJIT: native fingerprint matches the serializer sources and the LuaJIT feature set (412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64)
+OC-LuaJIT: native exports the four oclj natives LuaStateLuaJIT declares
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyModAssets'.
+> OC-LuaJIT: libjnluajit52-linux-x86_64.so imports 6 symbols with NO version: pthread_attr_setstacksize, pthread_condattr_setclock, pthread_create, pthread_join, pthread_setname_np, pthread_sigmask. Each binds to whatever the host process has loaded, and a host without it cannot load the library. A .so this tree builds has none: build-native.sh's Linux LINK_EXTRA names -pthread, which gives the pthread functions their versions on a glibc older than 2.34, and its ELF import gate refuses a .so that imports any symbol without one. Build it in AlmaLinux 8, or on any host whose glibc is 2.28: OCLJ_VARIANT=additive OCLJ_GLIBC_MAX=2.28 sh native/build-native.sh, and package that build's .so.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 5s
+1 actionable task: 1 executed
+Configuration cache entry stored.
