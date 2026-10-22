@@ -1,0 +1,23 @@
+semicolon-stmt: ok 1
+return-double-semi: ok 1
+return-semi: ok 1
+continue: ok 12
+continue-semi: ok 12
+linedir: RUNTIME foo.lua:100: here
+linedir-nostr: RUNTIME c:200: here
+linedir-first: RUNTIME c:50: here
+hash-first-line: SYNTAX c:1: unexpected symbol near '#'
+shebang-first-line: ok 1
+hash-length-line: ok 3
+hash-digit-line: SYNTAX c:5: unexpected symbol near 'return'
+continue-as-name: ok 7
+const: ok 5
+const-assign: SYNTAX c:1: attempt to assign to const variable 'x'
+const-as-name: ok 3
+short-func: ok 5 8
+underscore-num: ok 1000000
+ternary: ok big
+nil-coalesce: ok 9
+safe-nav: ok 5 nil
+customary-ops: ok true false 3 true
+compound: ok 7 xy

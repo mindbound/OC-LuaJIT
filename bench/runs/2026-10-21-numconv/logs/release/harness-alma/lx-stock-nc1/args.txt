@@ -1,0 +1,1 @@
+native=stock lib=- jit=on only=UNSET dispose= bundle= javasrc= smoke=/mnt/c/Users/astro/Downloads/OC-LuaJIT/test/native/smoke-test.sh timeout=600 benchdir= confextra=

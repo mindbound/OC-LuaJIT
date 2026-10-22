@@ -1,0 +1,240 @@
+round=1 pos=1 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.20 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=1 pos=1 vm=base bench=bench_numconv: ref 0.30 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.50 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=1 pos=1 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.80 ns/byte (r=1136067215) 
+round=1 pos=1 vm=base bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 4.00 (r=1136067215) ratio 0.784 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=1 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=1 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=1 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	1.00 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=1 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.65 (r=5.661161364681516e+18) 
+round=1 pos=2 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.60 ns/byte (r=1136067215) 
+round=1 pos=2 vm=proto bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.80 (r=680680512) ratio 0.760 | phi2 4.20 (r=1826722048) ratio 0.840 | cnt 3.80 (r=4294654796) ratio 0.760 
+round=1 pos=2 vm=proto bench=bench_spec-mix: mix 2.85 (r=1414406144) x2.85 
+round=1 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=2 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	1.00 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.80 ns/it 
+round=2 pos=1 vm=proto bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.10 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=2 pos=1 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=2 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.60 (r=680680512) ratio 0.706 | phi2 4.00 (r=1826722048) ratio 0.784 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=2 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=2 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.55 (r=40000000) x0.55 
+round=2 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.20 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.00 ns/it shr0-small	30029299	1.10 ns/it 
+round=2 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.70 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.50 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=2 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.70 ns/byte (r=1136067215) 
+round=2 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=2 pos=2 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=2 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=3 pos=1 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=3 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.40 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=3 pos=1 vm=base bench=bench_bit2: rgb 3.60 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.72 | crc-table 3.60 ns/byte (r=1136067215) 
+round=3 pos=1 vm=base bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.60 (r=1146041536) ratio 0.706 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=3 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=3 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=3 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	1.00 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.80 ns/it 
+round=3 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=3 pos=2 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.60 ns/byte (r=1136067215) 
+round=3 pos=2 vm=proto bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=3 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=3 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=4 pos=1 vm=proto bench=ident: or0-big	25000000	1.00 ns/it or0-small	30029299	0.80 ns/it andm1-big	25000000	1.00 ns/it andm1-small	30029299	1.00 ns/it xor0-big	25000000	1.00 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	1.00 ns/it shr0-small	30029299	0.90 ns/it 
+round=4 pos=1 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=4 pos=1 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215) 
+round=4 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.80 (r=4294654796) ratio 0.745 
+round=4 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=4 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=4 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.20 ns/it xor0-small	30029299	1.20 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=4 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=4 pos=2 vm=base bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.60 ns/byte (r=1136067215) 
+round=4 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=4 pos=2 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=4 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=5 pos=1 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.20 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.00 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=5 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=5 pos=1 vm=base bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215) 
+round=5 pos=1 vm=base bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=5 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=5 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=5 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.80 ns/it andm1-big	25000000	1.00 ns/it andm1-small	30029299	0.80 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=5 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.10 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=5 pos=2 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.70 ns/byte (r=1136067215) 
+round=5 pos=2 vm=proto bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=5 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=5 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=6 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	1.00 ns/it xor0-big	25000000	1.00 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.80 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=6 pos=1 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=6 pos=1 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.60 ns/byte (r=1136067215) 
+round=6 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=6 pos=1 vm=proto bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=6 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=6 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=6 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=6 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.50 ns/byte (r=1136067215) 
+round=6 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.80 (r=1136067215) ratio 0.760 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=6 pos=2 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=6 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=7 pos=1 vm=base bench=ident: or0-big	25000000	1.20 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.20 ns/it andm1-small	30029299	1.20 ns/it xor0-big	25000000	1.20 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=7 pos=1 vm=base bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.40 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=7 pos=1 vm=base bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215) 
+round=7 pos=1 vm=base bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.60 (r=680680512) ratio 0.720 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=7 pos=1 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=7 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=7 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=7 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=7 pos=2 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.60 ns/byte (r=1136067215) 
+round=7 pos=2 vm=proto bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=7 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=7 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=8 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=8 pos=1 vm=proto bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=8 pos=1 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215) 
+round=8 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=8 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=8 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=8 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.20 ns/it andm1-small	30029299	1.20 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.20 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.20 ns/it shr0-small	30029299	1.20 ns/it 
+round=8 pos=2 vm=base bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.25 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=8 pos=2 vm=base bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.70 ns/byte (r=1136067215) 
+round=8 pos=2 vm=base bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.60 (r=4294654796) ratio 0.706 
+round=8 pos=2 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=8 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=9 pos=1 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.20 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=9 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.80 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=9 pos=1 vm=base bench=bench_bit2: rgb 3.60 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.72 | crc-table 3.70 ns/byte (r=1136067215) 
+round=9 pos=1 vm=base bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.60 (r=1146041536) ratio 0.706 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.00 (r=1826722048) ratio 0.784 | cnt 3.60 (r=4294654796) ratio 0.706 
+round=9 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=9 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=9 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	1.00 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	1.00 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	1.00 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	1.00 ns/it 
+round=9 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=9 pos=2 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.70 ns/byte (r=1136067215) 
+round=9 pos=2 vm=proto bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=9 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=9 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.55 (r=40000000) x0.55 
+round=10 pos=1 vm=proto bench=ident: or0-big	25000000	1.00 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	1.00 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=10 pos=1 vm=proto bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=10 pos=1 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215) 
+round=10 pos=1 vm=proto bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 4.00 (r=1136067215) ratio 0.800 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=10 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=10 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.55 (r=40000000) x0.55 
+round=10 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.20 ns/it andm1-big	25000000	1.20 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=10 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.35 (r=30764296896) | bits 1.40 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=10 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=10 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=10 pos=2 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=10 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=11 pos=1 vm=base bench=ident: or0-big	25000000	1.20 ns/it or0-small	30029299	1.20 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.20 ns/it 
+round=11 pos=1 vm=base bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.25 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=11 pos=1 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.80 ns/byte (r=1136067215) 
+round=11 pos=1 vm=base bench=bench_idx: ref 4.90 | crct 3.70 (r=1136067215) ratio 0.755 | crctm 3.90 (r=1136067215) ratio 0.796 | idx 3.60 (r=1146041536) ratio 0.735 | phi 3.70 (r=680680512) ratio 0.755 | phi2 4.10 (r=1826722048) ratio 0.837 | cnt 3.70 (r=4294654796) ratio 0.755 
+round=11 pos=1 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=11 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=11 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	1.00 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=11 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=11 pos=2 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.70 ns/byte (r=1136067215) 
+round=11 pos=2 vm=proto bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.80 (r=680680512) ratio 0.760 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=11 pos=2 vm=proto bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=11 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=12 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	1.00 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	1.00 ns/it shl0-small	30029299	1.00 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=12 pos=1 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=12 pos=1 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 4.70 ns (r=1748186903) ratio 0.79 | crc-table 3.70 ns/byte (r=1136067215) 
+round=12 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.20 (r=1826722048) ratio 0.824 | cnt 3.60 (r=4294654796) ratio 0.706 
+round=12 pos=1 vm=proto bench=bench_spec-mix: mix 2.85 (r=1414406144) x2.85 
+round=12 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=12 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.20 ns/it shr0-small	30029299	1.10 ns/it 
+round=12 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.35 (r=30764296896) | bits 1.50 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=12 pos=2 vm=base bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.70 ns/byte (r=1136067215) 
+round=12 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.60 (r=680680512) ratio 0.720 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=12 pos=2 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=12 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=13 pos=1 vm=base bench=ident: or0-big	25000000	1.00 ns/it or0-small	30029299	1.20 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.20 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.00 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=13 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.35 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=13 pos=1 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=13 pos=1 vm=base bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.80 (r=680680512) ratio 0.760 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=13 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=13 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=13 pos=2 vm=proto bench=ident: or0-big	25000000	0.80 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	1.00 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.80 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=13 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.10 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=13 pos=2 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=13 pos=2 vm=proto bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.60 (r=680680512) ratio 0.720 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=13 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=13 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=14 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.80 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=14 pos=1 vm=proto bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=14 pos=1 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215) 
+round=14 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.60 (r=4294654796) ratio 0.706 
+round=14 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=14 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=14 pos=2 vm=base bench=ident: or0-big	25000000	1.00 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.20 ns/it shr0-small	30029299	1.10 ns/it 
+round=14 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=14 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=14 pos=2 vm=base bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.60 (r=1146041536) ratio 0.706 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.60 (r=4294654796) ratio 0.706 
+round=14 pos=2 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=14 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=15 pos=1 vm=base bench=ident: or0-big	25000000	1.20 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.20 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.20 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.20 ns/it shr0-small	30029299	1.10 ns/it 
+round=15 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.70 (r=1.1322322729364896e+19) | key 1.35 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=15 pos=1 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.70 ns/byte (r=1136067215) 
+round=15 pos=1 vm=base bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.80 (r=1136067215) ratio 0.760 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=15 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=15 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=15 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.80 ns/it shr0-big	25000000	1.00 ns/it shr0-small	30029299	0.90 ns/it 
+round=15 pos=2 vm=proto bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.10 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=15 pos=2 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.70 ns/byte (r=1136067215) 
+round=15 pos=2 vm=proto bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.80 (r=1136067215) ratio 0.745 | idx 3.60 (r=1146041536) ratio 0.706 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=15 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=15 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=16 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=16 pos=1 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.10 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=16 pos=1 vm=proto bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.76 | crc-table 3.70 ns/byte (r=1136067215) 
+round=16 pos=1 vm=proto bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.60 (r=4294654796) ratio 0.720 
+round=16 pos=1 vm=proto bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=16 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=16 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.20 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.00 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=16 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=16 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.60 ns/byte (r=1136067215) 
+round=16 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=16 pos=2 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=16 pos=2 vm=base bench=bench_spec-lo50: lo50 0.55 (r=40000000) x0.55 
+round=17 pos=1 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.20 ns/it xor0-big	25000000	1.20 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.20 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=17 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.80 (r=1.1322322729364896e+19) | key 1.35 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=17 pos=1 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.60 ns/byte (r=1136067215) 
+round=17 pos=1 vm=base bench=bench_idx: ref 5.00 | crct 3.60 (r=1136067215) ratio 0.720 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=17 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=17 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=17 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	1.00 ns/it shr0-small	30029299	0.90 ns/it 
+round=17 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.10 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=17 pos=2 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.20 ns (r=1748186903) ratio 0.71 | crc-table 3.70 ns/byte (r=1136067215) 
+round=17 pos=2 vm=proto bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.60 (r=1146041536) ratio 0.706 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=17 pos=2 vm=proto bench=bench_spec-mix: mix 2.85 (r=1414406144) x2.85 
+round=17 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=18 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	1.00 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=18 pos=1 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18) 
+round=18 pos=1 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.70 ns/byte (r=1136067215) 
+round=18 pos=1 vm=proto bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.20 (r=1826722048) ratio 0.840 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=18 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=18 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=18 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.20 ns/it xor0-big	25000000	1.00 ns/it xor0-small	30029299	1.20 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.20 ns/it 
+round=18 pos=2 vm=base bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=18 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=18 pos=2 vm=base bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.80 (r=1136067215) ratio 0.760 | idx 3.60 (r=1146041536) ratio 0.720 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.00 (r=1826722048) ratio 0.800 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=18 pos=2 vm=base bench=bench_spec-mix: mix 2.75 (r=1414406144) x2.75 
+round=18 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=19 pos=1 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.20 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.10 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.20 ns/it shr0-small	30029299	1.10 ns/it 
+round=19 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.75 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.40 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=19 pos=1 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=19 pos=1 vm=base bench=bench_idx: ref 5.00 | crct 3.70 (r=1136067215) ratio 0.740 | crctm 3.90 (r=1136067215) ratio 0.780 | idx 3.70 (r=1146041536) ratio 0.740 | phi 3.70 (r=680680512) ratio 0.740 | phi2 4.10 (r=1826722048) ratio 0.820 | cnt 3.70 (r=4294654796) ratio 0.740 
+round=19 pos=1 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=19 pos=1 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=19 pos=2 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	1.00 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	0.90 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.90 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=19 pos=2 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=19 pos=2 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.00 ns (r=1748186903) ratio 0.74 | crc-table 3.70 ns/byte (r=1136067215) 
+round=19 pos=2 vm=proto bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.60 (r=1146041536) ratio 0.706 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=19 pos=2 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=19 pos=2 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=20 pos=1 vm=proto bench=ident: or0-big	25000000	0.90 ns/it or0-small	30029299	0.90 ns/it andm1-big	25000000	0.90 ns/it andm1-small	30029299	0.90 ns/it xor0-big	25000000	1.00 ns/it xor0-small	30029299	0.90 ns/it shl0-big	25000000	0.90 ns/it shl0-small	30029299	0.80 ns/it shr0-big	25000000	0.90 ns/it shr0-small	30029299	0.90 ns/it 
+round=20 pos=1 vm=proto bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.25 (r=5107149359) | floor 1.75 (r=5.661161364681516e+18) 
+round=20 pos=1 vm=proto bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.70 ns/byte (r=1136067215) 
+round=20 pos=1 vm=proto bench=bench_idx: ref 5.10 | crct 3.70 (r=1136067215) ratio 0.725 | crctm 3.90 (r=1136067215) ratio 0.765 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.70 (r=680680512) ratio 0.725 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=20 pos=1 vm=proto bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=20 pos=1 vm=proto bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 
+round=20 pos=2 vm=base bench=ident: or0-big	25000000	1.10 ns/it or0-small	30029299	1.10 ns/it andm1-big	25000000	1.10 ns/it andm1-small	30029299	1.10 ns/it xor0-big	25000000	1.20 ns/it xor0-small	30029299	1.10 ns/it shl0-big	25000000	1.10 ns/it shl0-small	30029299	1.10 ns/it shr0-big	25000000	1.10 ns/it shr0-small	30029299	1.10 ns/it 
+round=20 pos=2 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.80 (r=1.1322322729364896e+19) | key 1.30 (r=30764296896) | bits 1.35 (r=5107149359) | floor 1.80 (r=5.661161364681516e+18) 
+round=20 pos=2 vm=base bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.70 ns/byte (r=1136067215) 
+round=20 pos=2 vm=base bench=bench_idx: ref 5.10 | crct 3.60 (r=1136067215) ratio 0.706 | crctm 4.00 (r=1136067215) ratio 0.784 | idx 3.70 (r=1146041536) ratio 0.725 | phi 3.80 (r=680680512) ratio 0.745 | phi2 4.10 (r=1826722048) ratio 0.804 | cnt 3.70 (r=4294654796) ratio 0.725 
+round=20 pos=2 vm=base bench=bench_spec-mix: mix 2.80 (r=1414406144) x2.80 
+round=20 pos=2 vm=base bench=bench_spec-lo50: lo50 0.50 (r=40000000) x0.50 

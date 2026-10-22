@@ -1,0 +1,32 @@
+run-bitjit: ours /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts gen; results /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/SELFGUARD/bitjit
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+seed 1: shared/jon=498 shared/hl1=534 shared/ms0=469 shared/he1=572 shared/noloop=532 shared/puc=0 fresh/jon=46 fresh/hl1=111 fresh/ms0=40 fresh/he1=110 fresh/noloop=48 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5858 raised, 152 after iteration 60; a trace completed in 1363 loops (JIT-on shared run, jit on)
+seed 1: FAIL -- shared/jon differs from -joff, first cases:4 6 9; shared/hl1 differs from -joff, first cases:2 4 6; shared/ms0 differs from -joff, first cases:6 9 12; shared/he1 differs from -joff, first cases:2 4 6; shared/noloop differs from -joff, first cases:4 6 9; fresh/jon differs from -joff, first cases:4 85 231; fresh/hl1 differs from -joff, first cases:2 4 6; fresh/ms0 differs from -joff, first cases:4 85 167; fresh/he1 differs from -joff, first cases:2 4 6; fresh/noloop differs from -joff, first cases:4 85 231;
+seed 2: shared/jon=531 shared/hl1=570 shared/ms0=500 shared/he1=579 shared/noloop=558 shared/puc=0 fresh/jon=48 fresh/hl1=112 fresh/ms0=45 fresh/he1=115 fresh/noloop=41 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5507 raised, 172 after iteration 60; a trace completed in 1400 loops (JIT-on shared run, jit on)
+seed 2: FAIL -- shared/jon differs from -joff, first cases:1 3 6; shared/hl1 differs from -joff, first cases:1 3 10; shared/ms0 differs from -joff, first cases:1 3 6; shared/he1 differs from -joff, first cases:1 3 10; shared/noloop differs from -joff, first cases:1 3 6; fresh/jon differs from -joff, first cases:121 122 181; fresh/hl1 differs from -joff, first cases:35 40 55; fresh/ms0 differs from -joff, first cases:70 121 122; fresh/he1 differs from -joff, first cases:17 35 40; fresh/noloop differs from -joff, first cases:122 181 198;
+seed 3: shared/jon=494 shared/hl1=539 shared/ms0=462 shared/he1=537 shared/noloop=550 shared/puc=0 fresh/jon=31 fresh/hl1=93 fresh/ms0=30 fresh/he1=91 fresh/noloop=35 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5622 raised, 107 after iteration 60; a trace completed in 1354 loops (JIT-on shared run, jit on)
+seed 3: FAIL -- shared/jon differs from -joff, first cases:2 4 5; shared/hl1 differs from -joff, first cases:2 4 5; shared/ms0 differs from -joff, first cases:2 4 5; shared/he1 differs from -joff, first cases:2 4 5; shared/noloop differs from -joff, first cases:2 4 5; fresh/jon differs from -joff, first cases:209 220 288; fresh/hl1 differs from -joff, first cases:14 24 60; fresh/ms0 differs from -joff, first cases:24 220 288; fresh/he1 differs from -joff, first cases:14 24 52; fresh/noloop differs from -joff, first cases:209 220 288;
+seed 4: shared/jon=499 shared/hl1=509 shared/ms0=448 shared/he1=514 shared/noloop=510 shared/puc=0 fresh/jon=28 fresh/hl1=76 fresh/ms0=30 fresh/he1=84 fresh/noloop=30 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5753 raised, 144 after iteration 60; a trace completed in 1352 loops (JIT-on shared run, jit on)
+seed 4: FAIL -- shared/jon differs from -joff, first cases:2 4 13; shared/hl1 differs from -joff, first cases:2 4 13; shared/ms0 differs from -joff, first cases:2 4 13; shared/he1 differs from -joff, first cases:2 4 13; shared/noloop differs from -joff, first cases:2 4 13; fresh/jon differs from -joff, first cases:4 32 38; fresh/hl1 differs from -joff, first cases:4 29 32; fresh/ms0 differs from -joff, first cases:4 32 45; fresh/he1 differs from -joff, first cases:4 29 32; fresh/noloop differs from -joff, first cases:4 32 45;
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+RUN-BITJIT: FAIL (parts run: gen; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/SELFGUARD/bitjit)

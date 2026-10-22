@@ -1,0 +1,30 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/build/native/luajit-windows-x86_64/src/luajit.exe; seeds 1..1 x 1000 cases x 16 tuples; hotmin 0.25; results /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/KFOLD64/fuzz
+seed 1: 1 -- 16000 tuples, EXACT 10841, INEXACT 5159 (of them 5.3.6 computes a number: 4898); REF results: E:INEXACT 5159, E:NOINT 807, E:TYPE 621, num 9413 (C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/KFOLD64/fuzz/puc-1.txt)
+    C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/KFOLD64/fuzz/ours-jon-1.txt: 16000 tuples, MISMATCH 497 (of them INEXACT in the reference: 2); by mode K 0 V 0 P 0 H 73 U 433
+      #cov tuples 16000 hotcases 386/1000 hotU 1513/3000 traces 3046 aborts 3156 [NYI: bytecode FNEW=5,NYI: bytecode UCLO=21,NYI: bytecode VARG=127,NYI: return to lower frame=12,bad argument type=2765,call unroll limit reached=55,inner loop in root trace=143,leavi
+      => FAIL
+    C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/KFOLD64/fuzz/ours-joff-1.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 5159 of INEXACT 5159; sim-round MISMATCH 5159 of REF E:INEXACT 5159
+  MISMATCH classes (mode want->got: count):
+    U num->num                   433
+        (((a >> b) << c) ~ (a & ~d))  with [(-16777214) (-38) 3.0 27]  want N-1025:4278190080 (5.3.6 exact N-1025:4278190080)  got N1024:0
+        (0x3fffffff ~ a)  with [5633089765533807]  want N1311555:3582564240 (5.3.6 exact N1311555:3582564240)  got N0:1073741823
+        ((4 & a) | (b >> (-5)))  with [2147483647 (-8)]  want N-1:4294967044 (5.3.6 exact N-1:4294967044)  got N0:4
+    H drift (repetitions disagree) 73
+        (((0x1ffffffff << (-36)) & a) & ((b ~ 16777215) & (-397748628610693056))) [26 15] last N0:12765248 vs rep1=N0:0
+        (((0x1ffffffff << (-36)) & a) & ((b ~ 16777215) & (-397748628610693056))) [(-37) 30] last N0:12765248 vs rep1=N0:0
+        (((0x1ffffffff << (-36)) & a) & ((b ~ 16777215) & (-397748628610693056))) [(-3) (-20)] last N-92608070:3372220416 vs rep1=N0:0
+    H num->num                   71
+        (((0x1ffffffff << (-36)) & a) & ((b ~ 16777215) & (-397748628610693056)))  with [26 15]  want N0:0 (5.3.6 exact N0:0)  got N0:12765248
+        (((0x1ffffffff << (-36)) & a) & ((b ~ 16777215) & (-397748628610693056)))  with [(-37) 30]  want N0:0 (5.3.6 exact N0:0)  got N0:12765248
+        (((0x1ffffffff << (-36)) & a) & ((b ~ 16777215) & (-397748628610693056)))  with [(-3) (-20)]  want N0:0 (5.3.6 exact N0:0)  got N-92608070:3372220416
+    H E:INEXACT->num             2
+        (a & ((-27) & (((-3374233886864928) ~ b) ~ ~(-8300606284893250))))  with [288230376151711744 (-72057594037927936)]  want E:INEXACT:~ (5.3.6 exact N0:0)  got N0:0
+        (a & ((-27) & (((-3374233886864928) ~ b) ~ ~(-8300606284893250))))  with [(-36028797018963968) 144115188075855872]  want E:INEXACT:~ (5.3.6 exact N-41943040:0)  got N-41943040:0
+  => FAIL
+C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/KFOLD64/fuzz/ours-joff-1.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+  #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+  => PASS
+BITFUZZ FAIL (results: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/KFOLD64/fuzz)

@@ -1621,9 +1621,11 @@ say "    oclj_strpack.c -Wall -Wextra warnings = $PW"
 # unit with the union of the headers lj_meta.c, lj_record.c and lj_opt_fold.c
 # include, the IR and emitir macros oclj_bitop_rec.c and oclj_bitop_fold.c
 # expect from lj_record.c and lj_opt_fold.c, the three .c files, and one
-# function that calls their entry points and oclj_bitop.h's and
+# function that calls their entry points, oclj_bitop_fold.c's two helpers
+# (oclj_bitwidth and FIX-NUMCONV's oclj_isnumconv) and oclj_bitop.h's and
 # oclj_num53.h's functions (an uncalled static inline function is never
-# compiled, so the warnings that need code generation would miss it).
+# compiled, so the warnings that need code generation would miss it, and an
+# uncalled static function that is not inline fails -Wunused-function).
 cat > "$OCLJ_BUILD/bitop_wgate.c" <<'EOF'
 #define LUA_CORE
 #include "lj_obj.h"
@@ -1663,6 +1665,7 @@ int oclj_bitop_wgate(lua_State *L, jit_State *J, TValue *o)
   double d = 0;
   oclj_meta_bitop(L, o, o, o, BC_BAND);
   return (int)oclj_rec_bitop(J, BC_BSHL, 0, 0, o, o) + oclj_bitwidth(J, 0, 0) +
+    oclj_isnumconv(J, 0) +
     oclj_bit2num(oclj_bitop64(BC_BSAR, 1, 2), &d) + oclj_flt2int(d, &k) +
     oclj_str2int("1", 1, &k) + oclj_str2d("1", 1, &d) + (int)oclj_u2s(1);
 }

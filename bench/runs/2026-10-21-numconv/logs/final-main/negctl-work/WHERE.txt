@@ -1,0 +1,1 @@
+negctl-bitop.sh's work directory of the full sweep: claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079

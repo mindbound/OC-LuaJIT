@@ -1,0 +1,22 @@
+joff rc=0 lines=209
+jon rc=0 diff=0  | #cov cases 209 traced 549 sel 131 selout 27 selside 69 kguard 0 aborts 1053 jit on
+hl1 rc=0 diff=0  | #cov cases 209 traced 625 sel 136 selout 22 selside 65 kguard 0 aborts 1230 jit on
+ms0 rc=0 diff=0  | #cov cases 209 traced 417 sel 74 selout 9 selside 9 kguard 0 aborts 360 jit on
+he1 rc=0 diff=0  | #cov cases 209 traced 1354 sel 245 selout 43 selside 182 kguard 0 aborts 1608 jit on
+noloop rc=0 diff=0  | #cov cases 209 traced 510 sel 136 selout 24 selside 72 kguard 0 aborts 908 jit on
+O0 rc=0 diff=0  | #cov cases 209 traced 551 sel 144 selout 23 selside 77 kguard 0 aborts 920 jit on
+O1 rc=0 diff=0  | #cov cases 209 traced 520 sel 131 selout 26 selside 70 kguard 0 aborts 873 jit on
+O2 rc=0 diff=0  | #cov cases 209 traced 552 sel 122 selout 21 selside 64 kguard 0 aborts 1040 jit on
+nofold rc=0 diff=0  | #cov cases 209 traced 583 sel 145 selout 23 selside 79 kguard 0 aborts 1086 jit on
+nocse rc=0 diff=0  | #cov cases 209 traced 559 sel 124 selout 23 selside 63 kguard 0 aborts 1062 jit on
+hx1 rc=0 diff=0  | #cov cases 209 traced 1326 sel 284 selout 45 selside 219 kguard 0 aborts 1426 jit on
+ts1 rc=0 diff=0  | #cov cases 209 traced 976 sel 185 selout 25 selside 121 kguard 0 aborts 651 jit on
+mx1 rc=0 diff=0  | #cov cases 209 traced 480 sel 100 selout 20 selside 35 kguard 0 aborts 628 jit on
+hl1ms0 rc=0 diff=0  | #cov cases 209 traced 480 sel 83 selout 13 selside 15 kguard 0 aborts 527 jit on
+noabc rc=0 diff=0  | #cov cases 209 traced 521 sel 113 selout 21 selside 54 kguard 0 aborts 1065 jit on
+nonarrow rc=0 diff=0  | #cov cases 209 traced 541 sel 118 selout 21 selside 58 kguard 0 aborts 1047 jit on
+nofuse rc=0 diff=0  | #cov cases 209 traced 543 sel 124 selout 23 selside 61 kguard 0 aborts 1075 jit on
+nofwd rc=0 diff=0  | #cov cases 209 traced 564 sel 140 selout 27 selside 72 kguard 0 aborts 1103 jit on
+nosink rc=0 diff=0  | #cov cases 209 traced 555 sel 125 selout 20 selside 65 kguard 0 aborts 1052 jit on
+hloop1 rc=0 diff=0  | #cov cases 209 traced 630 sel 137 selout 23 selside 63 kguard 0 aborts 1194 jit on
+he1ms0 rc=0 diff=0  | #cov cases 209 traced 655 sel 84 selout 13 selside 15 kguard 0 aborts 517 jit on

@@ -1,0 +1,3 @@
+packfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/luajit-windows-x86_64/src/luajit.exe; profile default; seeds 1..1 x 20000 cases; results /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/packfuzz-20261021T232443Z
+seed 1: 0 -- lines 33953: EXACT 32749, DEVIATION 1204, SECONDARY 0, MISMATCH 0
+PACKFUZZ PASS (results: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/packfuzz-20261021T232443Z)

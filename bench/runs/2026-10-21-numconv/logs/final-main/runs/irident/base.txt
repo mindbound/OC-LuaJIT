@@ -1,0 +1,19 @@
+x | 0           tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x & -1          tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x ~ 0           tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x << 0          tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x >> 0          tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x ~>> 0         tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+~~x             tr1 pre eq=2 back=2 opnd=1 | body eq=2 back=2 opnd=1
+x & x           tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x | x           tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+0 | x           tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+-1 & x          tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+(x ~ y) ~ y     tr1 pre eq=2 back=2 opnd=2 | body eq=2 back=2 opnd=1
+(x ~ 5) ~ 5     tr1 pre eq=2 back=2 opnd=1 | body eq=2 back=2 opnd=1
+~(x ~ -1)       tr1 pre eq=2 back=2 opnd=1 | body eq=2 back=2 opnd=1
+(x | 0) & -1    tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x | 1           tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x ~ y           tr1 pre eq=1 back=1 opnd=2 | body eq=1 back=1 opnd=1
+x << 1          tr1 pre eq=1 back=1 opnd=1 | body eq=1 back=1 opnd=1
+x & 0xff        tr1 pre eq=0 back=0 opnd=1 | body eq=0 back=0 opnd=1  tr2 pre eq=0 back=0 opnd=0 | body eq=0 back=0 opnd=0

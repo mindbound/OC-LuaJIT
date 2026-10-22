@@ -1,0 +1,1 @@
+patch-bitop-fold.sh: out2.c  already folds the 64-bit bit operators without FFI (verified) -- unchanged

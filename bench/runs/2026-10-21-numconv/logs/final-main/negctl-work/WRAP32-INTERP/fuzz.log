@@ -1,0 +1,50 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/build/native/luajit-windows-x86_64/src/luajit.exe; seeds 1..1 x 1000 cases x 16 tuples; hotmin 0.25; results /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WRAP32-INTERP/fuzz
+seed 1: 1 -- 16000 tuples, EXACT 10841, INEXACT 5159 (of them 5.3.6 computes a number: 4898); REF results: E:INEXACT 5159, E:NOINT 807, E:TYPE 621, num 9413 (C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WRAP32-INTERP/fuzz/puc-1.txt)
+    C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WRAP32-INTERP/fuzz/ours-jon-1.txt: 16000 tuples, MISMATCH 5826 (of them INEXACT in the reference: 3246); by mode K 3315 V 5817 P 5817 H 4353 U 860
+      #cov tuples 16000 hotcases 457/1000 hotU 1559/3000 traces 3096 aborts 4195 [NYI: bytecode FNEW=4,NYI: bytecode UCLO=24,NYI: bytecode VARG=68,NYI: return to lower frame=8,bad argument type=3950,call unroll limit reached=43,inner loop in root trace=78,leaving 
+      => FAIL
+    C:/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WRAP32-INTERP/fuzz/ours-joff-1.txt: 16000 tuples, MISMATCH 5818 (of them INEXACT in the reference: 3246); by mode K 3315 V 5817 P 5817 H 5817 U 1110
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => FAIL
+    controls: sim-wrap PASS; sim-raw MISMATCH 5159 of INEXACT 5159; sim-round MISMATCH 5159 of REF E:INEXACT 5159
+  MISMATCH classes (mode want->got: count):
+    P E:INEXACT->num             2941
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [25 0x1ffff 13]  want E:INEXACT:| (5.3.6 exact N-2147483648:25)  got N0:25
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [33 281474976710655 (-16)]  want E:INEXACT:| (5.3.6 exact N-2147483648:33)  got N0:33
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [(-38) 0xfffffffffffff8 "0x1p4"]  want E:INEXACT:| (5.3.6 exact N-2130706433:4294967256)  got N0:4294967256
+    V E:INEXACT->num             2941
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [25 0x1ffff 13]  want E:INEXACT:| (5.3.6 exact N-2147483648:25)  got N0:25
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [33 281474976710655 (-16)]  want E:INEXACT:| (5.3.6 exact N-2147483648:33)  got N0:33
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [(-38) 0xfffffffffffff8 "0x1p4"]  want E:INEXACT:| (5.3.6 exact N-2130706433:4294967256)  got N0:4294967256
+    H E:INEXACT->num             2941
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [25 0x1ffff 13]  want E:INEXACT:| (5.3.6 exact N-2147483648:25)  got N0:25
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [33 281474976710655 (-16)]  want E:INEXACT:| (5.3.6 exact N-2147483648:33)  got N0:33
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [(-38) 0xfffffffffffff8 "0x1p4"]  want E:INEXACT:| (5.3.6 exact N-2130706433:4294967256)  got N0:4294967256
+    K E:INEXACT->num             2752
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [25 0x1ffff 13]  want E:INEXACT:| (5.3.6 exact N-2147483648:25)  got N0:25
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [33 281474976710655 (-16)]  want E:INEXACT:| (5.3.6 exact N-2147483648:33)  got N0:33
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [(-38) 0xfffffffffffff8 "0x1p4"]  want E:INEXACT:| (5.3.6 exact N-2130706433:4294967256)  got N0:4294967256
+    P num->num                   2567
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [32 0xfffffffffffff80 1]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [18 0x100000000 18]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [37 0x7ffffffffffffc0 "  0xff  "]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+    V num->num                   2567
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [32 0xfffffffffffff80 1]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [18 0x100000000 18]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [37 0x7ffffffffffffc0 "  0xff  "]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+    H drift (repetitions disagree) 1428
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37)) [(-25) 0x3ffffffffffffe00 4096.0] last N1073741823:4294966784 vs rep1=N0:4294966784
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37)) [(-34) 0x100000000 (-39)] last N1:0 vs rep1=N0:0
+        (30 | (a >> b)) [140737488355326 11] last N15:4294967295 vs rep1=N0:4294967295
+    H num->num                   1103
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [32 0xfffffffffffff80 1]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [18 0x100000000 18]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [37 0x7ffffffffffffc0 "  0xff  "]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+    U E:INEXACT->num             554
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [25 0x1ffff 13]  want E:INEXACT:| (5.3.6 exact N-2147483648:25)  got N0:25
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [33 281474976710655 (-16)]  want E:INEXACT:| (5.3.6 exact N-2147483648:33)  got N0:33
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [(-38) 0xfffffffffffff8 "0x1p4"]  want E:INEXACT:| (5.3.6 exact N-2130706433:4294967256)  got N0:4294967256
+    K num->num                   266
+        ((((a & b) | (b ~ b)) | ((c ~ c) | (524287 >> (-63)))) << (2199023255554 & 37))  with [37 0x7ffffffffffffc0 "  0xff  "]  want N-2147483648:0 (5.3.6 exact N-2147483648:0)  got N0:0
+        (((a >> b) << c) ~ (a & ~d))  with [(-510) (-0.0) 46 (-17)]  want N-8355840:0 (5.3.6 exact N-8355840:0)  got N0:0
+BITFUZZ FAIL (results: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WRAP32-INTERP/fuzz)

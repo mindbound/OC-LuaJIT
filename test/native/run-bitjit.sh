@@ -19,7 +19,7 @@
 # default is relative to OCLJ_REPO and a git-archive scratch repo has no
 # bench/vendor (until 2026-10-20 such a run passed: verify-folda F11).
 # OCLJ_LUA53=none runs without PUC on purpose, and the run can pass.
-# Five parts (the fifth, sel, is not about the bit operators: it is the
+# Six parts (the fifth, sel, is not about the bit operators: it is the
 # JIT-against-interpreter runner's home for the select fix):
 #
 #   1. THE GENERATOR (gen).  bitop/gen.lua, the round-3 width-fold reviewer's
@@ -102,6 +102,29 @@
 #      the three loops recorded with k = 2^27 compiled; and in every JIT run
 #      no loop recorded only with k above 2^27 may compile a select trace
 #      (t_select-kmax).
+#   6. FIX-NUMCONV (nc; roadmap row 211 (5), JIT guide 3.11:
+#      patch-bitop-fold.sh's hunk 7 folds (i64)(num)y ==> y in
+#      simplify_conv_i64_num when y is an unguarded CONV i64.num of a
+#      double, oclj_isnumconv, so an identity operation's result guard, which
+#      cannot fail, goes).  bitop/t_numconv.lua runs identities (x | 0,
+#      x & -1, x ~ 0, x << 0, x >> 0, x ~>> 0, x & x, ...), cancellations
+#      (~~x, (x ~ y) ~ y, ...) and controls whose guard must stay (x | 1,
+#      x ~ y, ~x, ...), each recorded on small values and then met in the
+#      same compiled loop by values at and past 2^53, -0.0, NaN, infinities
+#      and +-2^63 and beyond, on a table's double, on a carried identity
+#      result, and through the loop's PHI, under the sel part's fifteen
+#      option sets: each output must equal -joff's, and with PUC the twin's
+#      (bitop/twin.lua) must equal -joff's.  Its default run's #cov line must
+#      say jit on, a trace in OCLJ_BITJIT_HOTMIN of the cases and at least
+#      one marked CONV num.i64 of an unmarked conversion of a double (ncin:
+#      the pair the rule reads), else it proved nothing.  Then bitop/ncir.lua
+#      reads the compiled loops under the thirteen of those sets that fold
+#      (no rule runs under -O0 or -O-fold, and ncir refuses them): no
+#      identity keeps a result guard on its operand's own conversion, each
+#      cancellation and control keeps exactly its one, every loop compiles
+#      (no type instability, JFORL; the rule returns a pre-roll ref across a
+#      PHI), the body's guard on a PHI-marked fleft is gone (swap1), the
+#      results equal -joff's, and a run with no summary line read nothing.
 #
 # Each part's catches, measured on one-line sabotages of the reference build
 # (2026-10-17, role C2's report has the counts): the generator catches every
@@ -117,12 +140,20 @@
 # The sel part (2026-10-20): t_select catches SELGUARD (no guard before
 # the shift: upstream's nil for a wrapping or non-positive k), and
 # t_select-kmax SELRECK (no record-time bound, which changes no value).
+# The nc part (2026-10-21, on sabotage copies of the FIX-NUMCONV
+# prototype's build): t_numconv catches NUMCONVOP1 (the rule widened to a
+# bit operator on a converted double) and NUMCONVW (a converted double
+# scored 54 bits wide in oclj_bitwidth), whose dropped guards return
+# rounded doubles where the interpreter raises; ncir catches NUMCONVOFF
+# (the rule switched off, which changes no value, so no differential suite
+# can see it), and the two value arms too, and fails on any build without
+# the rule (build/native at 209aa95).
 # Proof that the checks can fail: negctl-bitop.sh.
 #
 # Environment:
 #   OCLJ_LUA53            PUC Lua 5.3.6 (default bench/vendor/lua-5.3.6/src/lua[.exe]),
 #                         or "none": no PUC comparison, on purpose
-#   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx sel"  (default all five)
+#   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx sel nc"  (default all six)
 #   OCLJ_BITJIT_SEED      the generator's first seed                  (default 1)
 #   OCLJ_BITJIT_SEEDS     how many consecutive seeds                   (default 4)
 #   OCLJ_BITJIT_CASES     loops per seed                               (default 2000)
@@ -133,13 +164,14 @@
 #                         or "rg2": results at and past 2^53 (exact values in
 #                         bits 53-63 among them); each mode passes on any
 #                         build whose results equal the interpreter's
-#   OCLJ_BITJIT_HOTMIN    the coverage gate of the generator and of the idx
-#                         and sel parts, a fraction                     (default 0.25)
+#   OCLJ_BITJIT_HOTMIN    the coverage gate of the generator and of the idx,
+#                         sel and nc parts, a fraction                  (default 0.25)
 #   OCLJ_BITJIT_OUT       results directory; must not exist
 #                         (default $OCLJ_BUILD/bitjit-<UTC stamp>)
 #
-# Default: about 50 s (4 seeds x 2000 loops, about 7 s a seed with PUC; the
-# idx part about 10 s; the sel part about 6 s, 2026-10-20).
+# Default: about 60 s (61 s for all six parts on FIX-NUMCONV's prototype,
+# 2026-10-21; 4 seeds x 2000 loops, about 7 s a seed with PUC; the idx part
+# about 10 s; the sel part about 6 s, 2026-10-20; the nc part 6-8 s).
 # A campaign is OCLJ_BITJIT_PARTS=gen OCLJ_BITJIT_SEED=101
 # OCLJ_BITJIT_SEEDS=20, and again with OCLJ_BITJIT_GENMODE=phi, idx and rg2;
 # a change to the table-index fold runs the idx mode, and one to a result's
@@ -163,7 +195,7 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
 : "${OCLJ_LUA53:=$OCLJ_REPO/bench/vendor/lua-5.3.6/src/lua.exe}"
-: "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel}"
+: "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel nc}"
 : "${OCLJ_BITJIT_SEED:=1}"
 : "${OCLJ_BITJIT_SEEDS:=4}"
 : "${OCLJ_BITJIT_CASES:=2000}"
@@ -188,11 +220,11 @@ PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 LJEXE=$OCLJ_BUILD/luajit-$PLATFORM/src/luajit$EXE
 B=$SELF_DIR/bitop
 [ -x "$LJEXE" ] || fail "no $LJEXE -- run build-native.sh first (on THIS platform)"
-for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua t_select.lua; do
+for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua t_select.lua t_numconv.lua ncir.lua; do
   [ -f "$B/$f" ] || fail "no $B/$f"
 done
 for p in $OCLJ_BITJIT_PARTS; do
-  case $p in gen|floor|fix1|idx|sel) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx, sel" ;; esac
+  case $p in gen|floor|fix1|idx|sel|nc) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx, sel, nc" ;; esac
 done
 for v in "$OCLJ_BITJIT_SEED" "$OCLJ_BITJIT_SEEDS" "$OCLJ_BITJIT_CASES"; do
   case "$v" in *[!0-9]*|'') fail "OCLJ_BITJIT_SEED, _SEEDS and _CASES must be whole numbers" ;; esac
@@ -224,7 +256,7 @@ fi
 [ -e "$OCLJ_BITJIT_OUT" ] && fail "$OCLJ_BITJIT_OUT exists; results are never overwritten"
 mkdir -p "$OCLJ_BITJIT_OUT" || fail "cannot create $OCLJ_BITJIT_OUT"
 OUT=$OCLJ_BITJIT_OUT
-md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" "$B/t_select.lua" > "$OUT/inputs.md5"
+md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" "$B/t_select.lua" "$B/t_numconv.lua" "$B/ncir.lua" > "$OUT/inputs.md5"
 [ "$HAVEPUC" = 1 ] && md5sum "$OCLJ_LUA53" >> "$OUT/inputs.md5"
 # jit.vmdef and jit.util's names (p4v.lua) live beside the build's luajit.exe,
 # in src/jit; the Windows exe needs a C:/ path.
@@ -616,8 +648,104 @@ else
   echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
 fi
 
+# ---------------------------------------------------------------- 6
 echo
-sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx sel" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
+echo "== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces =="
+# t_numconv runs under the sel part's fifteen sets; ncir under the thirteen
+# of them that fold (under -O0 and -O-fold no rule runs, and ncir refuses).
+NCIROPTS="jon O1:-O1 hl1:-O3_-Ohotloop=1 ms0:-Omaxside=0 he1:-Ohotloop=1_-Ohotexit=1 noloop:-O3_-O-loop nocse:-O3_-O-cse hx1:-Ohotexit=1 ts1:-Otryside=1_-Ohotexit=2 mx1:-Omaxside=1 hl1ms0:-Ohotloop=1_-Omaxside=0 noabc:-O3_-O-abc nonarrow:-O3_-O-narrow"
+if wanted nc; then
+  D=$OUT/nc; mkdir -p "$D"
+  t=t_numconv
+  run "$D/$t-joff.txt" "$D/$t-joff.err" "$LJEXE" -joff "$B/$t.lua"; rc=$?
+  nc=$(grep -c . "$D/$t-joff.txt")
+  if [ "$rc" -eq 2 ] && grep -q INSTRUMENT "$D/$t-joff.txt"; then
+    echo "PROVED NOTHING $t:"; sed -n '/INSTRUMENT/,$p' "$D/$t-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+  elif [ "$rc" -ne 0 ] || [ "$nc" -eq 0 ]; then
+    echo "FAIL $t: -joff exited $rc with $nc lines: $(head -c 200 "$D/$t-joff.err")"; bad=1
+  else
+    ne=$(grep -c 'E:INEXACT' "$D/$t-joff.txt")
+    line="$t ($nc cases, $ne of them with an inexact result's raise):"; tbad=0
+    for o in $SELOPTS; do
+      n=$(optname "$o")
+      run "$D/$t-$n.txt" "$D/$t-$n.err" "$LJEXE" $(optargs "$o") "$B/$t.lua"; rc=$?
+      set -- $(ndiff "$D/$t-$n.txt" "$D/$t-joff.txt")
+      line="$line $n=$1"
+      [ "$rc" -ne 0 ] && { line="$line(exit $rc)"; tbad=1; }
+      [ "$1" -ne 0 ] && { shift; line="$line[$*]"; tbad=1; }
+    done
+    # Coverage, from the default run: traces, and the pair the rule reads.
+    cov=$(grep '^#cov' "$D/$t-jon.err" 2>/dev/null)
+    cv() { echo "$cov" | sed -n "s/.* $1 \([0-9]*\).*/\1/p"; }
+    traced=$(cv traced); ncin=$(cv ncin); nsig=$(cv nsig)
+    case "$cov" in *"jit on"*) jit=on ;; *) jit=off ;; esac
+    covtxt="coverage: a trace completed in ${traced:-?} of $nc cases; ${ncin:-?} marked CONV num.i64 of a converted double, ${nsig:-?} identity result guards left (default options, jit $jit)"
+    if [ "$tbad" = 1 ]; then
+      echo "FAIL $line  ($covtxt)"; bad=1
+    elif [ "$jit" != on ] || [ -z "$traced" ] || [ -z "$ncin" ] || [ "$ncin" -eq 0 ] ||
+         ! awk -v t="$traced" -v n="$nc" -v h="$OCLJ_BITJIT_HOTMIN" 'BEGIN { exit !(t >= h * n) }'; then
+      echo "PROVED NOTHING $line  ($covtxt; too few traces for OCLJ_BITJIT_HOTMIN $OCLJ_BITJIT_HOTMIN, or no bit operator on a double compiled)"; nothing=1
+    else
+      echo "PASS $line  ($covtxt)"
+    fi
+    if [ "$HAVEPUC" = 1 ]; then
+      # The "puc" part (every case: with U1-B's rule at every operator, the
+      # twin means what ours does), on PUC and on -joff.
+      run "$D/$t-joff-puc.txt" "$D/$t-joff-puc.err" "$LJEXE" -joff "$B/$t.lua" puc
+      run "$D/$t-puc.txt" "$D/$t-puc.err" "$OCLJ_LUA53" "$B/$t.lua" puc; rc=$?
+      set -- $(ndiff "$D/$t-puc.txt" "$D/$t-joff-puc.txt")
+      if [ "$rc" -ne 0 ] || [ ! -s "$D/$t-joff-puc.txt" ]; then
+        echo "PROVED NOTHING $t on PUC: exited $rc: $(head -c 300 "$D/$t-puc.txt") $(head -c 200 "$D/$t-puc.err")"; nothing=1
+      elif [ "$1" -eq 0 ]; then
+        echo "PASS $t: PUC 5.3.6 with U1-B's rule equals -joff in all $(grep -c . "$D/$t-puc.txt") cases of its puc part"
+      else
+        nd=$1; shift; echo "FAIL $t: PUC 5.3.6 with U1-B's rule differs from -joff in $nd cases of its puc part, first:$*"; bad=1
+      fi
+    else
+      echo "$t on PUC: SKIPPED ($PUCSKIP)"
+    fi
+  fi
+  # ncir: the guards the rule leaves, read from the compiled loops in every
+  # set that folds; the loops compile; their results equal -joff's.
+  run "$D/ncir-joff.txt" "$D/ncir-joff.err" "$LJEXE" -joff "$B/ncir.lua"; rf=$?
+  cut -f1,2 "$D/ncir-joff.txt" > "$D/ncir-joff-res.txt"
+  nres=$(grep -c . "$D/ncir-joff-res.txt")
+  if [ "$rf" -ne 0 ] || [ "$nres" -eq 0 ]; then
+    echo "FAIL ncir: -joff exited $rf with $nres results: $(head -c 200 "$D/ncir-joff.err")"; bad=1
+  else
+    line="ncir ($nres cases):"; ibad=; inothing=; idiff=
+    for o in $NCIROPTS; do
+      n=$(optname "$o")
+      run "$D/ncir-$n.txt" "$D/ncir-$n.err" "$LJEXE" $(optargs "$o") "$B/ncir.lua"; rj=$?
+      grep -v '^ncir:' "$D/ncir-$n.txt" | cut -f1,2 > "$D/ncir-$n-res.txt"
+      nf=$(grep -c 'FAILED' "$D/ncir-$n.txt")
+      line="$line $n=$nf"
+      if [ "$rj" -eq 2 ]; then
+        inothing="$inothing $n: $(grep INSTRUMENT "$D/ncir-$n.txt" | head -c 200) $(head -c 200 "$D/ncir-$n.err");"
+      elif ! cmp -s "$D/ncir-$n-res.txt" "$D/ncir-joff-res.txt"; then
+        idiff="$idiff $n"
+      elif [ "$rj" -ne 0 ]; then
+        ibad="$ibad $n:$(grep FAILED "$D/ncir-$n.txt" | cut -f1 | head -3 | tr '\n' ',' | sed 's/,$//')"
+      elif ! grep -q '^ncir: [0-9]* of [0-9]* cases compiled' "$D/ncir-$n.txt"; then
+        inothing="$inothing $n: no summary line, so no trace was read (the JIT off?);"
+      fi
+    done
+    if [ -n "$idiff" ]; then
+      echo "FAIL $line  compiled results differ from -joff's under:$idiff"; bad=1
+    elif [ -n "$ibad" ]; then
+      echo "FAIL $line  an identity kept its result guard, a guard the rule must leave went, or a loop did not compile (first cases:$ibad)"; bad=1
+    elif [ -n "$inothing" ]; then
+      echo "PROVED NOTHING $line  --$inothing"; nothing=1
+    else
+      echo "PASS $line  every case compiled with no identity result guard, its own guards kept and its results equal -joff's, in every set that folds"
+    fi
+  fi
+else
+  echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
+fi
+
+echo
+sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx sel nc" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
 if [ "$bad" = 1 ]; then echo "RUN-BITJIT: FAIL$sel (results: $OUT)"; exit 1; fi
 if [ "$nothing" = 1 ]; then echo "RUN-BITJIT: PROVED NOTHING$sel (results: $OUT)"; exit 2; fi
 echo "RUN-BITJIT: PASS$sel (results: $OUT)"

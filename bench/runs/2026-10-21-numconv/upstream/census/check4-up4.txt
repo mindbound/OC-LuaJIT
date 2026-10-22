@@ -1,0 +1,9 @@
+a4c        repro traces 2 side 1 VARG-aborts 6
+a4c        konst traces 0 side 0 VARG-aborts 3
+a4c        konst joff/jit: 300 / 300
+a4c        vsel: sets 21, diffs min 0 max 0, joff [('0', '209')]
+a4cnogc64  repro traces 2 side 1 VARG-aborts 6
+a4cnogc64  konst traces 0 side 0 VARG-aborts 3
+a4cnogc64  konst joff/jit: 300 / 300
+a4cnogc64  vsel: sets 21, diffs min 0 max 0, joff [('0', '209')]
+checks: PASS

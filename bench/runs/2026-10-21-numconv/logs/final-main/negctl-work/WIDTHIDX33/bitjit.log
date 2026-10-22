@@ -1,0 +1,35 @@
+run-bitjit: ours /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts idx; results /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WIDTHIDX33/bitjit
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+FAIL t_idx (684 cases, 36 of them end in a raise): jon=51[w33a-get1-o0 w33a-get1-o7 w33a-get1-o19] O0=0 O1=21[w33e-get-o0 w33e-get-o7 w33e-get-o19] hl1=44[w33a-get1-o19 w33a-fori-o0 w33a-fori-o7] ms0=44[w33a-get1-o0 w33a-get1-o7 w33a-get1-o19] he1=50[w33a-get1-o0 w33a-get1-o19 w33a-fori-o0] noloop=44[w33a-fori-o0 w33a-fori-o7 w33a-fori-o19] nofold=0 nocse=51[w33a-get1-o0 w33a-get1-o7 w33a-get1-o19]  (coverage: a trace completed in 602 of 684 cases, 2439 CONV int.i64 in them (default options, jit on))
+PASS t_idx: PUC 5.3.6 with U1-B's rule equals -joff in all 684 cases
+FAIL t_cnt33 (16 cases, 0 of them end in a raise): jon=10[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0] O0=0 O1=10[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0] hl1=10[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0] ms0=10[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0] he1=9[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0] noloop=10[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0] nofold=0 nocse=10[shr-sar31-o0 shr-sar31-o5 shl-sar31-o0]  (coverage: a trace completed in 16 of 16 cases, 32 CONV int.i64 in them (default options, jit on))
+PASS t_cnt33: PUC 5.3.6 with U1-B's rule equals -joff in all 16 cases
+FAIL t_idx2 (1440 cases, 0 of them end in a raise): jon=129[a33-get-p-o0 a33-get-p-o17 a33-get-s-o0] O0=0 O1=98[a33-get-p-o0 a33-get-p-o17 a33-get-s-o0] hl1=126[a33-get-p-o0 a33-get-p-o17 a33-get-s-o0] ms0=109[a33-get-p-o0 a33-get-p-o17 a33-get-s-o17] he1=129[a33-get-p-o0 a33-get-p-o17 a33-get-s-o0] noloop=112[a33-get-p-o0 a33-get-p-o17 a33-get-s-o0] nofold=0 nocse=130[a33-get-p-o0 a33-get-p-o17 a33-get-s-o0]  (coverage: a trace completed in 1306 of 1440 cases, 3141 CONV int.i64 in them (default options, jit on))
+PASS t_idx2: PUC 5.3.6 with U1-B's rule equals -joff in all 720 cases of its puc part
+    ctl	acc=214119465126448	traces=1 typeins=0 loop=JFORL fold=1 keep=0 cross=0 crossp=0 ok
+    ctl1	acc=213039424481744	traces=1 typeins=0 loop=JFORL fold=1 keep=0 cross=0 crossp=0 ok
+    crc	acc=3436781758	traces=1 typeins=0 loop=JFORL fold=1 keep=0 cross=0 crossp=0 ok
+    phi	acc=214118042363856	traces=1 typeins=0 loop=JFORL fold=0 keep=1 cross=0 crossp=0 ok
+    phi2	acc=428237507490304	traces=1 typeins=0 loop=JFORL fold=1 keep=1 cross=0 crossp=0 ok
+    phicnt	acc=13421772796875	traces=1 typeins=0 loop=JFORL fold=0 keep=1 cross=0 crossp=0 ok
+    phiint	acc=548163790720	traces=2 typeins=0 loop=JFORL fold=0 keep=2 cross=0 crossp=0 ok
+    phiidx: 7 of 7 variants compiled with the fold where it belongs and never across a PHI
+PASS phiidx: all 7 loops compiled, the fold fired where it belongs and never across a PHI, results equal -joff's
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+RUN-BITJIT: FAIL (parts run: idx; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/negctl-bitop/20261021T231121Z-7079/WIDTHIDX33/bitjit)

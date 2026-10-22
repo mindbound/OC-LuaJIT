@@ -1,0 +1,2 @@
+test/native/bitop/ncir.lua
+test/native/bitop/t_numconv.lua

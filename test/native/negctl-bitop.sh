@@ -1,10 +1,10 @@
 #!/bin/sh
 # =====================================================================
 # negctl-bitop.sh -- PROVE that round 3's tests of the 64-bit bitwise
-# operators, the CRC32 follow-up's of the table-index fold, and the select
-# fix's (2026-10-20) have teeth: run-bitop.sh, run-bitjit.sh,
-# run-bitfuzz.sh, run-security.sh's FF12, and build-native.sh's bitops
-# gate and stage-4 VM-features word check.
+# operators, the CRC32 follow-up's of the table-index fold, the select
+# fix's (2026-10-20) and FIX-NUMCONV's (2026-10-21) have teeth:
+# run-bitop.sh, run-bitjit.sh, run-bitfuzz.sh, run-security.sh's FF12, and
+# build-native.sh's bitops gate and stage-4 VM-features word check.
 #
 #   OCLJ_BUILD=<build dir used by build-native.sh>  sh test/native/negctl-bitop.sh
 #
@@ -78,6 +78,11 @@
 #   sel:t_select, :kmax   run-bitjit.sh's sel part (the select fix):
 #                 t_select against -joff under some option set, or its
 #                 record-time bound's trace count (t_select-kmax)
+#   nc:t_numconv, :ncir   run-bitjit.sh's nc part (FIX-NUMCONV):
+#                 t_numconv against -joff under some option set, or ncir's
+#                 read of the compiled loops under the sets that fold (an
+#                 identity's result guard left, a guard that must stay gone,
+#                 a loop that did not compile, or results unlike -joff's)
 #   security:FF12 run-security.sh's FF12 (a version-2 dump is refused)
 #   gate:dump     build-native.sh's bitops gate, its own text, run on the arm's
 #                 luajit.exe: the line differs from build-native.sh's wanted
@@ -122,6 +127,12 @@
 #   hunks 4 and 5):
 #     SELGUARD        lj_record.c        [sel:t_select]
 #     SELRECK         lj_record.c        [sel:kmax]
+#   FIX-NUMCONV's (roadmap row 211 (5), 2026-10-21; patch-bitop-fold.sh
+#   hunk 7's rule and oclj_bitop_fold.c's oclj_isnumconv):
+#     NUMCONVOP1      lj_opt_fold.c      [nc:t_numconv nc:ncir]
+#     NUMCONVW        oclj_bitop_fold.c  [nc:t_numconv nc:ncir]
+#     NUMCONVOFF      lj_opt_fold.c      [nc:ncir]
+#     NUMCONVNOOP     oclj_bitop_fold.c  [gen]   (added 2026-10-22)
 #   PHIIDX and NOLOOPFOLD change no value (the fold across a PHI; no fold in
 #   a loop body), so only phiidx.lua's IR read sees them: a sabotage that
 #   changes no value needs a catcher that reads the IR's shape or counts
@@ -129,6 +140,12 @@
 #   with a k above 2^27 compiles and gives the interpreter's values (a
 #   variable k exits at path C's guard; the constant 2^27+1 compiles path
 #   A's guard, a right nil), and only t_select-kmax's trace count sees it.
+#   So does NUMCONVOFF: the rule removes only a guard that cannot fail, so
+#   without it every value is the same, and only ncir's count of the guards
+#   the rule removes sees it.  NUMCONVW holds the line between exactness
+#   and range: a converted double is exactly a double whatever its range
+#   (oclj_isnumconv), which the bound must never score; scored 54, it
+#   composes, and x | 1 for an x of 2^53 loses its result guard.
 #   The follow-up's range guard (rg2) was prototyped with seven arms of its
 #   own and did not ship (2026-10-20), and its arms with it; its generator
 #   mode stayed as genrg2, which catches non-RG2 arms too: it is listed on
@@ -143,7 +160,19 @@
 # (lj_trace.c:751-752) and penalised as the BADTYPE abort is
 # (lj_trace.c:604-611).  Measured 2026-10-17 on a hot pcall loop whose >> and
 # ~ always raise: the same raises, 26 trace starts and 26 aborts on both
-# builds; only the abort's reason differs, and no test reads it.
+# builds; only the abort's reason differs, and no test reads it.  Nor are
+# oclj_isnumconv's three type tests (an I64 type, no guard, a NUM source;
+# decided 2026-10-21): each is a precondition of FIX-NUMCONV's argument,
+# kept and stated in the code, and no test can show that one matters on
+# this build, since every y one turns away is either taken first by the
+# width rule (an int-typed y, every guarded CONV being one to int, or a
+# CONV i64.int) or a conversion that exists only with FFI.  The fourth, the
+# opcode test, has an arm since 2026-10-22, NUMCONVNOOP (the claim that no
+# test could show it matters was false): without it an unguarded int64
+# instruction whose op2, a constant's ref or an instruction's, reads
+# IRT_NUM in its low five bits passes for a converted double and loses its
+# result guard.  gen catches it; ncir sees it only under -O1 and -O-narrow,
+# by ref layout, t_numconv never; genrg2 would add about 35 s to gen's catch.
 #
 # THE MARGINS, measured 2026-10-17 in three runs of every arm on round 3's
 # build (the JIT catchers vary from run to run: LuaJIT randomises its hot
@@ -181,14 +210,33 @@
 # SELGUARD t_select 11-53 cases in each of its 15 option sets (11-15 under
 # -Ohotloop=1 -Omaxside=0, 51-53 under the side-trace sets), every run;
 # SELRECK t_select-kmax 2-3 of its 3 loops in each of the 15 sets, every
-# run, and t_select 0 (it changes no value).
+# run, and t_select 0 (it changes no value).  FIX-NUMCONV'S ARMS, five
+# runs on 2026-10-21 (OCLJ_NEGCTL_ARMS=NUMCONVOP1,NUMCONVW,NUMCONVOFF, the
+# integrator, scratch claude-tmp/oclj/numconv/integrate/runs/negctl-nc-1..5),
+# each count the same in every run and equal to the test implementer's on
+# the prototype's sabotage builds (numconv/impl-tests/final-1, three runs):
+# NUMCONVOP1 t_numconv 30 cases in 10 of its 15 sets, 22 under -O1,
+# -O-loop and -O-cse, and 0 under -O0 and -O-fold, where no rule runs;
+# ncir 10 in each of its 13 (9 under -O1, -O-loop and -O-cse); NUMCONVW
+# t_numconv 27 in each of the 13 sets that fold, ncir as NUMCONVOP1's;
+# NUMCONVOFF ncir 22 a set (20 under -O1 and -O-loop, 17 under -O-cse) and
+# t_numconv 0 (it changes no value).  NUMCONVOFF's lj_opt_fold.o is HEAD
+# 209aa95's byte for byte (gcc drops the dead call and the unused static
+# function), which is not the shipped one, so the fingerprint takes it.
+# NUMCONVNOOP, three runs on 2026-10-22 (OCLJ_NEGCTL_ARMS=NUMCONVNOOP,
+# scratch claude-tmp/oclj/numconv/arm/negctl-1..3): gen 18-32 cases a seed,
+# every seed in every run; one run on 2026-10-21 (numconv/impl-code/sab-noop)
+# saw gen 17-27, genrg2 24-28 and t_rec 0-3 a seed.
 # A full run took 7.6 minutes with 27 arms (2026-10-17), 5.1 of them in
 # canon and the seven gen arms; the three idx arms take about 15 s each,
 # and genrg2 adds about 35 s to canon and to each of its five arms (one
 # run of each, 2026-10-20).  The CRC32 round's full sweep, 30 arms, took
 # 14 min 3 s (its final check, 2026-10-20).  With the sel part canon took
 # 107-108 s and each sel arm 7-9 s (four runs on the select round's
-# build).  A rebuild takes 1-3 s, a vm_x64.dasc one included.  The work
+# build); with the nc part canon took 95-100 s and each nc arm 8-9 s
+# (FIX-NUMCONV's five runs, which left 179 MB each in their work
+# directories); NUMCONVNOOP, the 36th arm, 37 s (its gen run; three runs).
+# A rebuild takes 1-3 s, a vm_x64.dasc one included.  The work
 # directory grows by about 40 MB a gen or genrg2 run (38.6-41.6 MB
 # measured in the 2026-10-17 runs; 445 MB for the 2026-10-17 sweep, 878
 # MB for the CRC32 round's), and nothing is deleted.
@@ -196,13 +244,14 @@
 # Every sabotage is memory-safe by construction: each computes a different
 # value, raises a different message or none, writes a different version
 # byte or word token, only blacklists loops (FIX1), or changes the IR's
-# shape and, in every suite run, no value (PHIIDX, NOLOOPFOLD).  None
-# touches a bound that guards a read or a write.  The JIT arms change int64
-# IR whose results become doubles or ints.  The safety of what such a value
-# reaches does not rest on its conversion to an int: since the table-index
-# fold (patch-bitop-fold.sh hunk 11), "no fold removes the int conversion
-# from an int64 source" is false, and the fold removes it when y has 32
-# bits or fewer.  It rests on the checks after the conversion.  A table
+# shape and, in every suite run, no value (PHIIDX, NOLOOPFOLD,
+# NUMCONVOFF).  None touches a bound that guards a read or a write.  The
+# JIT arms change int64 IR whose results become doubles or ints.  The
+# safety of what such a value reaches does not rest on its conversion to
+# an int: since the table-index fold (patch-bitop-fold.sh hunk 11), "no
+# fold removes the int conversion from an int64 source" is false, and the
+# fold removes it when y has 32 bits or fewer.  It rests on the checks
+# after the conversion.  A table
 # index is bounds-checked as an int before any load or store uses it (ABC,
 # lj_record.c rec_idx_abc, or ULE for an array extension; a hash key is
 # looked up, not addressed); string.byte, sub and find check their int
@@ -219,6 +268,17 @@
 # rec_varg loading only where upstream's does, for a k within the varargs
 # at record time, behind the unsigned ABC on k-1 (a variable k) or a GE
 # guard of fr (a constant k), so a wrapping k gives a wrong nil, no address.
+# NUMCONVOP1 reads IR(fleft->op1)'s opcode and, only for BNOT to BSAR, whose
+# op1 is always a ref (lj_ir.h), that op1, so every IR() it takes is of a
+# ref in the IR array; NUMCONVW reads only a CONV's op2; NUMCONVNOOP reads
+# the IR type and op2 of the same in-array ref (a non-CONV's op2 too),
+# and compares op2's bits without following them.  All three let the fold
+# take an inexact (i64)(num)y as y, so a result guard goes (a result is the
+# rounded double where the interpreter raises) or a later operator reads y
+# unrounded: a wrong value, never a pointer.  NUMCONVW's 54 also lets the
+# table-index fold take x ~>> k for a converted double x and a constant k
+# of 22 or more: a different int, checked by the same ABC, length check or
+# ULT as WIDTHIDX33's.  NUMCONVOFF only keeps a guard that cannot fail.
 #
 # OCLJ_NEGCTL_ARMS (default empty: every arm) runs only the arms it names,
 # separated by spaces or commas; canon always runs.  A name that is no arm is
@@ -452,7 +512,7 @@ run_stage4() {  # eris_lj.c compiled as build-native.sh's stage 4 does, then its
 # rcof <suite>: the exit status of the run that suite is part of ('-': not run).
 rcof() {
   case $1 in
-    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
+    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel|nc) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
     security) echo "$R_security" ;; gate) echo "$R_gate" ;; stage4) echo "$R_stage4" ;; *) echo - ;;
   esac
 }
@@ -469,7 +529,7 @@ runcatchers() {
       gate) [ "$R_gate" = - ] && { run_gate "$1"; R_gate=$?; } ;;
       stage4) [ "$R_stage4" = - ] && { run_stage4 "$1"; R_stage4=$?; } ;;
       genrg2) [ "$R_genrg2" = - ] && { run_genrg2 "$1"; R_genrg2=$?; } ;;
-      gen|floor|fix1|idx|sel) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+      gen|floor|fix1|idx|sel|nc) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
       *) fail "arm $name: unknown catcher '$tk'" ;;
     esac
   done
@@ -529,6 +589,8 @@ check() {
     idx:phiidx) grep -q '^FAIL phiidx' "$1/bitjit.log" ;;
     sel:t_select) grep -q '^FAIL t_select (' "$1/bitjit.log" ;;
     sel:kmax) grep -q '^FAIL t_select-kmax' "$1/bitjit.log" ;;
+    nc:t_numconv) grep -q '^FAIL t_numconv (' "$1/bitjit.log" ;;
+    nc:ncir) grep -q '^FAIL ncir (' "$1/bitjit.log" ;;
     genrg2) grep -q '^seed [0-9]*: FAIL' "$1/bitjit-rg2.log" ;;
     security:FF12) grep -q '^FAIL FF12 ' "$1/security.log" ;;
     gate:dump) gatedump "$1" ;;
@@ -565,6 +627,9 @@ info() {
       /^FAIL t_select [(]/ { out = out sep "t_select"; sep = "," }
       /^FAIL t_select-kmax/ { out = out sep "t_select-kmax"; sep = "," }
       /^FAIL t_select: PUC/ { out = out sep "t_select-PUC"; sep = "," }
+      /^FAIL t_numconv [(]/ { out = out sep "t_numconv"; sep = "," }
+      /^FAIL t_numconv: PUC/ { out = out sep "t_numconv-PUC"; sep = "," }
+      /^FAIL ncir/ { out = out sep "ncir"; sep = "," }
       END { print out }' "$1/bitjit.log")
     s="$s; bitjit[${parts# }] $R_bitjit$g${fl:+ failed: $fl}"
   fi
@@ -664,7 +729,7 @@ arm() {
 }
 
 armlist() {
-arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel security gate stage4' '' ''
+arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc security gate stage4' '' ''
 arm WRAP32-INTERP vm_x64.dasc 'bitop:t_ops fuzz:V' \
   '    |  ins RC, RA' \
   '    |  ins RCd, RAd@T@@T@// SABOTAGE WRAP32-INTERP: and/or/xor in 32 bits, as BitOp computed them'
@@ -763,6 +828,18 @@ arm SELGUARD lj_record.c 'sel:t_select' \
 arm SELRECK lj_record.c 'sel:kmax' \
   '      if (idx > OCLJ_SELECT_KMAX) goto nyivarg;  /* OC-LuaJIT: as for k < 0. */' \
   "      /* SABOTAGE SELRECK: no record-time bound on select's k, so a loop recorded with k above 2^27 compiles, as upstream's does */"
+arm NUMCONVOP1 lj_opt_fold.c 'nc:t_numconv nc:ncir' \
+  '    if (oclj_isnumconv(J, fleft->op1))' \
+  '    if (oclj_isnumconv(J, fleft->op1) || (IR(fleft->op1)->o >= IR_BNOT && IR(fleft->op1)->o <= IR_BSAR && oclj_isnumconv(J, IR(fleft->op1)->op1)))  /* SABOTAGE NUMCONVOP1: a bit operator on a converted double counts as one, so its result guard goes */'
+arm NUMCONVW oclj_bitop_fold.c 'nc:t_numconv nc:ncir' \
+  '    if ((ir->op2 & IRCONV_SRCMASK) == IRT_INT)' \
+  '    if ((ir->op2 & IRCONV_SRCMASK) == IRT_NUM) return 54; else if ((ir->op2 & IRCONV_SRCMASK) == IRT_INT)  /* SABOTAGE NUMCONVW: a converted double scored 54 bits wide, exactness put into the bound */'
+arm NUMCONVOFF lj_opt_fold.c 'nc:ncir' \
+  '    if (oclj_isnumconv(J, fleft->op1))' \
+  '    if (0 && oclj_isnumconv(J, fleft->op1))  /* SABOTAGE NUMCONVOFF: FIX-NUMCONV switched off, so every identity keeps its result guard */'
+arm NUMCONVNOOP oclj_bitop_fold.c 'gen' \
+  '  return ir->o == IR_CONV && irt_isi64(ir->t) && !irt_isguard(ir->t) &&' \
+  '  return irt_isi64(ir->t) && !irt_isguard(ir->t) &&  /* SABOTAGE NUMCONVNOOP: no opcode test, so a bit operator whose op2 ref reads as NUM passes for a converted double and loses its result guard */'
 }
 
 # The selection, checked against the arm list before anything is copied: a

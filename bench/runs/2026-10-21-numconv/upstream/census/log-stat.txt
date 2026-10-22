@@ -1,0 +1,88 @@
+==== a4c0645 2026-10-21 Don't compile select() indexing beyond varargs.
+
+ src/lj_record.c | 13 +++----------
+ 1 file changed, 3 insertions(+), 10 deletions(-)
+==== 95f931c 2026-10-20 Check for IR_NEWREF in IR_ALEN forwarding.
+
+ src/lj_opt_mem.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+==== c41d727 2026-10-20 Add line number directive. v3.0 backport.
+
+ doc/extensions.html |  3 +-
+ src/lj_errmsg.h     |  1 +
+ src/lj_lex.c        | 87 +++++++++++++++++++++++++++++++++++++++++++++--------
+ src/lj_lex.h        |  1 +
+ src/lj_parse.c      | 46 +++++++++++++++++++---------
+ 5 files changed, 111 insertions(+), 27 deletions(-)
+==== dd3b243 2026-10-18 FFI/ARM64e: Sign FFI callback pointers.
+
+ src/lj_ccallback.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+==== e7e9a32 2026-10-18 iOS: Disable non-functional os.tmpname().
+
+ src/lib_os.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+==== 716f74a 2026-10-18 macOS: Avoid collision of mcode with xzone malloc reclaim ring.
+
+ src/lj_mcode.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+==== a8d1f8a 2026-10-18 Merge branch 'master' into v2.1
+==== 2410b57 2026-10-18 FFI: Don't drop signedness in FOLD rule for FLOAD of CNEWI.
+
+ src/lj_opt_fold.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+==== 2a8e017 2026-10-14 Windows: Use 64 bit conversion for tonumber() with base.
+
+ src/lib_base.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+==== 634daf2 2026-10-13 Fix parsing of safe-navigation operator.
+
+ src/lj_parse.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+==== bc9261a 2026-10-13 Don't record for loops with +-0 step.
+
+ src/lj_record.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+==== 849bbbe 2026-10-13 x64: Fix math.floor()/ceil() argument check.
+
+ src/vm_x64.dasc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+==== cfb19fe 2026-10-13 Merge branch 'master' into v2.1
+==== acf8fcb 2026-10-13 x86: Fix math.floor()/ceil() argument check.
+
+ src/vm_x86.dasc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+==== 9451be0 2026-10-13 FFI: Fix recording of string buffer put() method.
+
+ src/lj_ffrecord.c | 1 +
+ 1 file changed, 1 insertion(+)
+==== ce8ec8d 2026-10-13 ARM64: Fix getmetatable() for cleared __metatable field.
+
+ src/vm_arm64.dasc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+==== 2c9f5cf 2026-10-13 ARM64: Fix BC_JFORI on empty FP range.
+
+ src/vm_arm64.dasc | 1 +
+ 1 file changed, 1 insertion(+)
+==== 3f549af 2026-10-13 Fix concurrent allocation issue on DragonFly (unsupported).
+
+ src/lj_alloc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+==== a998144 2026-10-13 DynASM/ARM64: Prevent sanitizer warning in dasm_imm13().
+
+ dynasm/dasm_arm64.h | 64 +++++++++++++++++++++++++++--------------------------
+ 1 file changed, 33 insertions(+), 31 deletions(-)
+==== 0218af7 2026-10-13 Allow empty statements (semicolons) anywhere. v3.0 backport.
+
+ doc/extensions.html |  4 ++--
+ src/lj_parse.c      | 15 ++++++++-------
+ 2 files changed, 10 insertions(+), 9 deletions(-)
+==== c6ffc14 2026-09-08 PPC: Fix string.* fast functions with P64 set (testing only).
+
+ src/vm_ppc.dasc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+==== 24c20c9 2026-09-03 Merge branch 'master' into v2.1
+==== 3000f7c 2026-09-03 FFI: Adjust J->maxslot after ffi.offsetof.
+
+ src/lj_record.c | 2 ++
+ 1 file changed, 2 insertions(+)

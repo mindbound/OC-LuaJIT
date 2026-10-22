@@ -1,0 +1,1 @@
+patch-strpack-register.sh: lib_string.c  registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 712); verified by content and diff

@@ -1,0 +1,675 @@
+---- TRACE 1 start konst.lua:3
+---- TRACE 1 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 1 stop -> loop
+
+---- TRACE 2 start 1/0 konst.lua:4
+---- TRACE 2 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 2 stop -> loop
+
+---- TRACE 3 start 2/0 konst.lua:4
+---- TRACE 3 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 3 stop -> loop
+
+---- TRACE 4 start 3/0 konst.lua:4
+---- TRACE 4 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 4 stop -> loop
+
+---- TRACE 5 start 4/0 konst.lua:4
+---- TRACE 5 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 5 stop -> loop
+
+---- TRACE 6 start 5/0 konst.lua:4
+---- TRACE 6 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 6 stop -> loop
+
+---- TRACE 7 start 6/0 konst.lua:4
+---- TRACE 7 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 7 stop -> loop
+
+---- TRACE 8 start 7/0 konst.lua:4
+---- TRACE 8 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 8 stop -> loop
+
+---- TRACE 9 start 8/0 konst.lua:4
+---- TRACE 9 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 9 stop -> loop
+
+---- TRACE 10 start 9/0 konst.lua:4
+---- TRACE 10 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 10 stop -> loop
+
+---- TRACE 11 start 10/0 konst.lua:4
+---- TRACE 11 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 11 stop -> loop
+
+---- TRACE 12 start 11/0 konst.lua:4
+---- TRACE 12 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 12 stop -> loop
+
+---- TRACE 13 start 12/0 konst.lua:4
+---- TRACE 13 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 13 stop -> loop
+
+---- TRACE 14 start 13/0 konst.lua:4
+---- TRACE 14 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 14 stop -> loop
+
+---- TRACE 15 start 14/0 konst.lua:4
+---- TRACE 15 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 15 stop -> loop
+
+---- TRACE 16 start 15/0 konst.lua:4
+---- TRACE 16 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 16 stop -> loop
+
+---- TRACE 17 start 16/0 konst.lua:4
+---- TRACE 17 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 17 stop -> loop
+
+---- TRACE 18 start 17/0 konst.lua:4
+---- TRACE 18 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 18 stop -> loop
+
+---- TRACE 19 start 18/0 konst.lua:4
+---- TRACE 19 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 19 stop -> loop
+
+---- TRACE 20 start 19/0 konst.lua:4
+---- TRACE 20 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 20 stop -> loop
+
+---- TRACE 21 start 20/0 konst.lua:4
+---- TRACE 21 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 21 stop -> loop
+
+---- TRACE 22 start 21/0 konst.lua:4
+---- TRACE 22 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 22 stop -> loop
+
+---- TRACE 23 start 22/0 konst.lua:4
+---- TRACE 23 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 23 stop -> loop
+
+---- TRACE 24 start 23/0 konst.lua:4
+---- TRACE 24 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 24 stop -> loop
+
+---- TRACE 25 start 24/0 konst.lua:4
+---- TRACE 25 IR
+0001 >  [35mint[m SLOAD  #5    CRI
+0002 >  [35mint[m LE     0001  [35m+2147483646[m
+0003    [35mint[m SLOAD  #4    CI
+0004    [1mfun[m SLOAD  #0    R
+0005    [31mtab[m FLOAD  0004  func.env
+0006    [35mint[m FLOAD  0005  tab.hmask
+0007 >  [35mint[m EQ     0006  [35m+63 [m
+0008    p64 FLOAD  0005  tab.node
+0009 >  p64 HREFK  0008  [32m"select"[m @26
+0010 >  [1mfun[m HLOAD  0009
+0011    [35mint[m SLOAD  #1    FR
+0012 >  [1mfun[m EQ     0010  [1mselect[m
+0013 >  [35mint[m LT     0011  [35m-2147483621[m
+0014 >  [34mnum[m SLOAD  #3    T
+0015  + [34mnum[m ADD    0014  [34m+1  [m
+0016  + [35mint[m ADD    0003  [35m+1  [m
+0017 >  [35mint[m LE     0016  0001
+0018 ------ LOOP ------------
+0019  + [34mnum[m ADD    0015  [34m+1  [m
+0020  + [35mint[m ADD    0016  [35m+1  [m
+0021 >  [35mint[m LE     0020  0001
+0022    [35mint[m PHI    0016  0020
+0023    [34mnum[m PHI    0015  0019
+---- TRACE 25 stop -> loop
+

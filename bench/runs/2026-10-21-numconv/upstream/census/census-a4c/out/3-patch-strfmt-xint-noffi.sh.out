@@ -1,0 +1,1 @@
+patch-strfmt-xint-noffi.sh: lj_ffrecord.c  2 lines (recff_nyiu + return, line 1110) replaced by 7 (of 1675); no-FFI integer-format fallback verified by content and diff

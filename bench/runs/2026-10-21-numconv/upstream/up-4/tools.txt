@@ -1,0 +1,7 @@
+gcc: /usr/bin/gcc
+make: /usr/bin/make
+tar: /usr/bin/tar
+python3: /usr/bin/python3
+md5sum: /usr/bin/md5sum
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Linux 6.18.54.1-microsoft-standard-WSL2 x86_64

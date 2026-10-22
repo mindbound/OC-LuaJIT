@@ -1,0 +1,123 @@
+OK  md5 fc-negctl-e5838e14.sh e5838e142c23605a918551ac3143ad64
+OK  md5 fc-a4c0645-lj_record.c 1f55838c162c3e1aec7b0c2c58aafc52
+OK  doc jit-guide.md carries comment line of `oclj_bitop_fold.c` (:150,
+OK  doc jit-guide.md carries the header's lines from ~:135 on move by 1 to 11, the code from `set -u` (~:283) by 11, and every line from `armlist`'s closing brace (~:829) by 14
+OK  doc jit-guide.md carries lj_record.c ~:2042-2063 of `a4c0645`'s tree
+OK  doc roadmap.md carries lj_record.c ~:2053-2063
+BAD build-native.sh:1682 LJEXE=$LJ/luajit.exe
+BAD build-native.sh:2064 jdline other than 1
+BAD build-native.sh:2066 # -----
+BAD build-native.sh:2066  1b
+BAD build-native.sh:2162 esac
+BAD build-native.sh:2636 # COLLECT ADDITIVE ARTIFACTS FOR PACKAGING.
+BAD build-native.sh:2662 fi
+BAD build-native.sh:2527 # BEGIN ELF IMPORT GATE
+BAD build-native.sh:2628 # END ELF IMPORT GATE
+BAD build-native.sh:1669 oclj_isnumconv(J, 0) +
+BAD negctl-bitop.sh:860 WORK=$OCLJ_BUILD/negctl-bitop/
+BAD negctl-bitop.sh:322 SRCTREE=$OCLJ_BUILD/luajit-$PLATFORM
+BAD negctl-bitop.sh:343 lj52shim.o
+BAD negctl-bitop.sh:875 for p in $PATCHED; do
+BAD negctl-bitop.sh:882 done
+BAD negctl-bitop.sh:660 # arm <name> <file> <catchers>
+BAD negctl-bitop.sh:732 armlist() {
+BAD negctl-bitop.sh:844 }
+OK  negctl-bitop.sh:681 SABOTAGE $name:
+BAD negctl-bitop.sh:468 run_bitop() {
+BAD negctl-bitop.sh:648 }
+BAD negctl-bitop.sh:733 arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc security gate stage4'
+BAD negctl-bitop.sh:483 run_genrg2() {
+BAD negctl-bitop.sh:336 # serializer's eris_lj.c
+BAD negctl-bitop.sh:339 ALLFILES=
+BAD negctl-bitop.sh:394 objs_of() {
+BAD negctl-bitop.sh:407 }
+BAD negctl-bitop.sh:492 run_gate() {
+BAD negctl-bitop.sh:512 }
+BAD negctl-bitop.sh:405     *) echo "" ;;
+BAD negctl-bitop.sh:511 exit 0 ) > "$1/stage4.log" 2>&1
+BAD negctl-bitop.sh:647 echo "${s#; }"
+BAD negctl-bitop.sh:843 SABOTAGE NUMCONVNOOP:
+BAD fc-negctl-e5838e14.sh:136 #   PHIIDX and NOLOOPFOLD change no value
+BAD negctl-bitop.sh:137 #   PHIIDX and NOLOOPFOLD change no value
+BAD fc-negctl-e5838e14.sh:284 set -u
+BAD negctl-bitop.sh:295 set -u
+BAD fc-negctl-e5838e14.sh:829 SABOTAGE NUMCONVOFF:
+BAD fc-negctl-e5838e14.sh:830 }
+BAD fc-a4c0645-lj_record.c:2043 ptrdiff_t idx = lj_ffrecord_select_mode(J, tridx, &J->L->base[dst-1]);
+BAD fc-a4c0645-lj_record.c:2044 if (idx < 0 || idx > LUAI_MAXSTACK) goto nyivarg;
+BAD fc-a4c0645-lj_record.c:2054 } else if (idx <= nvararg) {  /* Compute size. */
+BAD fc-a4c0645-lj_record.c:2063 } else {  /* Indexing beyond nvararg. */
+BAD fc-a4c0645-lj_record.c:2064 goto nyivarg;  /* Uncommon and pointless to compile it. */
+BAD run-bitjit.sh:221 LJEXE=$OCLJ_BUILD/luajit-$PLATFORM
+BAD run-bitjit.sh:324 "$nl" -ne "$OCLJ_BITJIT_CASES"
+BAD run-bitjit.sh:381 "$nl" -ne 400
+BAD run-bitjit.sh:499 IDXOPTS="jon
+BAD run-bitjit.sh:583 SELOPTS="$IDXOPTS
+BAD run-bitjit.sh:657 NCIROPTS="jon O1:-O1
+BAD run-bitjit.sh:302 GENOPTS="jon
+BAD run-bitjit.sh:578 # -------
+BAD run-bitjit.sh:578  5
+BAD run-bitjit.sh:650 fi
+BAD run-bitjit.sh:652 # -------
+BAD run-bitjit.sh:652  6
+BAD run-bitjit.sh:746 fi
+BAD run-bitjit.sh:730 elif ! grep -q '^ncir: [0-9]* of [0-9]* cases compiled'
+BAD run-bitjit.sh:731 inothing="$inothing $n: no summary line
+BAD run-bitjit.sh:199 OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel nc}
+BAD run-bitjit.sh:228 case $p in gen|floor|fix1|idx|sel|nc)
+BAD run-bitjit.sh:224 for f in gen.lua
+BAD run-bitjit.sh:260 md5sum "$LJEXE"
+BAD run-bitjit.sh:749 "gen floor fix1 idx sel nc"
+BAD run-bitjit.sh:301 # The JIT option sets
+BAD run-bitjit.sh:304 JIT2OPTS="jon
+BAD patch-bitop-fold.sh:463 verify_content() {
+BAD patch-bitop-fold.sh:490 }
+BAD patch-bitop-fold.sh:478 countsub 'oclj_isnumconv('
+BAD patch-bitop-fold.sh:485   fi
+BAD patch-bitop-fold.sh:486 RL='      return fleft->op1;'
+BAD patch-bitop-fold.sh:489   fi
+BAD patch-bitop-fold.sh:448 # FIX-NUMCONV's predicate is named on one line
+BAD patch-bitop-fold.sh:462 # this check fails alone.
+BAD patch-bitop-fold.sh:240 /* FIX-NUMCONV: y is an unguarded CONV i64.num
+BAD patch-bitop-fold.sh:246 return fleft->op1;
+BAD oclj_bitop_fold.c:117     return 64;
+BAD oclj_bitop_fold.c:116   default:
+BAD oclj_bitop_fold.c:121 /*
+BAD oclj_bitop_fold.c:122 ** FIX-NUMCONV (roadmap row 211 (5)).
+BAD oclj_bitop_fold.c:170 */
+BAD oclj_bitop_fold.c:151 (2026-10-21; the arm NUMCONVNOOP).
+BAD oclj_bitop_fold.c:171 static int oclj_isnumconv(jit_State *J, IRRef ref)
+BAD oclj_bitop_fold.c:176 }
+BAD patched-lj_opt_fold.c:1170 LJFOLD(CONV CONV IRCONV_I64_NUM)
+BAD patched-lj_opt_fold.c:1197 if (oclj_isnumconv(J, fleft->op1))
+BAD patched-lj_opt_fold.c:1200   PHIBARRIER(fleft);
+BAD patched-lj_opt_fold.c:1141 #include "oclj_bitop_fold.c"
+BAD patched-lj_opt_fold.c:1168 }
+BAD patched-lj_opt_fold.c:1190 if (oclj_bitwidth(J, fleft->op1, 0) <= 54)
+BAD patched-lj_opt_fold.c:1191 return fleft->op1;
+BAD pristine-lj_asm_x86.h:909 x86Op op = st == IRT_NUM ? XO_CVTTSD2SI
+BAD pristine-lj_asm_x86.h:930 emit_mrm(as, op,
+BAD pristine-lj_asm_x86.h:932 asm_fuseload(as, lref, RSET_FPR));
+BAD pristine-lj_asm_x86.h:901 FP to integer conversion
+BAD pristine-lj_asm_x86.h:934     }
+BAD pristine-lj_asm_x86.h:912 if (irt_isu64(ir->t)) {
+BAD pristine-lj_asm_x86.h:913 add -2^64 and convert again
+BAD pristine-lj_asm_x86.h:925 ra_left(as, tmp, lref);
+BAD pristine-lj_asm_x86.h:902 if (irt_isguard(ir->t)) {
+BAD pristine-lj_asm_x86.h:906 asm_tointg(as, ir,
+BAD pristine-lj_opt_fold.c:902 LJFOLD(CONV KNUM IRCONV_I64_NUM)
+BAD pristine-lj_opt_fold.c:905 lj_num2i64(knumleft)
+BAD pristine-lj_opt_fold.c:906 }
+BAD pristine-lj_obj.h:1058 #define lj_num2i64(x)
+BAD pristine-vm_x64.dasc:2685 ->vm_num2i64:
+BAD pristine-vm_x64.dasc:2686 cvttsd2si rax, xmm0
+BAD pristine-vm_x64.dasc:2687 |  ret
+BAD pristine-lj_ffrecord.c:1106 IR_CONV, IRT_U64
+BAD pristine-lj_ffrecord.c:1105 #if LJ_HASFFI
+BAD pristine-lj_ir.h:58 _(BNOT,
+BAD pristine-lj_ir.h:65 _(BSAR,
+BAD pristine-lj_asm_arm64.h:659 A64Ins ai = irt_is64(ir->t) ?
+BAD pristine-lj_asm_arm64.h:660 A64I_FCVT_S64_F64
+BAD pristine-vm_arm64.dasc:2198 ->vm_num2i64:
+BAD pristine-vm_arm64.dasc:2199 fcvtzs CRET1, FARG1
+cites=116 md5s=2 doc-snippets=4 bad=115 shift=1

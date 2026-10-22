@@ -1,0 +1,1 @@
+patch-bitop-bcdump.sh: lj_bcdump.h  BCDUMP_VERSION 2 -> 0x80 (6 lines for 1, of 76); verified by content, diff and reversal

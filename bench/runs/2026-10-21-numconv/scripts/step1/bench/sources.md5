@@ -1,0 +1,11 @@
+# sources (copied 2026-10-21 by numconv/proto)
+5a0429552f6a808731b13a57bf10cce7 /c/Users/astro/claude-tmp/oclj/crc/verify-rg2/probes/ident.lua
+5a0429552f6a808731b13a57bf10cce7 /c/Users/astro/claude-tmp/oclj/crc/combine/bench/ident.lua
+7bb3ab87a8e0c3d9fbe618875e680f56 /c/Users/astro/claude-tmp/oclj/crc/combine/bench/bench_bit2.lua
+a9a6495030ee87d94a289d23b0e03351 /c/Users/astro/claude-tmp/oclj/crc/combine/bench/bench_idx.lua
+35b9bec162f31b664fc84c1f6a8761da /c/Users/astro/claude-tmp/oclj/crc/combine/bench/bench_spec.lua
+# copies
+7bb3ab87a8e0c3d9fbe618875e680f56 /c/Users/astro/claude-tmp/oclj/numconv/bench/bench_bit2.lua
+a9a6495030ee87d94a289d23b0e03351 /c/Users/astro/claude-tmp/oclj/numconv/bench/bench_idx.lua
+35b9bec162f31b664fc84c1f6a8761da /c/Users/astro/claude-tmp/oclj/numconv/bench/bench_spec.lua
+5a0429552f6a808731b13a57bf10cce7 /c/Users/astro/claude-tmp/oclj/numconv/bench/ident.lua

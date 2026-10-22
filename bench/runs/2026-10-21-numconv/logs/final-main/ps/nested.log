@@ -1,0 +1,1 @@
+patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/ps/nested-out.c.tmp.28833: the width rule's call (line 1189) or FIX-NUMCONV's (line 1190) is not followed directly by its own '      return fleft->op1;': a call nested in another rule's if

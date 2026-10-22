@@ -1,0 +1,23 @@
+run-bitjit: ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts nc; results /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/runs/base-nc
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+PASS t_numconv (75 cases, 30 of them with an inexact result's raise): jon=0 O0=0 O1=0 hl1=0 ms0=0 he1=0 noloop=0 nofold=0 nocse=0 hx1=0 ts1=0 mx1=0 hl1ms0=0 noabc=0 nonarrow=0  (coverage: a trace completed in 75 of 75 cases; 237 marked CONV num.i64 of a converted double, 126 identity result guards left (default options, jit on))
+PASS t_numconv: PUC 5.3.6 with U1-B's rule equals -joff in all 75 cases of its puc part
+FAIL ncir (29 cases): jon=22 O1=20 hl1=22 ms0=22 he1=22 noloop=20 nocse=17 hx1=22 ts1=22 mx1=22 hl1ms0=22 noabc=22 nonarrow=22  an identity kept its result guard, a guard the rule must leave went, or a loop did not compile (first cases: jon:or0,or0l,andm1 O1:or0,or0l,andm1 hl1:or0,or0l,andm1 ms0:or0,or0l,andm1 he1:or0,or0l,andm1 noloop:or0,or0l,andm1 nocse:or0,or0l,andm1 hx1:or0,or0l,andm1 ts1:or0,or0l,andm1 mx1:or0,or0l,andm1 hl1ms0:or0,or0l,andm1 noabc:or0,or0l,andm1 nonarrow:or0,or0l,andm1)
+
+RUN-BITJIT: FAIL (parts run: nc; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/runs/base-nc)

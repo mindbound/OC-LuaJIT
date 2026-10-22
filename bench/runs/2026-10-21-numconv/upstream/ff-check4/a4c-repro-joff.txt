@@ -1,0 +1,3 @@
+false	repro.lua:3: bad argument #1 to 'select' (index out of range)
+false	repro.lua:8: bad argument #1 to 'select' (index out of range)
+false	repro.lua:13: bad argument #1 to 'select' (index out of range)

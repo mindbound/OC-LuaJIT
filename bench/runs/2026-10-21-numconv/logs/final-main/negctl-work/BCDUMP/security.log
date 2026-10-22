@@ -1,0 +1,73 @@
+
+== FX  fixtures and anti-vacuity guards ==
+PASS FX1    state came from the shim (_OCLJ_NATIVE present)            luajit/LuaJIT 2.1.ROLLING
+PASS FX2    string.dump produced a real bytecode chunk                 69 bytes, first byte 0x1B
+
+== MG  C-API chunk-mode gate (jnlua's LuaState.load path) ==
+PASS MG1    mode "t"  + bytecode -> REFUSE (allowBytecode=false)       status=3 delta=+1 msg=attempt to load chunk with wrong mode
+PASS MG1D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG2    mode "t"  + text     -> accept                             status=0 delta=+1
+PASS MG2D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG3    mode "b"  + text     -> REFUSE (the other direction)       status=3 delta=+1 msg=attempt to load chunk with wrong mode
+PASS MG3D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG4    mode "b"  + bytecode -> accept                             status=0 delta=+1
+PASS MG4D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG5    mode "bt" + bytecode -> accept (allowBytecode=true)        status=0 delta=+1
+PASS MG5D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG6    mode "bt" + text     -> accept                             status=0 delta=+1
+PASS MG6D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG7    mode NULL  + bytecode -> accept (5.2: no check)            status=0 delta=+1
+PASS MG7D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG8    mode NULL  + text     -> accept (5.2: no check)            status=0 delta=+1
+PASS MG8D     ... stack delta is exactly +1                            delta=+1 (5.2 promises exactly +1)
+PASS MG9    refusal names the MODE, not a stray syntax error           "attempt to load chunk with wrong mode"
+
+== SB  sandbox `load` (machine.lua:754, verbatim) ==
+PASS SB0    fixture: sandbox sees a 0x1B-leading dump                  270/27
+PASS SB1    allowBytecode=false: load(string.dump(f)) is REFUSED       refused: attempt to load chunk with wrong mode
+PASS SB2    allowBytecode=false: a TEXT chunk still loads and runs     42
+PASS SB3    allowBytecode=false: caller-supplied mode="bt" does NOT bypass refused: attempt to load chunk with wrong mode
+PASS SB4    allowBytecode=true: load(string.dump(f)) is ACCEPTED and runs 42
+
+== ER  eris's internal bytecode route stays open ==
+PASS ER1    lua_loadx(..., "b") accepts our own LuaJIT bytecode        
+PASS ER2      ... and the bytecode it loaded actually runs             
+PASS ER3    eris library is present in this state                      table
+PASS ER4    eris round-trips a CLOSURE through its own bytecode route  478/true/42
+PASS SB5    sandbox is STILL shut in the same state eris just used     still refused
+
+== LE  lua_compare(LUA_OPLE) follows 5.2's __le rules ==
+PASS LE1    __le-only metatable, __le returns true  -> true            got true 
+PASS LE2    __le-only metatable, __le returns false -> false           got false 
+PASS LE3    __le and __lt both true -> true (5.1 form answers false)   got true 
+PASS LE4    LUA_OPLE fired __le once and __lt never (le/lt calls)      1/0
+PASS LE5    control: 1 <= 2 is true                                    got true 
+PASS LE6    control: 2 <= 1 is false                                   got false 
+PASS LE7    control: LUA_OPLT still works                              true
+PASS LE8    control: LUA_OPEQ still works                              false
+
+== FF  FFI compiled out: no cdata from source or bytecode ==
+PASS FF0    control: plain numeric literals still load as numbers      numbernumbernumbernumber/2147484664
+PASS FFP    fixture: registry._LOADED.ffi is nil BEFORE any literal    nil
+PASS FF1    `1LL` is a syntax error (malformed number)                 status=3 "[string "return 1LL"]:1: malformed number near '1LL'"
+PASS FF2    `2ULL` is a syntax error                                   status=3 "[string "return 2ULL"]:1: malformed number near '2ULL'"
+PASS FF3    `0x10ULL` is a syntax error                                status=3 "[string "return 0x10ULL"]:1: malformed number near '0x10ULL'"
+PASS FF4    `3i` (imaginary) is a syntax error                         status=3 "[string "return 3i"]:1: malformed number near '3i'"
+PASS FF5    `1LL << 40` is a syntax error                              status=3 "[string "local m = 1LL << 40 return m"]:1: malformed number near '1LL'"
+PASS FF6    Lua load('return 1LL', name, 't', {}) refuses              refused: lit:1: malformed number near '1LL'
+PASS FF7    registry._LOADED.ffi is still nil after FF1-FF6            nil/nil
+PASS FF8    registry._PRELOAD.ffi is nil (lib_init.c:32-37)            nil/nil
+FAIL FF9    control: a plain stripped dump loads in mode "b"           status=3 bcplain: cannot load incompatible bytecode
+FAIL FF10   an FFI-flagged dump (return 1LL) is refused in mode "b"    status=3 "bcffi: cannot load incompatible bytecode" (FF9 control failed: the header is refused for another reason)
+FAIL FF12   an upstream dump (BCDUMP_VERSION 2, its bit operators 32-bit) is refused status=0 "" (FF9 control failed)
+PASS FF11   registry._LOADED.ffi is still nil after FF10               nil
+
+== BF  string.buffer: FFI-only methods compiled out, the rest intact ==
+PASS BF0    control: string.buffer works; its objects are USERDATA     userdata/ab12/functionfunctionfunctionfunction
+PASS BF1    buf:reserve is absent (lib_buffer.c:183-237)               nil
+PASS BF2    buf:commit is absent (lib_buffer.c:183-237)                nil
+PASS BF3    buf:ref is absent (lib_buffer.c:183-237)                   nil
+PASS BF4    buf:putcdata is absent (lib_buffer.c:183-237)              nil
+
+56 checks, 3 failures
+SECURITY TESTS: FAIL

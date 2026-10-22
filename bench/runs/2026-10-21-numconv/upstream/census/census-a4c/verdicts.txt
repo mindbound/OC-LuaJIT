@@ -1,0 +1,12 @@
+1 patch-penalty-scrub.sh lj_func.c rc=0 | patch-penalty-scrub.sh: lj_func.c 22 lines inserted into lj_func_freeproto (of 213), 0 removed; scrub verified by content
+2 patch-fastfunc-errmem-top.sh lj_err.c rc=0 | patch-fastfunc-errmem-top.sh: lj_err.c 4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+3 patch-strfmt-xint-noffi.sh lj_ffrecord.c rc=0 | patch-strfmt-xint-noffi.sh: lj_ffrecord.c 2 lines (recff_nyiu + return, line 1110) replaced by 7 (of 1675); no-FFI integer-format fallback verified by content and diff
+4 patch-features-include.sh lj_arch.h rc=0 | patch-features-include.sh: lj_arch.h includes oclj_features.h right after lua.h (1 line inserted, of 779); verified by content and diff
+5 patch-strpack-register.sh lib_string.c rc=0 | patch-strpack-register.sh: lib_string.c registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 712); verified by content and diff
+6 patch-bitop-parse.sh lj_parse.c rc=0 | patch-bitop-parse.sh: lj_parse.c foldbitop and the ~ fold use oclj_bitop.h (24 lines added, 18 removed, of 3140); verified by content, diff and reversal
+7 patch-bitop-vm.sh vm_x64.dasc rc=0 | patch-bitop-vm.sh: vm_x64.dasc BC_BNOT and ins_bitop compute on int64, exact results only (40 lines added, 15 removed, of 5221); verified by content, diff and reversal
+8 patch-bitop-meta.sh lj_meta.c rc=0 | patch-bitop-meta.sh: lj_meta.c lj_meta_bitop's no-FFI path calls oclj_meta_bitop (8 lines added, 26 removed, of 540); verified by content, diff and reversal
+9 patch-bitop-record.sh lj_record.c rc=1 | patch-bitop-record.sh: refusing -- hunk 5's upstream text occurs 0 times in /c/Users/astro/claude-tmp/oclj/numconv/docs-up/census-a4c/work/lj_record.c, expected exactly 1 (has lj_record.c changed shape?)
+10 patch-bitop-fold.sh lj_opt_fold.c rc=0 | patch-bitop-fold.sh: lj_opt_fold.c int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2725); verified by content, diff and reversal
+11 patch-bitop-bcdump.sh lj_bcdump.h rc=0 | patch-bitop-bcdump.sh: lj_bcdump.h BCDUMP_VERSION 2 -> 0x80 (6 lines for 1, of 76); verified by content, diff and reversal
+12 patch-bitop-jitlib.sh lib_jit.c rc=0 | patch-bitop-jitlib.sh: lib_jit.c jit.util.funcbc's word and tracesnap's entries unsigned (7 lines added, 3 removed, of 779); verified by content, diff and reversal

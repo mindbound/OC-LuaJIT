@@ -1,0 +1,13 @@
+4ad7474725c0c6aa9c6ea79bb6bb2346 */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-bcdump.sh
+08c242a5a06c4063d25265d7793e769b */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-fold.sh
+e097c7b151847ab3f9a07c5fea3e737f */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-jitlib.sh
+743ad873960bbb5d482d38f6b3e2d0cd */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-meta.sh
+849483eca7a93e77c710b98b0374051e */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-parse.sh
+b218585d82e1ed21e294ea9e9cc61650 */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-record.sh
+5dbcd6bcb1fb00242c84b65b91713f2e */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-bitop-vm.sh
+58f8fdbb400bcc6dda429815238c401b */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-fastfunc-errmem-top.sh
+3c668275c5d7ff7295e200c5e1d0c30e */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-features-include.sh
+a2dfa0d08cce8a65c4e793e19d437a82 */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-penalty-scrub.sh
+af7311cde19e559a304e1cf4c0f0df48 */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-strfmt-xint-noffi.sh
+62f72e0c8efbfeb435c68df777a5630f */c/Users/astro/Downloads/OC-LuaJIT/native/luajit/patch-strpack-register.sh
+ad304c1ff8c225facda00281519dbe93 *scripts/census.sh

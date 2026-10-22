@@ -1,0 +1,12 @@
+f44d5456ea689ee15dfe6ee6b68f301f *census-pin/work/lib_jit.c
+a1e72c77ead85069d96d0680177c3ccc *census-pin/work/lib_string.c
+116243fb80ef11cbd1899e6b01af6aeb *census-pin/work/lj_arch.h
+6847b9f2fc042ff3bba27ecd7d3d2761 *census-pin/work/lj_bcdump.h
+6c39014c0f50011bdebeb0a545ee54ca *census-pin/work/lj_err.c
+a56d16be3a8623f493949e79ccf5d419 *census-pin/work/lj_ffrecord.c
+b1f7309eef06a21fd18f2510db1adb77 *census-pin/work/lj_func.c
+7f8042af93f7b3468441213c73581c92 *census-pin/work/lj_meta.c
+3b11930f05400e29e2c3ed16eedf5530 *census-pin/work/lj_opt_fold.c
+f316088e3548da4b9a015d833f840c01 *census-pin/work/lj_parse.c
+d490af9bfe2ec6e67b832136b2f9b5b0 *census-pin/work/lj_record.c
+8c3fbca96098db56ee96d34518d78d8d *census-pin/work/vm_x64.dasc

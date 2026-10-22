@@ -1,0 +1,1 @@
+x:2043: if (idx < 0 || idx > LUAI_MAXSTACK) goto nyivarg;

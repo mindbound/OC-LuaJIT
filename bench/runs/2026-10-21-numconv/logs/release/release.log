@@ -1,0 +1,14 @@
+23:26:29 start; HEAD 209aa957; 10 changed files; final check: PASS 80 FAIL 0 SKIP 0 secs 1267 parts [build alma bitjit base suites negctl runners hygiene timing] FC_USE_BUILD=unset FC_BASE_BUILD=unset FC_ROUNDS=8 FC_NDIV=1 FC_NEGCTL_ARMS=unset FC_CENSUS=md5 final-check.sh e0f1797a0c3def6a405dd43fd0af4ea9
+23:27:26 windows: build-dropin exit=0 build-additive exit=0 
+23:27:55 alma: build-dropin exit=0 build-additive exit=0 
+23:27:55 PASS objects-win: build/native's 80 objects equal the final check's
+23:27:55 PASS objects-linux: build/native's 80 objects equal the final check's
+23:27:55 fingerprint libjnluajit52-linux-x86_64.so: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+23:27:55 fingerprint libjnluajit52-windows-x86_64.dll: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+23:27:55 alma glibc: == libjnlua52-linux-x86_64.so GLIBC_2.2.5 GLIBC_2.3 GLIBC_2.3.2 GLIBC_2.3.3 GLIBC_2.12 GLIBC_2.14 GLIBC_2.17    NEEDED [libm.so.6]   NEEDED [libpthread.so.0]   NEEDED [libc.so.6]   NEEDED [ld-linux-x86-64.so.2]   fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64 == libjnluajit52-linux-x86_64.so GLIBC_2.2.5 GLIBC_2.3 GLIBC_2.3.2 GLIBC_2.3.3 GLIBC_2.12 GLIB
+23:27:55 frozen /c/Users/astro/claude-tmp/oclj/new-nc-9ac03aeb /c/Users/astro/claude-tmp/oclj/new-nc-linux-f91700bd
+23:39:33 harness windows: gl-additive-on exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 92.2s gl-dropin exit=0 SMOKE| CHECKS: 69   FAILURES: 0   WALL: 99.5s gl-additive-off exit=0 SMOKE| CHECKS: 80   FAILURES: 0   WALL: 97.4s gl-sieve exit=0 SMOKE| CHECKS: 76   FAILURES: 0   WALL: 82.8s gl-stock exit=0 SMOKE| CHECKS: 53   FAILURES: 0   WALL: 88.3s gl-disposeoff exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 97.8s gl-bundleoff exit=1 SMOKE| CHECKS: 82   FAILURES: 3   WALL: 97.1s 
+23:50:01 harness alma: lx-additive-on exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 80.4s lx-dropin exit=0 SMOKE| CHECKS: 69   FAILURES: 0   WALL: 83.8s lx-additive-off exit=0 SMOKE| CHECKS: 80   FAILURES: 0   WALL: 85.1s lx-sieve exit=0 SMOKE| CHECKS: 76   FAILURES: 0   WALL: 71.1s lx-stock exit=0 SMOKE| CHECKS: 53   FAILURES: 0   WALL: 75.7s lx-disposeoff exit=0 SMOKE| CHECKS: 82   FAILURES: 0   WALL: 84.1s lx-bundleoff exit=1 SMOKE| CHECKS: 82   FAILURES: 3   WALL: 83.3s 
+23:50:11 gradle verifyModAssets rc=0 needs at most GLIBC_2.17
+23:50:25 gradle build rc=0
+23:50:26 done

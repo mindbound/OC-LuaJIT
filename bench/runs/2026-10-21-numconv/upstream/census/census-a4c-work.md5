@@ -1,0 +1,12 @@
+f44d5456ea689ee15dfe6ee6b68f301f *census-a4c/work/lib_jit.c
+a1e72c77ead85069d96d0680177c3ccc *census-a4c/work/lib_string.c
+116243fb80ef11cbd1899e6b01af6aeb *census-a4c/work/lj_arch.h
+6847b9f2fc042ff3bba27ecd7d3d2761 *census-a4c/work/lj_bcdump.h
+6c39014c0f50011bdebeb0a545ee54ca *census-a4c/work/lj_err.c
+0d42a0d86f481438e282985a7cb35620 *census-a4c/work/lj_ffrecord.c
+b1f7309eef06a21fd18f2510db1adb77 *census-a4c/work/lj_func.c
+7f8042af93f7b3468441213c73581c92 *census-a4c/work/lj_meta.c
+447a232969a6ad200b80f07a0a16db3b *census-a4c/work/lj_opt_fold.c
+4af9a0ce1877a1b9506d4f7a1866b4b0 *census-a4c/work/lj_parse.c
+1f55838c162c3e1aec7b0c2c58aafc52 *census-a4c/work/lj_record.c
+a10fb4fc0a0bc7b87719f8c05e11a808 *census-a4c/work/vm_x64.dasc

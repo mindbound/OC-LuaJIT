@@ -1,0 +1,80 @@
+== W-rc: rcis build-win 0
+== W-pin: sh -c grep -q "pin     = met" "$1" && grep -q -F "8 trees to their names, 232 files to the pin" "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/build-win.log
+== W-ignored-none: grep -q ignored from the environment: none  /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/build-win.log
+== W-patch: grep -q -F the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2715) /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/build-win.log
+== W-wgate: grep -q -F oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = 0 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/build-win.log
+== W-wgate-call: grep -q -F oclj_isnumconv(J, 0) + /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/bitop_wgate.c
+== W-objects: objcmp /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win /c/Users/astro/Downloads/OC-LuaJIT/build/native windows-x86_64 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/win-vs-buildnative
+== W-fold-object: sh -c [ "$(md5sum < "$1" | cut -c1-32)" = "$2" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/luajit-windows-x86_64/src/lj_opt_fold.o f6d916e29cf8e05cd951d220ba8abcd9
+== W-build-copy: sh -c [ "$(md5sum < "$1" | cut -c1-32)" = "$2" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/luajit-windows-x86_64/src/lj_opt_fold.c 3b11930f05400e29e2c3ed16eedf5530
+== ALMA-ran: [ -f /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/part.done ]
+== ALMA-rc: [ 0 = 0 ]
+== ALMA-ignored-none: grep -q ignored from the environment: none  /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/build.log
+== ALMA-patch: grep -q -F the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2715) /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/build.log
+== ALMA-wgate: grep -q -F oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = 0 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/build.log
+== ALMA-glibc: sh -c [ -n "$1" ] && [ "$1" -le 28 ] x 17
+== ALMA-objects: [ 0 = 0 ]
+== ALMA-fold-object: [ 57970a518831675ec90e3124850e50d7 = 57970a518831675ec90e3124850e50d7 ]
+== ALMA-build-copy: [ 3b11930f05400e29e2c3ed16eedf5530 = 3b11930f05400e29e2c3ed16eedf5530 ]
+== ALMA-bitjit: sh -c [ "$(cat "$1/rc/bitjit-all.rc")" = 0 ] && grep -q "^RUN-BITJIT: PASS (results" "$1/bitjit-all.log" && grep -q "^PASS phiidx" "$1/bitjit-all.log" && grep -q "^PASS t_select (" "$1/bitjit-all.log" && grep -q "^PASS t_rg2: PUC" "$1/bitjit-all.log" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma
+== ALMA-nc: ncpass /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/bitjit-all.log
+== ALMA-gen-idx: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma idx
+== ALMA-gen-rg2: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma rg2
+== ALMA-gen-phi: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma phi
+== ALMA-base-nc: basefails /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/rc/base-nc.rc /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/base-nc.log
+== BITJIT-all: sh -c [ "$(cat "$1/rc/bitjit-all.rc")" = 0 ] && grep -q "^RUN-BITJIT: PASS (results" "$2" && [ "$(grep -c "^seed [0-9]*: PASS" "$2")" = 4 ] && grep -q "^PASS t_rg2 (" "$2" && grep -q "^PASS t_rg2: PUC" "$2" && grep -q "^PASS fix1" "$2" && grep -q "^PASS t_idx (" "$2" && grep -q "^PASS t_cnt33 (" "$2" && grep -q "^PASS t_idx2 (" "$2" && grep -q "^PASS phiidx" "$2" && grep -q "^PASS t_select (" "$2" && grep -q "^PASS t_select-kmax" "$2" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/bitjit-all.log
+== BITJIT-nc: ncpass /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/bitjit-all.log
+== BITJIT-gen-idx: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/logs/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 idx
+== BITJIT-gen-rg2: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/logs/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 rg2
+== BITJIT-gen-phi: sh -c [ "$(cat "$1/rc/gen-$2.rc")" = 0 ] && [ "$(grep -c "^seed [0-9]*: PASS" "$1/logs/gen-$2.log")" = 4 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 phi
+== BASE-nc: basefails /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/rc/base-nc.rc /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/base-nc.log
+== IRIDENT-input: sh -c [ "$(md5sum < "$1" | cut -c1-32)" = "$2" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/runs/irident/ir_ident.lua e01eb3af575b54bb22c7a51f0d995022
+== IRIDENT-new: sh -c [ "$(cat "$1/new.rc")" = 0 ] && [ "$(cat "$1/new-as-new.rc")" = 0 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/runs/irident
+== IRIDENT-base: sh -c [ "$(cat "$1/base.rc")" = 0 ] && [ "$(cat "$1/base-as-base.rc")" = 0 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/runs/irident
+== IRIDENT-differ: sh -c [ "$(cat "$1/new-as-base.rc")" = 1 ] && [ "$(cat "$1/base-as-new.rc")" = 1 ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/runs/irident
+== BITOP: sh -c [ "$(cat "$1/rc/bitop.rc")" = 0 ] && grep -q "^RUN-BITOP: PASS" "$1/logs/bitop.log" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1
+== BITFUZZ: sh -c [ "$(cat "$1/rc/bitfuzz.rc")" = 0 ] && grep -q "^BITFUZZ PASS" "$1/logs/bitfuzz.log" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1
+== NEGCTL-arm-list: cmp -s /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/negctl-script-arms.txt /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/negctl-want.txt
+== NEGCTL-canon-list: grep -q -F arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc security gate stage4' /c/Users/astro/Downloads/OC-LuaJIT/test/native/negctl-bitop.sh
+== NEGCTL-rc: sh -c [ "$(cat "$1/rc/negctl-bitop.rc")" = 0 ] && grep -q "^NEGCTL-BITOP: PASS (canon passes; every sabotage is caught" "$2" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/negctl-bitop.log
+== NEGCTL-canon: sh -c grep -q "^.negctl-bitop. canon (-, .*: PASS (every catcher passes; every object reproduced)" "$1" && grep -q "pristine files from .*luajit-export-windows-x86_64/src" "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/negctl-bitop.log
+== NEGCTL-36-arms: sh -c cmp -s "$1" "$2" && grep -q "^.negctl-bitop. NUMCONVOP1 (.*: PASS (caught by nc:t_numconv nc:ncir)" "$3" && grep -q "^.negctl-bitop. NUMCONVW (.*: PASS (caught by nc:t_numconv nc:ncir)" "$3" && grep -q "^.negctl-bitop. NUMCONVOFF (.*: PASS (caught by nc:ncir)" "$3" && grep -q "^.negctl-bitop. NUMCONVNOOP (.*: PASS (caught by gen)" "$3" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/negctl-caught.txt /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/negctl-want.txt /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/negctl-bitop.log
+== NEGCTL-restore: grep -q ^.negctl-bitop. restore: PASS /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/logs/negctl-bitop.log
+== RUNNER-run.sh: rcis runner-run.sh 0
+== RUNNER-run-mem.sh: rcis runner-run-mem.sh 0
+== RUNNER-run-vgc.sh: rcis runner-run-vgc.sh 0
+== RUNNER-run-wd.sh: rcis runner-run-wd.sh 0
+== RUNNER-run-penalty.sh: rcis runner-run-penalty.sh 0
+== RUNNER-run-race.sh: rcis runner-run-race.sh 0
+== RUNNER-run-security.sh: rcis runner-run-security.sh 0
+== RUNNER-run-pack.sh: rcis runner-run-pack.sh 0
+== RUNNER-run-packfuzz.sh: rcis runner-run-packfuzz.sh 0
+== CHANGED-SET: cmp -s /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/changed-files.txt /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/changed-want.txt
+== CR0: [ 0 = 0 ]
+== GIT-DIFF-CHECK: rcis git-diff-check 0
+== GIT-DIFF-CHECK-NEW: [ 0 = 0 ]
+== SHN-gitbash: [ 0 = 0 ]
+== SHN-alma: sh -c [ -s "$1" ] && ! grep -v "^0 " "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/alma/shn.txt
+== SHN-ubuntu: sh -c [ -s "$1" ] && ! grep -v "^0 " "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/ubuntu/shn.txt
+== ENGINE: sh -c [ "$1" = 0 ] && [ "$(wc -l < "$2" | tr -d " ")" = 7 ] x 0 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/engine.txt
+== BUILD-NATIVE-WGATE: sh -c [ "$(cut -f1 "$1")" = 5 ] && [ "$(cut -f2 "$1")" = 2 ] && git -C "$2" diff HEAD -- native/build-native.sh | grep -q -F "+    oclj_isnumconv(J, 0) +" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/build-native.numstat /c/Users/astro/Downloads/OC-LuaJIT
+== PATCH-NO-TAB-BS: sh -c [ "$1" = 0 ] && [ "$2" = 0 ] x 0 0
+== NC-NO-BS: sh -c [ "$1" = 0 ] && [ "$2" = 0 ] && [ "$3" = 0 ] x 0 0 0
+== PATCH-PRISTINE: sh -c [ "$(cat "$1/rc/ps-run1.rc")" = 0 ] && grep -q -F "$2" "$1/ps/run1.log" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2715)
+== PATCH-IDEMPOTENT: sh -c [ "$(cat "$1/rc/ps-run2.rc")" = 0 ] && grep -q -F "$2" "$1/ps/run2.log" && cmp -s "$1/ps/out1.c" "$1/ps/out2.c" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 already folds the 64-bit bit operators without FFI (verified) -- unchanged
+== PATCH-IS-BUILD-COPY: sh -c cmp -s "$1" "$2" && [ "$(md5sum < "$1" | cut -c1-32)" = "$3" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/ps/out1.c /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/luajit-windows-x86_64/src/lj_opt_fold.c 3b11930f05400e29e2c3ed16eedf5530
+== PATCH-NESTED-REFUSED: sh -c [ "$(cat "$1/rc/ps-nested.rc")" = 1 ] && grep -q -F "is not followed directly by its own" "$1/ps/nested.log" && [ ! -e "$1/ps/nested-out.c" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1
+== NO-PRIVATE: sh -c ! grep -n -i -E "PRIVATE-SCRATCH-PATHS" "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/added-lines.txt
+== NO-EMAIL: sh -c ! grep -n -E "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+" "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/cmp/added-lines.txt
+== GUIDE-MD5S: sh -c grep -q -F "$(md5sum < "$1/test/native/bitop/t_numconv.lua" | cut -c1-8)" "$1/docs/jit-guide.md" && grep -q -F "$(md5sum < "$1/test/native/bitop/ncir.lua" | cut -c1-8)" "$1/docs/jit-guide.md" x /c/Users/astro/Downloads/OC-LuaJIT
+== DOCS-CITES: sh -c [ "$(cat "$1/rc/cites.rc")" = 0 ] && [ "$(cat "$1/rc/cites-shift1.rc")" = 1 ] && [ "$(cat "$1/rc/cites-shiftm1.rc")" = 1 ] && grep -q " bad=0 shift=0" "$1/cmp/cites.txt" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1
+== DOCS-ANCHORS: rcis anchors 0
+== DOCS-TABLES: rcis tables 0
+== TIMING-inputs: sh -c [ "$(md5sum < "$1" | cut -c1-32)" = "$2" ] && [ "$(md5sum < "$3" | cut -c1-32)" = "$4" ] && [ "$(md5sum < "$5" | cut -c1-32)" = "$6" ] && [ "$(md5sum < "$7" | cut -c1-32)" = "$8" ] && [ "$(md5sum < "$9" | cut -c1-32)" = "${10}" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/timing/ident.lua 5a0429552f6a808731b13a57bf10cce7 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/timing/bench_numconv.lua c15c325eb474b7458a753a637335ecae /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe 17f96322d746201a8c15d1edfcfe1f41 /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/lj_opt_fold.o 1d018acc8b2ce53076dfbb2e63aa5cdd /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/b/win/luajit-windows-x86_64/src/lj_opt_fold.o f6d916e29cf8e05cd951d220ba8abcd9
+== TIMING-complete: sh -c [ "$1" = 0 ] && [ "$(grep -c "^round [0-9]* done" "$2")" = "$3" ] x 0 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/timing/progress.txt 8
+== TIMING-results-equal: sh -c grep -q "^RESULTS: EQUAL" "$1" && grep -q "^SUMMARY: OK" "$1" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/timing/summary.txt
+== TIMING-no-gross-change: grep -q ^GROSS: OK /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/timing/summary.txt
+== CENSUS-build: cmp -s /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/census/before-build.md5 /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/census/after-build.md5
+== CENSUS-pristine-stat: cmp -s /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/census/before-pristine-stat.txt /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/census/after-pristine-stat.txt
+== CENSUS-pristine-git: sh -c cmp -s "$1-pristine-git.md5" "$2-pristine-git.md5" && cmp -s "$1-pristine-head.txt" "$2-pristine-head.txt" x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/census/before /c/Users/astro/claude-tmp/oclj/numconv/main/final-1/census/after
+== FILES-unchanged: sh -c cmp -s "$1/changed-files.txt" "$1/changed-files-end.txt" && cmp -s "$1/md5-start.txt" "$1/md5-end.txt" && [ "$(git -C "$2" rev-parse HEAD)" = "$(cat "$1/repo-head.txt")" ] x /c/Users/astro/claude-tmp/oclj/numconv/main/final-1 /c/Users/astro/Downloads/OC-LuaJIT

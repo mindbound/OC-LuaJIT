@@ -1,0 +1,13 @@
+a4c        repro traces 25 side 24 VARG-aborts 0
+a4c        konst traces 25 side 24 VARG-aborts 0
+a4c        konst joff/jit: 300 / 300
+a4c        vsel: sets 21, diffs min 38 max 135, joff [('0', '209')]
+a4cnogc64  repro traces 0 side 0 VARG-aborts 0
+a4cnogc64  konst traces 25 side 24 VARG-aborts 0
+a4cnogc64  konst joff/jit: 300 / 300
+a4cnogc64  vsel: sets 21, diffs min 38 max 135, joff [('0', '209')]
+FAIL a4c: JIT output differs from -joff (the issue's -joff block)
+FAIL a4c: vsel differs from -joff
+FAIL a4cnogc64: JIT output differs from -joff (the issue's -joff block)
+FAIL a4cnogc64: vsel differs from -joff
+checks: FAIL

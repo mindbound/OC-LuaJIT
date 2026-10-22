@@ -1,0 +1,38 @@
+build-dropin exit=0
+build-additive exit=0
+[build] glibc   = the library may need at most GLIBC_2.28 (OCLJ_GLIBC_MAX; checked in step 6)
+[build] luajit  = /mnt/c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit @ 1ee778a4 (feature set: native/luajit/oclj_features.h)
+[build]     bitwise-operator gate: fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true
+[build]     jit tools gate (luajit -bl, -jdump): jitlib f=1 hot=206208 snapend=4278190080 bc=118 bl=118 blerr=0 bldec=3 jd=1/1/0/0 jdb=12/1 jdim=1/1 jdline=1
+[build]     FOREIGN-ALLOC-OK GG=6376
+[build]     serializer hash = 412be694  (blobs are pinned to this)
+[build]     VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64 (luajit.exe agrees: ffi0 lua52 fr2 le pack1 bit64)
+[build]     ABI surface: Java_* = 91 (want 91), oclj natives = 4, total = 264
+[build]     ELF imports: 110 undefined, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable _ITM_registerTMCloneTable __gmon_start__)
+[build]     NEEDED: libm.so.6 libpthread.so.0 libc.so.6 ld-linux-x86-64.so.2
+[build]     glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28
+[build] glibc   = the library may need at most GLIBC_2.28 (OCLJ_GLIBC_MAX; checked in step 6)
+[build] luajit  = /mnt/c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit @ 1ee778a4 (feature set: native/luajit/oclj_features.h)
+[build]     bitwise-operator gate: fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true
+[build]     jit tools gate (luajit -bl, -jdump): jitlib f=1 hot=206208 snapend=4278190080 bc=118 bl=118 blerr=0 bldec=3 jd=1/1/0/0 jdb=12/1 jdim=1/1 jdline=1
+[build]     FOREIGN-ALLOC-OK GG=6376
+[build]     serializer hash = 412be694  (blobs are pinned to this)
+[build]     VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64 (luajit.exe agrees: ffi0 lua52 fr2 le pack1 bit64)
+[build]     ABI surface: Java_* = 87 (want 87), oclj natives = 0, total = 260
+[build]     ELF imports: 110 undefined, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable _ITM_registerTMCloneTable __gmon_start__)
+[build]     NEEDED: libm.so.6 libpthread.so.0 libc.so.6 ld-linux-x86-64.so.2
+[build]     glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28
+== libjnlua52-linux-x86_64.so
+GLIBC_2.2.5 GLIBC_2.3 GLIBC_2.3.2 GLIBC_2.3.3 GLIBC_2.12 GLIBC_2.14 GLIBC_2.17 
+  NEEDED [libm.so.6]
+  NEEDED [libpthread.so.0]
+  NEEDED [libc.so.6]
+  NEEDED [ld-linux-x86-64.so.2]
+  fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64
+== libjnluajit52-linux-x86_64.so
+GLIBC_2.2.5 GLIBC_2.3 GLIBC_2.3.2 GLIBC_2.3.3 GLIBC_2.12 GLIBC_2.14 GLIBC_2.17 
+  NEEDED [libm.so.6]
+  NEEDED [libpthread.so.0]
+  NEEDED [libc.so.6]
+  NEEDED [ld-linux-x86-64.so.2]
+  fingerprint: 1ee778a4|LuaJIT 2.1.ROLLING|412be694|ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64

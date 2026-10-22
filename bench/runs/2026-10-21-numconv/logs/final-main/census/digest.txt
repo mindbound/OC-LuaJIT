@@ -1,0 +1,13 @@
+after-build.md5 lines 39456 md5 1501deed1c468d9d031515c8331470e4
+after-pristine-git.md5 lines 31 md5 1560bc10edd9249990eaee3bc74ac14d
+after-pristine-head.txt lines 1 md5 6ea470c7cf00ee031d144eecaeb56075
+after-pristine-stat.txt lines 379 md5 57f59e935cc93ae66566f53f099e1bf3
+before-build.md5 lines 39456 md5 1501deed1c468d9d031515c8331470e4
+before-pristine-git.md5 lines 31 md5 1560bc10edd9249990eaee3bc74ac14d
+before-pristine-head.txt lines 1 md5 6ea470c7cf00ee031d144eecaeb56075
+before-pristine-stat.txt lines 379 md5 57f59e935cc93ae66566f53f099e1bf3
+before == after (build.md5): True
+before == after (pristine-stat.txt): True
+before == after (pristine-git.md5): True
+before == after (pristine-head.txt): True
+full files: claude-tmp/oclj/numconv/main/final-1/census/

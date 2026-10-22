@@ -1,0 +1,1 @@
+patch-penalty-scrub.sh: lj_func.c  22 lines inserted into lj_func_freeproto (of 213), 0 removed; scrub verified by content

@@ -1,0 +1,8 @@
+[TRACE   1 repro.lua:18 loop]
+[TRACE --- repro.lua:3 -- NYI: bytecode VARG  ]
+[TRACE --- repro.lua:3 -- NYI: bytecode VARG  ]
+[TRACE --- repro.lua:8 -- NYI: bytecode VARG  ]
+[TRACE --- repro.lua:8 -- NYI: bytecode VARG  ]
+[TRACE   2 (1/2) repro.lua:18 -> 1]
+[TRACE --- repro.lua:13 -- NYI: bytecode VARG  ]
+[TRACE --- repro.lua:13 -- NYI: bytecode VARG  ]

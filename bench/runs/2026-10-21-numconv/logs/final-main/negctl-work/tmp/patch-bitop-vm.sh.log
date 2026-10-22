@@ -1,0 +1,1 @@
+patch-bitop-vm.sh: vm_x64.dasc  BC_BNOT and ins_bitop compute on int64, exact results only (40 lines added, 15 removed, of 5221); verified by content, diff and reversal

@@ -46,9 +46,9 @@
 -- probes/selbug.lua, 2026-10-20; the shipped build and the 2026-09-01
 -- upstream binary alike), and a select consumer here would have reported
 -- that, not the fold.  The select fix (roadmap row 213, JIT guide P54)
--- bounds select's index since, and t_select.lua's bx source feeds select a
--- 32-bit bit result through this fold; whether select joins this file is
--- open.
+-- bounds select's index since, and select stays out (decided 2026-10-21):
+-- the fold meets an INDEX conversion here in rec_idx_key's CONV int.num,
+-- and select's own in t_select.lua's bx source, a 32-bit bit result.
 --
 -- ONE TEXT, TWO DIALECTS (bitop/twin.lua).  The reference is -joff.  Part
 -- "puc" prints only the consumers whose meaning is the same on PUC 5.3.6

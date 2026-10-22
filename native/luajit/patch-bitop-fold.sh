@@ -45,7 +45,7 @@
 #      upstream's FFI code as it is.  What still fails without FFI is
 #      harmless: kfold_int64arith2, kfold_bswap64 and simplify_intmul_k64
 #      handle ops the recorder never emits.
-#   7. simplify_conv_i64_num, (i64)(num)y ==> y, gains two rules before its
+#   7. simplify_conv_i64_num, (i64)(num)y ==> y, gains three rules before its
 #      PHIBARRIER, for an int64 y:
 #      - THE EXACT MARK: when the inner conversion carries OCLJ_IRCONV_EXACT
 #        and the outer one does not.  oclj_bitop_rec.c emits the guard that
@@ -66,7 +66,18 @@
 #        #included above simplify_conv_int_num (hunk 11), the first of its
 #        two callers: buildvm -m folddef reads the LJFOLD lines of this file
 #        only, so the rules must stay here.
-#      Across a PHI both rules fold only to an int64-typed y: an int-typed y
+#      - FIX-NUMCONV (roadmap row 211 (5), 2026-10-21), on a line of its own
+#        after the width rule: when y is an unguarded CONV i64.num of a
+#        double (oclj_isnumconv, beside the bound in oclj_bitop_fold.c, with
+#        its argument).  x64 compiles that to one cvttsd2si, whose value,
+#        the double's integral part or -2^63, is always exactly a double
+#        whatever its range.  That is exactness, not a range: the bound must
+#        never hold it, because a bound composes (x | 1 would lose its guard).
+#        An identity operation (x | 0, x & -1, x ~ 0, x << 0, x >> 0, and
+#        the outer operator of ~~x) folds its result to its operand's own
+#        conversion, so this removes a result guard that cannot fail.  Like
+#        the width rule, it reads no guard and no exact mark.
+#      Across a PHI the rules fold only to an int64-typed y: an int-typed y
 #      is the int loop index after simplify_conv_sext's x64 LEFTFOLD
 #      (:1242), and an int64 PHI of it makes loop_unroll raise TYPEINS and
 #      blacklist the loop (found by the round-3 review, 2026-10-17).
@@ -114,7 +125,7 @@ ME=patch-bitop-fold.sh
 MARK='OC-LuaJIT (native/luajit/patch-bitop-fold.sh)'
 NMARK=1     # the marker occurs once in a patched file
 NH=11       # hunks
-NADD=63     # lines diff -d reports added on the pristine file ...
+NADD=70     # lines diff -d reports added on the pristine file ...
 NDEL=8      # ... and removed
 NOFFI='#if 1  /* OC-LuaJIT: the 64-bit bit operators, without FFI. */'
 
@@ -194,7 +205,7 @@ cat > "$D/n6" <<'EOF'
 #if 1  /* OC-LuaJIT: the 64-bit bit operators, without FFI. */
   if (ir_k64(fright)->u64 == 0)
 EOF
-# 7. simplify_conv_i64_num: the exact mark and the width rule.
+# 7. simplify_conv_i64_num: the exact mark, the width rule and FIX-NUMCONV.
 cat > "$D/o7" <<'EOF'
 LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32 */
 LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _INT or _U32 */
@@ -207,7 +218,7 @@ LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32 */
 LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _INT or _U32 */
 LJFOLDF(simplify_conv_i64_num)
 {
-  /* OC-LuaJIT: (i64)(num)y ==> y for an int64 y, by either rule below.
+  /* OC-LuaJIT: (i64)(num)y ==> y for an int64 y, by any rule below.
   ** Across a PHI, only to an int64-typed y: an int-typed y is the int loop
   ** index after simplify_conv_sext's x64 LEFTFOLD, and an int64 PHI of it
   ** makes loop_unroll raise TYPEINS and blacklist the loop. */
@@ -224,6 +235,13 @@ LJFOLDF(simplify_conv_i64_num)
     ** double, in every iteration (oclj_bitwidth).  This is what removes the
     ** guard of a result that fits. */
     if (oclj_bitwidth(J, fleft->op1, 0) <= 54)
+      return fleft->op1;
+    /* FIX-NUMCONV: y is an unguarded CONV i64.num of a double, x64's
+    ** cvttsd2si, whose value (the double's integral part, or -2^63) is
+    ** exactly a double whatever its range (oclj_isnumconv: exactness, not
+    ** a bound).  This removes the guard of an identity operation, x | 0
+    ** and the like, whose result folds to its operand's own conversion. */
+    if (oclj_isnumconv(J, fleft->op1))
       return fleft->op1;
   }
   PHIBARRIER(fleft);
@@ -426,6 +444,21 @@ verify_patched() {
 # on an edit of this script's n11 or n7, the order links inside that hunk.
 # Implied, and kept for their messages: the include count and both calls'
 # counts (an extra one also fails an order link, and none the missing check).
+# FIX-NUMCONV's predicate is named on one line, its call on fleft->op1, which
+# lies inside the rules' block, below the width rule's call and above the
+# line '  }' that ends that block directly above simplify_conv_i64_num's
+# PHIBARRIER: there fleft is a CONV num.i64 and the folded conversion's type
+# is int64.  Each was run on its own mutation of a patched file with a fail()
+# that does not exit (2026-10-21): when every hunk's text matched, the
+# oclj_isnumconv( count fails alone on a stray line; on an edit of this
+# script's n7, the order fails alone on the call above the width rule,
+# between the block's '  }' and the PHIBARRIER, or below the PHIBARRIER, and
+# the call's text (another operand) and the count (a second call, or none)
+# fail first, the order failing with them.  The width rule's call and
+# FIX-NUMCONV's are each followed directly by their own return line, so
+# neither call sits nested in the other's unbraced if, which every check
+# above passes (the code verifier's m11, 2026-10-21); on that edit of n7
+# this check fails alone.
 verify_content() {
   [ "$(countx "$NOFFI" "$1")" = 7 ] || fail "$1: '$NOFFI' occurs $(countx "$NOFFI" "$1") times, expected 7"
   [ "$(countx '#include "oclj_bitop_fold.c"' "$1")" = 1 ] || fail "$1: oclj_bitop_fold.c is included $(countx '#include "oclj_bitop_fold.c"' "$1") times, expected 1"
@@ -440,6 +473,18 @@ verify_content() {
   [ -n "$LI" ] && [ -n "$LR1" ] && [ -n "$LC1" ] && [ -n "$LR2" ] && [ -n "$LC2" ] || fail "$1: missing the include, a rule or its call"
   if [ "$LI" -lt "$LR1" ] && [ "$LR1" -lt "$LC1" ] && [ "$LC1" -lt "$LR2" ] && [ "$LR2" -lt "$LC2" ]; then :; else
     fail "$1: out of order (include $LI, simplify_conv_int_num $LR1, its call $LC1, simplify_conv_i64_num $LR2, its call $LC2)"
+  fi
+  [ "$(countsub 'oclj_isnumconv(' "$1")" = 1 ] || fail "$1: oclj_isnumconv is named on $(countsub 'oclj_isnumconv(' "$1") lines, expected 1 (FIX-NUMCONV's call; the definition is in oclj_bitop_fold.c)"
+  LN=$(grep -n -F 'if (oclj_isnumconv(J, fleft->op1))' "$1" | cut -d: -f1)
+  LP=$(awk -v s="$LR2" 'NR > s + 0 && $0 == "  PHIBARRIER(fleft);" { print NR; exit }' "$1")
+  [ -n "$LN" ] && [ -n "$LP" ] || fail "$1: missing FIX-NUMCONV's call on fleft->op1, or simplify_conv_i64_num's PHIBARRIER"
+  LE=$(awk -v p="$LP" 'NR == p - 1 { print; exit }' "$1")
+  if [ "$LC2" -lt "$LN" ] && [ "$LN" -lt "$((LP - 1))" ] && [ "$LE" = "  }" ]; then :; else
+    fail "$1: FIX-NUMCONV's call (line $LN) is not inside the rules' block below the width rule's call ($LC2), which ends with '  }' directly above simplify_conv_i64_num's PHIBARRIER ($LP)"
+  fi
+  RL='      return fleft->op1;'
+  if [ "$(awk -v n="$LC2" 'NR == n + 1 { print; exit }' "$1")" = "$RL" ] && [ "$(awk -v n="$LN" 'NR == n + 1 { print; exit }' "$1")" = "$RL" ]; then :; else
+    fail "$1: the width rule's call (line $LC2) or FIX-NUMCONV's (line $LN) is not followed directly by its own '$RL': a call nested in another rule's if"
   fi
 }
 
@@ -496,4 +541,4 @@ cmp -s "$D/back" "$D/in" || fail "putting each hunk's upstream text back does no
 
 mv -f "$TMP" "$OUT" || fail "cannot write $OUT"
 trap 'rm -rf "$D"' EXIT
-echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark and width rules, the table-index fold ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"
+echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"

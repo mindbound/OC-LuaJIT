@@ -1,0 +1,30 @@
+patch-bitop-parse.sh     hunk  1 lj_parse.c     upstream 1 ours 0 lines   1 ok  first: #include "lj_vmevent.h"
+patch-bitop-parse.sh     hunk  2 lj_parse.c     upstream 1 ours 0 lines   5 ok  first: static LJ_AINLINE int32_t expr_bitV(ExpDesc *e)
+patch-bitop-parse.sh     hunk  3 lj_parse.c     upstream 1 ours 0 lines  15 ok  first: if (expr_isnumk_nojump(e1) && expr_isnumk_nojump(e2)) {
+patch-bitop-parse.sh     hunk  4 lj_parse.c     upstream 1 ours 0 lines   5 ok  first: } else if (op == BC_BNOT && expr_isnumk(e)) {
+patch-bitop-vm.sh        hunk  1 vm_x64.dasc    upstream 1 ours 0 lines   2 ok  first: |// Caveat: ra=RB rb=RC rc=RA.
+patch-bitop-vm.sh        hunk  2 vm_x64.dasc    upstream 1 ours 0 lines  11 ok  first: |.else
+patch-bitop-vm.sh        hunk  3 vm_x64.dasc    upstream 1 ours 0 lines  18 ok  first: |.else
+patch-bitop-meta.sh      hunk  1 lj_meta.c      upstream 1 ours 0 lines   1 ok  first: /* Helper for bit operators. No bitop metamethods in v2.1. */
+patch-bitop-meta.sh      hunk  2 lj_meta.c      upstream 1 ours 0 lines  29 ok  first: #else
+patch-bitop-record.sh    hunk  1 lj_record.c    upstream 1 ours 0 lines   1 ok  first: #include "lj_prng.h"
+patch-bitop-record.sh    hunk  2 lj_record.c    upstream 1 ours 0 lines   1 ok  first: #define emitir_raw(ot, a, b)	(lj_ir_set(J, (ot), (a), (b)), lj_ir_emit
+patch-bitop-record.sh    hunk  3 lj_record.c    upstream 1 ours 0 lines  36 ok  first: case BC_BNOT:
+patch-bitop-record.sh    hunk  4 lj_record.c    upstream 1 ours 0 lines   2 ok  first: /* Record vararg instruction. */
+patch-bitop-record.sh    hunk  5 lj_record.c    upstream 1 ours 0 lines  25 ok  first: ptrdiff_t idx = lj_ffrecord_select_mode(J, tridx, &J->L->base[dst-1]);
+patch-bitop-fold.sh      hunk  1 lj_opt_fold.c  upstream 1 ours 0 lines   1 ok  first: #include "lj_strfmt.h"
+patch-bitop-fold.sh      hunk  2 lj_opt_fold.c  upstream 1 ours 0 lines   2 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk  3 lj_opt_fold.c  upstream 1 ours 0 lines   5 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk  4 lj_opt_fold.c  upstream 1 ours 0 lines   2 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk  5 lj_opt_fold.c  upstream 1 ours 0 lines   2 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk  6 lj_opt_fold.c  upstream 1 ours 0 lines   2 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk  7 lj_opt_fold.c  upstream 1 ours 0 lines   5 ok  first: LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32 */
+patch-bitop-fold.sh      hunk  8 lj_opt_fold.c  upstream 1 ours 0 lines   3 ok  first: /* Narrowing ignores PHIs and repeating it inside the loop is not usef
+patch-bitop-fold.sh      hunk  9 lj_opt_fold.c  upstream 1 ours 0 lines   4 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk 10 lj_opt_fold.c  upstream 1 ours 0 lines   3 ok  first: #if LJ_HASFFI
+patch-bitop-fold.sh      hunk 11 lj_opt_fold.c  upstream 1 ours 0 lines   9 ok  first: LJFOLD(CONV CONV IRCONV_INT_NUM)  /* _INT */
+patch-bitop-bcdump.sh    hunk  1 lj_bcdump.h    upstream 1 ours 0 lines   1 ok  first: #define BCDUMP_VERSION		2
+patch-bitop-jitlib.sh    hunk  1 lib_jit.c      upstream 1 ours 0 lines   1 ok  first: setintV(L->top, ins);
+patch-bitop-jitlib.sh    hunk  2 lib_jit.c      upstream 1 ours 0 lines   3 ok  first: for (n = 0; n < nent; n++)
+refused hunks: 0
+0

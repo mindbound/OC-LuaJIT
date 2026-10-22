@@ -1,0 +1,1 @@
+patch-bitop-parse.sh: lj_parse.c  foldbitop and the ~ fold use oclj_bitop.h (24 lines added, 18 removed, of 3140); verified by content, diff and reversal

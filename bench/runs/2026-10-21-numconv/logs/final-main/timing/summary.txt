@@ -1,0 +1,19 @@
+ident:or0-big        base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.818-0.909] over 8 rounds  result 25000000
+ident:or0-small      base 1.150 ns  new 0.900 ns  new/base median 0.818 [0.750-0.909] over 8 rounds  result 30029299
+ident:andm1-big      base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.818-0.909] over 8 rounds  result 25000000
+ident:andm1-small    base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.750-1.000] over 8 rounds  result 30029299
+ident:xor0-big       base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.818-0.909] over 8 rounds  result 25000000
+ident:xor0-small     base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.750-0.909] over 8 rounds  result 30029299
+ident:shl0-big       base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.750-0.909] over 8 rounds  result 25000000
+ident:shl0-small     base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.818-0.909] over 8 rounds  result 30029299
+ident:shr0-big       base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.750-0.909] over 8 rounds  result 25000000
+ident:shr0-small     base 1.100 ns  new 0.900 ns  new/base median 0.818 [0.750-0.818] over 8 rounds  result 30029299
+bench_numconv:ref    base 0.375 ns  new 0.350 ns  new/base median 1.000 [0.875-1.143] over 8 rounds  result 1.1322322729364896e+19
+bench_numconv:arith  base 0.750 ns  new 0.600 ns  new/base median 0.800 [0.733-0.800] over 8 rounds  result 1.1322322729364896e+19
+bench_numconv:key    base 1.300 ns  new 1.150 ns  new/base median 0.885 [0.846-0.920] over 8 rounds  result 30764296896
+bench_numconv:bits   base 1.350 ns  new 1.300 ns  new/base median 0.927 [0.867-0.963] over 8 rounds  result 5107149359
+bench_numconv:floor  base 1.800 ns  new 1.750 ns  new/base median 0.972 [0.944-0.972] over 8 rounds  result 5.661161364681516e+18
+RESULTS: EQUAL
+GROSS: OK (every row's median new/base within [0.5, 2])
+IDENT: the ten identity rows' median new/base ratios have median 0.818 [0.818-0.818] (information only)
+SUMMARY: OK

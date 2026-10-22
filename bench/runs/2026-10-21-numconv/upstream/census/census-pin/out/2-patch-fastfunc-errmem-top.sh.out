@@ -1,0 +1,1 @@
+patch-fastfunc-errmem-top.sh: lj_err.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
