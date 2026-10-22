@@ -1,0 +1,292 @@
+---- TRACE 1 start benchir.lua:8
+---- TRACE 1 abort benchir.lua:11 -- leaving loop in root trace
+
+---- TRACE 1 start benchir.lua:8
+---- TRACE 1 IR
+0001    [35mint[m SLOAD  #10   CI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [34mnum[m SLOAD  #9    T
+0006    [35mi64[m CONV   0005  [35mi64[m.[34mnum[m none
+0007    [34mnum[m CONV   0006  [34mnum[m.[35mi64[m
+0008 >  [34mnum[m EQ     0007  0005
+0009    [35mi64[m BAND   0006  [35m+1  [m
+0010    [34mnum[m CONV   0009  [34mnum[m.[35mi64[m
+0011 >  [34mnum[m EQ     0010  [34m+0  [m
+0012  + [35mi64[m BSHR   0006  [35m+1  [m
+0013  + [34mnum[m CONV   0012  [34mnum[m.[35mi64[m
+0014    [35mi64[m CONV   0013  [35mi64[m.[34mnum[m none
+0015 >  [35mi64[m EQ     0014  0012
+0016  + [35mint[m ADD    0001  [35m+1  [m
+0017 >  [35mint[m LE     0016  [35m+8  [m
+0018 ------ LOOP ------------
+0019    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0020    [35mint[m BAND   0019  [35m+12 [m
+0021 >  [35mint[m EQ     0020  [35m+0  [m
+0022    [35mi64[m BAND   0012  [35m+1  [m
+0023    [34mnum[m CONV   0022  [34mnum[m.[35mi64[m
+0024 >  [34mnum[m EQ     0023  [34m+0  [m
+0025  + [35mi64[m BSHR   0012  [35m+1  [m
+0026  + [34mnum[m CONV   0025  [34mnum[m.[35mi64[m
+0027    [35mi64[m CONV   0026  [35mi64[m.[34mnum[m none
+0028 >  [35mi64[m EQ     0027  0025
+0029  + [35mint[m ADD    0016  [35m+1  [m
+0030 >  [35mint[m LE     0029  [35m+8  [m
+0031    [35mint[m PHI    0016  0029
+0032    [34mnum[m PHI    0013  0026
+0033    [35mi64[m PHI    0012  0025
+---- TRACE 1 stop -> loop
+
+---- TRACE 2 start 1/1 benchir.lua:9
+---- TRACE 2 IR
+0001    [35mint[m SLOAD  #10   PI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [34mnum[m SLOAD  #9    T
+0006    [35mi64[m CONV   0005  [35mi64[m.[34mnum[m none
+0007    [34mnum[m CONV   0006  [34mnum[m.[35mi64[m
+0008 >  [34mnum[m EQ     0007  0005
+0009    [35mi64[m BSHR   0006  [35m+1  [m
+0010    [34mnum[m CONV   0009  [34mnum[m.[35mi64[m
+0011    [35mi64[m CONV   0010  [35mi64[m.[34mnum[m none
+0012 >  [35mi64[m EQ     0011  0009
+0013    [35mi64[m BXOR   0009  [35m+2  [m
+0014    [34mnum[m CONV   0013  [34mnum[m.[35mi64[m
+0015    [35mi64[m CONV   0014  [35mi64[m.[34mnum[m none
+0016 >  [35mi64[m EQ     0015  0013
+0017    [35mint[m ADD    0001  [35m+1  [m
+0018 >  [35mint[m LE     0017  [35m+8  [m
+0019    [34mnum[m CONV   0017  [34mnum[m.[35mint[m
+---- TRACE 2 stop -> 1
+
+---- TRACE 3 start 1/5 benchir.lua:9
+---- TRACE 3 IR
+0001    [34mnum[m SLOAD  #9    PI
+0002    [35mint[m SLOAD  #10   PI
+0003    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0004    [35mint[m BAND   0003  [35m+12 [m
+0005 >  [35mint[m EQ     0004  [35m+0  [m
+0006    [35mi64[m CONV   0001  [35mi64[m.[34mnum[m none
+0007    [34mnum[m CONV   0006  [34mnum[m.[35mi64[m
+0008 >  [34mnum[m EQ     0007  0001
+0009    [35mi64[m BSHR   0006  [35m+1  [m
+0010    [34mnum[m CONV   0009  [34mnum[m.[35mi64[m
+0011    [35mi64[m CONV   0010  [35mi64[m.[34mnum[m none
+0012 >  [35mi64[m EQ     0011  0009
+0013    [35mi64[m BXOR   0009  [35m+3  [m
+0014    [34mnum[m CONV   0013  [34mnum[m.[35mi64[m
+0015    [35mi64[m CONV   0014  [35mi64[m.[34mnum[m none
+0016 >  [35mi64[m EQ     0015  0013
+0017    [35mint[m ADD    0002  [35m+1  [m
+0018 >  [35mint[m LE     0017  [35m+8  [m
+0019    [34mnum[m CONV   0017  [34mnum[m.[35mint[m
+---- TRACE 3 stop -> 1
+
+---- TRACE 4 start 1/7 benchir.lua:11
+---- TRACE 4 IR
+0001    [34mnum[m SLOAD  #9    PI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [31mtab[m SLOAD  #4    T
+0006 >  [34mnum[m SLOAD  #8    T
+0007 >  [35mint[m CONV   0006  [35mint[m.[34mnum[m index
+0008    [35mint[m FLOAD  0005  tab.asize
+0009 >  [35mint[m ABC    0008  0007
+0010    p64 FLOAD  0005  tab.array
+0011    p64 AREF   0010  0007
+0012    [31mtab[m FLOAD  0005  tab.meta
+0013 >  [31mtab[m EQ     0012  [31mNULL[m
+0014    [34mnum[m ASTORE 0011  0001
+0015    [34mnum[m SLOAD  #5    I
+0016    [34mnum[m ADD    0015  [34m+1  [m
+0017 >  [34mnum[m LE     0016  [34m+255[m
+---- TRACE 4 stop -> 1
+
+---- TRACE 5 start 1/3 benchir.lua:11
+---- TRACE 5 IR
+0001    [34mnum[m SLOAD  #9    PI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [31mtab[m SLOAD  #4    T
+0006 >  [34mnum[m SLOAD  #8    T
+0007 >  [35mint[m CONV   0006  [35mint[m.[34mnum[m index
+0008    [35mint[m FLOAD  0005  tab.asize
+0009 >  [35mint[m ABC    0008  0007
+0010    p64 FLOAD  0005  tab.array
+0011    p64 AREF   0010  0007
+0012    [31mtab[m FLOAD  0005  tab.meta
+0013 >  [31mtab[m EQ     0012  [31mNULL[m
+0014    [34mnum[m ASTORE 0011  0001
+0015    [34mnum[m SLOAD  #5    I
+0016    [34mnum[m ADD    0015  [34m+1  [m
+0017 >  [34mnum[m LE     0016  [34m+255[m
+---- TRACE 5 stop -> 1
+
+---- TRACE 6 start 2/1 benchir.lua:11
+---- TRACE 6 IR
+0001    [34mnum[m SLOAD  #9    PI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [31mtab[m SLOAD  #4    T
+0006 >  [34mnum[m SLOAD  #8    T
+0007 >  [35mint[m CONV   0006  [35mint[m.[34mnum[m index
+0008    [35mint[m FLOAD  0005  tab.asize
+0009 >  [35mint[m ABC    0008  0007
+0010    p64 FLOAD  0005  tab.array
+0011    p64 AREF   0010  0007
+0012    [31mtab[m FLOAD  0005  tab.meta
+0013 >  [31mtab[m EQ     0012  [31mNULL[m
+0014    [34mnum[m ASTORE 0011  0001
+0015    [34mnum[m SLOAD  #5    I
+0016    [34mnum[m ADD    0015  [34m+1  [m
+0017 >  [34mnum[m LE     0016  [34m+255[m
+---- TRACE 6 stop -> 1
+
+---- TRACE 7 start 3/1 benchir.lua:11
+---- TRACE 7 IR
+0001    [34mnum[m SLOAD  #9    PI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [31mtab[m SLOAD  #4    T
+0006 >  [34mnum[m SLOAD  #8    T
+0007 >  [35mint[m CONV   0006  [35mint[m.[34mnum[m index
+0008    [35mint[m FLOAD  0005  tab.asize
+0009 >  [35mint[m ABC    0008  0007
+0010    p64 FLOAD  0005  tab.array
+0011    p64 AREF   0010  0007
+0012    [31mtab[m FLOAD  0005  tab.meta
+0013 >  [31mtab[m EQ     0012  [31mNULL[m
+0014    [34mnum[m ASTORE 0011  0001
+0015    [34mnum[m SLOAD  #5    I
+0016    [34mnum[m ADD    0015  [34m+1  [m
+0017 >  [34mnum[m LE     0016  [34m+255[m
+---- TRACE 7 stop -> 1
+
+---- TRACE 8 start benchir.lua:14
+---- TRACE 8 IR
+0001    [35mint[m SLOAD  #6    CI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [1mfun[m SLOAD  #3    T
+0006    [34mnum[m CONV   0001  [34mnum[m.[35mint[m
+0007    [34mnum[m MUL    0006  [34m+7  [m
+0008    [34mnum[m ADD    0007  [34m+3  [m
+0009    [34mnum[m MUL    0008  [34m+0.00390625[m
+0010    [34mnum[m FPMATH 0009  floor
+0011    [34mnum[m MUL    0010  [34m+256[m
+0012    [34mnum[m SUB    0008  0011
+0013 >  [1mfun[m EQ     0005  [1mstring.char[m
+0014    [35mint[m CONV   0012  [35mint[m.[34mnum[m none
+0015 >  [35mint[m ULE    0014  [35m+255[m
+0016    [32mstr[m TOSTR  0014  CHAR
+0017 >  [31mtab[m SLOAD  #5    T
+0018    [35mint[m FLOAD  0017  tab.asize
+0019 >  [35mint[m ABC    0018  0001
+0020    p64 FLOAD  0017  tab.array
+0021    p64 AREF   0020  0001
+0022    [31mtab[m FLOAD  0017  tab.meta
+0023 >  [31mtab[m EQ     0022  [31mNULL[m
+0024    [32mstr[m ASTORE 0021  0016
+0025    nil TBAR   0017
+0026  + [35mint[m ADD    0001  [35m+1  [m
+0027 >  [35mint[m LE     0026  [35m+4096[m
+0028 ------ LOOP ------------
+0029    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0030    [35mint[m BAND   0029  [35m+12 [m
+0031 >  [35mint[m EQ     0030  [35m+0  [m
+0032    [34mnum[m CONV   0026  [34mnum[m.[35mint[m
+0033    [34mnum[m MUL    0032  [34m+7  [m
+0034    [34mnum[m ADD    0033  [34m+3  [m
+0035    [34mnum[m MUL    0034  [34m+0.00390625[m
+0036    [34mnum[m FPMATH 0035  floor
+0037    [34mnum[m MUL    0036  [34m+256[m
+0038    [34mnum[m SUB    0034  0037
+0039    [35mint[m CONV   0038  [35mint[m.[34mnum[m none
+0040 >  [35mint[m ULE    0039  [35m+255[m
+0041    [32mstr[m TOSTR  0039  CHAR
+0042 >  [35mint[m ABC    0018  0026
+0043    p64 AREF   0020  0026
+0044    [32mstr[m ASTORE 0043  0041
+0045    nil TBAR   0017
+0046  + [35mint[m ADD    0026  [35m+1  [m
+0047 >  [35mint[m LE     0046  [35m+4096[m
+0048    [35mint[m PHI    0026  0046
+---- TRACE 8 stop -> loop
+
+---- TRACE 9 start benchir.lua:17
+---- TRACE 9 IR
+0001    [35mint[m SLOAD  #8    CI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [35mint[m SUBOV  0001  [35m+500[m
+0006    [34mnum[m CONV   0005  [34mnum[m.[35mint[m
+0007    [34mnum[m MUL    0006  [34m+3  [m
+0008 >  [31mtab[m SLOAD  #7    T
+0009    [35mint[m FLOAD  0008  tab.asize
+0010 >  [35mint[m ABC    0009  0001
+0011    p64 FLOAD  0008  tab.array
+0012    p64 AREF   0011  0001
+0013    [31mtab[m FLOAD  0008  tab.meta
+0014 >  [31mtab[m EQ     0013  [31mNULL[m
+0015    [34mnum[m ASTORE 0012  0007
+0016  + [35mint[m ADD    0001  [35m+1  [m
+0017 >  [35mint[m LE     0016  [35m+1024[m
+0018 ------ LOOP ------------
+0019    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0020    [35mint[m BAND   0019  [35m+12 [m
+0021 >  [35mint[m EQ     0020  [35m+0  [m
+0022 >  [35mint[m SUBOV  0016  [35m+500[m
+0023    [34mnum[m CONV   0022  [34mnum[m.[35mint[m
+0024    [34mnum[m MUL    0023  [34m+3  [m
+0025 >  [35mint[m ABC    0009  0016
+0026    p64 AREF   0011  0016
+0027    [34mnum[m ASTORE 0026  0024
+0028  + [35mint[m ADD    0016  [35m+1  [m
+0029 >  [35mint[m LE     0028  [35m+1024[m
+0030    [35mint[m PHI    0016  0028
+---- TRACE 9 stop -> loop
+
+---- TRACE 10 start benchir.lua:31
+---- TRACE 10 IR
+0001    [35mint[m SLOAD  #15   CI
+0002    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0003    [35mint[m BAND   0002  [35m+12 [m
+0004 >  [35mint[m EQ     0003  [35m+0  [m
+0005 >  [31mtab[m SLOAD  #9    T
+0006    [35mint[m FLOAD  0005  tab.asize
+0007 >  p32 ABC    0006  [35m+1024[m
+0008    p64 FLOAD  0005  tab.array
+0009    p64 AREF   0008  0001
+0010 >  [34mnum[m ALOAD  0009
+0011    [35mi64[m CONV   0010  [35mi64[m.[34mnum[m none
+0012    [34mnum[m CONV   0011  [34mnum[m.[35mi64[m
+0013 >  [34mnum[m EQ     0012  0010
+0014 >  [34mnum[m SLOAD  #10   T
+0015  + [34mnum[m ADD    0014  0012
+0016  + [35mint[m ADD    0001  [35m+1  [m
+0017 >  [35mint[m LE     0016  [35m+1024[m
+0018 ------ LOOP ------------
+0019    [35mu8 [m XLOAD  [0x18a5f970471]  V
+0020    [35mint[m BAND   0019  [35m+12 [m
+0021 >  [35mint[m EQ     0020  [35m+0  [m
+0022    p64 AREF   0008  0016
+0023 >  [34mnum[m ALOAD  0022
+0024    [35mi64[m CONV   0023  [35mi64[m.[34mnum[m none
+0025    [34mnum[m CONV   0024  [34mnum[m.[35mi64[m
+0026 >  [34mnum[m EQ     0025  0023
+0027  + [34mnum[m ADD    0025  0015
+0028  + [35mint[m ADD    0016  [35m+1  [m
+0029 >  [35mint[m LE     0028  [35m+1024[m
+0030    [35mint[m PHI    0016  0028
+0031    [34mnum[m PHI    0015  0027
+---- TRACE 10 stop -> loop
+
+38400

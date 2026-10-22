@@ -1,0 +1,6 @@
+T10 ingame-bitops v1  arch=Lua 5.2 (in game)
+RAM 16384 KB free 14648 KB  _VERSION=Lua 5.2  jit global=false  reps=5
+needs Lua 5.3 or LuaJIT: this CPU (Lua 5.2) cannot compile Lua 5.3's bitwise operators
+  load: ingame-bitops ops:22: ')' expected near '&'
+results written to C:/Users/astro/claude-tmp/oclj/t10/run2/f-lua52-stubLua52/ingame-bitops-lua52.txt
+STUB: arch stub 'Lua 5.2', 0 yields, longest stretch without a yield 0.001 s

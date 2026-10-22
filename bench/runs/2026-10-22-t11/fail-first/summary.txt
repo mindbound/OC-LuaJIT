@@ -1,0 +1,11 @@
+none-lj rc=0 verdict: PASS  (LuaJIT, standalone)
+err-lj rc=0 verdict: FAIL  (LuaJIT, standalone)
+bad-lj rc=0 verdict: FAIL  (LuaJIT, standalone)
+clock-lj rc=0 verdict: FAIL  (LuaJIT, standalone)
+skip-lj rc=0 verdict: FAIL  (LuaJIT, standalone)
+none-puc rc=0 verdict: PASS  (Lua 5.3, standalone)
+err-puc rc=0 verdict: FAIL  (Lua 5.3, standalone)
+bad-puc rc=0 verdict: FAIL  (Lua 5.3, standalone)
+clock-puc rc=0 verdict: FAIL  (Lua 5.3, standalone)
+skip-puc rc=0 verdict: FAIL  (Lua 5.3, standalone)
+done

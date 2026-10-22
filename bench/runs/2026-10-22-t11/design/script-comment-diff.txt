@@ -1,0 +1,15 @@
+18,19c18,20
+< -- it goes next to this script.  A non-numeric argument names another
+< -- directory.  Docs: docs/in-game-tests.md, T11.
+---
+> -- it goes to the current directory (there pcall(debug.getinfo, 1) describes
+> -- pcall itself).  A non-numeric argument names another directory.
+> -- Docs: docs/in-game-tests.md, T11.
+39c40
+< --   * Timer, yield and output follow bench/oc/ingame-ladder.lua: os.clock()
+---
+> --   * Timer and yield follow bench/oc/ingame-ladder.lua (T7): os.clock()
+84c85
+< -- The results file: /home in game (see the header), next to this script
+---
+> -- The results file: /home in game (see the header), the current directory

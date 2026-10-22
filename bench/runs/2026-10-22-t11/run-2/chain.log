@@ -1,0 +1,10 @@
+2026-10-22T03:31:10Z start
+2026-10-22T03:31:20Z standalone luajit rc=0
+2026-10-22T03:31:27Z standalone luajit -joff rc=0
+2026-10-22T03:31:37Z standalone puc53 rc=0
+2026-10-22T03:32:34Z harness luajit rc=0 exit=0
+2026-10-22T03:33:30Z harness lua53 rc=0 exit=0
+2026-10-22T03:33:38Z gradle verifyModAssets rc=0
+2026-10-22T03:33:52Z gradle build rc=0
+2026-10-22T03:33:52Z jar build/libs/ocluajit-19a7806.jar 681124 bytes
+2026-10-22T03:33:52Z done

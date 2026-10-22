@@ -1,0 +1,37 @@
+Archive:  build/libs/ocluajit-19a7806.jar
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  1980-02-01 00:00   META-INF/
+       25  1980-02-01 00:00   META-INF/MANIFEST.MF
+        0  1980-02-01 00:00   io/
+        0  1980-02-01 00:00   io/github/
+        0  1980-02-01 00:00   io/github/astronfo/
+        0  1980-02-01 00:00   io/github/astronfo/ocluajit/
+     2010  1980-02-01 00:00   io/github/astronfo/ocluajit/OCLuaJIT.class
+        0  1980-02-01 00:00   io/github/astronfo/ocluajit/arch/
+     1733  1980-02-01 00:00   io/github/astronfo/ocluajit/arch/LuaJITArchitecture$1.class
+    15062  1980-02-01 00:00   io/github/astronfo/ocluajit/arch/LuaJITArchitecture.class
+     1873  1980-02-01 00:00   io/github/astronfo/ocluajit/arch/LuaJITStateFactory.class
+        0  1980-02-01 00:00   li/
+        0  1980-02-01 00:00   li/cil/
+        0  1980-02-01 00:00   li/cil/repack/
+        0  1980-02-01 00:00   li/cil/repack/com/
+        0  1980-02-01 00:00   li/cil/repack/com/naef/
+        0  1980-02-01 00:00   li/cil/repack/com/naef/jnlua/
+      918  1980-02-01 00:00   li/cil/repack/com/naef/jnlua/LuaStateLuaJIT$LuaDebug$1.class
+      961  1980-02-01 00:00   li/cil/repack/com/naef/jnlua/LuaStateLuaJIT$LuaDebug.class
+    11407  1980-02-01 00:00   li/cil/repack/com/naef/jnlua/LuaStateLuaJIT.class
+     1070  1980-02-01 00:00   LICENSE
+    28523  1980-02-01 00:00   NOTICE
+      786  1980-02-01 00:00   mcmod.info
+        0  1980-02-01 00:00   assets/
+        0  1980-02-01 00:00   assets/ocluajit/
+        0  1980-02-01 00:00   assets/ocluajit/lua/
+    52904  1980-02-01 00:00   assets/ocluajit/lua/machine.lua
+        0  1980-02-01 00:00   assets/opencomputers/
+        0  1980-02-01 00:00   assets/opencomputers/lib/
+   681392  1980-02-01 00:00   assets/opencomputers/lib/libjnluajit52-linux-x86_64.so
+   739749  1980-02-01 00:00   assets/opencomputers/lib/libjnluajit52-windows-x86_64.dll
+      369  1980-02-01 00:00   io/github/astronfo/ocluajit/Tags.class
+---------                     -------
+  1538782                     32 files

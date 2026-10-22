@@ -1,0 +1,49 @@
+MEM chunk+data retained: 82.3 KB (before 88.3, after 170.5)
+PASS	crc32 table '123456789'	3421780262 (0xCBF43926)	want 3421780262 (0xCBF43926)	type double	wanttype double
+PASS	crc32 bitwise '123456789'	3421780262 (0xCBF43926)	want 3421780262 (0xCBF43926)	type double	wanttype double
+PASS	crc32 table, 4 KB	3823016021 (0xE3DE9855)	want 3823016021 (0xE3DE9855)	type double	wanttype double
+PASS	crc32 bitwise, 4 KB	3823016021 (0xE3DE9855)	want 3823016021 (0xE3DE9855)	type double	wanttype double
+PASS	1 << 31	2147483648 (0x80000000)	want 2147483648 (0x80000000)	type double	wanttype double
+PASS	1 << 32	4294967296	want 4294967296	type double	wanttype double
+PASS	1 << 63 == -2^63	-9223372036854775808	want -9223372036854775808	type double	wanttype double
+PASS	-1 >> 63	1	want 1	type double	wanttype double
+PASS	1 << 64	0	want 0	type double	wanttype double
+PASS	-1 << 64	0	want 0	type double	wanttype double
+PASS	-1 >> 64	0	want 0	type double	wanttype double
+PASS	255 << 100	0	want 0	type double	wanttype double
+PASS	8 << -2	2	want 2	type double	wanttype double
+PASS	8 >> -2	32	want 32	type double	wanttype double
+PASS	1 >> -63 == -2^63	-9223372036854775808	want -9223372036854775808	type double	wanttype double
+PASS	1 << -64	0	want 0	type double	wanttype double
+PASS	0xDEADBEEF & 0xFFFF	48879	want 48879	type double	wanttype double
+PASS	0xF0F0 | 0x0F0F	65535	want 65535	type double	wanttype double
+PASS	0xFF00 ~ 0x0FF0	61680	want 61680	type double	wanttype double
+PASS	x ~ x	0	want 0	type double	wanttype double
+PASS	~0	-1	want -1	type double	wanttype double
+PASS	~5	-6	want -6	type double	wanttype double
+PASS	~0x12345678 & 0xFFFFFFFF	3989547399 (0xEDCBA987)	want 3989547399 (0xEDCBA987)	type double	wanttype double
+PASS	'0x10' | 0	16	want 16	type double	wanttype double
+ERR 	1.5 & 1 raises	number (field 'f15') has no integer representation
+PASS	pack bytes DE AD BE EF	3735928559 (0xDEADBEEF)	want 3735928559 (0xDEADBEEF)	type double	wanttype double
+PASS	unpack 0xDEADBEEF	"222,173,190,239"	want "222,173,190,239"	type string	wanttype string
+PASS	pack rgb 33 99 FF	3381759 (0x3399FF)	want 3381759 (0x3399FF)	type double	wanttype double
+PASS	unpack rgb 0x3399FF	"51,153,255"	want "51,153,255"	type string	wanttype string
+PASS	xorshift32 step 1	723471715 (0x2B1F4D63)	want 723471715 (0x2B1F4D63)	type double	wanttype double
+PASS	masked rotr(0xDEADBEEF, 7)	3753728893 (0xDFBD5B7D)	want 3753728893 (0xDFBD5B7D)	type double	wanttype double
+PASS	((-2 & 0xFFFFFFFF) >> 8) & 0xFF	255	want 255	type double	wanttype double
+PASS	~0 >> 11	9007199254740991	want 9007199254740991	type double	wanttype double
+PASS	string.pack('<I4', 0x12345678)	bytes 78 56 34 12	want bytes 78 56 34 12	type string	wanttype string
+PASS	string.unpack('<I4', 78 56 34 12)	"305419896 next 5"	want "305419896 next 5"	type string	wanttype string
+PASS	string.pack('>i8', -2)	bytes FF FF FF FF FF FF FF FE	want bytes FF FF FF FF FF FF FF FE	type string	wanttype string
+PASS	string.unpack('>i8', FF..FF FE)	-2	want -2	type double	wanttype double
+PASS	string.unpack('>i8', 00 01 .. 07)	283686952306183	want 283686952306183	type double	wanttype double
+DEV	2^53 | 1	raised result of '|' has more than 53 significant bits (mask each operand to 32 bits first)	at nil	want53 9007199254740993
+DEV	-1 >> 1	raised result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)	at nil	want53 9223372036854775807
+DEV	~0 >> 1	raised result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)	at nil	want53 9223372036854775807
+DEV	rotr(0xDEADBEEF, 7) unmasked	raised result of '|' has more than 53 significant bits (mask each operand to 32 bits first)	at nil	want53 3753728893
+DEV	hot loop (2^53-1000+i) | 1	raised result of '|' has more than 53 significant bits (mask each operand to 32 bits first)	at 1000	want53 9007199254741993
+BENCHWANT	crc32 table	3823016021 (0xE3DE9855)	double
+BENCHWANT	xorshift32	3298996588 (0xC4A2B16C)	double
+BENCHWANT	pack+unpack	"2207579243520/522240"	string
+BENCHWANT	x | 0	38400	double
+BENCHWANT	select(i,...)	8550	double

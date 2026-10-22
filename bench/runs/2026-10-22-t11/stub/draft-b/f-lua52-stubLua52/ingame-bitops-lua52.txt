@@ -1,0 +1,5 @@
+T10 ingame-bitops v1  arch=Lua 5.2 (in game)
+RAM 16384 KB free 14648 KB  _VERSION=Lua 5.2  jit global=false  reps=5
+needs Lua 5.3 or LuaJIT: this CPU (Lua 5.2) cannot compile Lua 5.3's bitwise operators
+  load: ingame-bitops ops:22: ')' expected near '&'
+verdict: not run  (Lua 5.2, in game)

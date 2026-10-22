@@ -1,0 +1,62 @@
+T10 ingame-bitops v1  arch=LuaJIT (standalone)
+_VERSION=Lua 5.1  jit global=true  reps=3
+Part 1: known answers
+PASS crc32 table '123456789' = 3421780262 (0xCBF43926)
+PASS crc32 bitwise '123456789' = 3421780262 (0xCBF43926)
+PASS crc32 table, 4 KB = 3823016021 (0xE3DE9855)
+PASS crc32 bitwise, 4 KB = 3823016021 (0xE3DE9855)
+PASS 1 << 31 = 2147483648 (0x80000000)
+PASS 1 << 32 = 4294967296
+PASS 1 << 63 == -2^63 = -9223372036854775808
+PASS -1 >> 63 = 1
+PASS 1 << 64 = 0
+PASS -1 << 64 = 0
+PASS -1 >> 64 = 0
+PASS 255 << 100 = 0
+PASS 8 << -2 = 2
+PASS 8 >> -2 = 32
+PASS 1 >> -63 == -2^63 = -9223372036854775808
+PASS 1 << -64 = 0
+PASS 0xDEADBEEF & 0xFFFF = 48879
+PASS 0xF0F0 | 0x0F0F = 65535
+PASS 0xFF00 ~ 0x0FF0 = 61680
+PASS x ~ x = 0
+PASS ~0 = -1
+PASS ~5 = -6
+PASS ~0x12345678 & 0xFFFFFFFF = 3989547399 (0xEDCBA987)
+PASS '0x10' | 0 = 16
+PASS 1.5 & 1 raises: number (field 'f15') has no integer representation
+PASS pack bytes DE AD BE EF = 3735928559 (0xDEADBEEF)
+PASS unpack 0xDEADBEEF = "222,173,190,239"
+PASS pack rgb 33 99 FF = 3381759 (0x3399FF)
+PASS unpack rgb 0x3399FF = "51,153,255"
+PASS xorshift32 step 1 = 723471715 (0x2B1F4D63)
+PASS masked rotr(0xDEADBEEF, 7) = 3753728893 (0xDFBD5B7D)
+PASS ((-2 & 0xFFFFFFFF) >> 8) & 0xFF = 255
+PASS ~0 >> 11 = 9007199254740991
+PASS string.pack('<I4', 0x12345678) = bytes 78 56 34 12
+PASS string.unpack('<I4', 78 56 34 12) = "305419896 next 5"
+PASS string.pack('>i8', -2) = bytes FF FF FF FF FF FF FF FE
+PASS string.unpack('>i8', FF..FF FE) = -2
+PASS string.unpack('>i8', 00 01 .. 07) = 283686952306183
+Deviation (README, Lua dialect; U1-B): LuaJIT raises
+DEV  2^53 | 1: deviation as documented: raised: result of '|' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  -1 >> 1: deviation as documented: raised: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  ~0 >> 1: deviation as documented: raised: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  rotr(0xDEADBEEF, 7) unmasked: deviation as documented: raised: result of '|' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  hot loop (2^53-1000+i) | 1: deviation as documented: raised: result of '|' has more than 53 significant bits (mask each operand to 32 bits first) (at i = 1000, want 1000)
+Part 1: 38 PASS, 0 FAIL, 5 deviation as documented, 0 SKIP
+Part 2: ns per op, median and min of 3 reps
+bench         per     median       min check
+crc32 table   byte     22.74     22.66 ok
+  n=3167 x 4096 byte; warm-up 0.306 s; reps (s): 0.295 0.298 0.294; check ok 3823016021 (0xE3DE9855)
+xorshift32    step     45.32     44.88 ok
+  n=6752 x 1000 step; warm-up 0.298 s; reps (s): 0.306 0.303 0.306; check ok 3298996588 (0xC4A2B16C)
+pack+unpack   word     66.45     66.24 ok
+  n=4585 x 1024 word; warm-up 0.308 s; reps (s): 0.312 0.312 0.311; check ok "2207579243520/522240"
+x | 0         op        6.07      6.07 ok
+  n=47262 x 1024 op; warm-up 0.296 s; reps (s): 0.294 0.294 0.295; check ok 38400
+select(i,...) call     12.69     12.61 ok
+  n=30341 x 800 call; warm-up 0.310 s; reps (s): 0.306 0.314 0.308; check ok 8550
+Part 2: 5 benches, 0 with a BAD check
+verdict: PASS  (LuaJIT, standalone)

@@ -453,3 +453,332 @@ binarytrees, about 0.18 s a run, is not separated (the candidates are in the
 detail).
 Detail: [bench/results-allocator-2026-10-02.md](../bench/results-allocator-2026-10-02.md#in-game-t8-2026-10-03),
 "In game (T8, 2026-10-03)".
+
+## T11 — the bitwise operators and their speed, on OC's Lua 5.3 CPU and on ours
+
+Shape: one file, `bench/oc/ingame-bitops.lua`, run unchanged on OpenComputers'
+own **Lua 5.3** CPU and on our **LuaJIT** CPU, on the same computer. Like T7
+it is not one fix's test, but where T7 measured our CPU against plain LuaJIT,
+it compares the two CPUs on Lua 5.3's bitwise operators, the first in-game comparison with the Lua 5.3 CPU, the CPU GTNH
+crafts by default (the roadmap's in-game benchmark row). It is T11 because the
+roadmap's T10 row holds the next per-fix session; the two can run in one game
+session on the same jar. It shows two things in game.
+
+- **Part 1** checks Lua 5.3's bitwise operators against known answers, as a
+  player's program meets them: CRC32 of `"123456789"` (`0xCBF43926`) both
+  table-driven and bit by bit, and of a 4 KB buffer; shifts by 31, 32 and 63
+  bits (`1 << 63` compared with `-2^63`), by 64 or more and by negative
+  counts; masks, xor and `~`; packing and unpacking bytes and 24-bit colours
+  with `<< >> & |`; xorshift32's first step; the masked rotate and mask-first
+  remedies the README recommends; `string.pack` and `string.unpack` of `<I4`
+  and `>i8` with known bytes; and `1.5 & 1` raising `number (field 'f15') has
+  no integer representation` (the file matches `has no integer
+  representation`). Every line must PASS on both CPUs. Then it runs five
+  **deviation** cases, where the two CPUs must differ as documented (README,
+  Lua dialect; the JIT guide's U1-B): `2^53 | 1`, `-1 >> 1`, `~0 >> 1`, the
+  unmasked 32-bit rotate `((x >> 7) | (x << 25)) & 0xFFFFFFFF`, and a loop of
+  2000 iterations whose `(2^53 - 1000 + i) | 1` first passes 53 significant
+  bits at i = 1000. Lua 5.3 returns 5.3.6's 64-bit integers. Our CPU raises
+  `result of '<op>' has more than 53 significant bits (mask each operand to 32
+  bits first)`, and in the loop it raises at exactly i = 1000. Standalone, our
+  `luajit.exe` starts recording a trace of that loop at i = 56, completes it
+  at i = 57 and runs the loop compiled from i = 58 [M: 2026-10-22,
+  `jit.attach`, the T11 review and its verification]. The interpreter also
+  raises at i = 1000, so in game the line shows compiled code agreeing with
+  the interpreter only if the loop compiled there as it does standalone.
+- **Part 2** times five loops, in nanoseconds per operation: a table-driven
+  CRC32 over 4 KB (per byte), xorshift32 (per step), packing four bytes into a
+  word and unpacking it (per word), the `x | 0` float-to-int idiom on integral
+  doubles (per operation), and `select(i, ...)` in a vararg function (per
+  call). Two of them are what the 2026-10 work on our fork sped up: `crc32
+  table` by the table-index fold (e7eb613) and `x | 0` by FIX-NUMCONV's
+  identity fold (19a7806). The `select` row times the common path, an index
+  within the varargs, which the select fix (209aa95) left as upstream compiled
+  it apart from a record-time bound; it neither times nor checks the cases
+  that fix closed (an index beyond the varargs, at most 0, or above 2^27),
+  which `run-bitjit.sh`'s sel part holds. Each loop's result is checked
+  against a reference computed without bit operators (CRC32 and xorshift32
+  against PUC Lua 5.3.6's values), so a compiled loop that computes a wrong
+  value shows as `BAD`, and one that raises shows as `ERR`.
+
+What it cannot show. The sandbox has no `jit` table, so a program cannot turn
+the JIT off or ask what it compiled. T11 compares **CPUs**, not JIT settings.
+Part 1's checks each run once, so on our CPU they test the interpreter: only
+the two 4 KB CRC32 checks and the deviations' hot loop run long enough to be
+compiled (standalone, the only Part 1 traces that complete are in those; one
+more starts in the 9-byte bitwise CRC32 and aborts [M: 2026-10-22,
+`jit.attach`, the T11 review and its verification]). What compiled code computes is checked by
+those three lines and by Part 2's `check` column. That a Part 2 loop was
+compiled on our CPU is only inferred from its speed: the standalone `-joff`
+column below is what the same loop costs interpreted. It does not save or
+reload a world (T1–T3 cover persistence).
+
+The timer is the same on both CPUs. In game `os.clock()` is not the C
+library's but OpenComputers' own, which returns `machine.cpuTime()`: the wall
+time the computer has spent running, measured with `System.nanoTime()` and
+summed over its run slices [S: OC GTNH 1.12.58,
+`li/cil/oc/server/machine/luac/OSAPI.scala`:13-19 and `Machine.scala`:185,
+:997, :1068; the sandbox's `clock = os.clock`, `machine.lua`:983, and in our
+kernel `1d12c322` :1028;
+`LuaJITArchitecture` (`LuaJITArchitecture.java`:86) extends
+`NativeLuaArchitecture`, whose `apis` include `OSAPI` (:49-52, set up at
+:319)]. ocelot-brain's `OSAPI.scala` and `Machine.scala`:148 are the same, so
+the harness columns below use this timer too. The timer therefore means the
+same on a Windows host and on a Linux server (every T11 reading so far is
+from Windows, and no Minecraft server has loaded the Linux library yet,
+README). Only the
+standalone runs below use the C library's `os.clock()`: wall time on Windows,
+where they were taken, and process CPU time on Linux.
+
+How the file is written, and why (its header says the same):
+
+- The operators live in a string chunk that the file compiles with `load()`.
+  On a **Lua 5.2** CPU, which cannot parse them, it prints `needs Lua 5.3 or
+  LuaJIT` and `verdict: not run`, instead of failing to compile. The chunk uses
+  only Lua 5.3 syntax: no `~>>`, no compound assignment, and no `//` (our CPU
+  has none).
+- Operands come from `tonumber()` of strings, from a table or from
+  `string.byte`, because both CPUs' parsers fold a constant bit expression at
+  compile time (ours and PUC 5.3.6's: `1 << 4` compiles to the constant 16 on
+  both [M: the T11 review]). A check written on literals would test the
+  folder.
+- The architecture comes from `computer.getArchitecture()`. Standalone, with no
+  `computer`, it is inferred from `jit` and `_VERSION`. In game nothing depends
+  on `jit`.
+- The timer and the yield follow `ingame-ladder.lua` (T7): `os.clock()`
+  brackets each rep, and `os.sleep(0)` between reps yields. Unlike T7's
+  runner, which prints the min of 5 and loads each bench afresh per rep, T11
+  reports the median and the min, writes a results file, and calls the same
+  closures every rep. Each bench's iteration count is calibrated so that a rep
+  takes about 0.3 s. One uncounted warm-up rep checks the count and rescales
+  it once if the rep fell outside 0.2–0.5 s. Then REPS reps run (5 by
+  default). That stays far under OC's 5 s no-yield timeout and our watchdog
+  ([docs/watchdog.md](watchdog.md)): standalone, with a stub `os.sleep` that
+  recorded the gaps, the longest stretch without a yield was at most 0.38 s,
+  on our `luajit.exe` and on PUC Lua 5.3.6 (0.36 and 0.38 s on this script,
+  0.35–0.38 s on its draft) [M: 2026-10-22, `bench/runs/2026-10-22-t11/`'s
+  `stub/`]. If `os.clock()` does not advance, calibration stops at its first
+  run of at least 4e6 operations (at most 2.6e7, for `select`) and the row
+  reads `NOT TIMED` instead of running into the timeout.
+- Everything it prints also goes to a results file in `/home`,
+  `/home/ingame-bitops-luajit.txt` or `/home/ingame-bitops-lua53.txt`,
+  wherever the script itself is (in game the sandbox's `debug.getinfo`
+  describes `machine.lua`, not the script). If that name is taken it writes
+  `-2`, `-3` and so on, and never overwrites an earlier result. The file also
+  holds each bench's iteration count, its warm-up time and every rep's time.
+
+**Setup.**
+
+1. **The jar.** With the game closed, replace the `ocluajit-*.jar` in
+   `C:/Games/Minecraft/instances/Main/minecraft/mods/` with the one from
+   `build/libs/` (Before every test, step 1), built from the commit whose
+   native you want to see, and make sure it is the only `ocluajit-*.jar`
+   there. Record its name and size, its Windows native's md5
+   (`unzip -p <jar> assets/opencomputers/lib/libjnluajit52-windows-x86_64.dll | md5sum`)
+   and its kernel's (`unzip -p <jar> assets/ocluajit/lua/machine.lua | md5sum`).
+   For FIX-NUMCONV's natives that jar is `build/libs/ocluajit-19a7806.jar`
+   (681 124 bytes, md5 `1e02e032`), built from the clean 19a7806 on
+   2026-10-22: DLL `9ac03aeb`, .so `f91700bd`, kernel `1d12c322`. It has the
+   table-index fold, the select fix and FIX-NUMCONV, and its DLL is the one the
+   harness readings below ran.
+2. **The file.** Also with the game closed, copy `bench/oc/ingame-bitops.lua`
+   into the computer's `/home`, the directory
+   `saves/<world>/opencomputers/<address>/home/` on the host (the disk that
+   holds T5's `bench.lua` and T7's files). Check it is byte-identical to the
+   repo's (`md5sum`).
+3. **The machine.** Give it at least 512 KB of RAM (the harness ran 1 MB).
+   While it runs, the file keeps about 160 KB live on standalone PUC 5.3.6
+   (126 KB from its setup, 33 KB of compiled code) and about 90 KB on our
+   `luajit.exe` (76 + 15), and its setup allocates 223 KB in all on PUC
+   [M: the T11 review's `mem.lua`], so a 192 KB or 256 KB machine running
+   OpenOS may run out of memory [I].
+4. Launch, load the world, open the computer, and **power-cycle it** (Before
+   every test, step 3). That a power-cycled machine boots to the shell on this
+   jar is also item (1) of the roadmap's T10 row.
+
+**Running it.** On each CPU in turn, LuaJIT first:
+
+1. **Choose the architecture.** Either take the CPU out of the computer,
+   shift+right-click with it in hand until its tooltip names the architecture,
+   and put it back; or, at the `lua>` REPL, run
+   `computer.setArchitecture("Lua 5.3")` (or `"LuaJIT"`), which, if the name
+   differs from the CPU's current one, sets it on the installed CPU and
+   reboots the computer (OC's `machine.lua`:1441-1450: `libcomputer.setArchitecture`
+   yields `true`, the reboot request; `ComputerAPI.scala`:139-158 [S]). The
+   current name does nothing and returns no value (`machine.lua`:1442-1446
+   drops the callback's `false`); an unknown name returns
+   `nil, "unknown architecture"`. `computer.getArchitectures()` lists the
+   names the CPU accepts.
+2. **Power-cycle the computer** (shut it down, then start it), as Before every
+   test, step 3, says, so that each arm starts from a fresh boot.
+3. At the shell, in `/home`: `ingame-bitops` (or `lua /home/ingame-bitops.lua`).
+   `ingame-bitops 3` runs 3 reps instead of 5. A run takes about 10–20 s
+   [I: 10 s standalone on either CPU, at about 0.3 s a rep]. The screen
+   scrolls (Part 1 alone is 46 lines), so read the results file; the last
+   lines on screen are the Part 2 table, its `Part 2: 5 benches, ...` line,
+   the `verdict:` line and the file's path (the one line the file does not
+   hold). When it ends, take a screenshot (F2): the path on the last line names
+   the file this run wrote.
+
+A **Lua 5.2** CPU is not part of the test. On one, the file prints its two
+header lines, `needs Lua 5.3 or LuaJIT: ...`, the load error and
+`verdict: not run`, and writes them to `/home/ingame-bitops-lua52.txt` (checked
+on PUC Lua 5.2.4 standalone, 2026-10-22).
+
+**Expected.** Part 1, on both CPUs: `Part 1: 38 PASS, 0 FAIL, 5 deviation as
+documented, 0 SKIP`. The checks' lines are identical on the two CPUs. The five
+`DEV` lines differ as documented:
+
+| case | Lua 5.3 | LuaJIT |
+|---|---|---|
+| `2^53 \| 1` | `5.3.6's value 9007199254740993` | `raised: result of '\|' has more than 53 significant bits (mask each operand to 32 bits first)` |
+| `-1 >> 1` | `5.3.6's value 9223372036854775807` | `raised: result of '>>' has more ...` |
+| `~0 >> 1` | `5.3.6's value 9223372036854775807` | `raised: result of '>>' has more ...` |
+| `rotr(0xDEADBEEF, 7) unmasked` | `5.3.6's value 3753728893` | `raised: result of '\|' has more ...` |
+| `hot loop (2^53-1000+i) \| 1` | `5.3.6's value 9007199254741993 (loop ran to i = 2000)` | `raised: result of '\|' has more ... (at i = 1000, want 1000)` |
+
+The file matches the stable part of our message, `result of '<op>' has more
+than 53 significant bits`, with the operator in it. The full text is
+`ob_err_inexact`'s, in `native/luajit/oclj_bitop_meta.c` :129-134 [S].
+
+Part 2: the `check` column reads `ok` on all five rows, on both CPUs, then
+`Part 2: 5 benches, 0 BAD, ERR or NOT TIMED` and `verdict: PASS`. The figures
+are measurements, not a pass/fail. For comparison, smoke readings on this box
+on 2026-10-22, on FIX-NUMCONV's natives, unpinned (median / min of 5 reps, ns
+per operation; `-joff` 3 reps, medians) [M: `bench/runs/2026-10-22-t11/`]:
+
+| bench (per) | luajit.exe | luajit.exe `-joff` | PUC 5.3.6 | harness, LuaJIT | harness, Lua 5.3 |
+|---|---:|---:|---:|---:|---:|
+| crc32 table (byte) | 3.76 / 3.74 | 22.80 | 22.82 / 22.82 | 3.44 / 3.42 | 37.60 / 32.73 |
+| xorshift32 (step) | 2.30 / 1.99 | 44.58 | 16.33 / 13.59 | 2.37 / 2.36 | 30.88 / 30.74 |
+| pack+unpack (word) | 5.39 / 5.37 | 66.50 | 69.16 / 68.93 | 5.42 / 5.39 | 90.25 / 89.94 |
+| x \| 0 (op) | 0.56 / 0.56 | 6.16 | 8.62 / 8.59 | 0.56 / 0.56 | 13.27 / 13.24 |
+| select(i,...) (call) | 1.61 / 1.59 | 12.58 | 24.58 / 24.50 | 1.93 / 1.91 | 42.74 / 42.67 |
+
+`luajit.exe` is `build/native/luajit-windows-x86_64/src/luajit.exe`
+(`f4038cd6`, the build of FIX-NUMCONV's release); PUC 5.3.6 is
+`bench/vendor/lua-5.3.6/src/lua.exe`. "harness" is the ocelot-brain census:
+`test/native/census-os.sh <copy of ocelot-brain's OpenOS> OpenOS bios 3000`,
+with `OCLJ_NATIVE=additive OCLJ_CENSUS_ARCH=luajit` and the DLL's directory in
+`OCLJ_LIBDIR`, or `OCLJ_NATIVE=stock OCLJ_CENSUS_ARCH=53`; `/home/.shrc` starts
+the file; a 1 MB machine (the wrapper is in the archive's `scripts/`). Its
+LuaJIT arm ran our DLL `9ac03aeb` under the watchdog kernel. Its Lua 5.3 arm
+ran ocelot-brain's bundled native (Lua+Eris 5.3.6) under OC's stock kernel,
+and read 1.3–1.9x the standalone PUC 5.3.6 (medians); the stock kernel's count hook and
+a different build of the native are candidates, not separated [I]. Both arms
+gave Part 1 38 / 0 / 5 / 0, with every `PASS` line identical between their
+results files, all checks `ok`, and `verdict: PASS`; in the harness Lua 5.3
+reads 11–24x LuaJIT (medians). The harness has predicted the game closely before,
+pinned to the performance cores (T7–T9); these runs were not pinned.
+
+FIX-NUMCONV shows in the `x | 0` row: on the select release's DLL
+(`b5ff2d18`) the harness read 0.75 ns there, and on FIX-NUMCONV's (`9ac03aeb`)
+0.57, with the other four rows within 6% [M: the archive's `run-1/` and
+`run-2/`, the same draft script on each DLL; standalone, `luajit.exe` read
+0.75 and 0.56].
+
+**Reading Part 2.**
+
+- The **median** is the figure to record; the **min** is the best rep. A wide
+  gap between them means the game or the box was busy during a rep. The file
+  holds every rep's time.
+- The ratio that matters is **Lua 5.3 / LuaJIT** per row, both from the same
+  game session. It compares the CPUs as a player gets them, kernels included:
+  OC's stock kernel sets a count hook on the computer's coroutine at every
+  resume (its `machine.lua`:1532), which standalone PUC 5.3.6 does not pay;
+  ours sets none.
+- A LuaJIT row near the `-joff` column most likely ran interpreted in game: it
+  was not compiled, it was blacklisted, or, on a small machine, its traces
+  were flushed under memory pressure. Our kernel sets no standing hook, so
+  interpreted code should cost in game about what `-joff` costs standalone
+  [S: docs/watchdog.md]; that is not measured [I]. A row well above the
+  compiled column but well below `-joff` is compiled code running slower: a
+  busy box, a slower core or a different trace. Either is a finding to follow
+  up standalone, not a FAIL.
+- `crc32 table` is the row the table-index fold (e7eb613) speeds: in this
+  file's loop the table key converts without a guard (`CONV int.i64`, read
+  with `-jdump` on the standalone build [M: the T11 review]), and with the fold
+  the loop reads 3.4–3.8 ns per byte standalone and in the harness [M, above].
+  e7eb613's 7.2 ns per byte before the fold and 3.7 after are another CRC32
+  loop's (`bench_bit2.lua`'s crc-table, with a modulo per byte). This loop was
+  never timed without the fold, so reading about twice its standalone figure
+  as a missing fold is [I]. To judge it, take its ratio to the same session's
+  pack+unpack row, which the fold does not touch, and compare that with the
+  same ratio above (0.70 standalone, 0.63 in the harness), rather than an
+  absolute figure, which moves with the core the machine thread runs on
+  (T7–T9). That is the one comparison across rows worth making.
+- The units differ between rows, so compare a row with itself across CPUs,
+  never across rows. Each figure includes its loop's overhead: one crc32 byte
+  is a `string.byte` call, a table load, two xors, a shift and a mask; one
+  xorshift32 step is three shift-and-xor pairs and two 32-bit masks; one
+  pack+unpack word is four table loads, three shifts and three `|` to pack,
+  three shift-and-mask pairs and one mask to unpack, and five adds; one `x | 0`
+  operation includes a table load and an add (on our CPU the `|` itself leaves
+  only the check that the double is an integer); one `select(i, ...)` call
+  includes the vararg loop's add and an eighth of a call to the vararg
+  function with eight arguments, its `select("#", ...)` and the caller's add.
+
+**What to record, and where.** The date and game session, from `latest.log`
+(world joined) and the screenshot; the jar's name, size, its DLL's md5 and its
+kernel's md5, and that it is the only `ocluajit-*.jar` in `mods/`; that the
+power-cycled machine booted to the shell; that the copy on the disk is
+byte-identical to the repo's `bench/oc/ingame-bitops.lua` (md5); the machine's
+RAM (the second line prints it); and, from each CPU's results file, the
+`Part 1: N PASS, ...` summary line, any line that is not `PASS` or `DEV`, the
+Part 2 table and the `verdict:` line. Copy the two results files from the
+save's `home/` into `bench/runs/<date>-t11-game/`, and write the Result
+paragraph here:
+
+| bench (per) | LuaJIT median / min | Lua 5.3 median / min | Lua 5.3 / LuaJIT (medians) |
+|---|---:|---:|---:|
+| crc32 table (byte) | | | |
+| xorshift32 (step) | | | |
+| pack+unpack (word) | | | |
+| x \| 0 (op) | | | |
+| select(i,...) (call) | | | |
+| Part 1 (PASS / FAIL / DEV / SKIP) | | | — |
+| verdict | | | — |
+
+**What a FAIL means.** Check the instrument first: run the same file
+standalone on the jar's native (`luajit.exe` of the same build) and on PUC Lua
+5.3.6, where every line passed on 2026-10-22.
+
+- **A Part 1 `FAIL` on LuaJIT only.** Our CPU computes a value, or raises an
+  error, that 5.3.6 does not, in a case the README says matches. It is a bug
+  in the parser or the interpreter (or, in the two 4 KB CRC32 lines, the JIT).
+  The line prints what it got.
+- **A Part 1 `FAIL` on Lua 5.3 only.** OC's 5.3 native differs from 5.3.6 on
+  that case, or the expectation is wrong. It says nothing about our CPU, but
+  the expectation must be rechecked against PUC 5.3.6.
+- **A `DEV` line that FAILs on LuaJIT.** The case returned a value where it
+  must raise, or it raised another message, or the loop raised at an
+  iteration other than 1000. The first is the worst outcome: a double cannot
+  hold a result of more than 53 significant bits, so the value returned is
+  not 5.3.6's, and nothing said so. The last means compiled code and the
+  interpreter disagree (if the loop compiled, as it does standalone from
+  i = 58), or else an interpreter bug.
+- **A `DEV` line that FAILs on Lua 5.3.** OC's 5.3 does not give 5.3.6's
+  64-bit value.
+- **`BAD` in Part 2.** A bench returned a value other than its reference. On
+  LuaJIT that is almost certainly a compiled loop computing a wrong value: the
+  most serious result T11 can give. Reproduce it standalone with and without
+  `-joff`.
+- **`ERR` in Part 2.** A bench raised an error instead of returning, and the
+  row prints the message. Every bench's values stay exact, so on LuaJIT
+  `result of '<op>' has more than 53 significant bits` here means a compiled
+  loop raised where the interpreter does not, as serious as `BAD`. Reproduce
+  it standalone with and without `-joff`.
+- **`NOT TIMED` in Part 2.** `os.clock()` did not advance, so nothing was
+  timed. It says nothing about the operators.
+- **`needs Lua 5.3 or LuaJIT` with `FAIL: the LuaJIT CPU should have them`.**
+  The jar's native has no 5.3 operators: a wrong or stale jar.
+- **`not enough memory`**, in the setup's `FAIL` line or as an error. The
+  machine is too small. It says nothing about the operators: add RAM and run
+  again.
+- **`too long without yielding`, as a crash screen or in an `ERR` row.**
+  Something ran for 5 s without yielding (OC's timeout; the pack's
+  `timeout=5`), where no stretch should pass about 0.4 s. It should not
+  happen. Keep the log and the results file, which is flushed after every
+  section.
+
+**Result:** not yet run.

@@ -1,0 +1,2 @@
+lj rc=0 verdict: PASS  (LuaJIT, in game) STUB: arch stub 'LuaJIT', 36 yields, longest stretch without a yield 0.361 s 
+puc rc=0 verdict: PASS  (Lua 5.3, in game) STUB: arch stub 'Lua 5.3', 36 yields, longest stretch without a yield 0.379 s 

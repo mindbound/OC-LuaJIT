@@ -1,0 +1,110 @@
+[smoke]     OCLJ_NATIVE=additive -- our fourth LuaState beside OpenComputers' real PUC 5.2, both in one JVM
+[smoke] =============== 0. preflight ===============
+[smoke] host    = windows-x86_64 (library libjnluajit52-windows-x86_64.dll, patcher luajit.exe)
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] bench   = C:/Users/astro/Downloads/OC-LuaJIT/bench/oc
+[smoke] dll     = /c/Users/astro/claude-tmp/oclj/new-sel-b5ff2d18/libdir-additive/libjnluajit52-windows-x86_64.dll (739749 bytes)
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +0s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +1s  LuaStateLuaJIT compiled
+[smoke] +4s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = /c/Users/astro/claude-tmp/oclj/t10/ig-luajit-1/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/claude-tmp/oclj/t10/ig-luajit-1/work/libdir-additive
+[smoke]     patcher = /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe
+patch-machine-lua: ok  46451 -> 54527 bytes, 13 sites, 2 debug.sethook left, 0 next( left, CRLF endings
+[smoke]     kernel  = WATCHDOG variant at /c/Users/astro/claude-tmp/oclj/t10/ig-luajit-1/work/classes/assets/ocluajit/lua/machine.lua
+[smoke]               OUR resource domain -- OCLuaJITArchitecture.initialize() swaps it in
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+CENSUS| =============== OpenOS ===============
+CENSUS|     kernel root = C:\Users\astro\claude-tmp\oclj\t10\ig-luajit-1\os
+CENSUS|     boot        = OC Lua BIOS -> /init.lua
+CENSUS|     entries     = .prop, bin, boot, etc, home, init.lua, lib, usr
+CENSUS|     native      = additive
+CENSUS|     ticks       = 3000
+2026-10-21T22:00:27.081Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-21T22:00:27.110Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+2026-10-21T22:00:27.116Z main WARN forceNativeLibPathFirst is set, but  was not found there. Falling back to checking the built-in libraries.
+CENSUS| ADDITIVE ARM: pinned to ocljit.arch.OCLuaJITArchitecture (LuaStateLuaJIT,
+CENSUS| libjnluajit52).  OpenComputers' own PUC 5.2 native is loaded alongside it.
+[ocljit] OC-LuaJIT persistence: bundled roots ON (one blob: {kernel, closure|table})
+[ocljit] OC-LuaJIT value disposal: ON (the jnlua.Object __gc wrapper is installed on every state this architecture initializes)
+[ocljit] OC-LuaJIT for-in diagnostic: -Docluajit.forin absent -> ignore (the default: the persist does not look)
+CENSUS|     ram         = 1 x ExtendedTier.ThreeHalf = 1024 KB advertised
+CENSUS|     boot fs     = d4b8c732-ab35-4189-b60a-e5af709a6cce
+[ocljit] OC-LuaJIT: native ready (version=jit52, from .)
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = ocljit.arch.OCLuaJITArchitecture
+CENSUS| coexistence    = OpenComputers' own LuaState reports <stock PUC>   (expected <stock PUC>)
+CENSUS| native marker  = luajit/LuaJIT 2.1.ROLLING
+CENSUS| watchdog       = true   kernel = <stock>
+CENSUS| kernel (final) = watchdog
+CENSUS| 
+CENSUS| ticks run      = 3000 of 3000   (running=true)
+CENSUS| totalMemory    = 2053084 B   kernelMemory = 165647 B
+CENSUS| PEAK USED      = 1269561 B REAL   (min free 783523 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = arms=0 collects=0 bailouts=0 refusals=0 armed=false trace_flushes=0
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 1856 non-blank glyphs, 2 distinct cell colours
+CENSUS| ---------------- SCREEN [OpenOS] ----------------
+PASS -1 >> 63 = 1
+PASS 1 << 64 = 0
+PASS -1 << 64 = 0
+PASS -1 >> 64 = 0
+PASS 255 << 100 = 0
+PASS 8 << -2 = 2
+PASS 8 >> -2 = 32
+PASS 1 >> -63 == -2^63 = -9223372036854775808
+PASS 1 << -64 = 0
+PASS 0xDEADBEEF & 0xFFFF = 48879
+PASS 0xF0F0 | 0x0F0F = 65535
+PASS 0xFF00 ~ 0x0FF0 = 61680
+PASS x ~ x = 0
+PASS ~0 = -1
+PASS ~5 = -6
+PASS ~0x12345678 & 0xFFFFFFFF = 3989547399 (0xEDCBA987)
+PASS '0x10' | 0 = 16
+PASS 1.5 & 1 raises: number (field 'f15') has no integer representation
+PASS pack bytes DE AD BE EF = 3735928559 (0xDEADBEEF)
+PASS unpack 0xDEADBEEF = "222,173,190,239"
+PASS pack rgb 33 99 FF = 3381759 (0x3399FF)
+PASS unpack rgb 0x3399FF = "51,153,255"
+PASS xorshift32 step 1 = 723471715 (0x2B1F4D63)
+PASS masked rotr(0xDEADBEEF, 7) = 3753728893 (0xDFBD5B7D)
+PASS ((-2 & 0xFFFFFFFF) >> 8) & 0xFF = 255
+PASS ~0 >> 11 = 9007199254740991
+PASS string.pack('<I4', 0x12345678) = bytes 78 56 34 12
+PASS string.unpack('<I4', 78 56 34 12) = "305419896 next 5"
+PASS string.pack('>i8', -2) = bytes FF FF FF FF FF FF FF FE
+PASS string.unpack('>i8', FF..FF FE) = -2
+PASS string.unpack('>i8', 00 01 .. 07) = 283686952306183
+Deviation (README, Lua dialect; U1-B): LuaJIT raises
+DEV  2^53 | 1: deviation as documented: raised: result of '|' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  -1 >> 1: deviation as documented: raised: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  ~0 >> 1: deviation as documented: raised: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  rotr(0xDEADBEEF, 7) unmasked: deviation as documented: raised: result of '|' has more than 53 significant bits (mask each operand to 32 bits first)
+DEV  hot loop (2^53-1000+i) | 1: deviation as documented: raised: result of '|' has more than 53 significant bits (mask each operand to 32 bits first) (at i = 1
+000, want 1000)
+Part 1: 38 PASS, 0 FAIL, 5 deviation as documented, 0 SKIP
+Part 2: ns per op, median and min of 5 reps
+bench         per     median       min check
+crc32 table   byte      3.41      3.41 ok
+xorshift32    step      2.39      2.38 ok
+pack+unpack   word      5.43      5.41 ok
+x | 0         op        0.75      0.74 ok
+select(i,...) call      1.93      1.91 ok
+Part 2: 5 benches, 0 with a BAD check
+verdict: PASS  (LuaJIT, in game)
+results written to /home/ingame-bitops-luajit.txt
+/home #
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+[smoke] +54s  log: /c/Users/astro/claude-tmp/oclj/t10/ig-luajit-1/work/smoke.log
+CENSUS PASS -- the system ran to the tick limit on the pinned architecture, without error.

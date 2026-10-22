@@ -1,0 +1,59 @@
+T10 ingame-bitops v1  arch=Lua 5.3 (in game)
+RAM 16384 KB free 14648 KB  _VERSION=Lua 5.1  jit global=true  reps=1
+Part 1: known answers
+PASS crc32 table '123456789' = 3421780262 (0xCBF43926)
+PASS crc32 bitwise '123456789' = 3421780262 (0xCBF43926)
+PASS crc32 table, 4 KB = 3823016021 (0xE3DE9855)
+PASS crc32 bitwise, 4 KB = 3823016021 (0xE3DE9855)
+PASS 1 << 31 = 2147483648 (0x80000000)
+PASS 1 << 32 = 4294967296
+PASS 1 << 63 == -2^63 = -9223372036854775808
+PASS -1 >> 63 = 1
+PASS 1 << 64 = 0
+PASS -1 << 64 = 0
+PASS -1 >> 64 = 0
+PASS 255 << 100 = 0
+PASS 8 << -2 = 2
+PASS 8 >> -2 = 32
+PASS 1 >> -63 == -2^63 = -9223372036854775808
+PASS 1 << -64 = 0
+PASS 0xDEADBEEF & 0xFFFF = 48879
+PASS 0xF0F0 | 0x0F0F = 65535
+PASS 0xFF00 ~ 0x0FF0 = 61680
+PASS x ~ x = 0
+PASS ~0 = -1
+PASS ~5 = -6
+PASS ~0x12345678 & 0xFFFFFFFF = 3989547399 (0xEDCBA987)
+PASS '0x10' | 0 = 16
+PASS 1.5 & 1 raises: number (field 'f15') has no integer representation
+PASS pack bytes DE AD BE EF = 3735928559 (0xDEADBEEF)
+PASS unpack 0xDEADBEEF = "222,173,190,239"
+PASS pack rgb 33 99 FF = 3381759 (0x3399FF)
+PASS unpack rgb 0x3399FF = "51,153,255"
+PASS xorshift32 step 1 = 723471715 (0x2B1F4D63)
+PASS masked rotr(0xDEADBEEF, 7) = 3753728893 (0xDFBD5B7D)
+PASS ((-2 & 0xFFFFFFFF) >> 8) & 0xFF = 255
+PASS ~0 >> 11 = 9007199254740991
+PASS string.pack('<I4', 0x12345678) = bytes 78 56 34 12
+PASS string.unpack('<I4', 78 56 34 12) = "305419896 next 5"
+PASS string.pack('>i8', -2) = bytes FF FF FF FF FF FF FF FE
+PASS string.unpack('>i8', FF..FF FE) = -2
+PASS string.unpack('>i8', 00 01 .. 07) = 283686952306183
+Deviation (README, Lua dialect; U1-B): 5.3 gives the 64-bit integer
+FAIL 2^53 | 1: error: result of '|' has more than 53 significant bits (mask each operand to 32 bits first), want 9007199254740993
+FAIL -1 >> 1: error: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first), want 9223372036854775807
+FAIL ~0 >> 1: error: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first), want 9223372036854775807
+FAIL rotr(0xDEADBEEF, 7) unmasked: error: result of '|' has more than 53 significant bits (mask each operand to 32 bits first), want 3753728893
+FAIL hot loop (2^53-1000+i) | 1: error: result of '|' has more than 53 significant bits (mask each operand to 32 bits first), want 9007199254741993 (loop ran to i = 1000)
+Part 1: 38 PASS, 5 FAIL, 0 deviation as documented, 0 SKIP
+Part 2: ns per op, median and min of 1 reps
+bench         per     median       min check
+crc32 table   byte      3.71      3.71 ok
+xorshift32    step      1.99      1.99 ok
+pack+unpack   word      4.89      4.89 ok
+x | 0         op        0.75      0.75 ok
+select(i,...) call      1.60      1.60 ok
+Part 2: 5 benches, 0 with a BAD check
+verdict: FAIL  (Lua 5.3, in game)
+results written to C:/Users/astro/claude-tmp/oclj/t10/run4-stub/c-lj-stubLua53/ingame-bitops-lua53.txt
+STUB: arch stub 'Lua 5.3', 16 yields, longest stretch without a yield 0.346 s

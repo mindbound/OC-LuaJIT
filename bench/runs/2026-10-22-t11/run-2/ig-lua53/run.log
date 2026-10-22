@@ -1,0 +1,99 @@
+[smoke]     OCLJ_NATIVE=stock -- ocelot-brain's own PUC-Lua 5.2 native (the baseline a player runs today); kernel forced to stock
+[smoke] =============== 0. preflight ===============
+[smoke] host    = windows-x86_64 (library libjnlua52-windows-x86_64.dll, patcher luajit.exe)
+[smoke] java    = Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+[smoke] bench   = C:/Users/astro/Downloads/OC-LuaJIT/bench/oc
+[smoke] dll     = <none: stock arm, ocelot-brain bundled PUC-Lua only>
+[smoke] brain   = /c/Users/astro/Downloads/ocelot-brain/target/classes
+[smoke] =============== 1. dependency jars ===============
+[smoke] +1s  jars ready (17 files)
+[smoke] =============== 2. compile the harness ===============
+[smoke] +2s  LuaStateLuaJIT compiled
+[smoke] +4s  harness compiled
+[smoke] =============== 3. generate the ocelot-brain config ===============
+[smoke]     conf    = /c/Users/astro/claude-tmp/oclj/t10/rerun-2/ig-lua53/work/ocljit.conf
+[smoke]     libdir  = C:/Users/astro/claude-tmp/oclj/t10/rerun-2/ig-lua53/work/libdir-stock
+[smoke]     kernel  = stock (OC's own machine.lua, standing deadline hook)
+[smoke]     ramScale= 1.8   (OC's default is 1.8, which the architecture inherits -- see the comment above)
+[smoke] =============== 4. boot OpenOS ===============
+Picked up JAVA_TOOL_OPTIONS: -Dlog4j2.level=WARN
+CENSUS| =============== OpenOS ===============
+CENSUS|     kernel root = C:\Users\astro\claude-tmp\oclj\t10\rerun-2\ig-lua53\os
+CENSUS|     boot        = OC Lua BIOS -> /init.lua
+CENSUS|     entries     = .prop, bin, boot, etc, home, init.lua, lib, usr
+CENSUS|     native      = stock
+CENSUS|     ticks       = 3000
+CENSUS| !! BASELINE ARM: pinned to NativeLua53Architecture, which our native does
+CENSUS| !! NOT back.  This run measures ocelot-brain's PUC 5.3, not OC-LuaJIT.
+CENSUS|     ram         = 1 x ExtendedTier.ThreeHalf = 1024 KB advertised
+CENSUS|     boot fs     = 197d82c1-8002-4d12-8f01-46737a0a87df
+CENSUS| LuaStateFactory.isAvailable = true   includeLuaJ = false
+CENSUS| architecture   = totoro.ocelot.brain.entity.machine.luac.NativeLua53Architecture
+CENSUS| native marker  = <stock PUC>
+CENSUS| watchdog       = false   kernel = <stock>
+CENSUS| kernel (final) = <stock>
+CENSUS| 
+CENSUS| ticks run      = 3000 of 3000   (running=true)
+CENSUS| totalMemory    = 2051145 B   kernelMemory = 163708 B
+CENSUS| PEAK USED      = 1496046 B REAL   (min free 555099 B)   <- section 11 calibration input
+CENSUS| lastError      = <none>
+CENSUS| GC PRESSURE    = absent (stock native)
+CENSUS| 
+CENSUS| SCREEN         = 160x50, 1670 non-blank glyphs, 3 distinct cell colours
+CENSUS| ---------------- SCREEN [OpenOS] ----------------
+PASS 1 << 63 == -2^63 = -9223372036854775808
+PASS -1 >> 63 = 1
+PASS 1 << 64 = 0
+PASS -1 << 64 = 0
+PASS -1 >> 64 = 0
+PASS 255 << 100 = 0
+PASS 8 << -2 = 2
+PASS 8 >> -2 = 32
+PASS 1 >> -63 == -2^63 = -9223372036854775808
+PASS 1 << -64 = 0
+PASS 0xDEADBEEF & 0xFFFF = 48879
+PASS 0xF0F0 | 0x0F0F = 65535
+PASS 0xFF00 ~ 0x0FF0 = 61680
+PASS x ~ x = 0
+PASS ~0 = -1
+PASS ~5 = -6
+PASS ~0x12345678 & 0xFFFFFFFF = 3989547399 (0xEDCBA987)
+PASS '0x10' | 0 = 16
+PASS 1.5 & 1 raises: number (field 'f15') has no integer representation
+PASS pack bytes DE AD BE EF = 3735928559 (0xDEADBEEF)
+PASS unpack 0xDEADBEEF = "222,173,190,239"
+PASS pack rgb 33 99 FF = 3381759 (0x3399FF)
+PASS unpack rgb 0x3399FF = "51,153,255"
+PASS xorshift32 step 1 = 723471715 (0x2B1F4D63)
+PASS masked rotr(0xDEADBEEF, 7) = 3753728893 (0xDFBD5B7D)
+PASS ((-2 & 0xFFFFFFFF) >> 8) & 0xFF = 255
+PASS ~0 >> 11 = 9007199254740991
+PASS string.pack('<I4', 0x12345678) = bytes 78 56 34 12
+PASS string.unpack('<I4', 78 56 34 12) = "305419896 next 5"
+PASS string.pack('>i8', -2) = bytes FF FF FF FF FF FF FF FE
+PASS string.unpack('>i8', FF..FF FE) = -2
+PASS string.unpack('>i8', 00 01 .. 07) = 283686952306183
+Deviation (README, Lua dialect; U1-B): 5.3 gives the 64-bit integer
+DEV  2^53 | 1: deviation as documented: 5.3.6's value 9007199254740993
+DEV  -1 >> 1: deviation as documented: 5.3.6's value 9223372036854775807
+DEV  ~0 >> 1: deviation as documented: 5.3.6's value 9223372036854775807
+DEV  rotr(0xDEADBEEF, 7) unmasked: deviation as documented: 5.3.6's value 3753728893
+DEV  hot loop (2^53-1000+i) | 1: deviation as documented: 5.3.6's value 9007199254741993 (loop ran to i = 2000)
+Part 1: 38 PASS, 0 FAIL, 5 deviation as documented, 0 SKIP
+Part 2: ns per op, median and min of 5 reps
+bench         per     median       min check
+crc32 table   byte     37.44     35.83 ok
+xorshift32    step     31.22     31.19 ok
+pack+unpack   word     89.97     89.88 ok
+x | 0         op       13.22     13.17 ok
+select(i,...) call     41.74     41.66 ok
+Part 2: 5 benches, 0 with a BAD check
+verdict: PASS  (Lua 5.3, in game)
+results written to /home/ingame-bitops-lua53.txt
+/home #
+
+CENSUS| --------------------------------------------------
+CENSUS| VERDICT: no panic text on screen  (running=true, lastError=none)
+[smoke] =============== 5. verdict ===============
+[smoke] +55s  log: /c/Users/astro/claude-tmp/oclj/t10/rerun-2/ig-lua53/work/smoke.log
+CENSUS PASS -- the system ran to the tick limit on the pinned architecture, without error.
