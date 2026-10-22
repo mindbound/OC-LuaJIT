@@ -1,0 +1,9 @@
+crc32 table    game 3.82/3.77 (reps 3.818) spread 2.1% | vs standalone +1.6% (reps +1.7%) | vs harness +11.0% (reps +10.9%) | -joff/game 6.0x
+xorshift32     game 2.05/2.00 (reps 2.046) spread 2.4% | vs standalone -10.9% (reps -11.2%) | vs harness -13.5% (reps -13.9%) | -joff/game 21.7x
+pack+unpack    game 4.94/4.88 (reps 4.942) spread 3.5% | vs standalone -8.3% (reps -8.3%) | vs harness -8.9% (reps -8.9%) | -joff/game 13.5x
+x | 0          game 0.62/0.62 (reps 0.615) spread 1.4% | vs standalone +10.7% (reps +10.2%) | vs harness +10.7% (reps +9.5%) | -joff/game 9.9x
+select(i,...)  game 2.36/2.34 (reps 2.360) spread 3.3% | vs standalone +46.6% (reps +46.1%) | vs harness +22.3% (reps +22.5%) | -joff/game 5.3x
+crc32/pack game       0.773 (reps 0.772)
+crc32/pack standalone 0.698 (reps 0.697)
+crc32/pack harness    0.635 (reps 0.634)
+game: warm-ups + reps 8.72 s

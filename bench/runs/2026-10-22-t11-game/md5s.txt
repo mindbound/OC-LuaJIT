@@ -1,0 +1,14 @@
+# md5s, 2026-10-22, read after the game exited (13:42:50)
+
+mods/ entries named ocluajit* or opencomputers*: OpenComputers-1.12.64-GTNH.jar, ocluajit-19a7806.jar
+1e02e0321d8c9b27eab5724eaf9946d0  mods/ocluajit-19a7806.jar  (681124 bytes)
+1e02e0321d8c9b27eab5724eaf9946d0  build/libs/ocluajit-19a7806.jar  (the jar T11's setup names)
+9ac03aeb14ed5036030f540ed23feba7  its assets/opencomputers/lib/libjnluajit52-windows-x86_64.dll
+f91700bd2dac56aa16365a66c5fa4773  its assets/opencomputers/lib/libjnluajit52-linux-x86_64.so
+1d12c32246f22a901a3cbe06ef217cd5  its assets/ocluajit/lua/machine.lua (the kernel)
+661c51bd96973329ee2fc16fd6285de6  saves/<world>/opencomputers/<address>/home/ingame-bitops.lua (the copy the run read)
+661c51bd96973329ee2fc16fd6285de6  bench/oc/ingame-bitops.lua (the repo's, at 928a119)
+93b7c961641a552b9fb4e47ab4408643  saves/<world>/opencomputers/<address>/home/ingame-bitops-luajit.txt = ingame-bitops-luajit.txt here
+results files in that home/: ingame-bitops-luajit.txt
+fml-client-latest.log (T11's session): 2 lines containing 'eris-lj' (the error's two exception lines), 1 'Unexpected error loading a state'
+fml-client-3.log (the session before): 0 lines containing 'eris-lj', 0 'Unexpected error loading a state'

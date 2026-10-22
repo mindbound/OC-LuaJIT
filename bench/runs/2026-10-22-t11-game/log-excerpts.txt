@@ -1,0 +1,50 @@
+# The session before, 13:17-13:32, on the previous jar: it loaded the world, saved
+# it and exited, writing the computer state the next session refused.
+
+# logs/fml-client-3.log (that session's FML log)
+
+     1: [13:17:36] [main/DEBUG] [FML/]: Injecting tracing printstreams for STDOUT/STDERR.
+  8988: [13:17:49] [Client thread/DEBUG] [FML/]: 	ocluajit(OC-LuaJIT:a4994e6): ocluajit-a4994e6.jar ()
+ 21686: [13:19:18] [Client thread/INFO] [ocluajit/ocluajit]: Registered the LuaJIT architecture with OpenComputers.
+
+# logs/2026-10-22-1.log.gz (that session's latest.log)
+
+     1: [13:17:43] [main/INFO]: Setting user: mindbound
+    63: [13:21:33] [Server thread/INFO]: mindbound joined the game
+    74: [13:22:26] [Server thread/INFO]: Saving and pausing game...
+   100: [13:22:28] [Server thread/INFO]: Saving and pausing game...
+   152: [13:32:46] [Server thread/INFO]: Saving and pausing game...
+   178: [13:32:47] [Server thread/INFO]: Stopping server
+   180: [13:32:47] [Server thread/INFO]: Saving worlds
+   206: [13:32:48] [Client thread/INFO]: Stopping!
+
+# T11's session, 13:35-13:42, on ocluajit-19a7806.jar
+
+# logs/latest.log (start, world join, save and exit)
+
+     1: [13:36:01] [main/INFO]: Setting user: mindbound
+    59: [13:39:25] [Server thread/INFO]: Starting integrated minecraft server version 1.7.10
+    63: [13:39:30] [Server thread/INFO]: mindbound joined the game
+    74: [13:42:48] [Server thread/INFO]: Saving and pausing game...
+   100: [13:42:49] [Server thread/INFO]: Stopping server
+   102: [13:42:49] [Server thread/INFO]: Saving worlds
+   128: [13:42:50] [Client thread/INFO]: Stopping!
+
+# logs/fml-client-latest.log (start, the mod's registration and version, and the
+# session's one error from a computer: its saved state refused at the header)
+
+     1: [13:35:56] [main/DEBUG] [FML/]: Injecting tracing printstreams for STDOUT/STDERR.
+ 21684: [13:37:16] [Client thread/INFO] [ocluajit/ocluajit]: Registered the LuaJIT architecture with OpenComputers.
+ 35819: [13:39:26] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ocluajit version a4994e6 and it is now at version 19a7806, things may not work well
+ 46039: [13:39:32] [Server thread/ERROR] [OpenComputers/]: Unexpected error loading a state of computer at (-353.500, 4.50000, 1137.50). State: Paused. Unless you're upgrading/downgrading across a major version, please report this! Thank you.
+ 46040: java.lang.RuntimeException: li.cil.repack.com.naef.jnlua.LuaRuntimeException: eris-lj: build fingerprint mismatch: serializer hash differs (blob '8c5a1168', this build '412be694'); the blob is from a different natives build
+ 46041: 	at io.github.astronfo.ocluajit.arch.LuaJITArchitecture.load(LuaJITArchitecture.java:735) ~[LuaJITArchitecture.class:?]
+ 46042: 	at li.cil.oc.server.machine.Machine.liftedTree1$1(Machine.scala:775) [Machine.class:?]
+ 46043: 	at li.cil.oc.server.machine.Machine.load(Machine.scala:774) [Machine.class:?]
+ 46044: 	at li.cil.oc.common.tileentity.traits.Computer$class.readFromNBTForServer(Computer.scala:158) [Computer$class.class:?]
+ 46085: Caused by: li.cil.repack.com.naef.jnlua.LuaRuntimeException: eris-lj: build fingerprint mismatch: serializer hash differs (blob '8c5a1168', this build '412be694'); the blob is from a different natives build
+ 46086: 	at li.cil.repack.com.naef.jnlua.LuaStateLuaJIT.lua_pcall(Native Method) ~[LuaStateLuaJIT.class:?]
+ 46087: 	at li.cil.repack.com.naef.jnlua.LuaState.call(LuaState.java:712) ~[LuaState.class:?]
+ 46088: 	at li.cil.oc.server.machine.luac.PersistenceAPI.unpersist(PersistenceAPI.scala:164) ~[PersistenceAPI.class:?]
+ 46089: 	at io.github.astronfo.ocluajit.arch.LuaJITArchitecture.load(LuaJITArchitecture.java:684) ~[LuaJITArchitecture.class:?]
+ 46090: 	... 43 more

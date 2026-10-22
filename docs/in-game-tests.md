@@ -29,7 +29,21 @@ fix; each is run once after the fix ships and recorded here with its result.
      OpenComputers.` once at startup (the mod prints nothing per save; the
      `bundled roots ON` banner is the harness adapter's);
    - a failure is any `eris-lj:` text, any `Unexpected error loading a state
-     of computer`, or the machine coming back `Stopped`.
+     of computer`, or the machine coming back `Stopped`. One exception, by
+     design (the roadmap's cross-build blob compatibility row): on the first
+     load after a jar change whose natives stamp another build fingerprint,
+     our native refuses the saved state of each LuaJIT computer that was
+     running when the world was saved, naming the first field that differs
+     (`eris-lj: build fingerprint mismatch: <field> differs (blob '...', this
+     build '...'); the blob is from a different natives build`; or, if the
+     new jar also changes the blob format, which is checked first,
+     `eris-lj: format version mismatch (expected N)`). OC logs it as
+     `Unexpected error loading a state of computer` and the computer is left
+     stopped. Check that the blob's value is the old jar's (the
+     `fml.ModTracker` line names the version the world was saved with) and
+     the other the new jar's. A refusal on a reload under the same jar, or
+     any other `eris-lj:` text, is still a failure. T11's session met the
+     exception (its Result).
 
 ## T1 — a `__persist` value with host-side state survives (shell-fill)
 
@@ -781,4 +795,53 @@ standalone on the jar's native (`luajit.exe` of the same build) and on PUC Lua
   happen. Keep the log and the results file, which is flushed after every
   section.
 
-**Result:** not yet run.
+**Result: the LuaJIT arm PASS, 2026-10-22, jar `ocluajit-19a7806.jar`; the
+Lua 5.3 arm not yet run.** [M: `bench/runs/2026-10-22-t11-game/`, unless
+marked] One game session, started 13:35:56 local time, world joined 13:39:30,
+saved and exited 13:42:50. The jar was the only `ocluajit-*.jar` in `mods/`:
+681 124 bytes, md5 `1e02e032`, DLL `9ac03aeb`, kernel `1d12c322`. The copy on
+the computer's disk was byte-identical to the repo's (`661c51bd`), and the
+machine had 16384 KB of RAM. An earlier session that day, 13:17 to 13:32, had
+loaded and saved the world under a4994e6's jar. So on load our native refused
+the computer's state at the header (`build fingerprint mismatch: serializer
+hash differs (blob '8c5a1168', this build '412be694')`). This is the one
+exception in Before every test, step 6: `8c5a1168` is the serializer hash
+a4994e6's natives stamp and `412be694` the one 19a7806's carry [S: the
+roadmap's cross-build blob compatibility row]. It was the session's only `eris-lj:` text and its
+only `Unexpected error loading a state`. The computer was left stopped [S: OC
+`Machine.scala`:808-813 in 1.12.58-GTNH], then started; with no saved state
+it ran the jar's kernel [I: Before every test, step 3] and booted OpenOS [I:
+the results file exists], the roadmap T10 row's item (1). No screenshot was
+taken; the results file holds everything the screen showed but its last line,
+the file's path.
+
+| bench (per) | LuaJIT median / min | Lua 5.3 median / min | Lua 5.3 / LuaJIT (medians) |
+|---|---:|---:|---:|
+| crc32 table (byte) | 3.82 / 3.77 | not run | — |
+| xorshift32 (step) | 2.05 / 2.00 | not run | — |
+| pack+unpack (word) | 4.94 / 4.88 | not run | — |
+| x \| 0 (op) | 0.62 / 0.62 | not run | — |
+| select(i,...) (call) | 2.36 / 2.34 | not run | — |
+| Part 1 (PASS / FAIL / DEV / SKIP) | 38 / 0 / 5 / 0 | not run | — |
+| verdict | PASS | not run | — |
+
+Part 1 printed no `FAIL` or `SKIP` line, and its `PASS`, `DEV` and summary
+lines are identical to the harness LuaJIT arm's (run 3 of
+`bench/runs/2026-10-22-t11/`); the hot loop raised at i = 1000. Each row's
+five reps lie within 3.5% of each other. From the medians of the reps, the
+rows read +11%, -14%, -9%, +10% and +22% against the harness's LuaJIT arm,
+and +2%, -11%, -8%, +10% and +46% against standalone `luajit.exe`. Every row
+is 5.3 to 21.7 times faster than the `-joff` column, so all five ran compiled
+[I]. The crc32 / pack+unpack ratio is 0.77, against 0.70 standalone and 0.63
+in the harness. An absent fold would roughly double the crc32 figure, and
+with it this ratio [I, Reading Part 2], so 0.77 is consistent with the
+table-index fold in effect [I]. `select` is furthest from standalone. About
+half of that gap was already in the harness (1.93 against 1.61, +20%), and
+the game reads +22% over the harness. By Reading Part 2 that is a finding to
+follow up standalone, not a FAIL; it has not been followed up.
+
+The comparison T11 exists for needs both arms from one game session (Reading
+Part 2). A later session on the same jar follows Running it on both CPUs,
+LuaJIT then Lua 5.3, and copies both results files into a new directory, never into
+`2026-10-22-t11-game/`. On this computer's disk the LuaJIT file will be
+`ingame-bitops-luajit-2.txt`; the last screen line names it.
