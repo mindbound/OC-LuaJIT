@@ -1,0 +1,6 @@
+lshift3    n=401 mismatches=0
+bnot       n=401 mismatches=0
+ctl-shl    n=401 mismatches=0
+ctl-bnot   n=401 mismatches=0
+jit false  total mismatches 0
+rc=0

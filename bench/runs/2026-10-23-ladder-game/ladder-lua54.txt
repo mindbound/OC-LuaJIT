@@ -1,0 +1,4 @@
+machine RAM total=16384 KB free=16204 KB  jit global=false
+mandelbrot   CHECK=37904620  min=1.0263 s  reps: 1.041 1.026 1.056 1.047 1.049
+matmul       CHECK=481.0000  min=1.2916 s  reps: 1.303 1.310 1.293 1.309 1.292
+binarytrees  CHECK=7038400  min=1.4840 s  reps: 1.497 1.484 1.503 1.514 1.488

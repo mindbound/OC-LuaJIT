@@ -318,6 +318,40 @@ per rep.
 Detail: [bench/results-ladder-2026-09-29.md](../bench/results-ladder-2026-09-29.md),
 "The in-game column".
 
+**2026-10-23: the same runner on OC's Lua 5.3 and Lua 5.4 CPUs** [M:
+`bench/runs/2026-10-23-ladder-game/`, unless marked]. One game session on
+`ocluajit-19a7806.jar`, the jar of T11's 2026-10-23 Result, on the same 16 MB
+computer, with the runner (`a20fdf67`) and the three bench files
+byte-identical to the repo's. The runner ran on each CPU, LuaJIT first, its
+output redirected into `/home/ladder-<arch>.txt`. The LuaJIT arm began from a
+fresh boot, since the morning's session had left the computer stopped, and
+between arms the CPU was cycled in hand, as in T11's Running it, step 1, the
+first way, so the Lua 5.3 and Lua 5.4 arms did too [I:
+`bench/runs/2026-10-23-ladder-game/README.md`, The load and The switches].
+CHECKs as expected on all three. Min of 5, seconds:
+
+| benchmark | LuaJIT | Lua 5.3 | Lua 5.4 | Lua 5.3 / LuaJIT | Lua 5.4 / LuaJIT |
+|---|---:|---:|---:|---:|---:|
+| mandelbrot | 0.0638 | 1.3958 | 1.0263 | 21.9x | 16.1x |
+| matmul | 0.0893 | 1.6103 | 1.2916 | 18.0x | 14.5x |
+| binarytrees | 0.2737 | 1.4403 | 1.4840 | 5.3x | 5.4x |
+
+Lua 5.3 reads 18-22x our CPU on mandelbrot and matmul and 5.3x on
+binarytrees, which allocates by far the most (7,038,400 nodes a run, against
+about 99,000 tables for matmul and under 800 allocator calls for mandelbrot,
+T9) [S: the bench files]; that the gap narrows there because both VMs spend
+much of it allocating and collecting is [I]. Lua 5.4 reads 26% and 20% faster
+than Lua 5.3 on mandelbrot and matmul and 3% slower on binarytrees. Our CPU
+reads within 1.5% of the pinned harness's last run of these benches, which ran
+on that day's natives (2026-10-05: 0.0647 / 0.0906 / 0.2706 s), and -2.9%,
++3.6% and +8.6% against T9 in game. binarytrees' step came with the kernel:
+the harness read it at 0.2497 s on stage B's natives with the old kernel and
+0.2671 s on the same natives with the site-13 kernel (one run each,
+`bench/runs/2026-10-04-wall/logs/chainB`, `chainC0`) [M], so kernel site 13
+(85faa0e), which this jar's kernel `1d12c322` carries, most likely accounts
+for it [I]. In every row the slowest rep reads at most about 5% over the
+row's min.
+
 ## T9 — the accounting without a JNI crossing, in game
 
 Shape: until this change every allocation a machine made crossed into the JVM

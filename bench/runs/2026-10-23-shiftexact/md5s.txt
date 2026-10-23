@@ -1,0 +1,63 @@
+# md5s of every file copied, as it is in scratch (the CSE probes' output copies here have
+# their CRLF line ends and ANSI colour codes stripped), and of the binaries the runs used
+
+ddcbacce0d965075d9625791afe56c22  argue/argument.md
+396d13e79bee4f8bf8208d0faf514dcc  refute/notes.md
+900179f2e2243aba2db215cc34d281e4  checks/model.py
+03a98fdead0e4f918470de1c736e1c4a  checks/jitcheck.lua
+13b251aa0fc792912f8395f374437d74  checks/run.sh
+33039889af4fd7603c23ea952c889604  cse/cse-fwd.lua
+39539055e3090325d6ef72d712887cc2  cse/cse-fwd2.lua
+ff7b0868335371dde82604113f5803f8  cse/cse-ir.lua
+37fc03770cf88cabd452444ba0b39f06  cse/run-1/joff.txt  (stripped copy 8e692f28d0e5aa95ed4e52be2c54b6fc)
+be62f088cc60fc0dc4259762fa05bc61  cse/run-1/jit.txt  (stripped copy de4ee61a883b164f3fa9504403c07d59)
+daf06daca02fcff2aa1fc4bf57e83b9b  cse/run-2/jdump2.txt  (stripped copy 3214e59a91e3364720d2f70204fa8bda)
+87fa414d1801be29330b8ec8cd1dbd29  cse/run-3/joff.txt  (stripped copy 807150a60d9be237dd19aaea98536372)
+480a16a7d25dd57e5b44e4f4e49447dd  cse/run-3/jit.txt  (stripped copy b157b3592a41e14d1b76760ba93eab4a)
+b175e299e9f28e7a07bf823e51bf7434  cse/run-3/jdump.txt  (stripped copy 2eec54949932c7d27788f302fac46347)
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/done
+8f665ab3d7eaa81fc95beef201348f8d  checks/runs/run-1/env.txt
+969a3d6788eab40bb2256dcd45d9dc61  checks/runs/run-1/inputs.md5
+77ef4e487700df2dd9fb241f2b5695d4  checks/runs/run-1/jc-he1.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-he1.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-he1.rc
+8c9511a0d7a839b7aaea6092ee0908a3  checks/runs/run-1/jc-hl1.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-hl1.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-hl1.rc
+0c386ad100cf79c0442c8589e4d91290  checks/runs/run-1/jc-joff.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-joff.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-joff.rc
+ae5b0dffd3fffe620e449e26d65c5e57  checks/runs/run-1/jc-jon.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-jon.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-jon.rc
+e003d565548938f1c36056429456fb87  checks/runs/run-1/jc-ms0.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-ms0.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-ms0.rc
+6abc217a49227eefeb36a604d0bc4ee9  checks/runs/run-1/jc-nofold.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-nofold.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-nofold.rc
+62179db61b9867b2cd096acbe058fb0a  checks/runs/run-1/jc-noloop.err
+88ef8a702087278a6b60c06111df2e92  checks/runs/run-1/jc-noloop.out
+897316929176464ebc9ad085f31e7284  checks/runs/run-1/jc-noloop.rc
+d41d8cd98f00b204e9800998ecf8427e  checks/runs/run-1/model.err
+53fbedf975105b4790543eb347587bde  checks/runs/run-1/model.out
+0c0401e5bddcda0377dfffa12065512f  checks/runs/run-1/run.log
+15e44e1fa26ed49c6c88c3426a6e784e  checks/runs/run-1/summary.txt
+
+# the checks' run read these (checks/runs/run-1/inputs.md5, as the run wrote it):
+
+  900179f2e2243aba2db215cc34d281e4 */c/Users/astro/claude-tmp/oclj/shiftexact/checks/runs/run-1/inputs/model.py
+  03a98fdead0e4f918470de1c736e1c4a */c/Users/astro/claude-tmp/oclj/shiftexact/checks/runs/run-1/inputs/jitcheck.lua
+  13b251aa0fc792912f8395f374437d74 */c/Users/astro/claude-tmp/oclj/shiftexact/checks/runs/run-1/inputs/run.sh
+  f4038cd62af3a12985868cea77cc1518 */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe
+  abaaa9026e4ea49eb00efb04eaa6f30c */c/Users/astro/AppData/Local/Programs/Python/Python313/python
+  fe6f1d68de85e621d06b088c9ff23966 */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/jit/vmdef.lua
+  f6d916e29cf8e05cd951d220ba8abcd9 */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/lj_opt_fold.o
+  c536c2b9afd16b971de1b003ab98541b */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/lj_record.o
+  ee6d0c98098f923ffd27c6bc1ce805f8 */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/lj_asm.o
+  583d6da3533b6920ec7548e951bf133d */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/lj_vm.o
+  77c037d93c4c2e1268bdcd9ff24d5491 */c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/libluajit.a
+
+# the CSE probes ran (cse/run-1 to run-3; 2026-10-23, before the checks):
+
+f4038cd62af3a12985868cea77cc1518  build/native/luajit-windows-x86_64/src/luajit.exe

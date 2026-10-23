@@ -1,0 +1,13 @@
+jitcheck nrand 24 seed 20261023 values 1499 small 300 calls 3 cases 464
+instrument kat 20/20 ctl-derivation 64/64 operands 3346/3346 counts 1499/1499 rejects 10/10
+selftest comparator pairs 4497 wrong 4491 (must be > 0) verdict PASS
+probe untraced pairs 4497 ok 4497 wrong 0 raised 0 verdict PASS first -
+part shlK cases 130 pairs 584610 ok 584610 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part sarK cases 132 pairs 593604 ok 593604 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part shlneg cases 128 pairs 575616 ok 575616 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part var cases 4 pairs 17988 ok 17988 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part chain cases 32 pairs 143904 ok 143904 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part shapes cases 22 pairs 98934 ok 98934 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part ctl-shr cases 8 pairs 8352 ok 7200 wrong 0 raised 1152 inexact53 1152 mustraise 1152 raisedok 1152 returned 0 verdict PASS first -
+part ctl-shlneg cases 8 pairs 8352 ok 7200 wrong 0 raised 1152 inexact53 1152 mustraise 1152 raisedok 1152 returned 0 verdict PASS first -
+verdict PASS

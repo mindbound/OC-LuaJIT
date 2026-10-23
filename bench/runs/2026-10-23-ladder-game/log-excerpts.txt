@@ -1,0 +1,43 @@
+# 2026-10-23, 11:07-11:14, on ocluajit-19a7806.jar: T7's ladder runner on all three CPUs
+
+# logs/latest.log (start, world join, OC's chat line for each CPU architecture click, saves and exit)
+
+     1: [11:07:41] [main/INFO]: Setting user: mindbound
+    59: [11:11:07] [Server thread/INFO]: Starting integrated minecraft server version 1.7.10
+    63: [11:11:13] [Server thread/INFO]: mindbound joined the game
+    74: [11:11:24] [Server thread/INFO]: Saving and pausing game...
+   100: [11:12:20] [Client thread/INFO]: [CHAT] Architecture: Lua 5.3
+   101: [11:13:22] [Client thread/INFO]: [CHAT] Architecture: Lua 5.4
+   102: [11:14:28] [Client thread/INFO]: [CHAT] Architecture: Lua 5.2
+   103: [11:14:28] [Client thread/INFO]: [CHAT] Architecture: LuaJ
+   104: [11:14:29] [Client thread/INFO]: [CHAT] Architecture: LuaJIT
+   105: [11:14:34] [Server thread/INFO]: Saving and pausing game...
+   131: [11:14:35] [Server thread/INFO]: Stopping server
+   133: [11:14:35] [Server thread/INFO]: Saving worlds
+   159: [11:14:36] [Client thread/INFO]: Stopping!
+
+# logs/fml-client-latest.log (start; FML's mod count; the mod's version; the session's one
+# OpenComputers ERROR, the same startup recipe as in the morning's session; our architecture
+# registered; the world's ModTracker lines: mods updated since the morning's session; OC's
+# glyph-width cache first used by the client's font loader, 8 s after the join, and OC's
+# computer_running sound first decoded 18 s after it)
+
+     1: [11:07:36] [main/DEBUG] [FML/]: Injecting tracing printstreams for STDOUT/STDERR.
+  7984: [11:07:46] [Client thread/INFO] [FML/]: Forge Mod Loader has identified 244 mods to load
+  8985: [11:07:47] [Client thread/DEBUG] [FML/]: 	ocluajit(OC-LuaJIT:19a7806): ocluajit-19a7806.jar ()
+ 20877: [11:08:55] [Client thread/ERROR] [OpenComputers/OpenComputers]: Failed adding recipe for 'ritegUpgrade', you will not be able to craft this item.
+ 21684: [11:09:02] [Client thread/INFO] [ocluajit/ocluajit]: Registered the LuaJIT architecture with OpenComputers.
+ 35819: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod NotEnoughItems version 2.8.164-GTNH and it is now at version 2.8.165-GTNH, things may not work well
+ 35820: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod Baubles version 2.2.25-GTNH and it is now at version 2.2.26-GTNH, things may not work well
+ 35821: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod Baubles|Expanded version 2.2.25-GTNH and it is now at version 2.2.26-GTNH, things may not work well
+ 35822: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Core version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35823: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Transmission version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35824: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Exploration version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35825: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Transportation version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35826: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Compatibility version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35827: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Expansion version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35828: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Integration version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35829: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Fabrication version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 35830: [11:11:09] [Server thread/INFO] [fml.ModTracker/]: This world was saved with mod ProjRed|Illumination version 4.12.47-GTNH and it is now at version 4.12.48-GTNH, things may not work well
+ 46180: [11:11:21] [Client thread/INFO] [OpenComputers/]: Initializing font glyph width cache...
+ 46212: [11:11:31] [Thread-67/DEBUG] [Hodgepodge/]: Downmixed opencomputers:sounds/computer_running.ogg to mono (average +0.1 dB), 1722 KB -> 861 KB

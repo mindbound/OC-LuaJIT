@@ -1,0 +1,11 @@
+#cov probe untraced starts 0 aborts 0 traced 0 traces 0 jit off
+#cov part shlK cases 130 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate 0 oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part sarK cases 132 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate 0 oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part shlneg cases 128 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate 0 oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part var cases 4 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate 0 oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part chain cases 32 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate 0 oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part shapes cases 22 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate - oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part ctl-shr cases 8 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate - oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov part ctl-shlneg cases 8 traced 0 traces 0 starts 0 aborts 0 interp 0 rguards 0 sguards 0 sggate - oguards 0 rgsnaps 0 rgshared 0 exits 0 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 0 - jit off
+#cov measured: not measured (jit off)
+#cov verdict jit off

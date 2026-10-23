@@ -1,0 +1,487 @@
+---- TRACE 1 start cse-fwd2.lua:22
+---- TRACE 1 IR
+0001    int SLOAD  #6    CI
+0002    u8  XLOAD  [0x1e4ed8b0471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005    fun SLOAD  #0    R
+0006    tab FLOAD  0005  func.env
+0007    int FLOAD  0006  tab.hmask
+0008 >  int EQ     0007  +63 
+0009    p64 FLOAD  0006  tab.node
+0010 >  p64 HREFK  0009  "bit" @63
+0011 >  tab HLOAD  0010
+0012    int FLOAD  0011  tab.hmask
+0013 >  int EQ     0012  +15 
+0014    p64 FLOAD  0011  tab.node
+0015 >  p64 HREFK  0014  "lshift" @3
+0016 >  fun HLOAD  0015
+0017 >  fun EQ     0016  bit.lshift
+0018    int BSHL   0001  +3  
+0019    num CONV   0018  num.i64
+0020 >  tab SLOAD  #5    T
+0021    tab FLOAD  0020  tab.meta
+0022 >  tab EQ     0021  NULL
+0023    int ALEN   0020  nil 
+0025    int ADD    0023  +1  
+0026    int FLOAD  0020  tab.asize
+0027 >  int ABC    0026  0025
+0028    p64 FLOAD  0020  tab.array
+0029    p64 AREF   0028  0025
+0030    num CONV   0018  num.int
+0031    num ASTORE 0029  0030
+0032 >  tab SLOAD  #4    T
+0033    tab FLOAD  0032  tab.meta
+0034 >  tab EQ     0033  NULL
+0035    int ALEN   0032  nil 
+0037    int ADD    0035  +1  
+0038    int FLOAD  0032  tab.asize
+0039 >  int ABC    0038  0037
+0040    p64 FLOAD  0032  tab.array
+0041    p64 AREF   0040  0037
+0042    num ASTORE 0041  0019
+0043  + int ADD    0001  +1  
+0044 >  int LE     0043  +536871312
+0045 ------ LOOP ------------
+0046    u8  XLOAD  [0x1e4ed8b0471]  V
+0047    int BAND   0046  +12 
+0048 >  int EQ     0047  +0  
+0049    int BSHL   0043  +3  
+0050    num CONV   0049  num.i64
+0051    int ALEN   0020  nil 
+0052    int ADD    0051  +1  
+0053 >  int ABC    0026  0052
+0054    p64 AREF   0028  0052
+0055    num CONV   0049  num.int
+0056    num ASTORE 0054  0055
+0057    int ALEN   0032  nil 
+0058    int ADD    0057  +1  
+0059 >  int ABC    0038  0058
+0060    p64 AREF   0040  0058
+0061    num ASTORE 0060  0050
+0062  + int ADD    0043  +1  
+0063 >  int LE     0062  +536871312
+0064    int PHI    0043  0062
+---- TRACE 1 stop -> loop
+
+---- TRACE 2 start cse-fwd2.lua:8
+---- TRACE 2 IR
+0001 >  int SLOAD  #9    CRI
+0002 >  int LE     0001  +2147483646
+0003    int SLOAD  #8    CI
+0004    u8  XLOAD  [0x1e4ed8b0471]  V
+0005    int BAND   0004  +12 
+0006 >  int EQ     0005  +0  
+0007 >  tab SLOAD  #3    T
+0008    int FLOAD  0007  tab.asize
+0009 >  p32 ABC    0008  0001
+0010    p64 FLOAD  0007  tab.array
+0011    p64 AREF   0010  0003
+0012 >  num ALOAD  0011
+0013 >  fun SLOAD  #4    T
+0014 >  num SLOAD  #5    T
+0015    num CONV   0003  num.int
+0016    num ADD    0015  0014
+0017    num SUB    0016  +1  
+0018 >  fun EQ     0013  cse-fwd2.lua:28
+0019    num MUL    0017  +8  
+0020 >  num EQ     0019  0012
+0021  + int ADD    0003  +1  
+0022 >  int LE     0021  0001
+0023 ------ LOOP ------------
+0024    u8  XLOAD  [0x1e4ed8b0471]  V
+0025    int BAND   0024  +12 
+0026 >  int EQ     0025  +0  
+0027    p64 AREF   0010  0021
+0028 >  num ALOAD  0027
+0029    num CONV   0021  num.int
+0030    num ADD    0029  0014
+0031    num SUB    0030  +1  
+0032    num MUL    0031  +8  
+0033 >  num EQ     0032  0028
+0034  + int ADD    0021  +1  
+0035 >  int LE     0034  0001
+0036    int PHI    0021  0034
+---- TRACE 2 stop -> loop
+
+---- TRACE 3 start 2/1 cse-fwd2.lua:10
+---- TRACE 3 IR
+0001    int SLOAD  #8    PI
+0002    int SLOAD  #9    PRI
+0003    u8  XLOAD  [0x1e4ed8b0471]  V
+0004    int BAND   0003  +12 
+0005 >  int EQ     0004  +0  
+0006 >  num SLOAD  #6    T
+0007    num ADD    0006  +1  
+0008 >  str SLOAD  #7    T
+0009    int ADD    0001  +1  
+0010 >  int LE     0009  0002
+0011    num CONV   0009  num.int
+---- TRACE 3 stop -> 2
+
+lshift3    n=401 mismatches=341  first: i=536870969 got 456 want 4294967752
+---- TRACE 4 start cse-fwd2.lua:33
+---- TRACE 4 IR
+0001    int SLOAD  #6    CI
+0002    u8  XLOAD  [0x1e4ed8b0471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005    fun SLOAD  #0    R
+0006    tab FLOAD  0005  func.env
+0007    int FLOAD  0006  tab.hmask
+0008 >  int EQ     0007  +63 
+0009    p64 FLOAD  0006  tab.node
+0010 >  p64 HREFK  0009  "bit" @63
+0011 >  tab HLOAD  0010
+0012    int FLOAD  0011  tab.hmask
+0013 >  int EQ     0012  +15 
+0014    p64 FLOAD  0011  tab.node
+0015 >  p64 HREFK  0014  "bnot" @1
+0016 >  fun HLOAD  0015
+0017 >  fun EQ     0016  bit.bnot
+0018    int BNOT   0001
+0019    num CONV   0018  num.i64
+0020 >  tab SLOAD  #5    T
+0021    tab FLOAD  0020  tab.meta
+0022 >  tab EQ     0021  NULL
+0023    int ALEN   0020  nil 
+0025    int ADD    0023  +1  
+0026    int FLOAD  0020  tab.asize
+0027 >  int ABC    0026  0025
+0028    p64 FLOAD  0020  tab.array
+0029    p64 AREF   0028  0025
+0030    num CONV   0018  num.int
+0031    num ASTORE 0029  0030
+0032 >  tab SLOAD  #4    T
+0033    tab FLOAD  0032  tab.meta
+0034 >  tab EQ     0033  NULL
+0035    int ALEN   0032  nil 
+0037    int ADD    0035  +1  
+0038    int FLOAD  0032  tab.asize
+0039 >  int ABC    0038  0037
+0040    p64 FLOAD  0032  tab.array
+0041    p64 AREF   0040  0037
+0042    num ASTORE 0041  0019
+0043  + int ADD    0001  +1  
+0044 >  int LE     0043  +401
+0045 ------ LOOP ------------
+0046    u8  XLOAD  [0x1e4ed8b0471]  V
+0047    int BAND   0046  +12 
+0048 >  int EQ     0047  +0  
+0049    int BNOT   0043
+0050    num CONV   0049  num.i64
+0051    int ALEN   0020  nil 
+0052    int ADD    0051  +1  
+0053 >  int ABC    0026  0052
+0054    p64 AREF   0028  0052
+0055    num CONV   0049  num.int
+0056    num ASTORE 0054  0055
+0057    int ALEN   0032  nil 
+0058    int ADD    0057  +1  
+0059 >  int ABC    0038  0058
+0060    p64 AREF   0040  0058
+0061    num ASTORE 0060  0050
+0062  + int ADD    0043  +1  
+0063 >  int LE     0062  +401
+0064    int PHI    0043  0062
+---- TRACE 4 stop -> loop
+
+---- TRACE 5 start 2/0 cse-fwd2.lua:9
+---- TRACE 5 IR
+0001 >  int SLOAD  #9    CRI
+0002 >  int LE     0001  +2147483646
+0003    int SLOAD  #8    CI
+0004    u8  XLOAD  [0x1e4ed8b0471]  V
+0005    int BAND   0004  +12 
+0006 >  int EQ     0005  +0  
+0007 >  tab SLOAD  #3    T
+0008    int FLOAD  0007  tab.asize
+0009 >  p32 ABC    0008  0001
+0010    p64 FLOAD  0007  tab.array
+0011    p64 AREF   0010  0003
+0012 >  num ALOAD  0011
+0013 >  fun SLOAD  #4    T
+0014 >  num SLOAD  #5    T
+0015    num CONV   0003  num.int
+0016    num ADD    0015  0014
+0017    num SUB    0016  +1  
+0018 >  fun EQ     0013  cse-fwd2.lua:39
+0021    num SUB    -1    0017
+0022 >  num EQ     0021  0012
+0023  + int ADD    0003  +1  
+0024 >  int LE     0023  0001
+0025 ------ LOOP ------------
+0026    u8  XLOAD  [0x1e4ed8b0471]  V
+0027    int BAND   0026  +12 
+0028 >  int EQ     0027  +0  
+0029    p64 AREF   0010  0023
+0030 >  num ALOAD  0029
+0031    num CONV   0023  num.int
+0032    num ADD    0031  0014
+0033    num SUB    0032  +1  
+0034    num SUB    -1    0033
+0035 >  num EQ     0034  0030
+0036  + int ADD    0023  +1  
+0037 >  int LE     0036  0001
+0038    int PHI    0023  0036
+---- TRACE 5 stop -> loop
+
+---- TRACE 6 start 5/1 cse-fwd2.lua:10
+---- TRACE 6 IR
+0001    int SLOAD  #8    PI
+0002    int SLOAD  #9    PRI
+0003    u8  XLOAD  [0x1e4ed8b0471]  V
+0004    int BAND   0003  +12 
+0005 >  int EQ     0004  +0  
+0006 >  num SLOAD  #6    T
+0007    num ADD    0006  +1  
+0008 >  str SLOAD  #7    T
+0009    int ADD    0001  +1  
+0010 >  int LE     0009  0002
+0011    num CONV   0009  num.int
+---- TRACE 6 stop -> 2
+
+bnot       n=401 mismatches=341  first: i=58 got 4294967237 want -59
+---- TRACE 7 start cse-fwd2.lua:44
+---- TRACE 7 IR
+0001    int SLOAD  #5    CI
+0002    u8  XLOAD  [0x1e4ed8b0471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005 >  tab SLOAD  #4    T
+0006    tab FLOAD  0005  tab.meta
+0007 >  tab EQ     0006  NULL
+0008    int ALEN   0005  nil 
+0010    i64 BSHL   0001  +3  
+0011    num CONV   0010  num.i64
+0012  + int ADD    0008  +1  
+0013    int FLOAD  0005  tab.asize
+0014 >  int ABC    0013  0012
+0015    p64 FLOAD  0005  tab.array
+0016    p64 AREF   0015  0012
+0017    num ASTORE 0016  0011
+0018  + int ADD    0001  +1  
+0019 >  int LE     0018  +536871312
+0020 ------ LOOP ------------
+0021    u8  XLOAD  [0x1e4ed8b0471]  V
+0022    int BAND   0021  +12 
+0023 >  int EQ     0022  +0  
+0024    int ALEN   0005  0012
+0025    i64 BSHL   0018  +3  
+0026    num CONV   0025  num.i64
+0027  + int ADD    0024  +1  
+0028 >  int ABC    0013  0027
+0029    p64 AREF   0015  0027
+0030    num ASTORE 0029  0026
+0031  + int ADD    0018  +1  
+0032 >  int LE     0031  +536871312
+0033    int PHI    0018  0031
+0034    int PHI    0012  0027
+---- TRACE 7 stop -> loop
+
+---- TRACE 8 start 5/0 cse-fwd2.lua:9
+---- TRACE 8 IR
+0001 >  int SLOAD  #9    CRI
+0002 >  int LE     0001  +2147483646
+0003    int SLOAD  #8    CI
+0004    u8  XLOAD  [0x1e4ed8b0471]  V
+0005    int BAND   0004  +12 
+0006 >  int EQ     0005  +0  
+0007 >  tab SLOAD  #3    T
+0008    int FLOAD  0007  tab.asize
+0009 >  p32 ABC    0008  0001
+0010    p64 FLOAD  0007  tab.array
+0011    p64 AREF   0010  0003
+0012 >  num ALOAD  0011
+0013 >  fun SLOAD  #4    T
+0014 >  num SLOAD  #5    T
+0015    num CONV   0003  num.int
+0016    num ADD    0015  0014
+0017    num SUB    0016  +1  
+0018 >  fun EQ     0013  cse-fwd2.lua:47
+0019    num MUL    0017  +8  
+0020 >  num EQ     0019  0012
+0021  + int ADD    0003  +1  
+0022 >  int LE     0021  0001
+0023 ------ LOOP ------------
+0024    u8  XLOAD  [0x1e4ed8b0471]  V
+0025    int BAND   0024  +12 
+0026 >  int EQ     0025  +0  
+0027    p64 AREF   0010  0021
+0028 >  num ALOAD  0027
+0029    num CONV   0021  num.int
+0030    num ADD    0029  0014
+0031    num SUB    0030  +1  
+0032    num MUL    0031  +8  
+0033 >  num EQ     0032  0028
+0034  + int ADD    0021  +1  
+0035 >  int LE     0034  0001
+0036    int PHI    0021  0034
+---- TRACE 8 stop -> loop
+
+ctl-shl    n=401 mismatches=0
+---- TRACE 9 start cse-fwd2.lua:52
+---- TRACE 9 IR
+0001    int SLOAD  #5    CI
+0002    u8  XLOAD  [0x1e4ed8b0471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005 >  tab SLOAD  #4    T
+0006    tab FLOAD  0005  tab.meta
+0007 >  tab EQ     0006  NULL
+0008    int ALEN   0005  nil 
+0010    i64 BNOT   0001
+0011    num CONV   0010  num.i64
+0012  + int ADD    0008  +1  
+0013    int FLOAD  0005  tab.asize
+0014 >  int ABC    0013  0012
+0015    p64 FLOAD  0005  tab.array
+0016    p64 AREF   0015  0012
+0017    num ASTORE 0016  0011
+0018  + int ADD    0001  +1  
+0019 >  int LE     0018  +401
+0020 ------ LOOP ------------
+0021    u8  XLOAD  [0x1e4ed8b0471]  V
+0022    int BAND   0021  +12 
+0023 >  int EQ     0022  +0  
+0024    int ALEN   0005  0012
+0025    i64 BNOT   0018
+0026    num CONV   0025  num.i64
+0027  + int ADD    0024  +1  
+0028 >  int ABC    0013  0027
+0029    p64 AREF   0015  0027
+0030    num ASTORE 0029  0026
+0031  + int ADD    0018  +1  
+0032 >  int LE     0031  +401
+0033    int PHI    0018  0031
+0034    int PHI    0012  0027
+---- TRACE 9 stop -> loop
+
+---- TRACE 10 start 8/0 cse-fwd2.lua:9
+---- TRACE 10 IR
+0001 >  int SLOAD  #9    CRI
+0002 >  int LE     0001  +2147483646
+0003    int SLOAD  #8    CI
+0004    u8  XLOAD  [0x1e4ed8b0471]  V
+0005    int BAND   0004  +12 
+0006 >  int EQ     0005  +0  
+0007 >  tab SLOAD  #3    T
+0008    int FLOAD  0007  tab.asize
+0009 >  p32 ABC    0008  0001
+0010    p64 FLOAD  0007  tab.array
+0011    p64 AREF   0010  0003
+0012 >  num ALOAD  0011
+0013 >  fun SLOAD  #4    T
+0014 >  num SLOAD  #5    T
+0015    num CONV   0003  num.int
+0016    num ADD    0015  0014
+0017    num SUB    0016  +1  
+0018 >  fun EQ     0013  cse-fwd2.lua:55
+0021    num SUB    -1    0017
+0022 >  num EQ     0021  0012
+0023  + int ADD    0003  +1  
+0024 >  int LE     0023  0001
+0025 ------ LOOP ------------
+0026    u8  XLOAD  [0x1e4ed8b0471]  V
+0027    int BAND   0026  +12 
+0028 >  int EQ     0027  +0  
+0029    p64 AREF   0010  0023
+0030 >  num ALOAD  0029
+0031    num CONV   0023  num.int
+0032    num ADD    0031  0014
+0033    num SUB    0032  +1  
+0034    num SUB    -1    0033
+0035 >  num EQ     0034  0030
+0036  + int ADD    0023  +1  
+0037 >  int LE     0036  0001
+0038    int PHI    0023  0036
+---- TRACE 10 stop -> loop
+
+ctl-bnot   n=401 mismatches=0
+---- TRACE 11 start cse-fwd2.lua:60
+---- TRACE 11 IR
+0001    int SLOAD  #5    CI
+0002    u8  XLOAD  [0x1e4ed8b0471]  V
+0003    int BAND   0002  +12 
+0004 >  int EQ     0003  +0  
+0005 >  tab SLOAD  #4    T
+0006    tab FLOAD  0005  tab.meta
+0007 >  tab EQ     0006  NULL
+0008    int ALEN   0005  nil 
+0010    i64 BNOT   0001
+0011    num CONV   0010  num.i64
+0012  + int ADD    0008  +1  
+0013    int FLOAD  0005  tab.asize
+0014 >  int ABC    0013  0012
+0015    p64 FLOAD  0005  tab.array
+0016    p64 AREF   0015  0012
+0017    num ASTORE 0016  0011
+0018  + int ADD    0001  +1  
+0019 >  int LE     0018  +401
+0020 ------ LOOP ------------
+0021    u8  XLOAD  [0x1e4ed8b0471]  V
+0022    int BAND   0021  +12 
+0023 >  int EQ     0022  +0  
+0024    int ALEN   0005  0012
+0025    i64 BNOT   0018
+0026    num CONV   0025  num.i64
+0027  + int ADD    0024  +1  
+0028 >  int ABC    0013  0027
+0029    p64 AREF   0015  0027
+0030    num ASTORE 0029  0026
+0031  + int ADD    0018  +1  
+0032 >  int LE     0031  +401
+0033    int PHI    0018  0031
+0034    int PHI    0012  0027
+---- TRACE 11 stop -> loop
+
+---- TRACE 12 start 10/0 cse-fwd2.lua:9
+---- TRACE 12 IR
+0001 >  int SLOAD  #9    CRI
+0002 >  int LE     0001  +2147483646
+0003    int SLOAD  #8    CI
+0004    u8  XLOAD  [0x1e4ed8b0471]  V
+0005    int BAND   0004  +12 
+0006 >  int EQ     0005  +0  
+0007 >  tab SLOAD  #3    T
+0008    int FLOAD  0007  tab.asize
+0009 >  p32 ABC    0008  0001
+0010    p64 FLOAD  0007  tab.array
+0011    p64 AREF   0010  0003
+0012 >  num ALOAD  0011
+0013 >  fun SLOAD  #4    T
+0014 >  num SLOAD  #5    T
+0015    num CONV   0003  num.int
+0016    num ADD    0015  0014
+0017    num SUB    0016  +1  
+0018 >  fun EQ     0013  cse-fwd2.lua:61
+0019    num FLOAD  nil   #280
+0020    num NEG    0017  0019
+0021 >  num NE     0020  0012
+0022 >  num SLOAD  #6    T
+0023  + num ADD    0022  +1  
+0024 >  str SLOAD  #7    T
+0025  + int ADD    0003  +1  
+0026 >  int LE     0025  0001
+0027 ------ LOOP ------------
+0028    u8  XLOAD  [0x1e4ed8b0471]  V
+0029    int BAND   0028  +12 
+0030 >  int EQ     0029  +0  
+0031    p64 AREF   0010  0025
+0032 >  num ALOAD  0031
+0033    num CONV   0025  num.int
+0034    num ADD    0033  0014
+0035    num SUB    0034  +1  
+0036    num NEG    0035  0019
+0037 >  num NE     0036  0032
+0038  + num ADD    0023  +1  
+0039  + int ADD    0025  +1  
+0040 >  int LE     0039  0001
+0041    int PHI    0025  0039
+0042    num PHI    0023  0038
+---- TRACE 12 stop -> loop
+
+failfirst  n=401 mismatches=401  first: i=1 got -2 want -1
+failfirst ok (the checker reports a wrong reference)
+jit true  total mismatches 682
+rc=0

@@ -1,0 +1,8 @@
+lshift3    n=401 mismatches=341  first: i=536870969 got 456 want 4294967752
+bnot       n=401 mismatches=341  first: i=58 got 4294967237 want -59
+ctl-shl    n=401 mismatches=0
+ctl-bnot   n=401 mismatches=0
+failfirst  n=401 mismatches=401  first: i=1 got -2 want -1
+failfirst ok (the checker reports a wrong reference)
+jit true  total mismatches 682
+rc=0

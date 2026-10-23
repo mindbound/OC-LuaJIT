@@ -1,0 +1,121 @@
+model.py nrand 200 seed 20261023 python 3.13.15
+== 1. the scaled model: W 4..16, P 1..W, every x in D_P, every k in 0..W-1 ==
+model W 4 shl checks 208 fails 0 vacfails 0 mono 0 ctlcover -
+model W 4 sar checks 208 fails 0 vacfails 0 mono 0 ctlcover -
+model W 4 lsr checks 208 fails 9 vacfails 0 mono 7 ctlcover 2/2
+model W 4 orbit checks 208 fails 19 vacfails 0 mono 15 ctlcover 2/2
+model W 5 shl checks 570 fails 0 vacfails 0 mono 0 ctlcover -
+model W 5 sar checks 570 fails 0 vacfails 0 mono 0 ctlcover -
+model W 5 lsr checks 570 fails 29 vacfails 0 mono 20 ctlcover 3/3
+model W 5 orbit checks 570 fails 59 vacfails 0 mono 40 ctlcover 3/3
+model W 6 shl checks 1440 fails 0 vacfails 0 mono 0 ctlcover -
+model W 6 sar checks 1440 fails 0 vacfails 0 mono 0 ctlcover -
+model W 6 lsr checks 1440 fails 74 vacfails 0 mono 45 ctlcover 4/4
+model W 6 orbit checks 1440 fails 152 vacfails 0 mono 93 ctlcover 4/4
+model W 7 shl checks 3458 fails 0 vacfails 0 mono 0 ctlcover -
+model W 7 sar checks 3458 fails 0 vacfails 0 mono 0 ctlcover -
+model W 7 lsr checks 3458 fails 174 vacfails 0 mono 100 ctlcover 5/5
+model W 7 orbit checks 3458 fails 354 vacfails 0 mono 202 ctlcover 5/5
+model W 8 shl checks 8032 fails 0 vacfails 0 mono 0 ctlcover -
+model W 8 sar checks 8032 fails 0 vacfails 0 mono 0 ctlcover -
+model W 8 lsr checks 8032 fails 379 vacfails 0 mono 205 ctlcover 6/6
+model W 8 orbit checks 8032 fails 777 vacfails 0 mono 423 ctlcover 6/6
+model W 9 shl checks 18234 fails 0 vacfails 0 mono 0 ctlcover -
+model W 9 sar checks 18234 fails 0 vacfails 0 mono 0 ctlcover -
+model W 9 lsr checks 18234 fails 803 vacfails 0 mono 424 ctlcover 7/7
+model W 9 orbit checks 18234 fails 1645 vacfails 0 mono 868 ctlcover 7/7
+model W 10 shl checks 40720 fails 0 vacfails 0 mono 0 ctlcover -
+model W 10 sar checks 40720 fails 0 vacfails 0 mono 0 ctlcover -
+model W 10 lsr checks 40720 fails 1652 vacfails 0 mono 849 ctlcover 8/8
+model W 10 orbit checks 40720 fails 3406 vacfails 0 mono 1761 ctlcover 8/8
+model W 11 shl checks 89826 fails 0 vacfails 0 mono 0 ctlcover -
+model W 11 sar checks 89826 fails 0 vacfails 0 mono 0 ctlcover -
+model W 11 lsr checks 89826 fails 3368 vacfails 0 mono 1716 ctlcover 9/9
+model W 11 orbit checks 89826 fails 6956 vacfails 0 mono 3550 ctlcover 9/9
+model W 12 shl checks 196272 fails 0 vacfails 0 mono 0 ctlcover -
+model W 12 sar checks 196272 fails 0 vacfails 0 mono 0 ctlcover -
+model W 12 lsr checks 196272 fails 6789 vacfails 0 mono 3421 ctlcover 10/10
+model W 12 orbit checks 196272 fails 14087 vacfails 0 mono 7131 ctlcover 10/10
+model W 13 shl checks 425594 fails 0 vacfails 0 mono 0 ctlcover -
+model W 13 sar checks 425594 fails 0 vacfails 0 mono 0 ctlcover -
+model W 13 lsr checks 425594 fails 13653 vacfails 0 mono 6864 ctlcover 11/11
+model W 13 orbit checks 425594 fails 28383 vacfails 0 mono 14296 ctlcover 11/11
+model W 14 shl checks 917056 fails 0 vacfails 0 mono 0 ctlcover -
+model W 14 sar checks 917056 fails 0 vacfails 0 mono 0 ctlcover -
+model W 14 lsr checks 917056 fails 27342 vacfails 0 mono 13689 ctlcover 12/12
+model W 14 orbit checks 917056 fails 57012 vacfails 0 mono 28629 ctlcover 12/12
+model W 15 shl checks 1965570 fails 0 vacfails 0 mono 0 ctlcover -
+model W 15 sar checks 1965570 fails 0 vacfails 0 mono 0 ctlcover -
+model W 15 lsr checks 1965570 fails 54746 vacfails 0 mono 27404 ctlcover 13/13
+model W 15 orbit checks 1965570 fails 114310 vacfails 0 mono 57298 ctlcover 13/13
+model W 16 shl checks 4193728 fails 0 vacfails 0 mono 0 ctlcover -
+model W 16 sar checks 4193728 fails 0 vacfails 0 mono 0 ctlcover -
+model W 16 lsr checks 4193728 fails 109455 vacfails 0 mono 54709 ctlcover 14/14
+model W 16 orbit checks 4193728 fails 228949 vacfails 0 mono 114639 ctlcover 14/14
+model total shl checks 7860708 fails 0 mono 0
+model total sar checks 7860708 fails 0 mono 0
+model total lsr checks 7860708 fails 218473 mono 109453
+model total orbit checks 7860708 fails 456109 mono 228945
+control lsr first counterexample W 4 P 2 x -6 k 1 y 5 sigbits(y) 3
+control orbit first counterexample W 4 P 1 x -8 k 0 y -7 sigbits(y) 3
+== 1b. Lemma BSHL10 in the scaled model: W 4..16, P 1..W, every x in the word, every k from W-1-P to W-1 ==
+model W 4 bshl10 checks 208 fails 0 vacfails 0 tight 2/2 witness 2/2
+model W 5 bshl10 checks 608 fails 0 vacfails 0 tight 3/3 witness 3/3
+model W 6 bshl10 checks 1664 fails 0 vacfails 0 tight 4/4 witness 4/4
+model W 7 bshl10 checks 4352 fails 0 vacfails 0 tight 5/5 witness 5/5
+model W 8 bshl10 checks 11008 fails 0 vacfails 0 tight 6/6 witness 6/6
+model W 9 bshl10 checks 27136 fails 0 vacfails 0 tight 7/7 witness 7/7
+model W 10 bshl10 checks 65536 fails 0 vacfails 0 tight 8/8 witness 8/8
+model W 11 bshl10 checks 155648 fails 0 vacfails 0 tight 9/9 witness 9/9
+model W 12 bshl10 checks 364544 fails 0 vacfails 0 tight 10/10 witness 10/10
+model W 13 bshl10 checks 843776 fails 0 vacfails 0 tight 11/11 witness 11/11
+model W 14 bshl10 checks 1933312 fails 0 vacfails 0 tight 12/12 witness 12/12
+model W 15 bshl10 checks 4390912 fails 0 vacfails 0 tight 13/13 witness 13/13
+model W 16 bshl10 checks 9895936 fails 0 vacfails 0 tight 14/14 witness 14/14
+model total bshl10 checks 17694640 fails 0
+control bshl10-tight first witness W 4 P 1 x 5 k 1 y -6 sigbits(y) 2
+== 1c. Lemma BAND in the scaled model: W 4..10, P 1..W, every pair in D_P x D_P (the whole word squared) ==
+model W 4 band checks 720 fails 0 vacfails 0 mono 0 ctlcover -
+model W 4 bor checks 720 fails 28 vacfails 0 mono 24 ctlcover 2/2
+model W 5 band checks 2980 fails 0 vacfails 0 mono 0 ctlcover -
+model W 5 bor checks 2980 fails 136 vacfails 0 mono 108 ctlcover 3/3
+model W 6 band checks 12064 fails 0 vacfails 0 mono 0 ctlcover -
+model W 6 bor checks 12064 fails 584 vacfails 0 mono 448 ctlcover 4/4
+model W 7 band checks 48452 fails 0 vacfails 0 mono 0 ctlcover -
+model W 7 bor checks 48452 fails 2396 vacfails 0 mono 1812 ctlcover 5/5
+model W 8 band checks 194064 fails 0 vacfails 0 mono 0 ctlcover -
+model W 8 bor checks 194064 fails 9668 vacfails 0 mono 7272 ctlcover 6/6
+model W 9 band checks 776580 fails 0 vacfails 0 mono 0 ctlcover -
+model W 9 bor checks 776580 fails 38784 vacfails 0 mono 29116 ctlcover 7/7
+model W 10 band checks 3106720 fails 0 vacfails 0 mono 0 ctlcover -
+model W 10 bor checks 3106720 fails 155280 vacfails 0 mono 116496 ctlcover 8/8
+model total band checks 4141580 fails 0 mono 0
+model total bor checks 4141580 fails 206876 mono 155276
+control bor first counterexample W 4 P 1 x -8 y 1 r -7 sigbits(r) 3
+== 2. instruments ==
+instrument D_P by construction against max(sigbits, 1) <= P: 0 of 130 (W, P) differ
+instrument literal path against fast path (W 4..10): 0 of 196 (W, P, op) counts differ, 0 of 290648 values differ
+instrument results outside the word: 0
+instrument BSHL10 histogram rows holding 2^W values (W 4..16, every k): 0 of 130 rows wrong
+instrument BSHL10 literal walk against the histogram (W 4..10): 0 of 49 (W, P) counts differ, 0 of 110512 values differ
+instrument BSHL10 witness: the two spellings differ at 0, sigbits(y) other than P + 1 at 0, of 104 (W, P)
+instrument BSHL10 checks against 2^W * (W(W+3)/2 - 1) (W 4..16): 0 of 13 W differ; the formula at W + 1 equals the count at 0 (must be 0)
+instrument BAND and bor pairs[P] against |D_P|^2 (W 4..10, every P): 0 of 98 differ; |D_(P-1)|^2 equals pairs[P] at 0 of 70 P in 2..W-1 (must be 0)
+instrument BAND and bor literal walk of D_P x D_P against the histogram (W 4..8): 0 of 60 (W, P, op) counts differ, 0 of 516560 values differ
+instrument BAND and bor results outside the word: 0
+== 3. the 64-bit sweep: P 53, W 64, every k in 0..63 ==
+sweep64 operands 6850 m 211 pairs-per-op 438400
+instrument oclj_bitop.h's shifts against the model's ops: 0 of 1753600 values differ
+instrument sigbits(y) <= 53 against oclj_bit2num's round trip: 0 of 1753600 disagree; operands not exact: 0
+sweep64 shl pairs 438400 fails 0 mono 0 first -
+sweep64 sar pairs 438400 fails 0 mono 0 first -
+sweep64 lsr pairs 438400 fails 8532 mono 143513 first x -1 k 1 y 9223372036854775807 sigbits(y) 63
+sweep64 orbit pairs 438400 fails 16158 mono 218142 first x 1 k 53 y 9007199254740993 sigbits(y) 54
+== 3b. the second 64-bit sweep: BSHL10 (k 10..63, any int64 x) and BAND, P 53 ==
+sweep64 bshl10 operands 814 boundary 14 outside-D 802 pairs 43956 fails 0 first -
+sweep64 bshl9 control pairs 814 fails 197 first x 9007199254740993 k 9 y 4611686018427388416 sigbits(y) 54 witness x 18014398509481985 k 9 y -9223372036854775296 sigbits(y) 54
+sweep64 band boundary-operands 320 pairs 112400 (boundary 102400, random 10000) fails 0 mono 0 first -
+sweep64 bor control pairs 112400 fails 5895 mono 38748 first x 1 y 9007199254740992 r 9007199254740993 sigbits(r) 54
+instrument the second sweep: the two spellings differ at 0 of 269570 values; sigbits(y) <= 53 against oclj_bit2num's round trip disagree at 0; BAND operands not exact 0; BSHL10 operands outside D 802 (must be > 0)
+time model 1.0 s bshl10 0.0 s band 0.2 s instruments 0.4 s sweep 0.7 s sweep2 0.1 s
+VERDICT PASS: L1 (shl) and L2 (sar) hold in every case checked, in the model for W 4..16 and every P, and in the 64-bit sweep at P 53; L3 (BSHL10) holds for every x in the word and every k from W-1-P, W 4..16, and in the sweep for k 10..63; L4 (BAND) holds on every pair in D_P x D_P, W 4..10, and in the sweep; every control found counterexamples where it must: lsr, orbit and bor at every non-vacuous (W, P) and in the sweep, BSHL10's tightness at k = W-2-P for every P <= W-2 and every W, and k = 9 in the sweep

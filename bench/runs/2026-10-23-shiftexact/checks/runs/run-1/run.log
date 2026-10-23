@@ -1,0 +1,117 @@
+run.sh: results /c/Users/astro/claude-tmp/oclj/shiftexact/checks/runs/run-1; pid 528; started 2026-10-23T10:36:11Z
+run.sh: results /c/Users/astro/claude-tmp/oclj/shiftexact/checks/runs/run-1; started 2026-10-23T10:36:11Z
+model.py: exit 0; VERDICT PASS: L1 (shl) and L2 (sar) hold in every case checked, in the model for W 4..16 and every P, and in the 64-bit sweep at P 53; L3 (BSHL10) holds for every x in the word and every k from W-1-P, W 4..16, and in the sweep for k 10..63; L4 (BAND) holds on every pair in D_P x D_P, W 4..10, and in the sweep; every control found counterexamples where it must: lsr, orbit and bor at every non-vacuous (W, P) and in the sweep, BSHL10's tightness at k = W-2-P for every P <= W-2 and every W, and k = 9 in the sweep
+model total shl checks 7860708 fails 0 mono 0
+model total sar checks 7860708 fails 0 mono 0
+model total lsr checks 7860708 fails 218473 mono 109453
+model total orbit checks 7860708 fails 456109 mono 228945
+control lsr first counterexample W 4 P 2 x -6 k 1 y 5 sigbits(y) 3
+control orbit first counterexample W 4 P 1 x -8 k 0 y -7 sigbits(y) 3
+model total bshl10 checks 17694640 fails 0
+control bshl10-tight first witness W 4 P 1 x 5 k 1 y -6 sigbits(y) 2
+model total band checks 4141580 fails 0 mono 0
+model total bor checks 4141580 fails 206876 mono 155276
+control bor first counterexample W 4 P 1 x -8 y 1 r -7 sigbits(r) 3
+instrument D_P by construction against max(sigbits, 1) <= P: 0 of 130 (W, P) differ
+instrument literal path against fast path (W 4..10): 0 of 196 (W, P, op) counts differ, 0 of 290648 values differ
+instrument results outside the word: 0
+instrument BSHL10 histogram rows holding 2^W values (W 4..16, every k): 0 of 130 rows wrong
+instrument BSHL10 literal walk against the histogram (W 4..10): 0 of 49 (W, P) counts differ, 0 of 110512 values differ
+instrument BSHL10 witness: the two spellings differ at 0, sigbits(y) other than P + 1 at 0, of 104 (W, P)
+instrument BSHL10 checks against 2^W * (W(W+3)/2 - 1) (W 4..16): 0 of 13 W differ; the formula at W + 1 equals the count at 0 (must be 0)
+instrument BAND and bor pairs[P] against |D_P|^2 (W 4..10, every P): 0 of 98 differ; |D_(P-1)|^2 equals pairs[P] at 0 of 70 P in 2..W-1 (must be 0)
+instrument BAND and bor literal walk of D_P x D_P against the histogram (W 4..8): 0 of 60 (W, P, op) counts differ, 0 of 516560 values differ
+instrument BAND and bor results outside the word: 0
+sweep64 operands 6850 m 211 pairs-per-op 438400
+instrument oclj_bitop.h's shifts against the model's ops: 0 of 1753600 values differ
+instrument sigbits(y) <= 53 against oclj_bit2num's round trip: 0 of 1753600 disagree; operands not exact: 0
+sweep64 shl pairs 438400 fails 0 mono 0 first -
+sweep64 sar pairs 438400 fails 0 mono 0 first -
+sweep64 lsr pairs 438400 fails 8532 mono 143513 first x -1 k 1 y 9223372036854775807 sigbits(y) 63
+sweep64 orbit pairs 438400 fails 16158 mono 218142 first x 1 k 53 y 9007199254740993 sigbits(y) 54
+sweep64 bshl10 operands 814 boundary 14 outside-D 802 pairs 43956 fails 0 first -
+sweep64 bshl9 control pairs 814 fails 197 first x 9007199254740993 k 9 y 4611686018427388416 sigbits(y) 54 witness x 18014398509481985 k 9 y -9223372036854775296 sigbits(y) 54
+sweep64 band boundary-operands 320 pairs 112400 (boundary 102400, random 10000) fails 0 mono 0 first -
+sweep64 bor control pairs 112400 fails 5895 mono 38748 first x 1 y 9007199254740992 r 9007199254740993 sigbits(r) 54
+instrument the second sweep: the two spellings differ at 0 of 269570 values; sigbits(y) <= 53 against oclj_bit2num's round trip disagree at 0; BAND operands not exact 0; BSHL10 operands outside D 802 (must be > 0)
+jitcheck joff: exit 0; verdict PASS; #cov verdict jit off
+jitcheck nrand 24 seed 20261023 values 1499 small 300 calls 3 cases 464
+instrument kat 20/20 ctl-derivation 64/64 operands 3346/3346 counts 1499/1499 rejects 10/10
+selftest comparator pairs 4497 wrong 4491 (must be > 0) verdict PASS
+probe untraced pairs 4497 ok 4497 wrong 0 raised 0 verdict PASS first -
+part shlK cases 130 pairs 584610 ok 584610 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part sarK cases 132 pairs 593604 ok 593604 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part shlneg cases 128 pairs 575616 ok 575616 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part var cases 4 pairs 17988 ok 17988 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part chain cases 32 pairs 143904 ok 143904 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part shapes cases 22 pairs 98934 ok 98934 wrong 0 raised 0 inexact53 0 mustraise 0 raisedok 0 returned 0 verdict PASS first -
+part ctl-shr cases 8 pairs 8352 ok 7200 wrong 0 raised 1152 inexact53 1152 mustraise 1152 raisedok 1152 returned 0 verdict PASS first -
+part ctl-shlneg cases 8 pairs 8352 ok 7200 wrong 0 raised 1152 inexact53 1152 mustraise 1152 raisedok 1152 returned 0 verdict PASS first -
+jitcheck jon: exit 0; stdout same as -joff's; #cov verdict ok
+    jon #cov probe untraced starts 7 aborts 7 traced 0 traces 0 jit on
+    jon #cov part shlK cases 130 traced 127 traces 136 starts 199 aborts 72 interp 0 rguards 372 sguards 246 sggate 246 oguards 380 rgsnaps 250 rgshared 0 exits 377 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 102 maxexits 3 shl0-p jit on
+    jon #cov part sarK cases 132 traced 130 traces 163 starts 184 aborts 54 interp 0 rguards 166 sguards 36 sggate 36 oguards 390 rgsnaps 148 rgshared 0 exits 388 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 352 maxexits 3 sar0-p jit on
+    jon #cov part shlneg cases 128 traced 128 traces 160 starts 146 aborts 18 interp 0 rguards 252 sguards 252 sggate 252 oguards 256 rgsnaps 252 rgshared 0 exits 384 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 341 maxexits 3 shrneg1 jit on
+    jon #cov part var cases 4 traced 4 traces 5 starts 5 aborts 1 interp 0 rguards 12 sguards 8 sggate 8 oguards 28 rgsnaps 8 rgshared 0 exits 12 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shlv-p jit on
+    jon #cov part chain cases 32 traced 31 traces 39 starts 46 aborts 15 interp 0 rguards 64 sguards 64 sggate 64 oguards 62 rgsnaps 46 rgshared 0 exits 93 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 77 maxexits 3 shl1-sar1 jit on
+    jon #cov part shapes cases 22 traced 20 traces 22 starts 52 aborts 32 interp 0 rguards 24 sguards 0 sggate - oguards 40 rgsnaps 24 rgshared 0 exits 56 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 25 maxexits 3 m53-shl1 jit on
+    jon #cov part ctl-shr cases 8 traced 8 traces 18 starts 63 aborts 47 interp 8 rguards 16 sguards 0 sggate - oguards 16 rgsnaps 16 rgshared 0 exits 134 rgexits 134 attrib 134 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 12 maxexits 17 ctl-shr1 jit on
+    jon #cov part ctl-shlneg cases 8 traced 7 traces 16 starts 54 aborts 40 interp 7 rguards 14 sguards 0 sggate - oguards 14 rgsnaps 14 rgshared 0 exits 119 rgexits 119 attrib 119 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 11 maxexits 17 ctl-shlneg1 jit on
+    jon #cov measured result guards never failed in the lemma parts: YES (result guards 890, 606 of them on an i64 BSHL, BSAR or ADD, and operand guards 1156, in 525 traces of 448 cases; exits through result guards' snapshots 0: attributable 0, shared 0; operand-only exits 0; exits counted 1310, foreign 897; the controls' attributable exits 253, which must be > 0)
+jitcheck hl1: exit 0; stdout same as -joff's; #cov verdict ok
+    hl1 #cov probe untraced starts 7 aborts 7 traced 0 traces 0 jit on
+    hl1 #cov part shlK cases 130 traced 126 traces 142 starts 222 aborts 96 interp 0 rguards 368 sguards 244 sggate 244 oguards 376 rgsnaps 248 rgshared 0 exits 374 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 179 maxexits 3 shl0-p jit on
+    hl1 #cov part sarK cases 132 traced 129 traces 162 starts 204 aborts 75 interp 0 rguards 166 sguards 36 sggate 36 oguards 388 rgsnaps 148 rgshared 0 exits 387 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 352 maxexits 3 sar0-p jit on
+    hl1 #cov part shlneg cases 128 traced 128 traces 160 starts 178 aborts 50 interp 0 rguards 252 sguards 252 sggate 252 oguards 256 rgsnaps 252 rgshared 0 exits 384 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 341 maxexits 3 shrneg1 jit on
+    hl1 #cov part var cases 4 traced 4 traces 5 starts 7 aborts 3 interp 0 rguards 12 sguards 8 sggate 8 oguards 28 rgsnaps 8 rgshared 0 exits 12 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shlv-p jit on
+    hl1 #cov part chain cases 32 traced 32 traces 40 starts 68 aborts 36 interp 0 rguards 68 sguards 68 sggate 68 oguards 64 rgsnaps 48 rgshared 0 exits 92 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 77 maxexits 3 shl1-sar1 jit on
+    hl1 #cov part shapes cases 22 traced 20 traces 25 starts 31 aborts 11 interp 0 rguards 24 sguards 0 sggate - oguards 40 rgsnaps 24 rgshared 0 exits 60 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 50 maxexits 3 m53-shl1 jit on
+    hl1 #cov part ctl-shr cases 8 traced 7 traces 16 starts 64 aborts 50 interp 7 rguards 14 sguards 0 sggate - oguards 14 rgsnaps 14 rgshared 0 exits 117 rgexits 117 attrib 117 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 11 maxexits 17 ctl-shr1 jit on
+    hl1 #cov part ctl-shlneg cases 8 traced 6 traces 14 starts 50 aborts 38 interp 6 rguards 12 sguards 0 sggate - oguards 12 rgsnaps 12 rgshared 0 exits 102 rgexits 102 attrib 102 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 11 maxexits 17 ctl-shlneg2 jit on
+    hl1 #cov measured result guards never failed in the lemma parts: YES (result guards 890, 608 of them on an i64 BSHL, BSAR or ADD, and operand guards 1152, in 534 traces of 448 cases; exits through result guards' snapshots 0: attributable 0, shared 0; operand-only exits 0; exits counted 1309, foreign 999; the controls' attributable exits 219, which must be > 0)
+jitcheck ms0: exit 0; stdout same as -joff's; #cov verdict ok
+    ms0 #cov probe untraced starts 7 aborts 7 traced 0 traces 0 jit on
+    ms0 #cov part shlK cases 130 traced 130 traces 130 starts 168 aborts 38 interp 0 rguards 382 sguards 252 sggate 252 oguards 390 rgsnaps 256 rgshared 0 exits 388 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shl0-p jit on
+    ms0 #cov part sarK cases 132 traced 131 traces 131 starts 186 aborts 55 interp 0 rguards 166 sguards 36 sggate 36 oguards 392 rgsnaps 148 rgshared 0 exits 390 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 sar0-p jit on
+    ms0 #cov part shlneg cases 128 traced 128 traces 128 starts 154 aborts 26 interp 0 rguards 252 sguards 252 sggate 252 oguards 256 rgsnaps 252 rgshared 0 exits 384 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shrneg1 jit on
+    ms0 #cov part var cases 4 traced 4 traces 4 starts 5 aborts 1 interp 0 rguards 12 sguards 8 sggate 8 oguards 28 rgsnaps 8 rgshared 0 exits 12 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shlv-p jit on
+    ms0 #cov part chain cases 32 traced 31 traces 31 starts 52 aborts 21 interp 0 rguards 66 sguards 66 sggate 66 oguards 62 rgsnaps 46 rgshared 0 exits 92 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shl1-sar1 jit on
+    ms0 #cov part shapes cases 22 traced 22 traces 22 starts 29 aborts 7 interp 0 rguards 26 sguards 0 sggate - oguards 44 rgsnaps 26 rgshared 0 exits 64 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 m53-shl1 jit on
+    ms0 #cov part ctl-shr cases 8 traced 8 traces 16 starts 29 aborts 13 interp 8 rguards 16 sguards 0 sggate - oguards 16 rgsnaps 16 rgshared 0 exits 104 rgexits 104 attrib 104 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 13 ctl-shr1 jit on
+    ms0 #cov part ctl-shlneg cases 8 traced 7 traces 14 starts 24 aborts 10 interp 7 rguards 14 sguards 0 sggate - oguards 14 rgsnaps 14 rgshared 0 exits 90 rgexits 90 attrib 90 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 13 ctl-shlneg1 jit on
+    ms0 #cov measured result guards never failed in the lemma parts: YES (result guards 904, 614 of them on an i64 BSHL, BSAR or ADD, and operand guards 1172, in 446 traces of 448 cases; exits through result guards' snapshots 0: attributable 0, shared 0; operand-only exits 0; exits counted 1330, foreign 0; the controls' attributable exits 194, which must be > 0)
+jitcheck he1: exit 0; stdout same as -joff's; #cov verdict ok
+    he1 #cov probe untraced starts 7 aborts 7 traced 0 traces 0 jit on
+    he1 #cov part shlK cases 130 traced 127 traces 279 starts 327 aborts 73 interp 0 rguards 372 sguards 246 sggate 246 oguards 380 rgsnaps 250 rgshared 0 exits 127 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 53 maxexits 1 shl0-p jit on
+    he1 #cov part sarK cases 132 traced 130 traces 274 starts 335 aborts 75 interp 0 rguards 164 sguards 36 sggate 36 oguards 388 rgsnaps 146 rgshared 0 exits 130 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 31 maxexits 1 sar0-p jit on
+    he1 #cov part shlneg cases 128 traced 128 traces 353 starts 300 aborts 44 interp 0 rguards 252 sguards 252 sggate 252 oguards 256 rgsnaps 252 rgshared 0 exits 128 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 193 maxexits 1 shrneg1 jit on
+    he1 #cov part var cases 4 traced 4 traces 12 starts 12 aborts 4 interp 0 rguards 12 sguards 8 sggate 8 oguards 28 rgsnaps 8 rgshared 0 exits 4 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 6 maxexits 1 shlv-p jit on
+    he1 #cov part chain cases 32 traced 32 traces 96 starts 89 aborts 25 interp 0 rguards 68 sguards 68 sggate 68 oguards 64 rgsnaps 48 rgshared 0 exits 32 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 62 maxexits 1 shl1-sar1 jit on
+    he1 #cov part shapes cases 22 traced 22 traces 50 starts 65 aborts 21 interp 0 rguards 26 sguards 0 sggate - oguards 44 rgsnaps 26 rgshared 0 exits 22 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 15 maxexits 1 m53-shl1 jit on
+    he1 #cov part ctl-shr cases 8 traced 6 traces 18 starts 68 aborts 56 interp 6 rguards 12 sguards 0 sggate - oguards 12 rgsnaps 12 rgshared 0 exits 48 rgexits 48 attrib 48 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 15 maxexits 8 ctl-shr1 jit on
+    he1 #cov part ctl-shlneg cases 8 traced 7 traces 18 starts 84 aborts 70 interp 7 rguards 14 sguards 0 sggate - oguards 14 rgsnaps 14 rgshared 0 exits 54 rgexits 54 attrib 54 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 12 maxexits 8 ctl-shlneg2 jit on
+    he1 #cov measured result guards never failed in the lemma parts: YES (result guards 894, 610 of them on an i64 BSHL, BSAR or ADD, and operand guards 1160, in 1064 traces of 448 cases; exits through result guards' snapshots 0: attributable 0, shared 0; operand-only exits 0; exits counted 443, foreign 360; the controls' attributable exits 102, which must be > 0)
+jitcheck noloop: exit 0; stdout same as -joff's; #cov verdict ok
+    noloop #cov probe untraced starts 7 aborts 7 traced 0 traces 0 jit on
+    noloop #cov part shlK cases 130 traced 128 traces 160 starts 194 aborts 66 interp 0 rguards 188 sguards 124 sggate 124 oguards 192 rgsnaps 126 rgshared 0 exits 380 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 347 maxexits 3 shl0-p jit on
+    noloop #cov part sarK cases 132 traced 129 traces 139 starts 184 aborts 55 interp 0 rguards 80 sguards 17 sggate 17 oguards 192 rgsnaps 72 rgshared 0 exits 385 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 113 maxexits 3 sar0-p jit on
+    noloop #cov part shlneg cases 128 traced 128 traces 160 starts 158 aborts 30 interp 0 rguards 126 sguards 126 sggate 126 oguards 128 rgsnaps 126 rgshared 0 exits 384 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 341 maxexits 3 shrneg1 jit on
+    noloop #cov part var cases 4 traced 4 traces 5 starts 5 aborts 1 interp 0 rguards 6 sguards 4 sggate 4 oguards 14 rgsnaps 4 rgshared 0 exits 12 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shlv-p jit on
+    noloop #cov part chain cases 32 traced 31 traces 37 starts 50 aborts 19 interp 0 rguards 34 sguards 34 sggate 34 oguards 31 rgsnaps 24 rgshared 0 exits 92 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 69 maxexits 3 shl1-sar1 jit on
+    noloop #cov part shapes cases 22 traced 22 traces 27 starts 30 aborts 8 interp 0 rguards 13 sguards 0 sggate - oguards 22 rgsnaps 13 rgshared 0 exits 64 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 50 maxexits 3 m53-shl1 jit on
+    noloop #cov part ctl-shr cases 8 traced 6 traces 13 starts 54 aborts 42 interp 6 rguards 6 sguards 0 sggate - oguards 6 rgsnaps 6 rgshared 0 exits 84 rgexits 84 attrib 84 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 12 maxexits 14 ctl-shr1 jit on
+    noloop #cov part ctl-shlneg cases 8 traced 5 traces 11 starts 48 aborts 38 interp 5 rguards 5 sguards 0 sggate - oguards 5 rgsnaps 5 rgshared 0 exits 70 rgexits 70 attrib 70 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 12 maxexits 14 ctl-shlneg2 jit on
+    noloop #cov measured result guards never failed in the lemma parts: YES (result guards 447, 305 of them on an i64 BSHL, BSAR or ADD, and operand guards 579, in 528 traces of 448 cases; exits through result guards' snapshots 0: attributable 0, shared 0; operand-only exits 0; exits counted 1317, foreign 920; the controls' attributable exits 154, which must be > 0)
+jitcheck nofold: exit 0; stdout same as -joff's; #cov verdict ok
+    nofold #cov probe untraced starts 7 aborts 7 traced 0 traces 0 jit on
+    nofold #cov part shlK cases 130 traced 128 traces 138 starts 175 aborts 47 interp 0 rguards 380 sguards 252 sggate 252 oguards 512 rgsnaps 254 rgshared 0 exits 383 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 114 maxexits 3 shl0-p jit on
+    nofold #cov part sarK cases 132 traced 130 traces 133 starts 178 aborts 48 interp 0 rguards 388 sguards 260 sggate 34 oguards 516 rgsnaps 260 rgshared 0 exits 388 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 36 maxexits 3 sar0-p jit on
+    nofold #cov part shlneg cases 128 traced 128 traces 160 starts 153 aborts 25 interp 0 rguards 252 sguards 252 sggate 252 oguards 256 rgsnaps 252 rgshared 0 exits 384 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 341 maxexits 3 shrneg1 jit on
+    nofold #cov part var cases 4 traced 4 traces 5 starts 4 aborts 0 interp 0 rguards 12 sguards 8 sggate 8 oguards 32 rgsnaps 8 rgshared 0 exits 12 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 3 shlv-p jit on
+    nofold #cov part chain cases 32 traced 32 traces 40 starts 41 aborts 9 interp 0 rguards 128 sguards 128 sggate 128 oguards 128 rgsnaps 64 rgshared 0 exits 94 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 77 maxexits 3 shl1-sar1 jit on
+    nofold #cov part shapes cases 22 traced 21 traces 26 starts 40 aborts 19 interp 0 rguards 90 sguards 34 sggate - oguards 90 rgsnaps 42 rgshared 0 exits 61 rgexits 0 attrib 0 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 50 maxexits 3 m53-shl1 jit on
+    nofold #cov part ctl-shr cases 8 traced 7 traces 15 starts 53 aborts 39 interp 7 rguards 14 sguards 0 sggate - oguards 14 rgsnaps 14 rgshared 0 exits 119 rgexits 119 attrib 119 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 9 maxexits 17 ctl-shr1 jit on
+    nofold #cov part ctl-shlneg cases 8 traced 7 traces 14 starts 58 aborts 44 interp 7 rguards 14 sguards 0 sggate - oguards 14 rgsnaps 14 rgshared 0 exits 119 rgexits 119 attrib 119 shared 0 sgexits 0 opexits 0 unknown 0 exbad 0 snapbad 0 foreign 0 maxexits 17 ctl-shlneg1 jit on
+    nofold #cov measured result guards never failed in the lemma parts: YES (result guards 1250, 934 of them on an i64 BSHL, BSAR or ADD, and operand guards 1534, in 502 traces of 448 cases; exits through result guards' snapshots 0: attributable 0, shared 0; operand-only exits 0; exits counted 1322, foreign 618; the controls' attributable exits 238, which must be > 0)
+finished 2026-10-23T10:36:16Z
+VERDICT PASS: model.py's lemmas (L1 shl, L2 sar, L3 BSHL10, L4 BAND) hold and its controls fail where they must; jitcheck passes under every one of the 7 option sets, -joff among them, each compiled run's stdout identical to -joff's, and in each compiled run no result guard of a lemma part left (the controls' did, through snapshots holding only result and operand guards) and the jit.off'd probe read untraced

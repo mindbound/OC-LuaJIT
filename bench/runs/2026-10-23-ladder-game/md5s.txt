@@ -1,0 +1,20 @@
+# md5s, 2026-10-23, read after the game exited (11:14:36)
+
+mods/ entries named ocluajit* or opencomputers*: OpenComputers-1.12.64-GTNH.jar, ocluajit-19a7806.jar
+1e02e0321d8c9b27eab5724eaf9946d0  mods/ocluajit-19a7806.jar  (681124 bytes)
+9ac03aeb14ed5036030f540ed23feba7  its assets/opencomputers/lib/libjnluajit52-windows-x86_64.dll
+1d12c32246f22a901a3cbe06ef217cd5  its assets/ocluajit/lua/machine.lua (the kernel)
+a20fdf677c575325a6071162d7f78f55  home/ingame-ladder.lua on the computer's disk; the repo's bench/oc/ingame-ladder.lua: same
+945468bafbcc900f54ddb18fbb395c0f  home/mandelbrot.lua on the computer's disk; the repo's bench/oc/mandelbrot.lua: same
+7de7ab3fdf9b44eb472141b633b19844  home/matmul.lua on the computer's disk; the repo's bench/oc/matmul.lua: same
+e00cf101b894bb2b300a06878ecc76ec  home/binarytrees.lua on the computer's disk; the repo's bench/oc/binarytrees.lua: same
+d8faf7ffcd61037d557cba41a3fe53c9  home/ladder-luajit.txt = ladder-luajit.txt here, mtime 2026-10-23 11:11:57.24
+8dcd38f62bf152b7d8f3985422ff3987  home/ladder-lua53.txt = ladder-lua53.txt here, mtime 2026-10-23 11:13:11.93
+991e4ea8a97f8a90ce013e1f8e81bfe3  home/ladder-lua54.txt = ladder-lua54.txt here, mtime 2026-10-23 11:14:05.81
+saves/<world>/opencomputers/state/ (OC's per-machine save files): sizes and mtimes; OC re-stamps
+every file there when the world loads (SaveHandler.onWorldLoad):
+  2026-10-23 11:14:20.19    183673  0/-23.71/1bac88a3-8c59-4fe1-b8ea-6eb3ed1ea7c4_kernel
+  2026-10-23 11:11:13.72        48  0/-23.71/1bac88a3-8c59-4fe1-b8ea-6eb3ed1ea7c4_stack
+  2026-10-23 11:14:34.84       288  0/-23.71/1bac88a3-8c59-4fe1-b8ea-6eb3ed1ea7c4_tmp
+  2026-10-23 11:14:34.84     24326  0/-23.71/35a15cc8-76e4-40af-aadb-73d7a6c2c858_buffer
+fml-client-latest.log: 0 lines containing 'eris-lj', 0 'Unexpected error loading a state', 1 '/ERROR] [OpenComputers'
