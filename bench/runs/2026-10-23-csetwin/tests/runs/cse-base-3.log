@@ -1,0 +1,28 @@
+run-bitjit: ours /c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts cse; results /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-tests/runs/cse-base-3
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 7. the CSE twins: t_csefwd.lua and t_cserev.lua against -joff, t_cserev.lua against PUC 5.3.6; cseir.lua's and t_cserev.lua's traces ==
+FAIL t_csefwd (28 cases): jon=11(exit 1)[lsh3 bnot bnotx] O0=0 O1=1(exit 1)[u8sh30] hl1=11(exit 1)[lsh3 bnot bnotx] ms0=11(exit 1)[lsh3 bnot bnotx] he1=11(exit 1)[lsh3 bnot bnotx] noloop=11(exit 1)[lsh3 bnot bnotx] nofold=0 nocse=0 hx1=11(exit 1)[lsh3 bnot bnotx] ts1=11(exit 1)[lsh3 bnot bnotx] mx1=11(exit 1)[lsh3 bnot bnotx] hl1ms0=11(exit 1)[lsh3 bnot bnotx] noabc=11(exit 1)[lsh3 bnot bnotx] nonarrow=1(exit 1)[u8sh30]  (coverage: a trace completed in 28 of 28 cases; 18 of 18 pairs formed, served 36, split 0 (default options, jit on))
+t_csefwd on PUC: not run, by design (its 32-bit halves are LuaJIT's bit library, which PUC 5.3.6 lacks; the file checks every 5.3 result against a plain-arithmetic reference under every VM, -joff included)
+FAIL t_cserev (8 cases): jon=4 O0=0 O1=0 hl1=4 ms0=4 he1=4 noloop=4 nofold=0 nocse=0 hx1=4 ts1=4 mx1=4 hl1ms0=4 noabc=4 nonarrow=0  a 32-bit instruction consumes our int64 one, a pair is not kept apart, an int64 instruction is in a snapshot, a value is unlike the file's reference, or a loop did not compile (first cases: jon:r5-sel,r6-byte,r6-sub,r6-mul hl1:r5-sel,r6-byte,r6-sub,r6-mul ms0:r5-sel,r6-byte,r6-sub,r6-mul he1:r5-sel,r6-byte,r6-sub,r6-mul noloop:r5-sel,r6-byte,r6-sub,r6-mul hx1:r5-sel,r6-byte,r6-sub,r6-mul ts1:r5-sel,r6-byte,r6-sub,r6-mul mx1:r5-sel,r6-byte,r6-sub,r6-mul hl1ms0:r5-sel,r6-byte,r6-sub,r6-mul noabc:r5-sel,r6-byte,r6-sub,r6-mul)
+PASS t_cserev: PUC 5.3.6 equals -joff in all 8 cases
+FAIL cseir (28 cases): jon=18 O1=1 hl1=18 ms0=18 he1=18 noloop=18 hx1=18 ts1=18 mx1=18 hl1ms0=18 noabc=18 nonarrow=1  compiled results differ from -joff's under: jon O1 hl1 ms0 he1 noloop hx1 ts1 mx1 hl1ms0 noabc nonarrow; a 32-bit instruction served our operator, a pair was not kept apart, an int64 instruction is in a snapshot, or a loop did not compile (first cases: jon:lsh1,band,rsh5 O1:u8sh30 hl1:lsh1,band,rsh5 ms0:lsh1,band,rsh5 he1:lsh1,band,rsh5 noloop:lsh1,band,rsh5 hx1:lsh1,band,rsh5 ts1:lsh1,band,rsh5 mx1:lsh1,band,rsh5 hl1ms0:lsh1,band,rsh5 noabc:lsh1,band,rsh5 nonarrow:u8sh30)
+
+RUN-BITJIT: FAIL (parts run: cse; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-tests/runs/cse-base-3)

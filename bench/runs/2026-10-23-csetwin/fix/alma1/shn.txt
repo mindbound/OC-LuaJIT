@@ -1,0 +1,3 @@
+0 native/luajit/patch-bitop-fold.sh
+0 test/native/negctl-bitop.sh
+0 test/native/run-bitjit.sh

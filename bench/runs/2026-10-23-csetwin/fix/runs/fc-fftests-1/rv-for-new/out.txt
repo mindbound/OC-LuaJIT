@@ -1,0 +1,3 @@
+$ C:/Users/astro/Downloads/OC-LuaJIT/bench/vendor/lua-5.3.6/src/lua.exe C:/Users/astro/claude-tmp/oclj/csetwin/round/fix/runs/fc-fftests-1\rv-for-new\bitop\t_cserev.lua
+rc=2
+INSTRUMENT: t_cserev's texts: r6-byte (a slot shape)

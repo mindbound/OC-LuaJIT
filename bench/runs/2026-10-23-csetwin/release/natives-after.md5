@@ -1,0 +1,6 @@
+dd3ab25883c1a3532fc76ebaa8917014 *build/native/dist/libjnluajit52-linux-x86_64.so
+a2fcae89a8e697b5f8115c78135f1849 *build/native/dist/libjnluajit52-windows-x86_64.dll
+8f5c1774d24fde700dc2e6cd112e1843 *build/native/libdir/libjnlua52-linux-x86_64.so
+08ad388e582326f4543893a7a58bb884 *build/native/libdir/libjnlua52-windows-x86_64.dll
+dd3ab25883c1a3532fc76ebaa8917014 *build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+a2fcae89a8e697b5f8115c78135f1849 *build/native/libdir-additive/libjnluajit52-windows-x86_64.dll

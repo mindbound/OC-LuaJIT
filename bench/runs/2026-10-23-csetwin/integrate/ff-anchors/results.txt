@@ -1,0 +1,4 @@
+m1-altered rc=1 :: CSEFWD        lj_opt_fold.c      build    count=0 ANCHOR x0 CSEFWD        lj_opt_fold.c      patched  count=0 ANCHOR x0  :: non-OK rows 2 :: verdict: SOME-BAD
+m2-common rc=1 :: CSEFWD        lj_opt_fold.c      build    count=70 ANCHOR x70 CSEFWD        lj_opt_fold.c      patched  count=70 ANCHOR x70  :: non-OK rows 2 :: verdict: SOME-BAD
+m3-nomarker rc=1 :: CSEFWD        lj_opt_fold.c      build    count=1 DIFF 1/1 mark 0 CSEFWD        lj_opt_fold.c      patched  count=1 DIFF 1/1 mark 0  :: non-OK rows 2 :: verdict: SOME-BAD
+m4-twoline rc=1 :: CSEFWD        lj_opt_fold.c      build    count=1 DIFF 1/2 mark 1 CSEFWD        lj_opt_fold.c      patched  count=1 DIFF 1/2 mark 1  :: non-OK rows 2 :: verdict: SOME-BAD

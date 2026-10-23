@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "C:\Users\astro\claude-tmp\oclj\csetwin\round\fix\fc-timing-summ.py", line 101, in <module>
+    key, median(b), median(n), mr, min(rat), max(rat), len(rat), ",".join(sorted(res[key]))))
+                                   ~~~^^^^^
+ValueError: min() iterable argument is empty

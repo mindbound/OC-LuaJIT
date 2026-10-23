@@ -1,0 +1,1 @@
+PASS 83 FAIL 0 SKIP 0 VERDICT: PASS secs 1538 FC_PARTS=build alma bitjit base suites negctl runners hygiene timing FC_USE_BUILD=unset FC_BASE_BUILD=unset FC_RP=unset FC_TASKLIST=unset FC_ROUNDS=8 FC_NDIV=1 FC_NEGCTL_ARMS=unset FC_CENSUS=md5 final-check.sh c4e69de157b2c4e911bf666af9694c90

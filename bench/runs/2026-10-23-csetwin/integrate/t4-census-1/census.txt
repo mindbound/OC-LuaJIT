@@ -1,0 +1,8 @@
+files searched: 568 (every file under /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/t4-census-1)
+files with a CSEREFUSE line: 1
+CSEREFUSE lines in all: 1
+bitjit rc=0 :: RUN-BITJIT: PASS (parts run: gen floor fix1 idx sel nc; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/t4-census-1/bitjit) 
+bitop rc=0 :: BITOP TESTS: 12 checks, 0 failures RUN-BITOP: PASS (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/t4-census-1/bitop) 
+direct runs: 18, exit codes: 0 x18 
+times: 14:45:42 14:46:47 14:46:51 14:46:52
+java processes at start: 0

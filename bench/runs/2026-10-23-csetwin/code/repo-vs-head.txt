@@ -1,0 +1,3 @@
+Files head-tree/native/luajit/oclj_bitop.h and ../repo/native/luajit/oclj_bitop.h differ
+Files head-tree/native/luajit/oclj_bitop_rec.c and ../repo/native/luajit/oclj_bitop_rec.c differ
+Files head-tree/native/luajit/patch-bitop-fold.sh and ../repo/native/luajit/patch-bitop-fold.sh differ

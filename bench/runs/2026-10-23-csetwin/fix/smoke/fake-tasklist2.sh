@@ -1,0 +1,1 @@
+C=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/fake-cnt.txt; n=$(cat "$C" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$C"; echo "Image Name   PID"; [ "$n" -ge 3 ] && echo "javaw.exe                    4242 Console    1    900,000 K"; exit 0

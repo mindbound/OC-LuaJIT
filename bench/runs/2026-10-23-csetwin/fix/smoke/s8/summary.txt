@@ -1,0 +1,12 @@
+PASS CHANGED-SET: the scratch repo is HEAD's tree outside docs/ and bench/runs/ (228 files) but for the round's eight files (cmp/changed.txt)
+PASS NEGCTL-arm-list: negctl-bitop.sh's arm calls are exactly the 37 arms this check expects
+PASS NEGCTL-canon-list: canon's catcher list holds the cse part
+FAIL NEGCTL-rc: negctl-bitop.sh, every arm: exit 0 and the full-sweep PASS line
+PASS NEGCTL-canon: canon passes, every object reproduced, pristine files from the build's export, the cse part among its catchers
+FAIL NEGCTL-37-arms: exactly the 37 arms, each caught by its catchers (CSEFWD by cse:t_csefwd cse:cseir)
+PASS NEGCTL-restore: restore: every file put back, every object as shipped
+SKIP CENSUS-build: FC_CENSUS=none: the real repo's build/ was not listed
+PASS CENSUS-pristine: the pristine checkout's stat list (mtimes included), its .git md5 list and HEAD are unchanged
+PASS CENSUS-real-repo: the real repo's HEAD, git status and its changed files' md5s are unchanged (nothing here writes there)
+SKIP CENSUS-scratch-repo: FC_CENSUS=none: the scratch repo was not listed
+PASS FILES-unchanged: the eight files, this script and its helpers are unchanged since the start; the real repo's HEAD too

@@ -1,0 +1,4 @@
+f75d6bcfa5ca16335a971e3d7ea385d9 *test/native/run-bitjit.sh
+7dc833e0f7e98fff2f5548776a0bc140 *test/native/bitop/t_csefwd.lua
+5e0a79fe2e19ee3222aa2f8ec18f669a *test/native/bitop/cseir.lua
+fbeaf16b606477ceff4986bc30bff8c1 *test/native/bitop/t_cserev.lua

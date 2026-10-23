@@ -1,0 +1,3 @@
+FAIL t_cserev (8 cases): jon=4 O0=0
+PASS t_csefwd (28 cases): jon=0
+PASS cseir (28 cases): jon=0

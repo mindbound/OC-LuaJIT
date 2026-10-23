@@ -1,0 +1,1 @@
+patch-bitop-fold.sh: out1.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal

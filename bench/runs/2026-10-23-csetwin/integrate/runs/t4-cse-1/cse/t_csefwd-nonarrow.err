@@ -1,0 +1,3 @@
+CSEREFUSE op=36 fins=21 cand=19
+CSEREFUSE op=36 fins=21 cand=19
+#cov cases 28 traced 28 pairs 1 of 18 served 0 split 2 i64slot 0 jit on

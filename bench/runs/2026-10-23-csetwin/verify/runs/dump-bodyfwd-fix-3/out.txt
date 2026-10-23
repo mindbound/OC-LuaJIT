@@ -1,0 +1,4 @@
+body-v1	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+body-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+ctl-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+bodyfwd: 0 wrong

@@ -1,0 +1,50 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/build/native/luajit-windows-x86_64/src/luajit.exe; seeds 1..1 x 1000 cases x 16 tuples; hotmin 0.25; results /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/INEXACT-FOLD/fuzz
+seed 1: 1 -- 16000 tuples, EXACT 10841, INEXACT 5159 (of them 5.3.6 computes a number: 4898); REF results: E:INEXACT 5159, E:NOINT 807, E:TYPE 621, num 9413 (C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/INEXACT-FOLD/fuzz/puc-1.txt)
+    C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/INEXACT-FOLD/fuzz/ours-jon-1.txt: 16000 tuples, MISMATCH 3059 (of them INEXACT in the reference: 3059); by mode K 3052 V 465 P 465 H 465 U 91
+      #cov tuples 16000 hotcases 427/1000 hotU 1572/3000 traces 3338 aborts 3207 [NYI: bytecode FNEW=6,NYI: bytecode UCLO=17,NYI: bytecode VARG=117,NYI: return to lower frame=8,bad argument type=2807,call unroll limit reached=74,inner loop in root trace=149,leavin
+      => FAIL
+    C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/INEXACT-FOLD/fuzz/ours-joff-1.txt: 16000 tuples, MISMATCH 3059 (of them INEXACT in the reference: 3059); by mode K 3052 V 465 P 465 H 465 U 91
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => FAIL
+    controls: sim-wrap PASS; sim-raw MISMATCH 5159 of INEXACT 5159; sim-round MISMATCH 5159 of REF E:INEXACT 5159
+  MISMATCH classes (mode want->got: count):
+    K E:INEXACT->num             2609
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N0:0
+        ((a << a) << (2251799813685247 << 15))  with [(-7)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N0:0
+        ((a << a) << (2251799813685247 << 15))  with [(-3)]  want E:INEXACT:<< (5.3.6 exact N0:0)  got N0:0
+    P E:INEXACT->num             328
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+    H E:INEXACT->num             328
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+    V E:INEXACT->num             328
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+    K E:INEXACT->E:INEXACT       218
+        ~((a >> b) & c)  with [(-17422693545977072) 1 (-20)]  want E:INEXACT:>> (5.3.6 exact N-2145455380:2045465207)  got E:INEXACT:~
+        ((((-0x59b5a9b0a934600) | a) & b) | ((a & 1547003364820077568) >> ~0x1fffffffffffff0))  with [1048575 4294967297]  want E:INEXACT:| (5.3.6 exact N0:1)  got E:INEXACT:~
+        ((((-0x59b5a9b0a934600) | a) & b) | ((a & 1547003364820077568) >> ~0x1fffffffffffff0))  with [32766 0x1.8p61]  want E:INEXACT:| (5.3.6 exact N805306368:0)  got E:INEXACT:~
+    K E:INEXACT->E:NOINT         165
+        ((((-0x5d89f8b27b4a0) ~ (-131072)) ~ (a ~ (-0x633ddcdbb0b28))) ~ (((-326562462375268992) & a) << (a >> b)))  with [(-23) 1]  want E:INEXACT:>> (5.3.6 exact N256834:1184710737)  got E:NOINT
+        (~(a ~ b) ~ ~(c << a))  with [(-1) 4 (-6)]  want E:INEXACT:<< (5.3.6 exact N-2147483648:6)  got E:NOINT
+        (~(25 ~ (a >> a)) << (b >> c))  with [(-14) (-5) 1]  want E:INEXACT:>> (5.3.6 exact N0:0)  got E:NOINT
+    P E:INEXACT->E:INEXACT       106
+        ~((0x3a3a039421dd3c0 ~ ~25) ~ ~(a >> b))  with [(-7.0) 6]  want E:INEXACT:~ (5.3.6 exact N-6053831:1109251033)  got E:INEXACT:>>
+        ((((-32) & a) ~ ((-258771898727655232) ~ (-70368744177662))) | b)  with [4 18]  want E:INEXACT:~ (5.3.6 exact N60254292:1115429074)  got E:INEXACT:|
+        ((((-32) & a) ~ ((-258771898727655232) ~ (-70368744177662))) | b)  with [(-40) 40]  want E:INEXACT:~ (5.3.6 exact N-60254293:3179538218)  got E:INEXACT:|
+    V E:INEXACT->E:INEXACT       106
+        ~((0x3a3a039421dd3c0 ~ ~25) ~ ~(a >> b))  with [(-7.0) 6]  want E:INEXACT:~ (5.3.6 exact N-6053831:1109251033)  got E:INEXACT:>>
+        ((((-32) & a) ~ ((-258771898727655232) ~ (-70368744177662))) | b)  with [4 18]  want E:INEXACT:~ (5.3.6 exact N60254292:1115429074)  got E:INEXACT:|
+        ((((-32) & a) ~ ((-258771898727655232) ~ (-70368744177662))) | b)  with [(-40) 40]  want E:INEXACT:~ (5.3.6 exact N-60254293:3179538218)  got E:INEXACT:|
+    H E:INEXACT->E:INEXACT       106
+        ~((0x3a3a039421dd3c0 ~ ~25) ~ ~(a >> b))  with [(-7.0) 6]  want E:INEXACT:~ (5.3.6 exact N-6053831:1109251033)  got E:INEXACT:>>
+        ((((-32) & a) ~ ((-258771898727655232) ~ (-70368744177662))) | b)  with [4 18]  want E:INEXACT:~ (5.3.6 exact N60254292:1115429074)  got E:INEXACT:|
+        ((((-32) & a) ~ ((-258771898727655232) ~ (-70368744177662))) | b)  with [(-40) 40]  want E:INEXACT:~ (5.3.6 exact N-60254293:3179538218)  got E:INEXACT:|
+    U E:INEXACT->num             65
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+        ((268435456 | 4503599627370498) ~ 0x1d30ee47a9e65e0)  with []  want E:INEXACT:~ (5.3.6 exact N29560548:1788765666)  got N29560548:1788765664
+BITFUZZ FAIL (results: /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/INEXACT-FOLD/fuzz)

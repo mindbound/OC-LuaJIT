@@ -1,0 +1,35 @@
+$ C:/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe -joff C:/Users/astro/claude-tmp/oclj/csetwin/round/fix/runs/fftests-2\fw-control\bitop\t_csefwd.lua
+rc=0
+ctl-shl3	n=400 bad=0 bbad=0 dig=5553600 bdig=0;n=400 bad=0 bbad=0 dig=5553600 bdig=0;n=400 bad=0 bbad=0 dig=5553600 bdig=0
+ctl-bnot	n=400 bad=0 bbad=0 dig=1409201544 bdig=0;n=400 bad=0 bbad=0 dig=1409201544 bdig=0;n=400 bad=0 bbad=0 dig=1409201544 bdig=0
+ctl-shl1	n=400 bad=0 bbad=0 dig=2617200 bdig=0;n=400 bad=0 bbad=0 dig=2617200 bdig=0;n=400 bad=0 bbad=0 dig=2617200 bdig=0
+ctl-shr5	n=400 bad=0 bbad=0 dig=21504 bdig=0;n=400 bad=0 bbad=0 dig=21504 bdig=0;n=400 bad=0 bbad=0 dig=21504 bdig=0
+ctl-band	n=400 bad=0 bbad=0 dig=20680 bdig=0;n=400 bad=0 bbad=0 dig=20680 bdig=0;n=400 bad=0 bbad=0 dig=20680 bdig=0
+ctl-vshl	n=416 bad=0 bbad=0 dig=3602568532 bdig=0;n=416 bad=0 bbad=0 dig=3602568532 bdig=0;n=416 bad=0 bbad=0 dig=3602568532 bdig=0
+ctl-copy	n=400 bad=0 bbad=0 dig=157605888 bdig=1843200;n=400 bad=0 bbad=0 dig=157605888 bdig=1843200;n=400 bad=0 bbad=0 dig=157605888 bdig=1843200
+ctl-side	n=600 bad=0 bbad=0 dig=236335104 bdig=1382400;n=600 bad=0 bbad=0 dig=236335104 bdig=1382400;n=600 bad=0 bbad=0 dig=236335104 bdig=1382400
+bit-lsh3	n=400 bad=0 bbad=0 dig=638400 bdig=1408587544;n=400 bad=0 bbad=0 dig=638400 bdig=1408587544;n=400 bad=0 bbad=0 dig=638400 bdig=1408587544
+same-bit	n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400
+same-53	n=400 bad=0 bbad=0 dig=5553600 bdig=5553600;n=400 bad=0 bbad=0 dig=5553600 bdig=5553600;n=400 bad=0 bbad=0 dig=5553600 bdig=5553600
+c1	n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400
+lsh1	n=400 bad=0 bbad=0 dig=2617200 bdig=987554944;n=400 bad=0 bbad=0 dig=2617200 bdig=987554944;n=400 bad=0 bbad=0 dig=2617200 bdig=987554944
+band	n=400 bad=0 bbad=0 dig=20680 bdig=20680;n=400 bad=0 bbad=0 dig=20680 bdig=20680;n=400 bad=0 bbad=0 dig=20680 bdig=20680
+rsh5	n=400 bad=0 bbad=0 dig=21504 bdig=21504;n=400 bad=0 bbad=0 dig=21504 bdig=21504;n=400 bad=0 bbad=0 dig=21504 bdig=21504
+byte2	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520
+sub2	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520
+lsh3	n=400 bad=0 bbad=0 dig=5553600 bdig=638400;n=400 bad=0 bbad=0 dig=5553600 bdig=638400;n=400 bad=0 bbad=0 dig=5553600 bdig=638400
+bnot	n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544
+bnotx	n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544
+bxorm1	n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409201544 bdig=1409201544
+lsh35	n=400 bad=0 bbad=0 dig=5553600 bdig=638400;n=400 bad=0 bbad=0 dig=5553600 bdig=638400;n=400 bad=0 bbad=0 dig=5553600 bdig=638400
+u8sh30	n=400 bad=0 bbad=0 dig=156966912 bdig=2641795720;n=400 bad=0 bbad=0 dig=156966912 bdig=2641795720;n=400 bad=0 bbad=0 dig=156966912 bdig=2641795720
+nested	n=400 bad=0 bbad=0 dig=25344000 bdig=20428800;n=400 bad=0 bbad=0 dig=25344000 bdig=20428800;n=400 bad=0 bbad=0 dig=25344000 bdig=20428800
+reassoc	n=400 bad=0 bbad=0 dig=5553600 bdig=638400;n=400 bad=0 bbad=0 dig=5553600 bdig=638400;n=400 bad=0 bbad=0 dig=5553600 bdig=638400
+chain	n=400 bad=0 bbad=0 dig=1409281744 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409281744 bdig=1409201544;n=400 bad=0 bbad=0 dig=1409281744 bdig=1409201544
+vlsh	n=416 bad=0 bbad=0 dig=3602568532 bdig=2451473760;n=416 bad=0 bbad=0 dig=3602568532 bdig=2451473760;n=416 bad=0 bbad=0 dig=3602568532 bdig=2451473760
+vrsh	n=416 bad=0 bbad=0 dig=0 bdig=2054;n=416 bad=0 bbad=0 dig=0 bdig=2054;n=416 bad=0 bbad=0 dig=0 bdig=2054
+copy	n=400 bad=0 bbad=0 dig=157605888 bdig=2641795720;n=400 bad=0 bbad=0 dig=157605888 bdig=2641795720;n=400 bad=0 bbad=0 dig=157605888 bdig=2641795720
+side	n=600 bad=0 bbad=0 dig=236335104 bdig=907604966;n=600 bad=0 bbad=0 dig=236335104 bdig=907604966;n=600 bad=0 bbad=0 dig=236335104 bdig=907604966
+select	n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0
+forin	n=400 bad=0 bbad=0 dig=160400 bdig=400;n=400 bad=0 bbad=0 dig=160400 bdig=400;n=400 bad=0 bbad=0 dig=160400 bdig=400
+#cov cases 32 traced 0 pairs 0 of 0 served 0 split 0 i64slot 0 jit off

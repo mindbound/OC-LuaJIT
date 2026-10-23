@@ -1,0 +1,4 @@
+11a12
+> #include <stdio.h>  /* T4 INSTRUMENT: never shipped */
+2680a2682
+>       if (IR(ref)->op12 == op12) fprintf(stderr, "CSEREFUSE op=%d fins=%d cand=%d%c", (int)fins->o, (int)irt_type(fins->t), (int)irt_type(IR(ref)->t), 10);  /* T4 INSTRUMENT: the predicate refused this candidate; never shipped */

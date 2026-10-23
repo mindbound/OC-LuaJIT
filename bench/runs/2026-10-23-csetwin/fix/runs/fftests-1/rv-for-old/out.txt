@@ -1,0 +1,10 @@
+$ C:/Users/astro/Downloads/OC-LuaJIT/bench/vendor/lua-5.3.6/src/lua.exe C:/Users/astro/claude-tmp/oclj/csetwin/round/fix/runs/fftests-1\rv-for-old\bitop\t_cserev.lua
+rc=0
+rc-sel	n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0	-
+rc-shl1	n=400 bad=0 bbad=0 dig=160400 bdig=0;n=400 bad=0 bbad=0 dig=160400 bdig=0;n=400 bad=0 bbad=0 dig=160400 bdig=0	-
+rp-sel	n=400 bad=0 bbad=0 dig=82200 bdig=0 x=0;n=400 bad=0 bbad=0 dig=82200 bdig=0 x=0;n=400 bad=0 bbad=0 dig=82200 bdig=0 x=0	-
+rp-byte	n=400 bad=0 bbad=0 dig=51520 bdig=0;n=400 bad=0 bbad=0 dig=51520 bdig=0;n=400 bad=0 bbad=0 dig=51520 bdig=0	-
+r5-sel	n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0	-
+r6-byte	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520	-
+r6-sub	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520	-
+r6-mul	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520	-

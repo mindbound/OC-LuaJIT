@@ -35,7 +35,7 @@
 #     CONV int.num, a round trip on the loop's dependency chain in table-
 #     driven CRC32 (roadmap row 209).
 #
-# THE CHANGE, eleven hunks.
+# THE CHANGE, twelve hunks.
 #   1. lj_opt_fold.c includes oclj_bitop.h, for OCLJ_IRCONV_EXACT.
 #   2-6, 9, 10. The seven #if LJ_HASFFI become #if 1.  kfold_int64shift
 #      computes the shift itself: FFI's lj_carith_shift64 (lj_carith.c:302)
@@ -101,14 +101,27 @@
 #      variable shift count that passes its ULT 64 guard (round 3's review,
 #      verify:tablefold:0).  The #include of oclj_bitop_fold.c moves from
 #      hunk 7 to here, above both callers.
+#   12. lj_opt_cse never commons an int64 instruction with one of another
+#      type (the CSE type twin, 2026-10-23): CSE matches the operands alone
+#      and returns the existing instruction's type, and on x64
+#      simplify_conv_sext hands our int64 ops the int loop index or a
+#      string.byte value directly, so a 32-bit instruction on the same
+#      operands (the bit library's, or upstream's x + x) served our operator
+#      its zero-extended 32-bit value, and in the other order would hand our
+#      int64 ref to a 32-bit recorder that stores it in a slot.  The test is
+#      int64 against the rest, by type alone (irt_isi64, so the guard and PHI
+#      bits never block a merge): other types merge as upstream's do, and a
+#      refused match emits what -O-cse would, so no value changes.
 #
 # Anchored, refusing otherwise, on the line `#include "lj_strfmt.h"`
 # (lj_opt_fold.c:31 at 1ee778a4); on each of the seven #if LJ_HASFFI lines
 # together with the line or lines after it that make it unique (:376-377,
 # :432-436, :444-445, :471-472, :492-493, :1746-1749, :1794-1796); on
 # simplify_conv_i64_num's first five lines (:1138-1142); on
-# narrow_convert's comment and loop check (:1315-1317); and on
-# simplify_conv_int_num whole (:1128-1136); each exactly once.
+# narrow_convert's comment and loop check (:1315-1317); on
+# simplify_conv_int_num whole (:1128-1136); and on lj_opt_cse's match, its
+# if and return lines together (:2612-2613; lj_opt_cselim's if is indented
+# less); each exactly once.
 # No LJFOLD line is added or removed (checked), so buildvm's fold table
 # keeps its rules.  Verified by content, by diff, and by putting upstream's
 # text back and comparing with the input.  CRLF is stripped (the pinned tree
@@ -124,9 +137,9 @@ OUT=$2
 ME=patch-bitop-fold.sh
 MARK='OC-LuaJIT (native/luajit/patch-bitop-fold.sh)'
 NMARK=1     # the marker occurs once in a patched file
-NH=11       # hunks
-NADD=70     # lines diff -d reports added on the pristine file ...
-NDEL=8      # ... and removed
+NH=12       # hunks
+NADD=76     # lines diff -d reports added on the pristine file ...
+NDEL=9      # ... and removed
 NOFFI='#if 1  /* OC-LuaJIT: the 64-bit bit operators, without FFI. */'
 
 fail() { echo "$ME: $*" >&2; exit 1; }
@@ -332,6 +345,20 @@ LJFOLDF(simplify_conv_int_num)
   return NEXTFOLD;
 }
 EOF
+# 12. lj_opt_cse: an int64 instruction and one of another type never match.
+cat > "$D/o12" <<'EOF'
+      if (IR(ref)->op12 == op12)
+@T@return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */
+EOF
+cat > "$D/n12" <<'EOF'
+      /* OC-LuaJIT: an int64 instruction never commons with one of another
+      ** type.  On x64 simplify_conv_sext hands int64 ops int refs, so a 32-bit
+      ** op can share their op12: its value would stand in for the int64 one,
+      ** or an int64 ref would reach a 32-bit recorder (JIT guide P63). */
+      if (IR(ref)->op12 == op12 &&
+@T@  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))
+@T@return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */
+EOF
 
 # --- THE HUNK ENGINE (the same text in all seven patch-bitop-*.sh) ---------
 # hunks <file> <mode> reads <file> with each line's trailing CR removed, and
@@ -459,6 +486,35 @@ verify_patched() {
 # neither call sits nested in the other's unbraced if, which every check
 # above passes (the code verifier's m11, 2026-10-21); on that edit of n7
 # this check fails alone.
+# Hunk 12's CSE type test (2026-10-23): the line that, stripped of leading
+# blanks, is exactly the test occurs once; irt_isi64(IR(ref)->t) is named on
+# that line only, so a copy in another form (on lj_opt_cselim's if, say) is
+# refused too; the line lies between lj_opt_cse's definition line and
+# lj_opt_cselim's; and it sits directly below lj_opt_cse's if line, ending
+# in &&, and directly above its return of the common subexpression.  So the
+# forward-allowing and the reverse-allowing forms (an || in the test), a
+# whole-type compare, and the test dropped, in lj_opt_cselim, after the
+# return or under an || are each refused.  Every check was evaluated on
+# eleven mutations of a patched file and on the file itself, with a fail()
+# that does not exit (2026-10-23): the irt_isi64(IR(ref)->t) count fails
+# alone on a one-line copy in lj_opt_cselim, the order alone on the test
+# moved with its two neighbours into lj_opt_cselim, and the neighbours alone
+# on the test after the return and on an if line ending in ||.  Implied,
+# and kept for their messages: the line count (none also fails the missing
+# check, two the irt_isi64(IR(ref)->t) count) and the missing check (the
+# order fails with it).  Indentation is not checked here: the hunk's own
+# text, which verify_patched finds exactly once, holds it.
+# Those checks read hunk 12's three lines only, so an n12 that adds a second
+# match beside them passed them all (the code verifier's m1-m4, 2026-10-23:
+# a forward- or a reverse-allowing match line above the if, an else-if
+# after the return, one at the same line count, 76/9).  So lj_opt_cse, from
+# its definition line to lj_opt_cselim's, must name op12 == op12 on one line
+# and return on two.  Each count was run on its own mutation of a patched
+# file with a fail() that does not exit (2026-10-23): the match count fails
+# alone on a stray line naming op12 == op12 with no return, the return count
+# alone on an extra match spelled without op12; m1-m4 fail both, and fail
+# none of the checks above.  Not checked: a macro that redefines irt_isi64
+# inside n12.
 verify_content() {
   [ "$(countx "$NOFFI" "$1")" = 7 ] || fail "$1: '$NOFFI' occurs $(countx "$NOFFI" "$1") times, expected 7"
   [ "$(countx '#include "oclj_bitop_fold.c"' "$1")" = 1 ] || fail "$1: oclj_bitop_fold.c is included $(countx '#include "oclj_bitop_fold.c"' "$1") times, expected 1"
@@ -486,6 +542,37 @@ verify_content() {
   if [ "$(awk -v n="$LC2" 'NR == n + 1 { print; exit }' "$1")" = "$RL" ] && [ "$(awk -v n="$LN" 'NR == n + 1 { print; exit }' "$1")" = "$RL" ]; then :; else
     fail "$1: the width rule's call (line $LC2) or FIX-NUMCONV's (line $LN) is not followed directly by its own '$RL': a call nested in another rule's if"
   fi
+  # Hunk 12, the CSE type test.
+  PRED='irt_isi64(IR(ref)->t) == irt_isi64(fins->t))'
+  NPL=$(P=$PRED awk 'BEGIN { T = sprintf("%c", 9) }
+    { s = $0; while (substr(s, 1, 1) == " " || substr(s, 1, 1) == T) s = substr(s, 2)
+      if (s == ENVIRON["P"]) n++ }
+    END { print n + 0 }' "$1")
+  [ "$NPL" = 1 ] || fail "$1: the CSE type test '$PRED' is a line of its own $NPL times, expected 1 (hunk 12)"
+  [ "$(countsub 'irt_isi64(IR(ref)->t)' "$1")" = 1 ] || fail "$1: irt_isi64(IR(ref)->t) is named on $(countsub 'irt_isi64(IR(ref)->t)' "$1") lines, expected 1 (hunk 12's CSE type test)"
+  LS=$(awk '$0 == "TRef LJ_FASTCALL lj_opt_cse(jit_State *J)" { print NR; exit }' "$1")
+  LT=$(awk '$0 == "TRef LJ_FASTCALL lj_opt_cselim(jit_State *J, IRRef lim)" { print NR; exit }' "$1")
+  LQ=$(P=$PRED awk 'BEGIN { T = sprintf("%c", 9) }
+    { s = $0; while (substr(s, 1, 1) == " " || substr(s, 1, 1) == T) s = substr(s, 2)
+      if (s == ENVIRON["P"]) { print NR; exit } }' "$1")
+  [ -n "$LS" ] && [ -n "$LT" ] && [ -n "$LQ" ] || fail "$1: missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)"
+  if [ -n "$LS" ] && [ -n "$LT" ] && [ -n "$LQ" ] && [ "$LS" -lt "$LQ" ] && [ "$LQ" -lt "$LT" ]; then :; else
+    fail "$1: the CSE type test (line $LQ) is not inside lj_opt_cse (its definition line $LS; lj_opt_cselim's $LT)"
+  fi
+  ADJ=$(W1='      if (IR(ref)->op12 == op12 &&' W2='return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */' awk -v n="${LQ:-0}" '
+    BEGIN { T = sprintf("%c", 9); b = "no"; a = "no" }
+    NR == n - 1 && $0 == ENVIRON["W1"] { b = "yes" }
+    NR == n + 1 { if ($0 == T ENVIRON["W2"]) a = "yes"; exit }
+    END { print b "/" a }' "$1")
+  [ "$ADJ" = yes/yes ] || fail "$1: the CSE type test (line $LQ) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly above its return of the common subexpression (below/above: $ADJ)"
+  # lj_opt_cse holds no match but hunk 12's: between its definition line and
+  # lj_opt_cselim's, one line names op12 == op12 (hunk 12's if) and two name
+  # return (hunk 12's return of the common subexpression and upstream's
+  # return of the instruction it emits).
+  NM=$(awk -v s="${LS:-0}" -v t="${LT:-0}" 'NR > s + 0 && NR < t + 0 && index($0, "op12 == op12") { n++ } END { print n + 0 }' "$1")
+  NRT=$(awk -v s="${LS:-0}" -v t="${LT:-0}" 'NR > s + 0 && NR < t + 0 && index($0, "return") { n++ } END { print n + 0 }' "$1")
+  [ "$NM" = 1 ] || fail "$1: lj_opt_cse (lines $LS-$LT) names 'op12 == op12' on $NM lines, expected 1 (hunk 12's if): a match other than hunk 12's"
+  [ "$NRT" = 2 ] || fail "$1: lj_opt_cse (lines $LS-$LT) names 'return' on $NRT lines, expected 2 (hunk 12's return of the common subexpression, and the return of the instruction it emits): a return other than those"
 }
 
 # --- already patched?  verify, copy if asked, and say so ------------------
@@ -541,4 +628,4 @@ cmp -s "$D/back" "$D/in" || fail "putting each hunk's upstream text back does no
 
 mv -f "$TMP" "$OUT" || fail "cannot write $OUT"
 trap 'rm -rf "$D"' EXIT
-echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"
+echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"

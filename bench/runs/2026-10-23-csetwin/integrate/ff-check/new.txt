@@ -1,0 +1,17 @@
+sab       R_bitjit=1 cse:t_csefwd  got 0 want 0 ok
+sab       R_bitjit=1 cse:cseir     got 0 want 0 ok
+base      R_bitjit=1 cse:t_csefwd  got 0 want 0 ok
+base      R_bitjit=1 cse:cseir     got 0 want 0 ok
+fix       R_bitjit=0 cse:t_csefwd  got 1 want 1 ok
+fix       R_bitjit=0 cse:cseir     got 1 want 1 ok
+sab       R_bitjit=0 cse:t_csefwd  got 1 want 1 ok
+sab       R_bitjit=2 cse:cseir     got 2 want 2 ok
+onlyrev   R_bitjit=1 cse:t_csefwd  got 1 want 1 ok
+onlyrev   R_bitjit=1 cse:cseir     got 1 want 1 ok
+onlyir    R_bitjit=1 cse:t_csefwd  got 1 want 1 ok
+onlyir    R_bitjit=1 cse:cseir     got 0 want 0 ok
+joffonly  R_bitjit=1 cse:t_csefwd  got 1 want 1 ok
+joffonly  R_bitjit=1 cse:cseir     got 1 want 1 ok
+sab       R_bitjit=1 nc:t_numconv  got 1 want 1 ok
+sab       R_bitjit=1 nc:ncir       got 1 want 1 ok
+ffcheck: 16 of 16 as wanted

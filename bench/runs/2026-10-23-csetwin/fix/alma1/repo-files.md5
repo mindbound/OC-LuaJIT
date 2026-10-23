@@ -1,0 +1,9 @@
+ae2184852731f198b272d086cd23c842  native/build-native.sh
+cfa5a3db5f1f92145cfdbe9074b46958  native/luajit/patch-bitop-fold.sh
+8385a4d11f06384835c61d41cf08325c  native/luajit/oclj_bitop.h
+076c0a1a78e14dd740b7f8fc069b47e1  native/luajit/oclj_bitop_rec.c
+674841b460f3c87c422f767f6d4da8fc  test/native/negctl-bitop.sh
+f75d6bcfa5ca16335a971e3d7ea385d9  test/native/run-bitjit.sh
+142cf32b121f60b190108ce3f270cbfc  test/native/bitop/t_csefwd.lua
+280d7782b4f40b72d3ed1b6b7e77f4e6  test/native/bitop/cseir.lua
+2d3615057941c38f569856729d114d08  test/native/bitop/t_cserev.lua

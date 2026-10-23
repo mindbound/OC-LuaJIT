@@ -1,0 +1,29 @@
+PASS CHANGED-SET: the scratch repo is HEAD's tree outside docs/ and bench/runs/ (228 files) but for the round's eight files (cmp/changed.txt)
+PASS W-rc: build-native.sh (additive) into a fresh OCLJ_BUILD succeeds
+PASS W-pin: the pin is met and the export verified (8 trees, 232 files)
+PASS W-ignored-none: nothing ignored from the environment
+PASS W-patch: patch-bitop-fold.sh: no CSE of int64 with another type, 76 added and 9 removed of 2720, verified
+PASS W-wgate: round 3's C files compile with 0 warnings under -Wall -Wextra (bitop_wgate.c)
+PASS W-objects: 77 LuaJIT objects, only lj_opt_fold.o differs from build/native's; our 3 objects equal
+PASS W-fold-object: lj_opt_fold.o is the round's (a6c5fcc2a56698ed1313f25c0a298719)
+PASS W-build-copy: the build copy's lj_opt_fold.c is the patched one (59778bb698247b3e3f0392fdf92def70)
+PASS BITOP: run-bitop.sh: PASS
+PASS BITFUZZ: run-bitfuzz.sh: PASS
+PASS RUNNER-run.sh: run.sh on the new build: exit 0
+PASS RUNNER-run-mem.sh: run-mem.sh on the new build: exit 0
+PASS RUNNER-run-vgc.sh: run-vgc.sh on the new build: exit 0
+PASS RUNNER-run-wd.sh: run-wd.sh on the new build: exit 0
+PASS RUNNER-run-penalty.sh: run-penalty.sh on the new build: exit 0
+PASS RUNNER-run-race.sh: run-race.sh on the new build: exit 0
+PASS RUNNER-run-security.sh: run-security.sh on the new build: exit 0
+PASS RUNNER-run-pack.sh: run-pack.sh on the new build: exit 0
+PASS RUNNER-run-packfuzz.sh: run-packfuzz.sh on the new build: exit 0
+PASS TIMING-inputs: the benches are integrate/timing/bench's (fc-bench, md5s pinned); base is build/native's luajit.exe (f4038cd62af3a12985868cea77cc1518, lj_opt_fold.o f6d916e29cf8e05cd951d220ba8abcd9), new's lj_opt_fold.o the round's (a6c5fcc2a56698ed1313f25c0a298719)
+PASS TIMING-complete: all 2 rounds ran (no Java process appeared)
+FAIL TIMING-results-equal: every result of the new build equals base's, in every round, all 21 rows (timing/summary.txt)
+SKIP TIMING-no-gross-change: FC_NDIV=10: a smoke reading, too short to time
+SKIP CENSUS-build: FC_CENSUS=none: the real repo's build/ was not listed
+PASS CENSUS-pristine: the pristine checkout's stat list (mtimes included), its .git md5 list and HEAD are unchanged
+PASS CENSUS-real-repo: the real repo's HEAD, git status and its changed files' md5s are unchanged (nothing here writes there)
+SKIP CENSUS-scratch-repo: FC_CENSUS=none: the scratch repo was not listed
+PASS FILES-unchanged: the eight files, this script and its helpers are unchanged since the start; the real repo's HEAD too

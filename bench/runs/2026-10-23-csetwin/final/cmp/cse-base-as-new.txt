@@ -1,0 +1,282 @@
+BAD t_csefwd-jon: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-O1: wrong on the fixed build: side u8sh30
+BAD t_csefwd-hl1: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-ms0: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh
+BAD t_csefwd-he1: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-noloop: wrong on the fixed build: bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-hx1: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-ts1: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-mx1: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-hl1ms0: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh
+BAD t_csefwd-noabc: wrong on the fixed build: bnot bnotx bxorm1 chain copy lsh3 lsh35 nested reassoc side u8sh30 vlsh vrsh
+BAD t_csefwd-nonarrow: wrong on the fixed build: side u8sh30
+BAD cseir-jon: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-jon lsh1: served 2 on the fixed build
+BAD cseir-jon band: served 2 on the fixed build
+BAD cseir-jon rsh5: served 2 on the fixed build
+BAD cseir-jon byte2: served 2 on the fixed build
+BAD cseir-jon sub2: served 2 on the fixed build
+BAD cseir-jon lsh3: served 2 on the fixed build
+BAD cseir-jon bnot: served 2 on the fixed build
+BAD cseir-jon bnotx: served 2 on the fixed build
+BAD cseir-jon bxorm1: served 2 on the fixed build
+BAD cseir-jon lsh35: served 2 on the fixed build
+BAD cseir-jon u8sh30: served 2 on the fixed build
+BAD cseir-jon nested: served 2 on the fixed build
+BAD cseir-jon reassoc: served 2 on the fixed build
+BAD cseir-jon chain: served 2 on the fixed build
+BAD cseir-jon vlsh: served 2 on the fixed build
+BAD cseir-jon vrsh: served 2 on the fixed build
+BAD cseir-jon copy: served 1 on the fixed build
+BAD cseir-jon side: served 1 on the fixed build
+BAD cseir-jon select: served 2 on the fixed build
+BAD cseir-jon forin: served 2 on the fixed build
+BAD cseir-jon copy: split 0
+BAD cseir-jon side: split 0
+BAD cseir-hl1: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-hl1 lsh1: served 2 on the fixed build
+BAD cseir-hl1 band: served 2 on the fixed build
+BAD cseir-hl1 rsh5: served 2 on the fixed build
+BAD cseir-hl1 byte2: served 2 on the fixed build
+BAD cseir-hl1 sub2: served 2 on the fixed build
+BAD cseir-hl1 lsh3: served 2 on the fixed build
+BAD cseir-hl1 bnot: served 2 on the fixed build
+BAD cseir-hl1 bnotx: served 2 on the fixed build
+BAD cseir-hl1 bxorm1: served 2 on the fixed build
+BAD cseir-hl1 lsh35: served 2 on the fixed build
+BAD cseir-hl1 u8sh30: served 2 on the fixed build
+BAD cseir-hl1 nested: served 2 on the fixed build
+BAD cseir-hl1 reassoc: served 2 on the fixed build
+BAD cseir-hl1 chain: served 2 on the fixed build
+BAD cseir-hl1 vlsh: served 2 on the fixed build
+BAD cseir-hl1 vrsh: served 2 on the fixed build
+BAD cseir-hl1 copy: served 1 on the fixed build
+BAD cseir-hl1 side: served 1 on the fixed build
+BAD cseir-hl1 select: served 2 on the fixed build
+BAD cseir-hl1 forin: served 2 on the fixed build
+BAD cseir-ms0: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-ms0 lsh1: served 2 on the fixed build
+BAD cseir-ms0 band: served 2 on the fixed build
+BAD cseir-ms0 rsh5: served 2 on the fixed build
+BAD cseir-ms0 byte2: served 2 on the fixed build
+BAD cseir-ms0 sub2: served 2 on the fixed build
+BAD cseir-ms0 lsh3: served 2 on the fixed build
+BAD cseir-ms0 bnot: served 2 on the fixed build
+BAD cseir-ms0 bnotx: served 2 on the fixed build
+BAD cseir-ms0 bxorm1: served 2 on the fixed build
+BAD cseir-ms0 lsh35: served 2 on the fixed build
+BAD cseir-ms0 u8sh30: served 2 on the fixed build
+BAD cseir-ms0 nested: served 2 on the fixed build
+BAD cseir-ms0 reassoc: served 2 on the fixed build
+BAD cseir-ms0 chain: served 2 on the fixed build
+BAD cseir-ms0 vlsh: served 2 on the fixed build
+BAD cseir-ms0 vrsh: served 2 on the fixed build
+BAD cseir-ms0 copy: served 1 on the fixed build
+BAD cseir-ms0 select: served 2 on the fixed build
+BAD cseir-ms0 forin: served 2 on the fixed build
+BAD cseir-he1: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-he1 lsh1: served 2 on the fixed build
+BAD cseir-he1 band: served 2 on the fixed build
+BAD cseir-he1 rsh5: served 2 on the fixed build
+BAD cseir-he1 byte2: served 2 on the fixed build
+BAD cseir-he1 sub2: served 2 on the fixed build
+BAD cseir-he1 lsh3: served 2 on the fixed build
+BAD cseir-he1 bnot: served 2 on the fixed build
+BAD cseir-he1 bnotx: served 2 on the fixed build
+BAD cseir-he1 bxorm1: served 2 on the fixed build
+BAD cseir-he1 lsh35: served 2 on the fixed build
+BAD cseir-he1 u8sh30: served 2 on the fixed build
+BAD cseir-he1 nested: served 2 on the fixed build
+BAD cseir-he1 reassoc: served 2 on the fixed build
+BAD cseir-he1 chain: served 2 on the fixed build
+BAD cseir-he1 vlsh: served 2 on the fixed build
+BAD cseir-he1 vrsh: served 2 on the fixed build
+BAD cseir-he1 copy: served 1 on the fixed build
+BAD cseir-he1 side: served 2 on the fixed build
+BAD cseir-he1 select: served 2 on the fixed build
+BAD cseir-he1 forin: served 2 on the fixed build
+BAD cseir-noloop: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-noloop lsh1: served 1 on the fixed build
+BAD cseir-noloop band: served 1 on the fixed build
+BAD cseir-noloop rsh5: served 1 on the fixed build
+BAD cseir-noloop byte2: served 1 on the fixed build
+BAD cseir-noloop sub2: served 1 on the fixed build
+BAD cseir-noloop lsh3: served 1 on the fixed build
+BAD cseir-noloop bnot: served 1 on the fixed build
+BAD cseir-noloop bnotx: served 1 on the fixed build
+BAD cseir-noloop bxorm1: served 1 on the fixed build
+BAD cseir-noloop lsh35: served 1 on the fixed build
+BAD cseir-noloop u8sh30: served 1 on the fixed build
+BAD cseir-noloop nested: served 1 on the fixed build
+BAD cseir-noloop reassoc: served 1 on the fixed build
+BAD cseir-noloop chain: served 2 on the fixed build
+BAD cseir-noloop vlsh: served 1 on the fixed build
+BAD cseir-noloop vrsh: served 1 on the fixed build
+BAD cseir-noloop side: served 1 on the fixed build
+BAD cseir-noloop select: served 1 on the fixed build
+BAD cseir-noloop forin: served 1 on the fixed build
+BAD cseir-hx1: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-hx1 lsh1: served 2 on the fixed build
+BAD cseir-hx1 band: served 2 on the fixed build
+BAD cseir-hx1 rsh5: served 2 on the fixed build
+BAD cseir-hx1 byte2: served 2 on the fixed build
+BAD cseir-hx1 sub2: served 2 on the fixed build
+BAD cseir-hx1 lsh3: served 2 on the fixed build
+BAD cseir-hx1 bnot: served 2 on the fixed build
+BAD cseir-hx1 bnotx: served 2 on the fixed build
+BAD cseir-hx1 bxorm1: served 2 on the fixed build
+BAD cseir-hx1 lsh35: served 2 on the fixed build
+BAD cseir-hx1 u8sh30: served 2 on the fixed build
+BAD cseir-hx1 nested: served 2 on the fixed build
+BAD cseir-hx1 reassoc: served 2 on the fixed build
+BAD cseir-hx1 chain: served 2 on the fixed build
+BAD cseir-hx1 vlsh: served 2 on the fixed build
+BAD cseir-hx1 vrsh: served 2 on the fixed build
+BAD cseir-hx1 copy: served 1 on the fixed build
+BAD cseir-hx1 side: served 2 on the fixed build
+BAD cseir-hx1 select: served 2 on the fixed build
+BAD cseir-hx1 forin: served 2 on the fixed build
+BAD cseir-ts1: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-ts1 lsh1: served 2 on the fixed build
+BAD cseir-ts1 band: served 2 on the fixed build
+BAD cseir-ts1 rsh5: served 2 on the fixed build
+BAD cseir-ts1 byte2: served 2 on the fixed build
+BAD cseir-ts1 sub2: served 2 on the fixed build
+BAD cseir-ts1 lsh3: served 2 on the fixed build
+BAD cseir-ts1 bnot: served 2 on the fixed build
+BAD cseir-ts1 bnotx: served 2 on the fixed build
+BAD cseir-ts1 bxorm1: served 2 on the fixed build
+BAD cseir-ts1 lsh35: served 2 on the fixed build
+BAD cseir-ts1 u8sh30: served 2 on the fixed build
+BAD cseir-ts1 nested: served 2 on the fixed build
+BAD cseir-ts1 reassoc: served 2 on the fixed build
+BAD cseir-ts1 chain: served 2 on the fixed build
+BAD cseir-ts1 vlsh: served 2 on the fixed build
+BAD cseir-ts1 vrsh: served 2 on the fixed build
+BAD cseir-ts1 copy: served 1 on the fixed build
+BAD cseir-ts1 side: served 2 on the fixed build
+BAD cseir-ts1 select: served 2 on the fixed build
+BAD cseir-ts1 forin: served 2 on the fixed build
+BAD cseir-mx1: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-mx1 lsh1: served 2 on the fixed build
+BAD cseir-mx1 band: served 2 on the fixed build
+BAD cseir-mx1 rsh5: served 2 on the fixed build
+BAD cseir-mx1 byte2: served 2 on the fixed build
+BAD cseir-mx1 sub2: served 2 on the fixed build
+BAD cseir-mx1 lsh3: served 2 on the fixed build
+BAD cseir-mx1 bnot: served 2 on the fixed build
+BAD cseir-mx1 bnotx: served 2 on the fixed build
+BAD cseir-mx1 bxorm1: served 2 on the fixed build
+BAD cseir-mx1 lsh35: served 2 on the fixed build
+BAD cseir-mx1 u8sh30: served 2 on the fixed build
+BAD cseir-mx1 nested: served 2 on the fixed build
+BAD cseir-mx1 reassoc: served 2 on the fixed build
+BAD cseir-mx1 chain: served 2 on the fixed build
+BAD cseir-mx1 vlsh: served 2 on the fixed build
+BAD cseir-mx1 vrsh: served 2 on the fixed build
+BAD cseir-mx1 copy: served 1 on the fixed build
+BAD cseir-mx1 side: served 1 on the fixed build
+BAD cseir-mx1 select: served 2 on the fixed build
+BAD cseir-mx1 forin: served 2 on the fixed build
+BAD cseir-hl1ms0: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-hl1ms0 lsh1: served 2 on the fixed build
+BAD cseir-hl1ms0 band: served 2 on the fixed build
+BAD cseir-hl1ms0 rsh5: served 2 on the fixed build
+BAD cseir-hl1ms0 byte2: served 2 on the fixed build
+BAD cseir-hl1ms0 sub2: served 2 on the fixed build
+BAD cseir-hl1ms0 lsh3: served 2 on the fixed build
+BAD cseir-hl1ms0 bnot: served 2 on the fixed build
+BAD cseir-hl1ms0 bnotx: served 2 on the fixed build
+BAD cseir-hl1ms0 bxorm1: served 2 on the fixed build
+BAD cseir-hl1ms0 lsh35: served 2 on the fixed build
+BAD cseir-hl1ms0 u8sh30: served 2 on the fixed build
+BAD cseir-hl1ms0 nested: served 2 on the fixed build
+BAD cseir-hl1ms0 reassoc: served 2 on the fixed build
+BAD cseir-hl1ms0 chain: served 2 on the fixed build
+BAD cseir-hl1ms0 vlsh: served 2 on the fixed build
+BAD cseir-hl1ms0 vrsh: served 2 on the fixed build
+BAD cseir-hl1ms0 copy: served 1 on the fixed build
+BAD cseir-hl1ms0 select: served 2 on the fixed build
+BAD cseir-hl1ms0 forin: served 2 on the fixed build
+BAD cseir-noabc: FAILED on the fixed build: band bnot bnotx bxorm1 byte2 chain copy forin lsh1 lsh3 lsh35 nested reassoc rsh5 select side sub2 u8sh30 vlsh vrsh
+BAD cseir-noabc lsh1: served 2 on the fixed build
+BAD cseir-noabc band: served 2 on the fixed build
+BAD cseir-noabc rsh5: served 2 on the fixed build
+BAD cseir-noabc byte2: served 2 on the fixed build
+BAD cseir-noabc sub2: served 2 on the fixed build
+BAD cseir-noabc lsh3: served 2 on the fixed build
+BAD cseir-noabc bnot: served 2 on the fixed build
+BAD cseir-noabc bnotx: served 2 on the fixed build
+BAD cseir-noabc bxorm1: served 2 on the fixed build
+BAD cseir-noabc lsh35: served 2 on the fixed build
+BAD cseir-noabc u8sh30: served 2 on the fixed build
+BAD cseir-noabc nested: served 2 on the fixed build
+BAD cseir-noabc reassoc: served 2 on the fixed build
+BAD cseir-noabc chain: served 2 on the fixed build
+BAD cseir-noabc vlsh: served 2 on the fixed build
+BAD cseir-noabc vrsh: served 2 on the fixed build
+BAD cseir-noabc copy: served 1 on the fixed build
+BAD cseir-noabc side: served 1 on the fixed build
+BAD cseir-noabc select: served 2 on the fixed build
+BAD cseir-noabc forin: served 2 on the fixed build
+BAD cseir-O1: FAILED on the fixed build: side u8sh30
+BAD cseir-O1 u8sh30: served 1 on the fixed build
+BAD cseir-O1 side: served 1 on the fixed build
+BAD cseir-nonarrow: FAILED on the fixed build: side u8sh30
+BAD cseir-nonarrow u8sh30: served 2 on the fixed build
+BAD cseir-nonarrow side: served 1 on the fixed build
+BAD t_cserev-jon: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-jon r5-sel: rserved on the fixed build
+BAD t_cserev-jon r6-byte: rserved on the fixed build
+BAD t_cserev-jon r6-sub: rserved on the fixed build
+BAD t_cserev-jon r6-mul: rserved on the fixed build
+BAD t_cserev-jon r5-sel: split 0
+BAD t_cserev-jon r6-byte: split 0
+BAD t_cserev-jon r6-sub: split 0
+BAD t_cserev-jon r6-mul: split 0
+BAD t_cserev-hl1: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-hl1 r5-sel: rserved on the fixed build
+BAD t_cserev-hl1 r6-byte: rserved on the fixed build
+BAD t_cserev-hl1 r6-sub: rserved on the fixed build
+BAD t_cserev-hl1 r6-mul: rserved on the fixed build
+BAD t_cserev-ms0: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-ms0 r5-sel: rserved on the fixed build
+BAD t_cserev-ms0 r6-byte: rserved on the fixed build
+BAD t_cserev-ms0 r6-sub: rserved on the fixed build
+BAD t_cserev-ms0 r6-mul: rserved on the fixed build
+BAD t_cserev-he1: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-he1 r5-sel: rserved on the fixed build
+BAD t_cserev-he1 r6-byte: rserved on the fixed build
+BAD t_cserev-he1 r6-sub: rserved on the fixed build
+BAD t_cserev-he1 r6-mul: rserved on the fixed build
+BAD t_cserev-noloop: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-noloop r5-sel: rserved on the fixed build
+BAD t_cserev-noloop r6-byte: rserved on the fixed build
+BAD t_cserev-noloop r6-sub: rserved on the fixed build
+BAD t_cserev-noloop r6-mul: rserved on the fixed build
+BAD t_cserev-hx1: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-hx1 r5-sel: rserved on the fixed build
+BAD t_cserev-hx1 r6-byte: rserved on the fixed build
+BAD t_cserev-hx1 r6-sub: rserved on the fixed build
+BAD t_cserev-hx1 r6-mul: rserved on the fixed build
+BAD t_cserev-ts1: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-ts1 r5-sel: rserved on the fixed build
+BAD t_cserev-ts1 r6-byte: rserved on the fixed build
+BAD t_cserev-ts1 r6-sub: rserved on the fixed build
+BAD t_cserev-ts1 r6-mul: rserved on the fixed build
+BAD t_cserev-mx1: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-mx1 r5-sel: rserved on the fixed build
+BAD t_cserev-mx1 r6-byte: rserved on the fixed build
+BAD t_cserev-mx1 r6-sub: rserved on the fixed build
+BAD t_cserev-mx1 r6-mul: rserved on the fixed build
+BAD t_cserev-hl1ms0: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-hl1ms0 r5-sel: rserved on the fixed build
+BAD t_cserev-hl1ms0 r6-byte: rserved on the fixed build
+BAD t_cserev-hl1ms0 r6-sub: rserved on the fixed build
+BAD t_cserev-hl1ms0 r6-mul: rserved on the fixed build
+BAD t_cserev-noabc: FAILED on the fixed build: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-noabc r5-sel: rserved on the fixed build
+BAD t_cserev-noabc r6-byte: rserved on the fixed build
+BAD t_cserev-noabc r6-sub: rserved on the fixed build
+BAD t_cserev-noabc r6-mul: rserved on the fixed build
+BASECSE new C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/base-cse: FAIL (281 findings)

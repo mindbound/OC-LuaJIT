@@ -1,0 +1,3 @@
+STAGE 4 FAIL: eris_lj.o's VM-features word 'ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit32' disagrees with libluajit.a, which behaves
+         as 'ffi0 lua52 fr2 le pack1 bit64' (token bit64): every blob would carry a false description of the VM
+         that wrote it

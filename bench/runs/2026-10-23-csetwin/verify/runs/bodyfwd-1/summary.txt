@@ -1,0 +1,20 @@
+== base-jit rc=1 stderr=0
+body-v1	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0	traces=1 direct=2 served=0 split=0 rserved=0 i64slot=0
+body-v2	bad=442 bbad=0 first=59:0/98784247808;bad=499 bbad=0 first=2:1073741824/56908316672;bad=499 bbad=0 first=2:1073741824/56908316672	traces=1 direct=1 served=1 split=0 rserved=0 i64slot=0
+ctl-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0	traces=1 direct=2 served=0 split=0 rserved=0 i64slot=0
+bodyfwd: 1440 wrong
+== base-joff rc=0 stderr=0
+body-v1	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+body-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+ctl-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+bodyfwd: 0 wrong
+== fix-jit rc=0 stderr=0
+body-v1	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0	traces=1 direct=2 served=0 split=0 rserved=0 i64slot=0
+body-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0	traces=1 direct=2 served=0 split=1 rserved=0 i64slot=0
+ctl-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0	traces=1 direct=2 served=0 split=0 rserved=0 i64slot=0
+bodyfwd: 0 wrong
+== fix-joff rc=0 stderr=0
+body-v1	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+body-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+ctl-v2	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0
+bodyfwd: 0 wrong

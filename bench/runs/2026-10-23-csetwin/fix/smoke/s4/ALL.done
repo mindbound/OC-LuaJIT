@@ -1,0 +1,1 @@
+PASS 19 FAIL 0 SKIP 2 VERDICT: INCOMPLETE secs 187 FC_PARTS=alma FC_USE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/b1 FC_BASE_BUILD=unset FC_RP=unset FC_TASKLIST=unset FC_ROUNDS=8 FC_NDIV=1 FC_NEGCTL_ARMS=unset FC_CENSUS=none final-check.sh 5fd82c0335ebc44daa0d34158975db54

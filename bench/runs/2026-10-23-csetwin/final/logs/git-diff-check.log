@@ -1,0 +1,8 @@
+rc=1 native/luajit/patch-bitop-fold.sh
+rc=1 native/luajit/oclj_bitop.h
+rc=1 native/luajit/oclj_bitop_rec.c
+rc=1 test/native/negctl-bitop.sh
+rc=1 test/native/run-bitjit.sh
+rc=1 test/native/bitop/t_csefwd.lua
+rc=1 test/native/bitop/cseir.lua
+rc=1 test/native/bitop/t_cserev.lua

@@ -1,0 +1,4 @@
+bench_bit.lua rc=0 stderr-bytes=0 CSEREFUSE=0
+bench_bit2.lua rc=0 stderr-bytes=0 CSEREFUSE=0
+ident.lua rc=0 stderr-bytes=0 CSEREFUSE=0
+bench_numconv.lua rc=0 stderr-bytes=0 CSEREFUSE=0

@@ -1,0 +1,5 @@
+Linux Ultra 6.18.54.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+/usr/bin/bash
+cb68e4547f36ab5da17f2def2cbcbfd4  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src/luajit
+57970a518831675ec90e3124850e50d7  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64/src/lj_opt_fold.o
+Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio

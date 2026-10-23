@@ -1,0 +1,3 @@
+ M bench/runs/2026-10-23-shiftexact/README.md
+ M docs/jit-guide.md
+ M docs/roadmap.md

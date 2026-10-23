@@ -1,0 +1,13 @@
+5161a5162
+> 5e0a79fe2e19ee3222aa2f8ec18f669a *./test/native/bitop/cseir.lua
+5171a5173,5174
+> 7dc833e0f7e98fff2f5548776a0bc140 *./test/native/bitop/t_csefwd.lua
+> fbeaf16b606477ceff4986bc30bff8c1 *./test/native/bitop/t_cserev.lua
+5192c5195
+< 0e453ecb9a35176f6e84a83a32454197 *./test/native/negctl-bitop.sh
+---
+> 674841b460f3c87c422f767f6d4da8fc *./test/native/negctl-bitop.sh
+5206c5209
+< 27b8262da75ab900585cad97ff9f0133 *./test/native/run-bitjit.sh
+---
+> f75d6bcfa5ca16335a971e3d7ea385d9 *./test/native/run-bitjit.sh

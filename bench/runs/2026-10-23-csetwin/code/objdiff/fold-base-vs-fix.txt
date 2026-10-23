@@ -1,0 +1,2 @@
+differs: lj_opt_cse (67 -> 83 insns)
+functions: A 155, B 155, differing or unmatched 1

@@ -1,0 +1,4 @@
+== census before
+== tree
+FAIL CHANGED-SET: the scratch repo differs from HEAD's tree otherwise than by the eight files (cmp/changed.txt): nothing runs
+PASS 0 FAIL 1 SKIP 0 VERDICT: REFUSED (the tree check) final-check.sh 0aaadfc0cef3396c705332a6ee9a18e8

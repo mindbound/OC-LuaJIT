@@ -1,0 +1,25 @@
+bench_bit:bit            base 0.400 ns  new 0.350 ns  new/base median 0.875 [0.875-0.875] over 1 rounds  result 9005056
+bench_bit:ref            base 3.700 ns  new 3.650 ns  new/base median 0.986 [0.986-0.986] over 1 rounds  result 6861824
+bench_bit:crc            base 70.500 ns  new 70.000 ns  new/base median 0.993 [0.993-0.993] over 1 rounds  result 3386490367
+bench_bit2:rgb           base 3.800 ns  new 3.700 ns  new/base median 0.974 [0.974-0.974] over 1 rounds  result 1748186903
+bench_bit2:ref           base 5.100 ns  new 5.100 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 1748186903
+bench_bit2:crc-table     base 3.700 ns  new 3.600 ns  new/base median 0.973 [0.973-0.973] over 1 rounds  result 1136067215
+ident:or0-big            MISSING rounds
+ident:or0-small          MISSING rounds
+ident:andm1-big          MISSING rounds
+ident:andm1-small        MISSING rounds
+ident:xor0-big           MISSING rounds
+ident:xor0-small         MISSING rounds
+ident:shl0-big           MISSING rounds
+ident:shl0-small         MISSING rounds
+ident:shr0-big           MISSING rounds
+ident:shr0-small         MISSING rounds
+bench_numconv:ref        base 0.350 ns  new 0.400 ns  new/base median 1.143 [1.143-1.143] over 1 rounds  result 1.1322322729364896e+19
+bench_numconv:arith      base 0.600 ns  new 0.550 ns  new/base median 0.917 [0.917-0.917] over 1 rounds  result 1.1322322729364896e+19
+bench_numconv:key        base 1.150 ns  new 1.150 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 30764296896
+bench_numconv:bits       base 1.300 ns  new 1.200 ns  new/base median 0.923 [0.923-0.923] over 1 rounds  result 5107149359
+bench_numconv:floor      base 1.700 ns  new 1.700 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 5.661161364681516e+18
+RESULTS: EQUAL
+GROSS: OK (every row's median new/base within [0.5, 2])
+ALL: the 11 rows' median new/base ratios have median 0.986 [0.875-1.143] (information only)
+SUMMARY: FAIL missing ident:or0-big ident:or0-small ident:andm1-big ident:andm1-small ident:xor0-big ident:xor0-small ident:shl0-big ident:shl0-small ident:shr0-big ident:shr0-small

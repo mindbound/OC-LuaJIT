@@ -1,0 +1,1 @@
+PASS 5 FAIL 2 SKIP 3 VERDICT: FAIL secs 19 FC_PARTS=timing FC_USE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/s5/b/win FC_BASE_BUILD=unset FC_RP=unset FC_TASKLIST=sh /c/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/fake-tasklist2.sh FC_ROUNDS=2 FC_NDIV=10 FC_NEGCTL_ARMS=unset FC_CENSUS=none final-check.sh 74382554fb201c95b232f624964bd532

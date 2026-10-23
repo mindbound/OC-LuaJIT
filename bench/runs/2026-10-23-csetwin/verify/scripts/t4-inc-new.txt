@@ -1,0 +1,1 @@
+#include "lj_strfmt.h"@N@#include <stdio.h>  /* verify-code T4 instrument, never shipped */

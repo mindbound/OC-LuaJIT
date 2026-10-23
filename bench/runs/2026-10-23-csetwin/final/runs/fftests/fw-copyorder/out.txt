@@ -1,0 +1,3 @@
+$ C:/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-windows-x86_64/src/luajit.exe -joff C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/fftests\fw-copyorder\bitop\t_csefwd.lua
+rc=2
+INSTRUMENT: t_csefwd's producer-first check fails for copy

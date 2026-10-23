@@ -1,0 +1,12 @@
+mingw32-make: Entering directory 'C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/pfwd/luajit-windows-x86_64/src'
+BUILDVM   lj_folddef.h
+host/buildvm.exe -m folddef -o lj_folddef.h lj_opt_fold.c
+CC        lj_opt_fold.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_opt_fold.o lj_opt_fold.c
+AR        libluajit.a
+ar rcus libluajit.a lj_vm.o lj_assert.o lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o lj_buf.o lj_str.o lj_tab.o lj_func.o lj_udata.o lj_meta.o lj_debug.o lj_prng.o lj_state.o lj_dispatch.o lj_vmevent.o lj_vmmath.o lj_strscan.o lj_strfmt.o lj_strfmt_num.o lj_serialize.o lj_api.o lj_profile.o lj_lex.o lj_parse.o lj_bcread.o lj_bcwrite.o lj_load.o lj_ir.o lj_opt_mem.o lj_opt_fold.o lj_opt_narrow.o lj_opt_dce.o lj_opt_loop.o lj_opt_split.o lj_opt_sink.o lj_mcode.o lj_snap.o lj_record.o lj_crecord.o lj_ffrecord.o lj_asm.o lj_trace.o lj_gdbjit.o lj_ctype.o lj_cdata.o lj_cconv.o lj_ccall.o lj_ccallback.o lj_carith.o lj_clib.o lj_cparse.o lj_lib.o lj_alloc.o lib_aux.o lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o lib_io.o lib_os.o lib_package.o lib_debug.o lib_jit.o lib_ffi.o lib_buffer.o lib_init.o
+LINK      luajit.exe
+gcc      -o luajit.exe luajit.o libluajit.a -lm  
+strip --strip-unneeded luajit.exe
+OK        Successfully built LuaJIT
+mingw32-make: Leaving directory 'C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/pfwd/luajit-windows-x86_64/src'

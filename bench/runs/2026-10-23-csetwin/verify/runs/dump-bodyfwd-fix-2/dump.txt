@@ -1,0 +1,1438 @@
+---- TRACE 1 start bodyfwd.lua:23
+0057  GGET    10   0      ; "string"
+0058  TGETS   10  10   2  ; "char"
+0059  MULVN   12   9   0  ; 37
+0060  MODVN   12  12   1  ; 90
+0061  ADDNV   12  12   2  ; 32
+0062  CALL    10   2   2
+0000  . FUNCC               ; string.char
+0063  TSETV   10   5   9
+0064  FORL     6 => 0057
+---- TRACE 1 IR
+....              SNAP   #0   [ ---- ---- ]
+0001 rdi      int SLOAD  #8    CI
+0002          u8  XLOAD  [0x2501e130471]  V
+0003          int BAND   0002  +12 
+0004       >  int EQ     0003  +0  
+0005 rax      fun SLOAD  #0    R
+0006 rax      tab FLOAD  0005  func.env
+0007          int FLOAD  0006  tab.hmask
+0008       >  int EQ     0007  +63 
+0009 rax      p64 FLOAD  0006  tab.node
+0010       >  p64 HREFK  0009  "string" @35
+0011 rax   >  tab HLOAD  0010
+0012          int FLOAD  0011  tab.hmask
+0013       >  int EQ     0012  +31 
+0014 rax      p64 FLOAD  0011  tab.node
+0015       >  p64 HREFK  0014  "char" @17
+0016 r14   >  fun HLOAD  0015
+0017 xmm10    num CONV   0001  num.int
+0018 xmm10    num MUL    0017  +37 
+0019 xmm12    num DIV    0018  +90 
+0020 xmm11    num FPMATH 0019  floor
+0021 xmm11    num MUL    0020  +90 
+0022 xmm10    num SUB    0018  0021
+0024       >  fun EQ     0016  string.char
+0025 rdx      int CONV   0022  int.num none
+0026 rdx      int ADD    0025  +32 
+0027       >  int ULE    0026  +255
+0028 rax      str TOSTR  0026  CHAR
+0029 rbp   >  tab SLOAD  #7    T
+0030 r13      int FLOAD  0029  tab.asize
+0031       >  int ABC    0030  0001
+0032 r12      p64 FLOAD  0029  tab.array
+0033          p64 AREF   0032  0001
+0034          tab FLOAD  0029  tab.meta
+0035       >  tab EQ     0034  NULL
+0036          str ASTORE 0033  0028
+0037          nil TBAR   0029
+0038 rdi    + int ADD    0001  +1  
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ]
+0039       >  int LE     0038  +700
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- 0038 ---- ---- 0038 ]
+0040 ------------ LOOP ------------
+0041          u8  XLOAD  [0x2501e130471]  V
+0042          int BAND   0041  +12 
+0043       >  int EQ     0042  +0  
+0044 xmm7     num CONV   0038  num.int
+0045 xmm7     num MUL    0044  +37 
+0046 xmm6     num DIV    0045  +90 
+0047 xmm6     num FPMATH 0046  floor
+0048 xmm6     num MUL    0047  +90 
+0049 xmm7     num SUB    0045  0048
+0050 rdx      int CONV   0049  int.num none
+0051 rdx      int ADD    0050  +32 
+0052       >  int ULE    0051  +255
+0053 rax      str TOSTR  0051  CHAR
+0054       >  int ABC    0030  0038
+0055          p64 AREF   0032  0038
+0056          str ASTORE 0055  0053
+0057          nil TBAR   0029
+0058 rdi    + int ADD    0038  +1  
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ]
+0059       >  int LE     0058  +700
+0060 rdi      int PHI    0038  0058
+---- TRACE 1 mcode 622
+7ff6935dfd92  mov dword [rbx-0xee0], 0x1
+7ff6935dfd9c  lea r15, [rbx+0x6658]
+7ff6935dfda3  movsd xmm9, [rbx+0x18de0]
+7ff6935dfdac  movsd xmm8, [rbx+0x18dc8]
+7ff6935dfdb5  mov rcx, [rbx-0xf88]
+7ff6935dfdbc  cmp rcx, [rbx-0xf80]
+7ff6935dfdc3  jb 0x7ff6935dfdde
+7ff6935dfdc5  mov edx, 0x1
+7ff6935dfdca  lea rcx, [rbx-0xf98]
+7ff6935dfdd1  call 0x7ff66be53f30	->lj_gc_step_jit
+7ff6935dfdd6  test eax, eax
+7ff6935dfdd8  jnz 0x7ff6935d0020	->0
+7ff6935dfdde  mov rdx, [rbx-0xe18]
+7ff6935dfde5  mov rcx, [rbx-0xe20]
+7ff6935dfdec  cvttsd2si edi, [rdx+0x30]
+7ff6935dfdf1  test byte [rbx-0xf07], 0xc
+7ff6935dfdf8  jnz 0x7ff6935d0020	->0
+7ff6935dfdfe  rorx rax, [rdx-0x10], 0x2f
+7ff6935dfe05  shr rax, 0x11
+7ff6935dfe09  mov rax, [rax+0x10]
+7ff6935dfe0d  cmp dword [rax+0x34], +0x3f
+7ff6935dfe11  jnz 0x7ff6935d0020	->0
+7ff6935dfe17  mov rax, [rax+0x28]
+7ff6935dfe1b  mov rsi, 0xfffd82501e133c18
+7ff6935dfe25  cmp rsi, [rax+0x350]
+7ff6935dfe2c  jnz 0x7ff6935d0020	->0
+7ff6935dfe32  rorx rax, [rax+0x348], 0x2f
+7ff6935dfe3c  cmp ax, -0x0c
+7ff6935dfe40  jnz 0x7ff6935d0020	->0
+7ff6935dfe46  shr rax, 0x11
+7ff6935dfe4a  cmp dword [rax+0x34], +0x1f
+7ff6935dfe4e  jnz 0x7ff6935d0020	->0
+7ff6935dfe54  mov rax, [rax+0x28]
+7ff6935dfe58  mov rsi, 0xfffd82501e137a08
+7ff6935dfe62  cmp rsi, [rax+0x1a0]
+7ff6935dfe69  jnz 0x7ff6935d0020	->0
+7ff6935dfe6f  rorx r14, [rax+0x198], 0x2f
+7ff6935dfe79  cmp r14w, -0x09
+7ff6935dfe7e  jnz 0x7ff6935d0020	->0
+7ff6935dfe84  shr r14, 0x11
+7ff6935dfe88  xorps xmm10, xmm10
+7ff6935dfe8c  cvtsi2sd xmm10, edi
+7ff6935dfe91  mulsd xmm10, xmm9
+7ff6935dfe96  movaps xmm12, xmm10
+7ff6935dfe9a  divsd xmm12, xmm8
+7ff6935dfe9f  roundsd xmm11, xmm12, 0x09
+7ff6935dfea6  mulsd xmm11, xmm8
+7ff6935dfeab  subsd xmm10, xmm11
+7ff6935dfeb0  cmp r14, r15
+7ff6935dfeb3  jnz 0x7ff6935d0020	->0
+7ff6935dfeb9  cvttsd2si edx, xmm10
+7ff6935dfebe  add edx, +0x20
+7ff6935dfec1  cmp edx, 0xff
+7ff6935dfec7  ja 0x7ff6935d0020	->0
+7ff6935dfecd  call 0x7ff66be39240	->lj_strfmt_char
+7ff6935dfed2  mov rdx, [rbx-0xe18]
+7ff6935dfed9  rorx rbp, [rdx+0x28], 0x2f
+7ff6935dfee0  cmp bp, -0x0c
+7ff6935dfee4  jnz 0x7ff6935d0020	->0
+7ff6935dfeea  shr rbp, 0x11
+7ff6935dfeee  mov r13d, [rbp+0x30]
+7ff6935dfef2  cmp edi, r13d
+7ff6935dfef5  jnb 0x7ff6935d0020	->0
+7ff6935dfefb  mov r12, [rbp+0x10]
+7ff6935dfeff  cmp qword [rbp+0x20], +0x00
+7ff6935dff04  jnz 0x7ff6935d0020	->0
+7ff6935dff0a  mov [r12+rdi*8], rax
+7ff6935dff0e  or dword [r12+rdi*8+0x4], 0xfffd8000
+7ff6935dff17  test byte [rbp+0x8], 0x4
+7ff6935dff1b  jz 0x7ff6935dff33
+7ff6935dff1d  and byte [rbp+0x8], 0xfb
+7ff6935dff21  mov rsi, [rbx-0xf58]
+7ff6935dff28  mov [rbx-0xf58], rbp
+7ff6935dff2f  mov [rbp+0x18], rsi
+7ff6935dff33  add edi, +0x01
+7ff6935dff36  cmp edi, 0x2bc
+7ff6935dff3c  jg 0x7ff6935d0024	->1
+->LOOP:
+7ff6935dff42  mov rcx, [rbx-0xf88]
+7ff6935dff49  cmp rcx, [rbx-0xf80]
+7ff6935dff50  jb 0x7ff6935dff6b
+7ff6935dff52  mov edx, 0x1
+7ff6935dff57  lea rcx, [rbx-0xf98]
+7ff6935dff5e  call 0x7ff66be53f30	->lj_gc_step_jit
+7ff6935dff63  test eax, eax
+7ff6935dff65  jnz 0x7ff6935d0028	->2
+7ff6935dff6b  mov rcx, [rbx-0xe20]
+7ff6935dff72  test byte [rbx-0xf07], 0xc
+7ff6935dff79  jnz 0x7ff6935d0028	->2
+7ff6935dff7f  xorps xmm7, xmm7
+7ff6935dff82  cvtsi2sd xmm7, edi
+7ff6935dff86  mulsd xmm7, xmm9
+7ff6935dff8b  movaps xmm6, xmm7
+7ff6935dff8e  divsd xmm6, xmm8
+7ff6935dff93  roundsd xmm6, xmm6, 0x09
+7ff6935dff99  mulsd xmm6, xmm8
+7ff6935dff9e  subsd xmm7, xmm6
+7ff6935dffa2  cvttsd2si edx, xmm7
+7ff6935dffa6  add edx, +0x20
+7ff6935dffa9  cmp edx, 0xff
+7ff6935dffaf  ja 0x7ff6935d0028	->2
+7ff6935dffb5  call 0x7ff66be39240	->lj_strfmt_char
+7ff6935dffba  cmp edi, r13d
+7ff6935dffbd  jnb 0x7ff6935d0028	->2
+7ff6935dffc3  mov [r12+rdi*8], rax
+7ff6935dffc7  or dword [r12+rdi*8+0x4], 0xfffd8000
+7ff6935dffd0  test byte [rbp+0x8], 0x4
+7ff6935dffd4  jz 0x7ff6935dffec
+7ff6935dffd6  and byte [rbp+0x8], 0xfb
+7ff6935dffda  mov rsi, [rbx-0xf58]
+7ff6935dffe1  mov [rbx-0xf58], rbp
+7ff6935dffe8  mov [rbp+0x18], rsi
+7ff6935dffec  add edi, +0x01
+7ff6935dffef  cmp edi, 0x2bc
+7ff6935dfff5  jle 0x7ff6935dff42	->LOOP
+7ff6935dfffb  jmp 0x7ff6935d002c	->3
+---- TRACE 1 stop -> loop
+
+---- TRACE 2 start bodyfwd.lua:55
+0140  KSHORT  31   0
+0141  TSETV   31  25  30
+0142  KSHORT  31   0
+0143  TSETV   31  26  30
+0144  FORL    27 => 0140
+---- TRACE 2 IR
+....              SNAP   #0   [ ---- ---- ]
+0001 rax   >  int SLOAD  #30   CRI
+0002       >  int LE     0001  +2147483646
+0003 rdi      int SLOAD  #29   CI
+0004          u8  XLOAD  [0x2501e130471]  V
+0005          int BAND   0004  +12 
+0006       >  int EQ     0005  +0  
+0007 r9    >  tab SLOAD  #27   T
+0008 rsi      int FLOAD  0007  tab.asize
+0009       >  int ABC    0008  0003
+0010 rbp      p64 FLOAD  0007  tab.array
+0011          p64 AREF   0010  0003
+0012          tab FLOAD  0007  tab.meta
+0013       >  tab EQ     0012  NULL
+0014          num ASTORE 0011  +0  
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 ---- ]
+0015 r8    >  tab SLOAD  #28   T
+0016 rdx      int FLOAD  0015  tab.asize
+0017       >  int ABC    0016  0003
+0018 rcx      p64 FLOAD  0015  tab.array
+0019          p64 AREF   0018  0003
+0020          tab FLOAD  0015  tab.meta
+0021       >  tab EQ     0020  NULL
+0022          num ASTORE 0019  +0  
+0023 rdi    + int ADD    0003  +1  
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0024       >  int LE     0023  0001
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0023 0001 ---- 0023 ]
+0025 ------------ LOOP ------------
+0026          u8  XLOAD  [0x2501e130471]  V
+0027          int BAND   0026  +12 
+0028       >  int EQ     0027  +0  
+0029       >  int ABC    0008  0023
+0030          p64 AREF   0010  0023
+0031          num ASTORE 0030  +0  
+....              SNAP   #4   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0023 0001 ---- 0023 ---- ]
+0032       >  int ABC    0016  0023
+0033          p64 AREF   0018  0023
+0034          num ASTORE 0033  +0  
+0035 rdi    + int ADD    0023  +1  
+....              SNAP   #5   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0036       >  int LE     0035  0001
+0037 rdi      int PHI    0023  0035
+---- TRACE 2 mcode 259
+7ff6935dfc81  mov dword [rbx-0xee0], 0x2
+7ff6935dfc8b  xorps xmm0, xmm0
+7ff6935dfc8e  movsd xmm7, [rdx+0xe0]
+7ff6935dfc96  cvttsd2si eax, xmm7
+7ff6935dfc9a  xorps xmm6, xmm6
+7ff6935dfc9d  cvtsi2sd xmm6, eax
+7ff6935dfca1  ucomisd xmm7, xmm6
+7ff6935dfca5  jnz 0x7ff6935d0020	->0
+7ff6935dfcab  jpe 0x7ff6935d0020	->0
+7ff6935dfcb1  cmp eax, 0x7ffffffe
+7ff6935dfcb7  jg 0x7ff6935d0020	->0
+7ff6935dfcbd  cvttsd2si edi, [rdx+0xd8]
+7ff6935dfcc5  test byte [rbx-0xf07], 0xc
+7ff6935dfccc  jnz 0x7ff6935d0020	->0
+7ff6935dfcd2  rorx r9, [rdx+0xc8], 0x2f
+7ff6935dfcdc  cmp r9w, -0x0c
+7ff6935dfce1  jnz 0x7ff6935d0020	->0
+7ff6935dfce7  shr r9, 0x11
+7ff6935dfceb  mov esi, [r9+0x30]
+7ff6935dfcef  cmp edi, esi
+7ff6935dfcf1  jnb 0x7ff6935d0020	->0
+7ff6935dfcf7  mov rbp, [r9+0x10]
+7ff6935dfcfb  cmp qword [r9+0x20], +0x00
+7ff6935dfd00  jnz 0x7ff6935d0020	->0
+7ff6935dfd06  movsd [rbp+rdi*8+0x0], xmm0
+7ff6935dfd0c  rorx r8, [rdx+0xd0], 0x2f
+7ff6935dfd16  cmp r8w, -0x0c
+7ff6935dfd1b  jnz 0x7ff6935d0024	->1
+7ff6935dfd21  shr r8, 0x11
+7ff6935dfd25  mov edx, [r8+0x30]
+7ff6935dfd29  cmp edi, edx
+7ff6935dfd2b  jnb 0x7ff6935d0024	->1
+7ff6935dfd31  mov rcx, [r8+0x10]
+7ff6935dfd35  cmp qword [r8+0x20], +0x00
+7ff6935dfd3a  jnz 0x7ff6935d0024	->1
+7ff6935dfd40  movsd [rcx+rdi*8], xmm0
+7ff6935dfd45  add edi, +0x01
+7ff6935dfd48  cmp edi, eax
+7ff6935dfd4a  jg 0x7ff6935d0028	->2
+->LOOP:
+7ff6935dfd50  test byte [rbx-0xf07], 0xc
+7ff6935dfd57  jnz 0x7ff6935d002c	->3
+7ff6935dfd5d  cmp edi, esi
+7ff6935dfd5f  jnb 0x7ff6935d002c	->3
+7ff6935dfd65  movsd [rbp+rdi*8+0x0], xmm0
+7ff6935dfd6b  cmp edi, edx
+7ff6935dfd6d  jnb 0x7ff6935d0030	->4
+7ff6935dfd73  movsd [rcx+rdi*8], xmm0
+7ff6935dfd78  add edi, +0x01
+7ff6935dfd7b  cmp edi, eax
+7ff6935dfd7d  jle 0x7ff6935dfd50	->LOOP
+7ff6935dfd7f  jmp 0x7ff6935d0034	->5
+---- TRACE 2 stop -> loop
+
+---- TRACE 3 start body-bshl:3
+0011  GGET     9   2      ; "bit"
+0012  TGETS    9   9   3  ; "lshift"
+0013  MOV     11   4
+0014  KSHORT  12  30
+0015  CALL     9   2   3
+0000  . FUNCC               ; bit.lshift
+0016  GGET    10   0      ; "string"
+0017  TGETS   10  10   1  ; "byte"
+0018  MOV     12   0
+0019  MOV     13   8
+0020  CALL    10   2   3
+0000  . FUNCC               ; string.byte
+0021  KSHORT  11  30
+0022  BSHL    10  10  11
+0023  TSETV   10   2   8
+0024  TSETV    9   3   8
+0025  GGET    11   0      ; "string"
+0026  TGETS   11  11   1  ; "byte"
+0027  MOV     13   0
+0028  ADDVN   14   8   0  ; 1
+0029  CALL    11   2   3
+0000  . FUNCC               ; string.byte
+0030  MOV      4  11
+0031  FORL     5 => 0011
+---- TRACE 3 IR
+....              SNAP   #0   [ ---- ---- ]
+0001 rax   >  int SLOAD  #8    CRI
+0002       >  int LE     0001  +2147483646
+0003 r10      int SLOAD  #7    CI
+0004          u8  XLOAD  [0x2501e130471]  V
+0005          int BAND   0004  +12 
+0006       >  int EQ     0005  +0  
+0007 rcx      fun SLOAD  #0    R
+0008 rcx      tab FLOAD  0007  func.env
+0009          int FLOAD  0008  tab.hmask
+0010       >  int EQ     0009  +63 
+0011 rcx      p64 FLOAD  0008  tab.node
+0012       >  p64 HREFK  0011  "bit" @33
+0013 rdx   >  tab HLOAD  0012
+0014          int FLOAD  0013  tab.hmask
+0015       >  int EQ     0014  +15 
+0016 rdx      p64 FLOAD  0013  tab.node
+0017       >  p64 HREFK  0016  "lshift" @0
+0018 rdx   >  fun HLOAD  0017
+0019 xmm2  >  num SLOAD  #6    T
+0020       >  fun EQ     0018  bit.lshift
+0021 r11      int TOBIT  0019  bias
+0022 r11      int BSHL   0021  +30 
+0023       >  p64 HREFK  0011  "string" @35
+0024 rcx   >  tab HLOAD  0023
+0025          int FLOAD  0024  tab.hmask
+0026       >  int EQ     0025  +31 
+0027 rcx      p64 FLOAD  0024  tab.node
+0028       >  p64 HREFK  0027  "byte" @16
+0029 rdx   >  fun HLOAD  0028
+0030 rcx   >  str SLOAD  #2    T
+0031       >  fun EQ     0029  string.byte
+0032 rdx      int FLOAD  0030  str.len
+0033 rbp      int ADD    0003  -1  
+0034       >  int ULT    0033  0032
+0035          p64 STRREF 0030  0033
+0036 rsi      u8  XLOAD  0035  R
+0037 rsi      i64 BSHL   0036  +30 
+0038 xmm1     num CONV   0037  num.i64
+0039 rbp      i64 CONV   0038  i64.num none
+0040       >  i64 EQ     0039  0037
+0041 rbp   >  tab SLOAD  #4    T
+0042          int FLOAD  0041  tab.asize
+0043       >  p32 ABC    0042  0001
+0044 r9       p64 FLOAD  0041  tab.array
+0045          p64 AREF   0044  0003
+0046          tab FLOAD  0041  tab.meta
+0047       >  tab EQ     0046  NULL
+0048          num ASTORE 0045  0038
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0022 ---- ---- ]
+0049 r12   >  tab SLOAD  #5    T
+0050          int FLOAD  0049  tab.asize
+0051       >  p32 ABC    0050  0001
+0052 r8       p64 FLOAD  0049  tab.array
+0053          p64 AREF   0052  0003
+0054          tab FLOAD  0049  tab.meta
+0055       >  tab EQ     0054  NULL
+0056 xmm0     num CONV   0022  num.int
+0057          num ASTORE 0053  0056
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 ---- ---- ---- ]
+0059 rsi    + int ADD    0003  +1  
+0060       >  int UGT    0032  0003
+0061          p64 STRREF 0030  0003
+0062 [20]   + u8  XLOAD  0061  R
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- 0062 ]
+0063       >  int LE     0059  0001
+....              SNAP   #4   [ ---- ---- ---- ---- ---- ---- 0062 0059 0001 ---- 0059 ]
+0064 ------------ LOOP ------------
+0065          u8  XLOAD  [0x2501e130471]  V
+0066          int BAND   0065  +12 
+0067       >  int EQ     0066  +0  
+0068          num CONV   0062  num.int
+0069 rdi      int BSHL   0062  +30 
+0070 r15      int ADD    0059  -1  
+0071       >  int ULT    0070  0032
+0072          p64 STRREF 0030  0070
+0073 r14      u8  XLOAD  0072  R
+0074 r14      i64 BSHL   0073  +30 
+0075 xmm7     num CONV   0074  num.i64
+0076 r15      i64 CONV   0075  i64.num none
+0077       >  i64 EQ     0076  0074
+0078          p64 AREF   0044  0059
+0079          num ASTORE 0078  0075
+0080          p64 AREF   0052  0059
+0081 xmm7     num CONV   0069  num.int
+0082          num ASTORE 0080  0081
+....              SNAP   #5   [ ---- ---- ---- ---- ---- ---- 0062 0059 0001 ---- 0059 ---- ---- ---- ]
+0083 rsi    + int ADD    0059  +1  
+0084       >  int ULT    0059  0032
+0085          p64 STRREF 0030  0059
+0086 rdi    + u8  XLOAD  0085  R
+....              SNAP   #6   [ ---- ---- ---- ---- ---- ---- 0086 ]
+0087       >  int LE     0083  0001
+0088 rsi      int PHI    0059  0083
+0089 rdi      u8  PHI    0062  0086
+0090 rdi      nil RENAME 0059  #5  
+0091 rbp      nil RENAME 0062  #32767
+---- TRACE 3 mcode 718
+7ff6935df9b3  add rsp, -0x10
+7ff6935df9b7  mov dword [rbx-0xee0], 0x3
+7ff6935df9c1  mov r13, rdx
+7ff6935df9c4  lea rsi, [rbx+0x89d0]
+7ff6935df9cb  lea rbp, [rbx+0x65f8]
+7ff6935df9d2  movsd xmm3, [rbx+0x65990]
+7ff6935df9da  movsd xmm7, [r13+0x30]
+7ff6935df9e0  cvttsd2si eax, xmm7
+7ff6935df9e4  xorps xmm6, xmm6
+7ff6935df9e7  cvtsi2sd xmm6, eax
+7ff6935df9eb  ucomisd xmm7, xmm6
+7ff6935df9ef  jnz 0x7ff6935d0020	->0
+7ff6935df9f5  jpe 0x7ff6935d0020	->0
+7ff6935df9fb  cmp eax, 0x7ffffffe
+7ff6935dfa01  jg 0x7ff6935d0020	->0
+7ff6935dfa07  cvttsd2si r10d, [r13+0x28]
+7ff6935dfa0d  test byte [rbx-0xf07], 0xc
+7ff6935dfa14  jnz 0x7ff6935d0020	->0
+7ff6935dfa1a  rorx rcx, [r13-0x10], 0x2f
+7ff6935dfa21  shr rcx, 0x11
+7ff6935dfa25  mov rcx, [rcx+0x10]
+7ff6935dfa29  cmp dword [rcx+0x34], +0x3f
+7ff6935dfa2d  jnz 0x7ff6935d0020	->0
+7ff6935dfa33  mov rcx, [rcx+0x28]
+7ff6935dfa37  mov rdi, 0xfffd82501e139a30
+7ff6935dfa41  cmp rdi, [rcx+0x320]
+7ff6935dfa48  jnz 0x7ff6935d0020	->0
+7ff6935dfa4e  rorx rdx, [rcx+0x318], 0x2f
+7ff6935dfa58  cmp dx, -0x0c
+7ff6935dfa5c  jnz 0x7ff6935d0020	->0
+7ff6935dfa62  shr rdx, 0x11
+7ff6935dfa66  cmp dword [rdx+0x34], +0x0f
+7ff6935dfa6a  jnz 0x7ff6935d0020	->0
+7ff6935dfa70  mov rdx, [rdx+0x28]
+7ff6935dfa74  mov rdi, 0xfffd82501e139d80
+7ff6935dfa7e  cmp rdi, [rdx+0x8]
+7ff6935dfa82  jnz 0x7ff6935d0020	->0
+7ff6935dfa88  rorx rdx, [rdx], 0x2f
+7ff6935dfa8e  cmp dx, -0x09
+7ff6935dfa92  jnz 0x7ff6935d0020	->0
+7ff6935dfa98  shr rdx, 0x11
+7ff6935dfa9c  cmp dword [r13+0x24], 0xfff90000
+7ff6935dfaa4  jnb 0x7ff6935d0020	->0
+7ff6935dfaaa  movsd xmm2, [r13+0x20]
+7ff6935dfab0  cmp rdx, rsi
+7ff6935dfab3  jnz 0x7ff6935d0020	->0
+7ff6935dfab9  addsd xmm2, xmm3
+7ff6935dfabd  movd r11d, xmm2
+7ff6935dfac2  shl r11d, 0x1e
+7ff6935dfac6  mov rdi, 0xfffd82501e133c18
+7ff6935dfad0  cmp rdi, [rcx+0x350]
+7ff6935dfad7  jnz 0x7ff6935d0020	->0
+7ff6935dfadd  rorx rcx, [rcx+0x348], 0x2f
+7ff6935dfae7  cmp cx, -0x0c
+7ff6935dfaeb  jnz 0x7ff6935d0020	->0
+7ff6935dfaf1  shr rcx, 0x11
+7ff6935dfaf5  cmp dword [rcx+0x34], +0x1f
+7ff6935dfaf9  jnz 0x7ff6935d0020	->0
+7ff6935dfaff  mov rcx, [rcx+0x28]
+7ff6935dfb03  mov rdi, 0xfffd82501e1379a8
+7ff6935dfb0d  cmp rdi, [rcx+0x188]
+7ff6935dfb14  jnz 0x7ff6935d0020	->0
+7ff6935dfb1a  rorx rdx, [rcx+0x180], 0x2f
+7ff6935dfb24  cmp dx, -0x09
+7ff6935dfb28  jnz 0x7ff6935d0020	->0
+7ff6935dfb2e  shr rdx, 0x11
+7ff6935dfb32  rorx rcx, [r13+0x0], 0x2f
+7ff6935dfb39  cmp cx, -0x05
+7ff6935dfb3d  jnz 0x7ff6935d0020	->0
+7ff6935dfb43  shr rcx, 0x11
+7ff6935dfb47  cmp rdx, rbp
+7ff6935dfb4a  jnz 0x7ff6935d0020	->0
+7ff6935dfb50  mov edx, [rcx+0x14]
+7ff6935dfb53  lea ebp, [r10-0x1]
+7ff6935dfb57  cmp ebp, edx
+7ff6935dfb59  jnb 0x7ff6935d0020	->0
+7ff6935dfb5f  movzx esi, byte [rcx+rbp+0x18]
+7ff6935dfb64  shl rsi, 0x1e
+7ff6935dfb68  xorps xmm1, xmm1
+7ff6935dfb6b  cvtsi2sd xmm1, rsi
+7ff6935dfb70  cvttsd2si rbp, xmm1
+7ff6935dfb75  cmp rbp, rsi
+7ff6935dfb78  jnz 0x7ff6935d0020	->0
+7ff6935dfb7e  rorx rbp, [r13+0x10], 0x2f
+7ff6935dfb85  cmp bp, -0x0c
+7ff6935dfb89  jnz 0x7ff6935d0020	->0
+7ff6935dfb8f  shr rbp, 0x11
+7ff6935dfb93  cmp eax, [rbp+0x30]
+7ff6935dfb96  jnb 0x7ff6935d0020	->0
+7ff6935dfb9c  mov r9, [rbp+0x10]
+7ff6935dfba0  cmp qword [rbp+0x20], +0x00
+7ff6935dfba5  jnz 0x7ff6935d0020	->0
+7ff6935dfbab  movsd [r9+r10*8], xmm1
+7ff6935dfbb1  rorx r12, [r13+0x18], 0x2f
+7ff6935dfbb8  cmp r12w, -0x0c
+7ff6935dfbbd  jnz 0x7ff6935d0024	->1
+7ff6935dfbc3  shr r12, 0x11
+7ff6935dfbc7  cmp eax, [r12+0x30]
+7ff6935dfbcc  jnb 0x7ff6935d0024	->1
+7ff6935dfbd2  mov r8, [r12+0x10]
+7ff6935dfbd7  cmp qword [r12+0x20], +0x00
+7ff6935dfbdd  jnz 0x7ff6935d0024	->1
+7ff6935dfbe3  xorps xmm0, xmm0
+7ff6935dfbe6  cvtsi2sd xmm0, r11d
+7ff6935dfbeb  movsd [r8+r10*8], xmm0
+7ff6935dfbf1  lea esi, [r10+0x1]
+7ff6935dfbf5  cmp r10d, edx
+7ff6935dfbf8  jnb 0x7ff6935d0028	->2
+7ff6935dfbfe  movzx edi, byte [rcx+r10+0x18]
+7ff6935dfc04  mov [rsp+0x20], edi
+7ff6935dfc08  cmp esi, eax
+7ff6935dfc0a  jg 0x7ff6935d002c	->3
+->LOOP:
+7ff6935dfc10  mov [rsp+0x20], edi
+7ff6935dfc14  test byte [rbx-0xf07], 0xc
+7ff6935dfc1b  jnz 0x7ff6935d0030	->4
+7ff6935dfc21  mov ebp, edi
+7ff6935dfc23  shl edi, 0x1e
+7ff6935dfc26  lea r15d, [rsi-0x1]
+7ff6935dfc2a  cmp r15d, edx
+7ff6935dfc2d  jnb 0x7ff6935d0030	->4
+7ff6935dfc33  movzx r14d, byte [rcx+r15+0x18]
+7ff6935dfc39  shl r14, 0x1e
+7ff6935dfc3d  xorps xmm7, xmm7
+7ff6935dfc40  cvtsi2sd xmm7, r14
+7ff6935dfc45  cvttsd2si r15, xmm7
+7ff6935dfc4a  cmp r15, r14
+7ff6935dfc4d  jnz 0x7ff6935d0030	->4
+7ff6935dfc53  movsd [r9+rsi*8], xmm7
+7ff6935dfc59  xorps xmm7, xmm7
+7ff6935dfc5c  cvtsi2sd xmm7, edi
+7ff6935dfc60  movsd [r8+rsi*8], xmm7
+7ff6935dfc66  mov edi, esi
+7ff6935dfc68  add esi, +0x01
+7ff6935dfc6b  cmp edi, edx
+7ff6935dfc6d  jnb 0x7ff6935d0034	->5
+7ff6935dfc73  movzx edi, byte [rcx+rdi+0x18]
+7ff6935dfc78  cmp esi, eax
+7ff6935dfc7a  jle 0x7ff6935dfc10	->LOOP
+7ff6935dfc7c  jmp 0x7ff6935d0038	->6
+---- TRACE 3 stop -> loop
+
+---- TRACE 4 start bodyfwd.lua:58
+0158  MOV     36   6
+0159  TGETS   34   6  35  ; "byte"
+0160  MOV     37  33
+0161  CALL    34   2   3
+0000  . FUNCC               ; string.byte
+0162  MULVV   34  34   8
+0163  TGETV   35  25  33
+0164  ISEQV   35  34
+0165  JMP     35 => 0176
+0176  TGETS   35  18  33  ; "name"
+0177  ISNES   35  37      ; "ctl-ours"
+0178  JMP     35 => 0187
+0187  MOV     35  11
+0188  MOV     39   6
+0189  TGETS   37   6  35  ; "byte"
+0190  MOV     40  33
+0191  CALL    37   2   3
+0000  . FUNCC               ; string.byte
+0192  MULVV   37  37   8
+0193  CALL    35   2   2
+0000  . FUNCF    2          ; bodyfwd.lua:27
+0001  . UGET     1   0      ; P32
+0002  . MODVV    0   0   1
+0003  . UGET     1   1      ; P31
+0004  . ISGT     1   0
+0005  . JMP      1 => 0008
+0006  . UGET     1   0      ; P32
+0007  . SUBVV    0   0   1
+0008  . RET1     0   2
+0194  TGETV   36  26  33
+0195  ISEQV   36  35
+0196  JMP     36 => 0198
+0198  FORL    30 => 0158
+---- TRACE 4 IR
+....              SNAP   #0   [ ---- ---- ]
+0001 rax   >  int SLOAD  #33   CRI
+0002       >  int LE     0001  +2147483646
+0003 rdi      int SLOAD  #32   CI
+0004          u8  XLOAD  [0x2501e130471]  V
+0005          int BAND   0004  +12 
+0006       >  int EQ     0005  +0  
+0007 rbp   >  str SLOAD  #8    T
+0008 rcx      tab FLOAD  nil   #184
+0009          int FLOAD  0008  tab.hmask
+0010       >  int EQ     0009  +1  
+0011 rcx      p64 FLOAD  0008  tab.node
+0012       >  p64 HREFK  0011  "__index" @1
+0013 rcx   >  tab HLOAD  0012
+0014          int FLOAD  0013  tab.hmask
+0015       >  int EQ     0014  +31 
+0016 rcx      p64 FLOAD  0013  tab.node
+0017       >  p64 HREFK  0016  "byte" @16
+0018 rcx   >  fun HLOAD  0017
+0019       >  fun EQ     0018  string.byte
+0020 r8       int FLOAD  0007  str.len
+0021 rcx      int ADD    0003  -1  
+0022       >  int ULT    0021  0020
+0023          p64 STRREF 0007  0021
+0024 rcx      u8  XLOAD  0023  R
+0025 xmm3  >  num SLOAD  #10   T
+0026 xmm8     num CONV   0024  num.int
+0027 xmm8     num MUL    0026  0025
+0028 rcx   >  tab SLOAD  #27   T
+0029          int FLOAD  0028  tab.asize
+0030       >  p32 ABC    0029  0001
+0031 rdx      p64 FLOAD  0028  tab.array
+0032          p64 AREF   0031  0003
+0033 xmm12 >  num ALOAD  0032
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0027 ]
+0034       >  num EQ     0033  0027
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0027 ]
+0035 rcx   >  tab SLOAD  #20   T
+0036          int FLOAD  0035  tab.hmask
+0037       >  int EQ     0036  +1  
+0038 r15      p64 FLOAD  0035  tab.node
+0039       >  p64 HREFK  0038  "name" @1
+0040 r13   >  str HLOAD  0039
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0027 ]
+0041       >  str NE     0040  "ctl-ours"
+....              SNAP   #4   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0027 ]
+0042 r11   >  fun SLOAD  #13   T
+0043       >  fun EQ     0042  bodyfwd.lua:27
+0044 xmm11    num MUL    0027  +2.3283064365387e-10
+0045 xmm10    num FPMATH 0044  floor
+0046 xmm10    num MUL    0045  +4294967296
+0047 xmm9     num SUB    0027  0046
+....              SNAP   #5   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0027 bodyfwd.lua:27 ftsz|0047 ]
+0048       >  num GE     0047  +2147483648
+....              SNAP   #6   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 0027 bodyfwd.lua:27 ftsz|0047 ]
+0049 xmm5     num SUB    0047  +4294967296
+0050 r9    >  tab SLOAD  #28   T
+0051          int FLOAD  0050  tab.asize
+0052       >  p32 ABC    0051  0001
+0053 rcx      p64 FLOAD  0050  tab.array
+0054          p64 AREF   0053  0003
+0055 xmm4  >  num ALOAD  0054
+....              SNAP   #7   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- ---- ---- ---- ]
+0056       >  num EQ     0055  0049
+0057 rdi    + int ADD    0003  +1  
+....              SNAP   #8   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0058       >  int LE     0057  0001
+....              SNAP   #9   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0057 0001 ---- 0057 ]
+0059 ------------ LOOP ------------
+0060          u8  XLOAD  [0x2501e130471]  V
+0061          int BAND   0060  +12 
+0062       >  int EQ     0061  +0  
+0063 rsi      int ADD    0057  -1  
+0064       >  int ULT    0063  0020
+0065          p64 STRREF 0007  0063
+0066 rsi      u8  XLOAD  0065  R
+0067 xmm15    num CONV   0066  num.int
+0068 xmm15    num MUL    0067  0025
+0069          p64 AREF   0031  0057
+0070 xmm7  >  num ALOAD  0069
+....              SNAP   #10  [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0057 0001 ---- 0057 0068 ]
+0071       >  num EQ     0070  0068
+0072 xmm7     num MUL    0068  +2.3283064365387e-10
+0073 xmm7     num FPMATH 0072  floor
+0074 xmm7     num MUL    0073  +4294967296
+0075 xmm14    num SUB    0068  0074
+....              SNAP   #11  [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0057 0001 ---- 0057 0068 bodyfwd.lua:27 ftsz|0075 ]
+0076       >  num GE     0075  +2147483648
+....              SNAP   #12  [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0057 0001 ---- 0057 0068 bodyfwd.lua:27 ftsz|0075 ]
+0077 xmm6     num SUB    0075  +4294967296
+0078          p64 AREF   0053  0057
+0079 xmm7  >  num ALOAD  0078
+....              SNAP   #13  [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0057 0001 ---- 0057 ---- ---- ]
+0080       >  num EQ     0079  0077
+0081 rdi    + int ADD    0057  +1  
+....              SNAP   #14  [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0082       >  int LE     0081  0001
+0083 rdi      int PHI    0057  0081
+---- TRACE 4 mcode 841
+7ff6935df66a  mov dword [rbx-0xee0], 0x4
+7ff6935df674  mov r10, rdx
+7ff6935df677  lea r14, [rbx+0x27380]
+7ff6935df67e  lea r12, [rbx+0x26e18]
+7ff6935df685  lea rdx, [rbx+0x65f8]
+7ff6935df68c  movsd xmm2, [rbx+0x74358]
+7ff6935df694  movsd xmm1, [rbx+0x74348]
+7ff6935df69c  movsd xmm0, [rbx+0x74368]
+7ff6935df6a4  movsd xmm7, [r10+0xf8]
+7ff6935df6ad  cvttsd2si eax, xmm7
+7ff6935df6b1  xorps xmm6, xmm6
+7ff6935df6b4  cvtsi2sd xmm6, eax
+7ff6935df6b8  ucomisd xmm7, xmm6
+7ff6935df6bc  jnz 0x7ff6935d0020	->0
+7ff6935df6c2  jpe 0x7ff6935d0020	->0
+7ff6935df6c8  cmp eax, 0x7ffffffe
+7ff6935df6ce  jg 0x7ff6935d0020	->0
+7ff6935df6d4  cvttsd2si edi, [r10+0xf0]
+7ff6935df6dd  test byte [rbx-0xf07], 0xc
+7ff6935df6e4  jnz 0x7ff6935d0020	->0
+7ff6935df6ea  rorx rbp, [r10+0x30], 0x2f
+7ff6935df6f1  cmp bp, -0x05
+7ff6935df6f5  jnz 0x7ff6935d0020	->0
+7ff6935df6fb  shr rbp, 0x11
+7ff6935df6ff  mov rcx, [rbx-0xd18]
+7ff6935df706  cmp dword [rcx+0x34], +0x01
+7ff6935df70a  jnz 0x7ff6935d0020	->0
+7ff6935df710  mov rcx, [rcx+0x28]
+7ff6935df714  mov rsi, 0xfffd82501e132d00
+7ff6935df71e  cmp rsi, [rcx+0x20]
+7ff6935df722  jnz 0x7ff6935d0020	->0
+7ff6935df728  rorx rcx, [rcx+0x18], 0x2f
+7ff6935df72f  cmp cx, -0x0c
+7ff6935df733  jnz 0x7ff6935d0020	->0
+7ff6935df739  shr rcx, 0x11
+7ff6935df73d  cmp dword [rcx+0x34], +0x1f
+7ff6935df741  jnz 0x7ff6935d0020	->0
+7ff6935df747  mov rcx, [rcx+0x28]
+7ff6935df74b  mov rsi, 0xfffd82501e1379a8
+7ff6935df755  cmp rsi, [rcx+0x188]
+7ff6935df75c  jnz 0x7ff6935d0020	->0
+7ff6935df762  rorx rcx, [rcx+0x180], 0x2f
+7ff6935df76c  cmp cx, -0x09
+7ff6935df770  jnz 0x7ff6935d0020	->0
+7ff6935df776  shr rcx, 0x11
+7ff6935df77a  cmp rcx, rdx
+7ff6935df77d  jnz 0x7ff6935d0020	->0
+7ff6935df783  mov r8d, [rbp+0x14]
+7ff6935df787  lea ecx, [rdi-0x1]
+7ff6935df78a  cmp ecx, r8d
+7ff6935df78d  jnb 0x7ff6935d0020	->0
+7ff6935df793  movzx ecx, byte [rbp+rcx+0x18]
+7ff6935df798  cmp dword [r10+0x44], 0xfff90000
+7ff6935df7a0  jnb 0x7ff6935d0020	->0
+7ff6935df7a6  movsd xmm3, [r10+0x40]
+7ff6935df7ac  xorps xmm8, xmm8
+7ff6935df7b0  cvtsi2sd xmm8, ecx
+7ff6935df7b5  mulsd xmm8, xmm3
+7ff6935df7ba  rorx rcx, [r10+0xc8], 0x2f
+7ff6935df7c4  cmp cx, -0x0c
+7ff6935df7c8  jnz 0x7ff6935d0020	->0
+7ff6935df7ce  shr rcx, 0x11
+7ff6935df7d2  cmp eax, [rcx+0x30]
+7ff6935df7d5  jnb 0x7ff6935d0020	->0
+7ff6935df7db  mov rdx, [rcx+0x10]
+7ff6935df7df  cmp dword [rdx+rdi*8+0x4], 0xfff90000
+7ff6935df7e7  jnb 0x7ff6935d0020	->0
+7ff6935df7ed  movsd xmm12, [rdx+rdi*8]
+7ff6935df7f3  ucomisd xmm12, xmm8
+7ff6935df7f8  jpe 0x7ff6935d0024	->1
+7ff6935df7fe  jnz 0x7ff6935d0024	->1
+7ff6935df804  rorx rcx, [r10+0x90], 0x2f
+7ff6935df80e  cmp cx, -0x0c
+7ff6935df812  jnz 0x7ff6935d0028	->2
+7ff6935df818  shr rcx, 0x11
+7ff6935df81c  cmp dword [rcx+0x34], +0x01
+7ff6935df820  jnz 0x7ff6935d0028	->2
+7ff6935df826  mov r15, [rcx+0x28]
+7ff6935df82a  mov rsi, 0xfffd82501e15acf8
+7ff6935df834  cmp rsi, [r15+0x20]
+7ff6935df838  jnz 0x7ff6935d0028	->2
+7ff6935df83e  rorx r13, [r15+0x18], 0x2f
+7ff6935df845  cmp r13w, -0x05
+7ff6935df84a  jnz 0x7ff6935d0028	->2
+7ff6935df850  shr r13, 0x11
+7ff6935df854  cmp r13, r14
+7ff6935df857  jz 0x7ff6935d002c	->3
+7ff6935df85d  rorx r11, [r10+0x58], 0x2f
+7ff6935df864  cmp r11w, -0x09
+7ff6935df869  jnz 0x7ff6935d0030	->4
+7ff6935df86f  shr r11, 0x11
+7ff6935df873  cmp r11, r12
+7ff6935df876  jnz 0x7ff6935d0030	->4
+7ff6935df87c  movaps xmm11, xmm8
+7ff6935df880  mulsd xmm11, xmm2
+7ff6935df885  roundsd xmm10, xmm11, 0x09
+7ff6935df88c  mulsd xmm10, xmm0
+7ff6935df891  movaps xmm9, xmm8
+7ff6935df895  subsd xmm9, xmm10
+7ff6935df89a  ucomisd xmm9, xmm1
+7ff6935df89f  jb 0x7ff6935d0034	->5
+7ff6935df8a5  movaps xmm5, xmm9
+7ff6935df8a9  subsd xmm5, xmm0
+7ff6935df8ad  rorx r9, [r10+0xd0], 0x2f
+7ff6935df8b7  cmp r9w, -0x0c
+7ff6935df8bc  jnz 0x7ff6935d0038	->6
+7ff6935df8c2  shr r9, 0x11
+7ff6935df8c6  cmp eax, [r9+0x30]
+7ff6935df8ca  jnb 0x7ff6935d0038	->6
+7ff6935df8d0  mov rcx, [r9+0x10]
+7ff6935df8d4  cmp dword [rcx+rdi*8+0x4], 0xfff90000
+7ff6935df8dc  jnb 0x7ff6935d0038	->6
+7ff6935df8e2  movsd xmm4, [rcx+rdi*8]
+7ff6935df8e7  ucomisd xmm4, xmm5
+7ff6935df8eb  jpe 0x7ff6935d003c	->7
+7ff6935df8f1  jnz 0x7ff6935d003c	->7
+7ff6935df8f7  add edi, +0x01
+7ff6935df8fa  cmp edi, eax
+7ff6935df8fc  jg 0x7ff6935d0040	->8
+->LOOP:
+7ff6935df902  test byte [rbx-0xf07], 0xc
+7ff6935df909  jnz 0x7ff6935d0044	->9
+7ff6935df90f  lea esi, [rdi-0x1]
+7ff6935df912  cmp esi, r8d
+7ff6935df915  jnb 0x7ff6935d0044	->9
+7ff6935df91b  movzx esi, byte [rbp+rsi+0x18]
+7ff6935df920  xorps xmm15, xmm15
+7ff6935df924  cvtsi2sd xmm15, esi
+7ff6935df929  mulsd xmm15, xmm3
+7ff6935df92e  cmp dword [rdx+rdi*8+0x4], 0xfff90000
+7ff6935df936  jnb 0x7ff6935d0044	->9
+7ff6935df93c  movsd xmm7, [rdx+rdi*8]
+7ff6935df941  ucomisd xmm7, xmm15
+7ff6935df946  jpe 0x7ff6935d0048	->10
+7ff6935df94c  jnz 0x7ff6935d0048	->10
+7ff6935df952  movaps xmm7, xmm15
+7ff6935df956  mulsd xmm7, xmm2
+7ff6935df95a  roundsd xmm7, xmm7, 0x09
+7ff6935df960  mulsd xmm7, xmm0
+7ff6935df964  movaps xmm14, xmm15
+7ff6935df968  subsd xmm14, xmm7
+7ff6935df96d  ucomisd xmm14, xmm1
+7ff6935df972  jb 0x7ff6935d004c	->11
+7ff6935df978  movaps xmm6, xmm14
+7ff6935df97c  subsd xmm6, xmm0
+7ff6935df980  cmp dword [rcx+rdi*8+0x4], 0xfff90000
+7ff6935df988  jnb 0x7ff6935d0050	->12
+7ff6935df98e  movsd xmm7, [rcx+rdi*8]
+7ff6935df993  ucomisd xmm7, xmm6
+7ff6935df997  jpe 0x7ff6935d0054	->13
+7ff6935df99d  jnz 0x7ff6935d0054	->13
+7ff6935df9a3  add edi, +0x01
+7ff6935df9a6  cmp edi, eax
+7ff6935df9a8  jle 0x7ff6935df902	->LOOP
+7ff6935df9ae  jmp 0x7ff6935d0058	->14
+---- TRACE 4 stop -> loop
+
+---- TRACE 5 start 4/5 bodyfwd.lua:27
+0008  . RET1     0   2
+0194  TGETV   36  26  33
+0195  ISEQV   36  35
+0196  JMP     36 => 0198
+0198  JFORL   30   4
+---- TRACE 5 IR
+0001 rdi      int SLOAD  #32   PI
+0002 rax      int SLOAD  #33   PRI
+0003 xmm8     num SLOAD  #36   PI
+0004 xmm9     num SLOAD  #39   PI
+....              SNAP   #0   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- 0001 0003 bodyfwd.lua:27 ftsz|0004 ]
+0005          u8  XLOAD  [0x2501e130471]  V
+0006          int BAND   0005  +12 
+0007       >  int EQ     0006  +0  
+0008 rsi   >  tab SLOAD  #28   T
+0009          int FLOAD  0008  tab.asize
+0010       >  int ABC    0009  0001
+0011 rsi      p64 FLOAD  0008  tab.array
+0012          p64 AREF   0011  0001
+0013 xmm7  >  num ALOAD  0012
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- ---- ---- ---- ]
+0014       >  num EQ     0013  0004
+0015 rdi      int ADD    0001  +1  
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0016       >  int LE     0015  0002
+0017 xmm7     num CONV   0015  num.int
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0017 0002 ---- 0017 ]
+---- TRACE 5 mcode 138
+7ff6935df5d9  mov dword [rbx-0xee0], 0x5
+7ff6935df5e3  mov rdx, r10
+7ff6935df5e6  test byte [rbx-0xf07], 0xc
+7ff6935df5ed  jnz 0x7ff6935d0020	->0
+7ff6935df5f3  rorx rsi, [rdx+0xd0], 0x2f
+7ff6935df5fd  cmp si, -0x0c
+7ff6935df601  jnz 0x7ff6935d0020	->0
+7ff6935df607  shr rsi, 0x11
+7ff6935df60b  cmp edi, [rsi+0x30]
+7ff6935df60e  jnb 0x7ff6935d0020	->0
+7ff6935df614  mov rsi, [rsi+0x10]
+7ff6935df618  cmp dword [rsi+rdi*8+0x4], 0xfff90000
+7ff6935df620  jnb 0x7ff6935d0020	->0
+7ff6935df626  movsd xmm7, [rsi+rdi*8]
+7ff6935df62b  ucomisd xmm7, xmm9
+7ff6935df630  jpe 0x7ff6935d0024	->1
+7ff6935df636  jnz 0x7ff6935d0024	->1
+7ff6935df63c  add edi, +0x01
+7ff6935df63f  cmp edi, eax
+7ff6935df641  jg 0x7ff6935d0028	->2
+7ff6935df647  xorps xmm7, xmm7
+7ff6935df64a  cvtsi2sd xmm7, edi
+7ff6935df64e  movsd [rdx+0x108], xmm7
+7ff6935df656  movsd [rdx+0xf0], xmm7
+7ff6935df65e  jmp 0x7ff6935df66a
+---- TRACE 5 stop -> 4
+
+---- TRACE 6 start 4/11 bodyfwd.lua:27
+0008  . RET1     0   2
+0194  TGETV   36  26  33
+0195  ISEQV   36  35
+0196  JMP     36 => 0198
+0198  JFORL   30   4
+---- TRACE 6 IR
+0001 rdi      int SLOAD  #32   PI
+0002 rax      int SLOAD  #33   PRI
+0003 xmm15    num SLOAD  #36   PI
+0004 xmm14    num SLOAD  #39   PI
+....              SNAP   #0   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- 0001 0003 bodyfwd.lua:27 ftsz|0004 ]
+0005          u8  XLOAD  [0x2501e130471]  V
+0006          int BAND   0005  +12 
+0007       >  int EQ     0006  +0  
+0008 rsi   >  tab SLOAD  #28   T
+0009          int FLOAD  0008  tab.asize
+0010       >  int ABC    0009  0001
+0011 rsi      p64 FLOAD  0008  tab.array
+0012          p64 AREF   0011  0001
+0013 xmm7  >  num ALOAD  0012
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- ---- ---- ---- ]
+0014       >  num EQ     0013  0004
+0015 rdi      int ADD    0001  +1  
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0016       >  int LE     0015  0002
+0017 xmm7     num CONV   0015  num.int
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0017 0002 ---- 0017 ]
+---- TRACE 6 mcode 138
+7ff6935df548  mov dword [rbx-0xee0], 0x6
+7ff6935df552  mov rdx, r10
+7ff6935df555  test byte [rbx-0xf07], 0xc
+7ff6935df55c  jnz 0x7ff6935d0020	->0
+7ff6935df562  rorx rsi, [rdx+0xd0], 0x2f
+7ff6935df56c  cmp si, -0x0c
+7ff6935df570  jnz 0x7ff6935d0020	->0
+7ff6935df576  shr rsi, 0x11
+7ff6935df57a  cmp edi, [rsi+0x30]
+7ff6935df57d  jnb 0x7ff6935d0020	->0
+7ff6935df583  mov rsi, [rsi+0x10]
+7ff6935df587  cmp dword [rsi+rdi*8+0x4], 0xfff90000
+7ff6935df58f  jnb 0x7ff6935d0020	->0
+7ff6935df595  movsd xmm7, [rsi+rdi*8]
+7ff6935df59a  ucomisd xmm7, xmm14
+7ff6935df59f  jpe 0x7ff6935d0024	->1
+7ff6935df5a5  jnz 0x7ff6935d0024	->1
+7ff6935df5ab  add edi, +0x01
+7ff6935df5ae  cmp edi, eax
+7ff6935df5b0  jg 0x7ff6935d0028	->2
+7ff6935df5b6  xorps xmm7, xmm7
+7ff6935df5b9  cvtsi2sd xmm7, edi
+7ff6935df5bd  movsd [rdx+0x108], xmm7
+7ff6935df5c5  movsd [rdx+0xf0], xmm7
+7ff6935df5cd  jmp 0x7ff6935df66a
+---- TRACE 6 stop -> 4
+
+---- TRACE 7 start 2/3 bodyfwd.lua:55
+0140  KSHORT  31   0
+0141  TSETV   31  25  30
+0142  KSHORT  31   0
+0143  TSETV   31  26  30
+0144  JFORL   27   2
+---- TRACE 7 IR
+0001 rdi      int SLOAD  #29   PI
+0002 [20]     int SLOAD  #30   PRI
+....              SNAP   #0   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- 0001 ]
+0003          u8  XLOAD  [0x2501e130471]  V
+0004          int BAND   0003  +12 
+0005       >  int EQ     0004  +0  
+0006 rdx   >  tab SLOAD  #27   T
+0007          int FLOAD  0006  tab.asize
+0008       >  int ULE    0007  0001
+0009          int FLOAD  0006  tab.hmask
+0010       >  int EQ     0009  +0  
+0011          tab FLOAD  0006  tab.meta
+0012       >  tab EQ     0011  NULL
+0013 xmm6     num CONV   0001  num.int
+0014 rax      p64 NEWREF 0006  0013
+0015          num HSTORE 0014  +0  
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- 0001 ---- ]
+0016 rdx   >  tab SLOAD  #28   T
+0017          int FLOAD  0016  tab.asize
+0018       >  int ULE    0017  0001
+0019          int FLOAD  0016  tab.hmask
+0020       >  int EQ     0019  +0  
+0021          tab FLOAD  0016  tab.meta
+0022       >  tab EQ     0021  NULL
+0023 rsi      p64 NEWREF 0016  0013
+0024          num HSTORE 0023  +0  
+0025 rdi      int ADD    0001  +1  
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0026       >  int LE     0025  0002
+0027 xmm7     num CONV   0025  num.int
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0027 0002 ---- 0027 ]
+---- TRACE 7 mcode 276
+7ff6935df431  add rsp, -0x10
+7ff6935df435  mov dword [rbx-0xee0], 0x7
+7ff6935df43f  mov [rsp+0x20], eax
+7ff6935df443  mov rdx, [rbx-0xe18]
+7ff6935df44a  mov rcx, [rbx-0xe20]
+7ff6935df451  xorps xmm7, xmm7
+7ff6935df454  test byte [rbx-0xf07], 0xc
+7ff6935df45b  jnz 0x7ff6935d0020	->0
+7ff6935df461  rorx rdx, [rdx+0xc8], 0x2f
+7ff6935df46b  cmp dx, -0x0c
+7ff6935df46f  jnz 0x7ff6935d0020	->0
+7ff6935df475  shr rdx, 0x11
+7ff6935df479  cmp edi, [rdx+0x30]
+7ff6935df47c  jb 0x7ff6935d0020	->0
+7ff6935df482  cmp dword [rdx+0x34], +0x00
+7ff6935df486  jnz 0x7ff6935d0020	->0
+7ff6935df48c  cmp qword [rdx+0x20], +0x00
+7ff6935df491  jnz 0x7ff6935d0020	->0
+7ff6935df497  xorps xmm6, xmm6
+7ff6935df49a  cvtsi2sd xmm6, edi
+7ff6935df49e  lea r8, [rbx-0xeb0]
+7ff6935df4a5  movsd [r8], xmm6
+7ff6935df4aa  call 0x7ff66be557b0	->lj_tab_newkey
+7ff6935df4af  mov rdx, [rbx-0xe18]
+7ff6935df4b6  mov rcx, [rbx-0xe20]
+7ff6935df4bd  movsd [rax], xmm7
+7ff6935df4c1  rorx rdx, [rdx+0xd0], 0x2f
+7ff6935df4cb  cmp dx, -0x0c
+7ff6935df4cf  jnz 0x7ff6935d0024	->1
+7ff6935df4d5  shr rdx, 0x11
+7ff6935df4d9  cmp edi, [rdx+0x30]
+7ff6935df4dc  jb 0x7ff6935d0024	->1
+7ff6935df4e2  cmp dword [rdx+0x34], +0x00
+7ff6935df4e6  jnz 0x7ff6935d0024	->1
+7ff6935df4ec  cmp qword [rdx+0x20], +0x00
+7ff6935df4f1  jnz 0x7ff6935d0024	->1
+7ff6935df4f7  lea r8, [rbx-0xeb0]
+7ff6935df4fe  movsd [r8], xmm6
+7ff6935df503  call 0x7ff66be557b0	->lj_tab_newkey
+7ff6935df508  mov rsi, rax
+7ff6935df50b  mov rdx, [rbx-0xe18]
+7ff6935df512  mov eax, [rsp+0x20]
+7ff6935df516  movsd [rsi], xmm7
+7ff6935df51a  add edi, +0x01
+7ff6935df51d  cmp edi, eax
+7ff6935df51f  jg 0x7ff6935d0028	->2
+7ff6935df525  xorps xmm7, xmm7
+7ff6935df528  cvtsi2sd xmm7, edi
+7ff6935df52c  movsd [rdx+0xf0], xmm7
+7ff6935df534  movsd [rdx+0xd8], xmm7
+7ff6935df53c  add rsp, +0x10
+7ff6935df540  jmp 0x7ff6935dfc81
+---- TRACE 7 stop -> 2
+
+---- TRACE 8 start ctl-ours:3
+0011  GGET     9   0      ; "string"
+0012  TGETS    9   9   1  ; "byte"
+0013  MOV     11   0
+0014  MOV     12   8
+0015  CALL     9   2   3
+0000  . FUNCC               ; string.byte
+0016  KSHORT  10  30
+0017  BSHL     9   9  10
+0018  TSETV    9   2   8
+0019  MULVN   10   4   0  ; 1073741824
+0020  MODVN   10  10   1  ; 4294967296
+0021  TSETV   10   3   8
+0022  GGET    10   0      ; "string"
+0023  TGETS   10  10   1  ; "byte"
+0024  MOV     12   0
+0025  ADDVN   13   8   2  ; 1
+0026  CALL    10   2   3
+0000  . FUNCC               ; string.byte
+0027  MOV      4  10
+0028  FORL     5 => 0011
+---- TRACE 8 IR
+....              SNAP   #0   [ ---- ---- ]
+0001 rax   >  int SLOAD  #8    CRI
+0002       >  int LE     0001  +2147483646
+0003 r10      int SLOAD  #7    CI
+0004          u8  XLOAD  [0x2501e130471]  V
+0005          int BAND   0004  +12 
+0006       >  int EQ     0005  +0  
+0007 rcx      fun SLOAD  #0    R
+0008 rcx      tab FLOAD  0007  func.env
+0009          int FLOAD  0008  tab.hmask
+0010       >  int EQ     0009  +63 
+0011 rcx      p64 FLOAD  0008  tab.node
+0012       >  p64 HREFK  0011  "string" @35
+0013 rcx   >  tab HLOAD  0012
+0014          int FLOAD  0013  tab.hmask
+0015       >  int EQ     0014  +31 
+0016 rcx      p64 FLOAD  0013  tab.node
+0017       >  p64 HREFK  0016  "byte" @16
+0018 rdx   >  fun HLOAD  0017
+0019 rcx   >  str SLOAD  #2    T
+0020       >  fun EQ     0018  string.byte
+0021 rdx      int FLOAD  0019  str.len
+0022 rbp      int ADD    0003  -1  
+0023       >  int ULT    0022  0021
+0024          p64 STRREF 0019  0022
+0025 rbp      u8  XLOAD  0024  R
+0026 rbp      i64 BSHL   0025  +30 
+0027 xmm8     num CONV   0026  num.i64
+0028 r14      i64 CONV   0027  i64.num none
+0029       >  i64 EQ     0028  0026
+0030 r13   >  tab SLOAD  #4    T
+0031          int FLOAD  0030  tab.asize
+0032       >  p32 ABC    0031  0001
+0033 r9       p64 FLOAD  0030  tab.array
+0034          p64 AREF   0033  0003
+0035          tab FLOAD  0030  tab.meta
+0036       >  tab EQ     0035  NULL
+0037          num ASTORE 0034  0027
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 ---- ---- ]
+0038 xmm3  >  num SLOAD  #6    T
+0039 xmm3     num MUL    0038  +1073741824
+0040 xmm5     num MUL    0039  +2.3283064365387e-10
+0041 xmm4     num FPMATH 0040  floor
+0042 xmm4     num MUL    0041  +4294967296
+0043 xmm3     num SUB    0039  0042
+0044 r11   >  tab SLOAD  #5    T
+0045          int FLOAD  0044  tab.asize
+0046       >  p32 ABC    0045  0001
+0047 r8       p64 FLOAD  0044  tab.array
+0048          p64 AREF   0047  0003
+0049          tab FLOAD  0044  tab.meta
+0050       >  tab EQ     0049  NULL
+0051          num ASTORE 0048  0043
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- 0003 0001 ---- 0003 ---- ---- ]
+0053 rsi    + int ADD    0003  +1  
+0054       >  int UGT    0021  0003
+0055          p64 STRREF 0019  0003
+0056 rdi    + u8  XLOAD  0055  R
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- 0056 ]
+0057       >  int LE     0053  0001
+....              SNAP   #4   [ ---- ---- ---- ---- ---- ---- 0056 0053 0001 ---- 0053 ]
+0058 ------------ LOOP ------------
+0059          u8  XLOAD  [0x2501e130471]  V
+0060          int BAND   0059  +12 
+0061       >  int EQ     0060  +0  
+0062 rdi      int ADD    0053  -1  
+0063       >  int ULT    0062  0021
+0064          p64 STRREF 0019  0062
+0065 r15      u8  XLOAD  0064  R
+0066 r15      i64 BSHL   0065  +30 
+0067 xmm7     num CONV   0066  num.i64
+0068 rdi      i64 CONV   0067  i64.num none
+0069       >  i64 EQ     0068  0066
+0070          p64 AREF   0033  0053
+0071          num ASTORE 0070  0067
+0072 xmm7     num CONV   0056  num.int
+0073 xmm7     num MUL    0072  +1073741824
+0074 xmm6     num MUL    0073  +2.3283064365387e-10
+0075 xmm6     num FPMATH 0074  floor
+0076 xmm6     num MUL    0075  +4294967296
+0077 xmm7     num SUB    0073  0076
+0078          p64 AREF   0047  0053
+0079          num ASTORE 0078  0077
+....              SNAP   #5   [ ---- ---- ---- ---- ---- ---- 0056 0053 0001 ---- 0053 ---- ---- ]
+0080 rsi    + int ADD    0053  +1  
+0081       >  int ULT    0053  0021
+0082          p64 STRREF 0019  0053
+0083 rdi    + u8  XLOAD  0082  R
+....              SNAP   #6   [ ---- ---- ---- ---- ---- ---- 0083 ]
+0084       >  int LE     0080  0001
+0085 rsi      int PHI    0053  0080
+0086 rdi      u8  PHI    0056  0083
+0087 rdi      nil RENAME 0053  #5  
+0088 rbp      nil RENAME 0056  #4  
+---- TRACE 8 mcode 636
+7ff6935df1b5  mov dword [rbx-0xee0], 0x8
+7ff6935df1bf  mov r12, rdx
+7ff6935df1c2  lea rbp, [rbx+0x65f8]
+7ff6935df1c9  movsd xmm2, [rbx+0x50e68]
+7ff6935df1d1  movsd xmm1, [rbx+0x50e48]
+7ff6935df1d9  movsd xmm0, [rbx+0x50e58]
+7ff6935df1e1  movsd xmm7, [r12+0x30]
+7ff6935df1e8  cvttsd2si eax, xmm7
+7ff6935df1ec  xorps xmm6, xmm6
+7ff6935df1ef  cvtsi2sd xmm6, eax
+7ff6935df1f3  ucomisd xmm7, xmm6
+7ff6935df1f7  jnz 0x7ff6935d0020	->0
+7ff6935df1fd  jpe 0x7ff6935d0020	->0
+7ff6935df203  cmp eax, 0x7ffffffe
+7ff6935df209  jg 0x7ff6935d0020	->0
+7ff6935df20f  cvttsd2si r10d, [r12+0x28]
+7ff6935df216  test byte [rbx-0xf07], 0xc
+7ff6935df21d  jnz 0x7ff6935d0020	->0
+7ff6935df223  rorx rcx, [r12-0x10], 0x2f
+7ff6935df22b  shr rcx, 0x11
+7ff6935df22f  mov rcx, [rcx+0x10]
+7ff6935df233  cmp dword [rcx+0x34], +0x3f
+7ff6935df237  jnz 0x7ff6935d0020	->0
+7ff6935df23d  mov rcx, [rcx+0x28]
+7ff6935df241  mov rdi, 0xfffd82501e133c18
+7ff6935df24b  cmp rdi, [rcx+0x350]
+7ff6935df252  jnz 0x7ff6935d0020	->0
+7ff6935df258  rorx rcx, [rcx+0x348], 0x2f
+7ff6935df262  cmp cx, -0x0c
+7ff6935df266  jnz 0x7ff6935d0020	->0
+7ff6935df26c  shr rcx, 0x11
+7ff6935df270  cmp dword [rcx+0x34], +0x1f
+7ff6935df274  jnz 0x7ff6935d0020	->0
+7ff6935df27a  mov rcx, [rcx+0x28]
+7ff6935df27e  mov rdi, 0xfffd82501e1379a8
+7ff6935df288  cmp rdi, [rcx+0x188]
+7ff6935df28f  jnz 0x7ff6935d0020	->0
+7ff6935df295  rorx rdx, [rcx+0x180], 0x2f
+7ff6935df29f  cmp dx, -0x09
+7ff6935df2a3  jnz 0x7ff6935d0020	->0
+7ff6935df2a9  shr rdx, 0x11
+7ff6935df2ad  rorx rcx, [r12], 0x2f
+7ff6935df2b4  cmp cx, -0x05
+7ff6935df2b8  jnz 0x7ff6935d0020	->0
+7ff6935df2be  shr rcx, 0x11
+7ff6935df2c2  cmp rdx, rbp
+7ff6935df2c5  jnz 0x7ff6935d0020	->0
+7ff6935df2cb  mov edx, [rcx+0x14]
+7ff6935df2ce  lea ebp, [r10-0x1]
+7ff6935df2d2  cmp ebp, edx
+7ff6935df2d4  jnb 0x7ff6935d0020	->0
+7ff6935df2da  movzx ebp, byte [rcx+rbp+0x18]
+7ff6935df2df  shl rbp, 0x1e
+7ff6935df2e3  xorps xmm8, xmm8
+7ff6935df2e7  cvtsi2sd xmm8, rbp
+7ff6935df2ec  cvttsd2si r14, xmm8
+7ff6935df2f1  cmp r14, rbp
+7ff6935df2f4  jnz 0x7ff6935d0020	->0
+7ff6935df2fa  rorx r13, [r12+0x10], 0x2f
+7ff6935df302  cmp r13w, -0x0c
+7ff6935df307  jnz 0x7ff6935d0020	->0
+7ff6935df30d  shr r13, 0x11
+7ff6935df311  cmp eax, [r13+0x30]
+7ff6935df315  jnb 0x7ff6935d0020	->0
+7ff6935df31b  mov r9, [r13+0x10]
+7ff6935df31f  cmp qword [r13+0x20], +0x00
+7ff6935df324  jnz 0x7ff6935d0020	->0
+7ff6935df32a  movsd [r9+r10*8], xmm8
+7ff6935df330  cmp dword [r12+0x24], 0xfff90000
+7ff6935df339  jnb 0x7ff6935d0024	->1
+7ff6935df33f  movsd xmm3, [r12+0x20]
+7ff6935df346  mulsd xmm3, xmm2
+7ff6935df34a  movaps xmm5, xmm3
+7ff6935df34d  mulsd xmm5, xmm1
+7ff6935df351  roundsd xmm4, xmm5, 0x09
+7ff6935df357  mulsd xmm4, xmm0
+7ff6935df35b  subsd xmm3, xmm4
+7ff6935df35f  rorx r11, [r12+0x18], 0x2f
+7ff6935df367  cmp r11w, -0x0c
+7ff6935df36c  jnz 0x7ff6935d0024	->1
+7ff6935df372  shr r11, 0x11
+7ff6935df376  cmp eax, [r11+0x30]
+7ff6935df37a  jnb 0x7ff6935d0024	->1
+7ff6935df380  mov r8, [r11+0x10]
+7ff6935df384  cmp qword [r11+0x20], +0x00
+7ff6935df389  jnz 0x7ff6935d0024	->1
+7ff6935df38f  movsd [r8+r10*8], xmm3
+7ff6935df395  lea esi, [r10+0x1]
+7ff6935df399  cmp r10d, edx
+7ff6935df39c  jnb 0x7ff6935d0028	->2
+7ff6935df3a2  movzx edi, byte [rcx+r10+0x18]
+7ff6935df3a8  cmp esi, eax
+7ff6935df3aa  jg 0x7ff6935d002c	->3
+->LOOP:
+7ff6935df3b0  mov ebp, edi
+7ff6935df3b2  test byte [rbx-0xf07], 0xc
+7ff6935df3b9  jnz 0x7ff6935d0030	->4
+7ff6935df3bf  lea edi, [rsi-0x1]
+7ff6935df3c2  cmp edi, edx
+7ff6935df3c4  jnb 0x7ff6935d0030	->4
+7ff6935df3ca  movzx r15d, byte [rcx+rdi+0x18]
+7ff6935df3d0  shl r15, 0x1e
+7ff6935df3d4  xorps xmm7, xmm7
+7ff6935df3d7  cvtsi2sd xmm7, r15
+7ff6935df3dc  cvttsd2si rdi, xmm7
+7ff6935df3e1  cmp rdi, r15
+7ff6935df3e4  jnz 0x7ff6935d0030	->4
+7ff6935df3ea  movsd [r9+rsi*8], xmm7
+7ff6935df3f0  xorps xmm7, xmm7
+7ff6935df3f3  cvtsi2sd xmm7, ebp
+7ff6935df3f7  mulsd xmm7, xmm2
+7ff6935df3fb  movaps xmm6, xmm7
+7ff6935df3fe  mulsd xmm6, xmm1
+7ff6935df402  roundsd xmm6, xmm6, 0x09
+7ff6935df408  mulsd xmm6, xmm0
+7ff6935df40c  subsd xmm7, xmm6
+7ff6935df410  movsd [r8+rsi*8], xmm7
+7ff6935df416  mov edi, esi
+7ff6935df418  add esi, +0x01
+7ff6935df41b  cmp edi, edx
+7ff6935df41d  jnb 0x7ff6935d0034	->5
+7ff6935df423  movzx edi, byte [rcx+rdi+0x18]
+7ff6935df428  cmp esi, eax
+7ff6935df42a  jle 0x7ff6935df3b0	->LOOP
+7ff6935df42c  jmp 0x7ff6935d0038	->6
+---- TRACE 8 stop -> loop
+
+---- TRACE 9 start 4/3 bodyfwd.lua:61
+0179  MOV     37   6
+0180  TGETS   35   6  35  ; "byte"
+0181  MOV     38  33
+0182  CALL    35   2   3
+0000  . FUNCC               ; string.byte
+0183  MULVV   35  35   8
+0184  MODVV   35  35   9
+0185  IST         35
+0186  JMP     36 => 0194
+0194  TGETV   36  26  33
+0195  ISEQV   36  35
+0196  JMP     36 => 0198
+0198  JFORL   30   4
+---- TRACE 9 IR
+0001 rdi      int SLOAD  #32   PI
+0002 rax      int SLOAD  #33   PRI
+0003 xmm8     num SLOAD  #36   PI
+....              SNAP   #0   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- 0001 0003 ]
+0004          u8  XLOAD  [0x2501e130471]  V
+0005          int BAND   0004  +12 
+0006       >  int EQ     0005  +0  
+0007 rsi   >  str SLOAD  #8    T
+0008 rbp      tab FLOAD  nil   #184
+0009          int FLOAD  0008  tab.hmask
+0010       >  int EQ     0009  +1  
+0011 rbp      p64 FLOAD  0008  tab.node
+0012       >  p64 HREFK  0011  "__index" @1
+0013 rbp   >  tab HLOAD  0012
+0014          int FLOAD  0013  tab.hmask
+0015       >  int EQ     0014  +31 
+0016 rbp      p64 FLOAD  0013  tab.node
+0017       >  p64 HREFK  0016  "byte" @16
+0018 rbp   >  fun HLOAD  0017
+0019       >  fun EQ     0018  string.byte
+0020          int FLOAD  0007  str.len
+0021 rbp      int ADD    0001  -1  
+0022       >  int ULT    0021  0020
+0023          p64 STRREF 0007  0021
+0024 rsi      u8  XLOAD  0023  R
+0025       >  num SLOAD  #10   T
+0026 xmm6     num CONV   0024  num.int
+0027 xmm6     num MUL    0026  0025
+0028 xmm15 >  num SLOAD  #11   T
+0029 xmm7     num DIV    0027  0028
+0030 xmm7     num FPMATH 0029  floor
+0031 xmm7     num MUL    0030  0028
+0032 xmm6     num SUB    0027  0031
+0033 rsi   >  tab SLOAD  #28   T
+0034          int FLOAD  0033  tab.asize
+0035       >  int ABC    0034  0001
+0036 rsi      p64 FLOAD  0033  tab.array
+0037          p64 AREF   0036  0001
+0038 xmm7  >  num ALOAD  0037
+....              SNAP   #1   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0001 0002 ---- ---- ---- ---- ]
+0039       >  num EQ     0038  0032
+0040 rdi      int ADD    0001  +1  
+....              SNAP   #2   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ]
+0041       >  int LE     0040  0002
+0042 xmm7     num CONV   0040  num.int
+....              SNAP   #3   [ ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- 0042 0002 ---- 0042 ]
+---- TRACE 9 mcode 381
+7ff6935df031  mov dword [rbx-0xee0], 0x9
+7ff6935df03b  mov rdx, r10
+7ff6935df03e  lea r15, [rbx+0x65f8]
+7ff6935df045  test byte [rbx-0xf07], 0xc
+7ff6935df04c  jnz 0x7ff6935d0020	->0
+7ff6935df052  rorx rsi, [rdx+0x30], 0x2f
+7ff6935df059  cmp si, -0x05
+7ff6935df05d  jnz 0x7ff6935d0020	->0
+7ff6935df063  shr rsi, 0x11
+7ff6935df067  mov rbp, [rbx-0xd18]
+7ff6935df06e  cmp dword [rbp+0x34], +0x01
+7ff6935df072  jnz 0x7ff6935d0020	->0
+7ff6935df078  mov rbp, [rbp+0x28]
+7ff6935df07c  mov rcx, 0xfffd82501e132d00
+7ff6935df086  cmp rcx, [rbp+0x20]
+7ff6935df08a  jnz 0x7ff6935d0020	->0
+7ff6935df090  rorx rbp, [rbp+0x18], 0x2f
+7ff6935df097  cmp bp, -0x0c
+7ff6935df09b  jnz 0x7ff6935d0020	->0
+7ff6935df0a1  shr rbp, 0x11
+7ff6935df0a5  cmp dword [rbp+0x34], +0x1f
+7ff6935df0a9  jnz 0x7ff6935d0020	->0
+7ff6935df0af  mov rbp, [rbp+0x28]
+7ff6935df0b3  mov rcx, 0xfffd82501e1379a8
+7ff6935df0bd  cmp rcx, [rbp+0x188]
+7ff6935df0c4  jnz 0x7ff6935d0020	->0
+7ff6935df0ca  rorx rbp, [rbp+0x180], 0x2f
+7ff6935df0d4  cmp bp, -0x09
+7ff6935df0d8  jnz 0x7ff6935d0020	->0
+7ff6935df0de  shr rbp, 0x11
+7ff6935df0e2  cmp rbp, r15
+7ff6935df0e5  jnz 0x7ff6935d0020	->0
+7ff6935df0eb  lea ebp, [rdi-0x1]
+7ff6935df0ee  cmp ebp, [rsi+0x14]
+7ff6935df0f1  jnb 0x7ff6935d0020	->0
+7ff6935df0f7  movzx esi, byte [rsi+rbp+0x18]
+7ff6935df0fc  cmp dword [rdx+0x44], 0xfff90000
+7ff6935df103  jnb 0x7ff6935d0020	->0
+7ff6935df109  xorps xmm6, xmm6
+7ff6935df10c  cvtsi2sd xmm6, esi
+7ff6935df110  mulsd xmm6, [rdx+0x40]
+7ff6935df115  cmp dword [rdx+0x4c], 0xfff90000
+7ff6935df11c  jnb 0x7ff6935d0020	->0
+7ff6935df122  movsd xmm15, [rdx+0x48]
+7ff6935df128  movaps xmm7, xmm6
+7ff6935df12b  divsd xmm7, xmm15
+7ff6935df130  roundsd xmm7, xmm7, 0x09
+7ff6935df136  mulsd xmm7, xmm15
+7ff6935df13b  subsd xmm6, xmm7
+7ff6935df13f  rorx rsi, [rdx+0xd0], 0x2f
+7ff6935df149  cmp si, -0x0c
+7ff6935df14d  jnz 0x7ff6935d0020	->0
+7ff6935df153  shr rsi, 0x11
+7ff6935df157  cmp edi, [rsi+0x30]
+7ff6935df15a  jnb 0x7ff6935d0020	->0
+7ff6935df160  mov rsi, [rsi+0x10]
+7ff6935df164  cmp dword [rsi+rdi*8+0x4], 0xfff90000
+7ff6935df16c  jnb 0x7ff6935d0020	->0
+7ff6935df172  movsd xmm7, [rsi+rdi*8]
+7ff6935df177  ucomisd xmm7, xmm6
+7ff6935df17b  jpe 0x7ff6935d0024	->1
+7ff6935df181  jnz 0x7ff6935d0024	->1
+7ff6935df187  add edi, +0x01
+7ff6935df18a  cmp edi, eax
+7ff6935df18c  jg 0x7ff6935d0028	->2
+7ff6935df192  xorps xmm7, xmm7
+7ff6935df195  cvtsi2sd xmm7, edi
+7ff6935df199  movsd [rdx+0x108], xmm7
+7ff6935df1a1  movsd [rdx+0xf0], xmm7
+7ff6935df1a9  jmp 0x7ff6935df66a
+---- TRACE 9 stop -> 4
+

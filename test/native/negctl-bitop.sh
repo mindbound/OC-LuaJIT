@@ -2,7 +2,8 @@
 # =====================================================================
 # negctl-bitop.sh -- PROVE that round 3's tests of the 64-bit bitwise
 # operators, the CRC32 follow-up's of the table-index fold, the select
-# fix's (2026-10-20) and FIX-NUMCONV's (2026-10-21) have teeth:
+# fix's (2026-10-20), FIX-NUMCONV's (2026-10-21) and the CSE type twin
+# fix's (2026-10-23) have teeth:
 # run-bitop.sh, run-bitjit.sh, run-bitfuzz.sh, run-security.sh's FF12, and
 # build-native.sh's bitops gate and stage-4 VM-features word check.
 #
@@ -83,6 +84,16 @@
 #                 read of the compiled loops under the sets that fold (an
 #                 identity's result guard left, a guard that must stay gone,
 #                 a loop that did not compile, or results unlike -joff's)
+#   cse:t_csefwd, :cseir   run-bitjit.sh's cse part (the CSE type twin):
+#                 t_csefwd against -joff under some option set (a 5.3
+#                 result unlike the file's plain-arithmetic reference exits
+#                 1 there too), or cseir's read of the forward pairs'
+#                 compiled loops under the sets with fold and CSE on (an
+#                 operator served by a 32-bit instruction, a pair not kept
+#                 apart, an int64 instruction in a snapshot, a loop that did
+#                 not compile, or results unlike -joff's); the part's
+#                 t_cserev (the reverse order, only in its two no-slot
+#                 shapes) runs with them and no arm names it
 #   security:FF12 run-security.sh's FF12 (a version-2 dump is refused)
 #   gate:dump     build-native.sh's bitops gate, its own text, run on the arm's
 #                 luajit.exe: the line differs from build-native.sh's wanted
@@ -133,6 +144,9 @@
 #     NUMCONVW        oclj_bitop_fold.c  [nc:t_numconv nc:ncir]
 #     NUMCONVOFF      lj_opt_fold.c      [nc:ncir]
 #     NUMCONVNOOP     oclj_bitop_fold.c  [gen]   (added 2026-10-22)
+#   the CSE type twin's (2026-10-23; patch-bitop-fold.sh hunk 12, the type
+#   test in lj_opt_cse):
+#     CSEFWD          lj_opt_fold.c      [cse:t_csefwd cse:cseir]
 #   PHIIDX and NOLOOPFOLD change no value (the fold across a PHI; no fold in
 #   a loop body), so only phiidx.lua's IR read sees them: a sabotage that
 #   changes no value needs a catcher that reads the IR's shape or counts
@@ -146,6 +160,17 @@
 #   and range: a converted double is exactly a double whatever its range
 #   (oclj_isnumconv), which the bound must never score; scored 54, it
 #   composes, and x | 1 for an x of 2^53 loses its result guard.
+#   CSEFWD lets an int64 instruction common with an older narrower one on
+#   the same operands (the forward order: the 5.3 operator gets the 32-bit
+#   value, zero-extended, as on every build before hunk 12) and still
+#   refuses the reverse.  No arm holds the reverse half: its sabotage would
+#   let an int64 ref reach a 32-bit recorder, crash-class, never run on
+#   any build.  That half is held by patch-bitop-fold.sh's verify_content,
+#   which every build runs (the predicate's exact text, once, inside
+#   lj_opt_cse, between its if and its return, and no other match or return
+#   in lj_opt_cse), and by the predicate's symmetry.  The predicate dropped
+#   is the unfixed build, which opens the reverse order too, so it is no
+#   arm.
 #   The follow-up's range guard (rg2) was prototyped with seven arms of its
 #   own and did not ship (2026-10-20), and its arms with it; its generator
 #   mode stayed as genrg2, which catches non-RG2 arms too: it is listed on
@@ -226,7 +251,20 @@
 # NUMCONVNOOP, three runs on 2026-10-22 (OCLJ_NEGCTL_ARMS=NUMCONVNOOP,
 # scratch claude-tmp/oclj/numconv/arm/negctl-1..3): gen 18-32 cases a seed,
 # every seed in every run; one run on 2026-10-21 (numconv/impl-code/sab-noop)
-# saw gen 17-27, genrg2 24-28 and t_rec 0-3 a seed.
+# saw gen 17-27, genrg2 24-28 and t_rec 0-3 a seed.  CSEFWD, one run on
+# 2026-10-23 (OCLJ_NEGCTL_ARMS=CSEFWD, the CSE round's integrator, scratch
+# claude-tmp/oclj/csetwin/round/integrate/runs/negctl-cse-1), every count
+# equal to the test implementer's on a prototype of the same sabotage
+# (csetwin/round/impl-tests/runs/cse-fwdsab-1): t_csefwd 11 cases in 10 of
+# its 15 sets, 1 under -O1 and -O-narrow, 0 under -O0, -O-fold and -O-cse
+# (no pair forms there, or none merges); cseir 18 in 10 of its 12 sets, 1
+# under -O1 and -O-narrow; t_cserev passes (the reverse stays refused).
+# With t_csefwd's copy and side cases, two runs (the round's fixer,
+# csetwin/round/fix/runs/negctl-cse-1 and -2): t_csefwd 13 cases in 7 sets
+# (in 6 in one run: under -Ohotexit=1 side read right there, as it did on
+# build/native once under -Ohotloop=1 -Ohotexit=1), 12 under
+# -O-loop and the two -Omaxside=0 sets, 2 under -O1 and -O-narrow; cseir
+# 20 in 7 sets, 19 in those three, 2 under -O1 and -O-narrow.
 # A full run took 7.6 minutes with 27 arms (2026-10-17), 5.1 of them in
 # canon and the seven gen arms; the three idx arms take about 15 s each,
 # and genrg2 adds about 35 s to canon and to each of its five arms (one
@@ -235,7 +273,10 @@
 # 107-108 s and each sel arm 7-9 s (four runs on the select round's
 # build); with the nc part canon took 95-100 s and each nc arm 8-9 s
 # (FIX-NUMCONV's five runs, which left 179 MB each in their work
-# directories); NUMCONVNOOP, the 36th arm, 37 s (its gen run; three runs).
+# directories); NUMCONVNOOP, the 36th arm, 37 s (its gen run; three runs);
+# with the cse part canon took 108 s and CSEFWD, the 37th arm, 12 s (one
+# run, 2026-10-23, which left 157 MB in its work directory; with the copy
+# and side cases canon 110-112 s, CSEFWD 12 s, the fixer's two runs).
 # A rebuild takes 1-3 s, a vm_x64.dasc one included.  The work
 # directory grows by about 40 MB a gen or genrg2 run (38.6-41.6 MB
 # measured in the 2026-10-17 runs; 445 MB for the 2026-10-17 sweep, 878
@@ -279,6 +320,12 @@
 # table-index fold take x ~>> k for a converted double x and a constant k
 # of 22 or more: a different int, checked by the same ABC, length check or
 # ULT as WIDTHIDX33's.  NUMCONVOFF only keeps a guard that cannot fail.
+# CSEFWD only lets one of our int64 instructions take an older 32-bit
+# instruction's ref on the same operands, as every build before hunk 12
+# did: our consumers read the whole register, which holds the 32-bit
+# result zero-extended, so a 5.3 result is a wrong number, and the reverse
+# match stays refused, so no int64 ref reaches a 32-bit recorder, a slot
+# or a snapshot.
 #
 # OCLJ_NEGCTL_ARMS (default empty: every arm) runs only the arms it names,
 # separated by spaces or commas; canon always runs.  A name that is no arm is
@@ -512,7 +559,7 @@ run_stage4() {  # eris_lj.c compiled as build-native.sh's stage 4 does, then its
 # rcof <suite>: the exit status of the run that suite is part of ('-': not run).
 rcof() {
   case $1 in
-    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel|nc) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
+    bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel|nc|cse) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
     security) echo "$R_security" ;; gate) echo "$R_gate" ;; stage4) echo "$R_stage4" ;; *) echo - ;;
   esac
 }
@@ -529,7 +576,7 @@ runcatchers() {
       gate) [ "$R_gate" = - ] && { run_gate "$1"; R_gate=$?; } ;;
       stage4) [ "$R_stage4" = - ] && { run_stage4 "$1"; R_stage4=$?; } ;;
       genrg2) [ "$R_genrg2" = - ] && { run_genrg2 "$1"; R_genrg2=$?; } ;;
-      gen|floor|fix1|idx|sel|nc) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+      gen|floor|fix1|idx|sel|nc|cse) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
       *) fail "arm $name: unknown catcher '$tk'" ;;
     esac
   done
@@ -591,6 +638,8 @@ check() {
     sel:kmax) grep -q '^FAIL t_select-kmax' "$1/bitjit.log" ;;
     nc:t_numconv) grep -q '^FAIL t_numconv (' "$1/bitjit.log" ;;
     nc:ncir) grep -q '^FAIL ncir (' "$1/bitjit.log" ;;
+    cse:t_csefwd) grep -q '^FAIL t_csefwd (' "$1/bitjit.log" ;;
+    cse:cseir) grep -q '^FAIL cseir (' "$1/bitjit.log" ;;
     genrg2) grep -q '^seed [0-9]*: FAIL' "$1/bitjit-rg2.log" ;;
     security:FF12) grep -q '^FAIL FF12 ' "$1/security.log" ;;
     gate:dump) gatedump "$1" ;;
@@ -630,6 +679,11 @@ info() {
       /^FAIL t_numconv [(]/ { out = out sep "t_numconv"; sep = "," }
       /^FAIL t_numconv: PUC/ { out = out sep "t_numconv-PUC"; sep = "," }
       /^FAIL ncir/ { out = out sep "ncir"; sep = "," }
+      /^FAIL t_csefwd/ { out = out sep "t_csefwd"; sep = "," }
+      /^FAIL t_cserev [(]/ { out = out sep "t_cserev"; sep = "," }
+      /^FAIL t_cserev: PUC/ { out = out sep "t_cserev-PUC"; sep = "," }
+      /^FAIL t_cserev: -joff/ { out = out sep "t_cserev-joff"; sep = "," }
+      /^FAIL cseir/ { out = out sep "cseir"; sep = "," }
       END { print out }' "$1/bitjit.log")
     s="$s; bitjit[${parts# }] $R_bitjit$g${fl:+ failed: $fl}"
   fi
@@ -729,7 +783,7 @@ arm() {
 }
 
 armlist() {
-arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc security gate stage4' '' ''
+arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc cse security gate stage4' '' ''
 arm WRAP32-INTERP vm_x64.dasc 'bitop:t_ops fuzz:V' \
   '    |  ins RC, RA' \
   '    |  ins RCd, RAd@T@@T@// SABOTAGE WRAP32-INTERP: and/or/xor in 32 bits, as BitOp computed them'
@@ -840,6 +894,9 @@ arm NUMCONVOFF lj_opt_fold.c 'nc:ncir' \
 arm NUMCONVNOOP oclj_bitop_fold.c 'gen' \
   '  return ir->o == IR_CONV && irt_isi64(ir->t) && !irt_isguard(ir->t) &&' \
   '  return irt_isi64(ir->t) && !irt_isguard(ir->t) &&  /* SABOTAGE NUMCONVNOOP: no opcode test, so a bit operator whose op2 ref reads as NUM passes for a converted double and loses its result guard */'
+arm CSEFWD lj_opt_fold.c 'cse:t_csefwd cse:cseir' \
+  '@T@  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' \
+  '@T@  (irt_isi64(IR(ref)->t) == irt_isi64(fins->t) || irt_isi64(fins->t)))  /* SABOTAGE CSEFWD: an int64 instruction may common with an older narrower one, the forward order, as before hunk 12; the reverse stays refused */'
 }
 
 # The selection, checked against the arm list before anything is copied: a

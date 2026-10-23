@@ -1,0 +1,10 @@
+48c48
+< f6d916e29cf8e05cd951d220ba8abcd9 lj_opt_fold.o
+---
+> ccf8385160b39de30b00064c2cb56f5b lj_opt_fold.o
+78,79c78,79
+< f4038cd62af3a12985868cea77cc1518 luajit.exe
+< 77c037d93c4c2e1268bdcd9ff24d5491 libluajit.a
+---
+> 4cb82f4baa8a357991fb9c8120ab9acc luajit.exe
+> 33bdae23f04f787e1a5004b0bf9c864d libluajit.a

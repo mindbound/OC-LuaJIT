@@ -1,0 +1,6 @@
+arm             file               verdict
+canon           -                  PASS (every catcher passes; every object reproduced)
+                                       bitop 0; fuzz 0 [jon K 0 V 0 P 0 H 0 U 0; joff K 0 V 0 P 0 H 0 U 0]; bitjit[gen floor fix1 idx sel nc cse] 0 (gen: 0/4 seeds differ, 0-0 cases a seed); genrg2 0 (0/4 seeds differ, 0-0 cases a seed); security 0; gate 0; stage4 0
+CSEFWD          lj_opt_fold.c      PASS (caught by cse:t_csefwd cse:cseir)
+                                       bitjit[cse] 1 failed: t_csefwd,cseir
+restore         -                  PASS (every file put back; every object byte-identical to the shipped build's)

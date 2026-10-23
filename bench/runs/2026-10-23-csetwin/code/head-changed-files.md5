@@ -1,0 +1,3 @@
+08c242a5a06c4063d25265d7793e769b *native/luajit/patch-bitop-fold.sh
+de156eccd2c58dfbbb4d1347cd76d6fa *native/luajit/oclj_bitop.h
+ef711189cc0638888e3a60460ed00077 *native/luajit/oclj_bitop_rec.c

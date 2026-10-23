@@ -117,10 +117,10 @@ static LJ_AINLINE int oclj_bit2num(uint64_t r, double *d)
 ** still matches a marked one.
 **   On CONV num.i64 (oclj_bitop_rec.c, an operator's result, or an operand's
 **   conversion back): the double is exactly the int64, because a guard right
-**   after it says so (or the width rule proved it).  (i64) of it folds to
-**   the int64 (lj_opt_fold.c's simplify_conv_i64_num, patch-bitop-fold.sh).
-**   On CONV i64.num: this conversion is a result guard's own check, which
-**   that rule must not fold; only the width rule may remove it. */
+**   after it says so (or the width rule or FIX-NUMCONV's proved it).  (i64)
+**   of it folds to the int64 (simplify_conv_i64_num, patch-bitop-fold.sh).
+**   On CONV i64.num: a result guard's own check, which that rule must not
+**   fold; only the width rule and FIX-NUMCONV's may remove it. */
 #define OCLJ_IRCONV_EXACT	0x0400
 
 #endif

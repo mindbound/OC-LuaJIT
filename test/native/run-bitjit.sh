@@ -19,7 +19,7 @@
 # default is relative to OCLJ_REPO and a git-archive scratch repo has no
 # bench/vendor (until 2026-10-20 such a run passed: verify-folda F11).
 # OCLJ_LUA53=none runs without PUC on purpose, and the run can pass.
-# Six parts (the fifth, sel, is not about the bit operators: it is the
+# Seven parts (the fifth, sel, is not about the bit operators: it is the
 # JIT-against-interpreter runner's home for the select fix):
 #
 #   1. THE GENERATOR (gen).  bitop/gen.lua, the round-3 width-fold reviewer's
@@ -125,6 +125,44 @@
 #      (no type instability, JFORL; the rule returns a pre-roll ref across a
 #      PHI), the body's guard on a PHI-marked fleft is gone (swap1), the
 #      results equal -joff's, and a run with no summary line read nothing.
+#   7. THE CSE TWINS (cse; JIT guide P63, 3.9: patch-bitop-fold.sh's hunk
+#      12 makes lj_opt_cse refuse a match when exactly one of the two
+#      instructions is IRT_I64; before it, on x64, where simplify_conv_sext
+#      hands our int64 operators the int loop index or a string.byte value
+#      directly, a 32-bit instruction on the same operands served our
+#      operator, and the 5.3 operator got the 32-bit value, zero-extended).
+#      bitop/t_csefwd.lua runs 32 loops, the forward order only (the
+#      32-bit producer first: the bit library, select beyond its varargs, a
+#      narrowed string.byte or string.sub argument, an inner for loop's
+#      step), 13 whose served value is wrong (bit.lshift(i, 3) then i << 3,
+#      the bnot and bxor forms, a masked count, a u8 operand, the nested
+#      (i & m) << k, reassoc_shift, a chain, variable counts of 32-63, a
+#      pair that forms only in the loop copy and one only in a side trace),
+#      7 whose served value is right (the in-game families among them) and
+#      12 controls, each checked against a plain-arithmetic reference (the
+#      file exits 1 otherwise, -joff included) and compared whole with
+#      -joff under the sel part's fifteen option sets; no PUC twin, by
+#      design (the bit library).  Its default run's #cov line must say jit
+#      on, a trace in OCLJ_BITJIT_HOTMIN of the cases, and at least one
+#      pair formed.  bitop/t_cserev.lua runs the reverse order (our
+#      operator first) ONLY in the two shapes whose 32-bit consumer stores
+#      nothing in a Lua slot (its header argues it from the source, and the
+#      user's decision of 2026-10-23 allows no other): select(j, ...)
+#      beyond the varargs, and string.byte or string.sub of i + i or i * 2,
+#      each after i << 1 or j << 3; its fields 1-2 must equal -joff's under
+#      the fifteen sets, PUC 5.3.6's whole output must equal -joff's, every
+#      JIT run must print its summary line, and its own IR read (the
+#      pair kept apart, split, and no 32-bit instruction consuming our
+#      int64 one, rserved, where fold, CSE and narrowing are on; never an
+#      int64 instruction in a snapshot) must pass, judging all four reverse
+#      cases in the default run.  bitop/cseir.lua reads t_csefwd's loops'
+#      IR under the twelve of those sets with fold and CSE on (no pair
+#      forms under -O0 and -O-fold, none merges under -O-cse, and it
+#      refuses them, P61): our operator never served by a 32-bit
+#      instruction, every pair kept apart where it forms, no int64
+#      instruction in a snapshot, every loop compiled, results equal to
+#      -joff's, a summary line in every run and every pair judged in the
+#      default one.
 #
 # Each part's catches, measured on one-line sabotages of the reference build
 # (2026-10-17, role C2's report has the counts): the generator catches every
@@ -148,12 +186,28 @@
 # (the rule switched off, which changes no value, so no differential suite
 # can see it), and the two value arms too, and fails on any build without
 # the rule (build/native at 209aa95).
+# The cse part (2026-10-23, the round's test implementer, and its fixer
+# after adding the copy and side cases): on build/native at 1a13bed
+# (luajit.exe f4038cd6, no fix) it FAILs, in six runs on Windows (cseir's
+# judge as now in the last five) and one in AlmaLinux 8: t_csefwd in 13
+# cases in 7 of the 10 sets with fold, CSE and narrowing on, 12 under
+# -O-loop and the two -Omaxside=0 sets, 2 under -O1 and -O-narrow, 0 under
+# -O0, -O-fold and -O-cse, except that the side case's value depends on
+# whether a trace compiles its branch, which varied: 12 once under
+# -Ohotloop=1 -Ohotexit=1, 13 once in 14 readings of the -Omaxside=0 sets;
+# cseir in 20 (19 under -O-loop and the two -Omaxside=0 sets, 2 under -O1
+# and -O-narrow) in every run; t_cserev in its 4 reverse cases wherever it
+# judges them.  With the fix (impl-tests' prototype, lj_opt_fold.o
+# a6c5fcc2, five runs before copy and side, and the fixer's build of the
+# same object) every check passes; with CSEFWD's sabotage
+# text (forward merges only) t_csefwd and cseir fail as on build/native
+# and t_cserev passes.
 # Proof that the checks can fail: negctl-bitop.sh.
 #
 # Environment:
 #   OCLJ_LUA53            PUC Lua 5.3.6 (default bench/vendor/lua-5.3.6/src/lua[.exe]),
 #                         or "none": no PUC comparison, on purpose
-#   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx sel nc"  (default all six)
+#   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx sel nc cse"  (default all seven)
 #   OCLJ_BITJIT_SEED      the generator's first seed                  (default 1)
 #   OCLJ_BITJIT_SEEDS     how many consecutive seeds                   (default 4)
 #   OCLJ_BITJIT_CASES     loops per seed                               (default 2000)
@@ -165,13 +219,15 @@
 #                         bits 53-63 among them); each mode passes on any
 #                         build whose results equal the interpreter's
 #   OCLJ_BITJIT_HOTMIN    the coverage gate of the generator and of the idx,
-#                         sel and nc parts, a fraction                  (default 0.25)
+#                         sel, nc and cse parts, a fraction             (default 0.25)
 #   OCLJ_BITJIT_OUT       results directory; must not exist
 #                         (default $OCLJ_BUILD/bitjit-<UTC stamp>)
 #
-# Default: about 60 s (61 s for all six parts on FIX-NUMCONV's prototype,
-# 2026-10-21; 4 seeds x 2000 loops, about 7 s a seed with PUC; the idx part
-# about 10 s; the sel part about 6 s, 2026-10-20; the nc part 6-8 s).
+# Default: about 70 s (61 s for all six parts on FIX-NUMCONV's prototype,
+# 2026-10-21; 68 s for all seven on the CSE round's prototype, 2026-10-23;
+# 4 seeds x 2000 loops, about 7 s a seed with PUC; the idx part about 10
+# s; the sel part about 6 s, 2026-10-20; the nc part 6-8 s; the cse part
+# 9-12 s).
 # A campaign is OCLJ_BITJIT_PARTS=gen OCLJ_BITJIT_SEED=101
 # OCLJ_BITJIT_SEEDS=20, and again with OCLJ_BITJIT_GENMODE=phi, idx and rg2;
 # a change to the table-index fold runs the idx mode, and one to a result's
@@ -195,7 +251,7 @@ SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 : "${OCLJ_REPO:=$(CDPATH= cd -- "$SELF_DIR/../.." && pwd)}"
 : "${OCLJ_BUILD:=$OCLJ_REPO/build/native}"
 : "${OCLJ_LUA53:=$OCLJ_REPO/bench/vendor/lua-5.3.6/src/lua.exe}"
-: "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel nc}"
+: "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel nc cse}"
 : "${OCLJ_BITJIT_SEED:=1}"
 : "${OCLJ_BITJIT_SEEDS:=4}"
 : "${OCLJ_BITJIT_CASES:=2000}"
@@ -220,11 +276,11 @@ PLATFORM="$OCLJ_OS-$OCLJ_ARCH"
 LJEXE=$OCLJ_BUILD/luajit-$PLATFORM/src/luajit$EXE
 B=$SELF_DIR/bitop
 [ -x "$LJEXE" ] || fail "no $LJEXE -- run build-native.sh first (on THIS platform)"
-for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua t_select.lua t_numconv.lua ncir.lua; do
+for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua t_select.lua t_numconv.lua ncir.lua t_csefwd.lua cseir.lua t_cserev.lua; do
   [ -f "$B/$f" ] || fail "no $B/$f"
 done
 for p in $OCLJ_BITJIT_PARTS; do
-  case $p in gen|floor|fix1|idx|sel|nc) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx, sel, nc" ;; esac
+  case $p in gen|floor|fix1|idx|sel|nc|cse) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx, sel, nc, cse" ;; esac
 done
 for v in "$OCLJ_BITJIT_SEED" "$OCLJ_BITJIT_SEEDS" "$OCLJ_BITJIT_CASES"; do
   case "$v" in *[!0-9]*|'') fail "OCLJ_BITJIT_SEED, _SEEDS and _CASES must be whole numbers" ;; esac
@@ -256,7 +312,7 @@ fi
 [ -e "$OCLJ_BITJIT_OUT" ] && fail "$OCLJ_BITJIT_OUT exists; results are never overwritten"
 mkdir -p "$OCLJ_BITJIT_OUT" || fail "cannot create $OCLJ_BITJIT_OUT"
 OUT=$OCLJ_BITJIT_OUT
-md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" "$B/t_select.lua" "$B/t_numconv.lua" "$B/ncir.lua" > "$OUT/inputs.md5"
+md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" "$B/t_select.lua" "$B/t_numconv.lua" "$B/ncir.lua" "$B/t_csefwd.lua" "$B/cseir.lua" "$B/t_cserev.lua" > "$OUT/inputs.md5"
 [ "$HAVEPUC" = 1 ] && md5sum "$OCLJ_LUA53" >> "$OUT/inputs.md5"
 # jit.vmdef and jit.util's names (p4v.lua) live beside the build's luajit.exe,
 # in src/jit; the Windows exe needs a C:/ path.
@@ -744,8 +800,158 @@ else
   echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
 fi
 
+# ---------------------------------------------------------------- 7
 echo
-sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx sel nc" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
+echo "== 7. the CSE twins: t_csefwd.lua and t_cserev.lua against -joff, t_cserev.lua against PUC 5.3.6; cseir.lua's and t_cserev.lua's traces =="
+# t_csefwd and t_cserev run under the sel part's fifteen sets; cseir under
+# the twelve of them with fold and CSE on (under -O0 and -O-fold no pair
+# forms, under -O-cse none merges, and cseir refuses all three: P61).
+CSEIROPTS="jon O1:-O1 hl1:-O3_-Ohotloop=1 ms0:-Omaxside=0 he1:-Ohotloop=1_-Ohotexit=1 noloop:-O3_-O-loop hx1:-Ohotexit=1 ts1:-Otryside=1_-Ohotexit=2 mx1:-Omaxside=1 hl1ms0:-Ohotloop=1_-Omaxside=0 noabc:-O3_-O-abc nonarrow:-O3_-O-narrow"
+if wanted cse; then
+  D=$OUT/cse; mkdir -p "$D"
+  cv() { echo "$cov" | sed -n "s/.* $1 \([0-9]*\).*/\1/p"; }
+  # t_csefwd: the forward pairs' values, against -joff and the file's own
+  # plain-arithmetic reference (a mismatch exits 1, under -joff too).
+  t=t_csefwd
+  run "$D/$t-joff.txt" "$D/$t-joff.err" "$LJEXE" -joff "$B/$t.lua"; rc=$?
+  nc=$(grep -c . "$D/$t-joff.txt")
+  if [ "$rc" -eq 2 ] && grep -q INSTRUMENT "$D/$t-joff.txt"; then
+    echo "PROVED NOTHING $t:"; sed -n '/INSTRUMENT/,$p' "$D/$t-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+  elif [ "$rc" -ne 0 ] || [ "$nc" -eq 0 ]; then
+    echo "FAIL $t: -joff exited $rc with $nc lines, $(grep -c 'bad=[1-9]' "$D/$t-joff.txt") of them with a result unlike the file's reference: $(head -c 200 "$D/$t-joff.err")"; bad=1
+  else
+    line="$t ($nc cases):"; tbad=0
+    for o in $SELOPTS; do
+      n=$(optname "$o")
+      run "$D/$t-$n.txt" "$D/$t-$n.err" "$LJEXE" $(optargs "$o") "$B/$t.lua"; rc=$?
+      set -- $(ndiff "$D/$t-$n.txt" "$D/$t-joff.txt")
+      line="$line $n=$1"
+      [ "$rc" -ne 0 ] && { line="$line(exit $rc)"; tbad=1; }
+      [ "$1" -ne 0 ] && { shift; line="$line[$*]"; tbad=1; }
+    done
+    # Coverage, from the default run: traces, and the pairs that formed.
+    cov=$(grep '^#cov' "$D/$t-jon.err" 2>/dev/null)
+    traced=$(cv traced); pairs=$(cv pairs); served=$(cv served); split=$(cv split)
+    pcases=$(echo "$cov" | sed -n 's/.* pairs [0-9]* of \([0-9]*\).*/\1/p')
+    case "$cov" in *"jit on"*) jit=on ;; *) jit=off ;; esac
+    covtxt="coverage: a trace completed in ${traced:-?} of $nc cases; ${pairs:-?} of ${pcases:-?} pairs formed, served ${served:-?}, split ${split:-?} (default options, jit $jit)"
+    if [ "$tbad" = 1 ]; then
+      echo "FAIL $line  ($covtxt)"; bad=1
+    elif [ "$jit" != on ] || [ -z "$traced" ] || [ -z "$pairs" ] || [ "$pairs" -eq 0 ] ||
+         ! awk -v t="$traced" -v n="$nc" -v h="$OCLJ_BITJIT_HOTMIN" 'BEGIN { exit !(t >= h * n) }'; then
+      echo "PROVED NOTHING $line  ($covtxt; too few traces for OCLJ_BITJIT_HOTMIN $OCLJ_BITJIT_HOTMIN, or no pair formed)"; nothing=1
+    else
+      echo "PASS $line  ($covtxt)"
+    fi
+  fi
+  echo "$t on PUC: not run, by design (its 32-bit halves are LuaJIT's bit library, which PUC 5.3.6 lacks; the file checks every 5.3 result against a plain-arithmetic reference under every VM, -joff included)"
+  # t_cserev: the reverse order in its two no-slot shapes; fields 1-2 (the
+  # values) against -joff in every set, its own IR read in every JIT run.
+  t=t_cserev
+  run "$D/$t-joff.txt" "$D/$t-joff.err" "$LJEXE" -joff "$B/$t.lua"; rf=$?
+  nres=$(grep -c . "$D/$t-joff.txt")
+  if [ "$rf" -eq 2 ] && grep -q INSTRUMENT "$D/$t-joff.txt"; then
+    echo "PROVED NOTHING $t:"; sed -n '/INSTRUMENT/,$p' "$D/$t-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+  elif [ "$rf" -ne 0 ] || [ "$nres" -eq 0 ]; then
+    echo "FAIL $t: -joff exited $rf with $nres lines, $(grep -c 'bad=[1-9]' "$D/$t-joff.txt") of them with a value unlike the file's reference: $(head -c 200 "$D/$t-joff.err")"; bad=1
+  else
+    cut -f1,2 "$D/$t-joff.txt" > "$D/$t-joff-res.txt"
+    line="$t ($nres cases):"; rbad=; rnothing=; rdiff=
+    for o in $SELOPTS; do
+      n=$(optname "$o")
+      run "$D/$t-$n.txt" "$D/$t-$n.err" "$LJEXE" $(optargs "$o") "$B/$t.lua"; rj=$?
+      grep -v '^t_cserev:' "$D/$t-$n.txt" | cut -f1,2 > "$D/$t-$n-res.txt"
+      nf=$(grep -c 'FAILED' "$D/$t-$n.txt")
+      line="$line $n=$nf"
+      if [ "$rj" -eq 2 ]; then
+        rnothing="$rnothing $n: $(grep INSTRUMENT "$D/$t-$n.txt" | head -c 200) $(head -c 200 "$D/$t-$n.err");"
+      else
+        cmp -s "$D/$t-$n-res.txt" "$D/$t-joff-res.txt" || rdiff="$rdiff $n"
+        if [ "$rj" -ne 0 ]; then
+          rbad="$rbad $n:$(grep FAILED "$D/$t-$n.txt" | cut -f1 | head -4 | tr '\n' ',' | sed 's/,$//')"
+        elif ! grep -q '^t_cserev: [0-9]* of [0-9]* cases ok' "$D/$t-$n.txt"; then
+          rnothing="$rnothing $n: no summary line, so no trace was read (the JIT off?);"
+        fi
+      fi
+    done
+    # The default run must judge every reverse case (the pairs formed).
+    set -- $(sed -n 's/^t_cserev: .* reverse cases judged \([0-9]*\) of \([0-9]*\)$/\1 \2/p' "$D/$t-jon.txt")
+    if [ $# -ne 2 ] || [ "$1" -eq 0 ] || [ "$1" -ne "$2" ]; then
+      rnothing="$rnothing jon: reverse cases judged ${1:-?} of ${2:-?}, so a reverse pair never formed;"
+    fi
+    if [ -n "$rdiff" ] || [ -n "$rbad" ]; then
+      msg=; [ -n "$rdiff" ] && msg=" compiled values differ from -joff's under:$rdiff;"
+      [ -n "$rbad" ] && msg="$msg a 32-bit instruction consumes our int64 one, a pair is not kept apart, an int64 instruction is in a snapshot, a value is unlike the file's reference, or a loop did not compile (first cases:$rbad)"
+      echo "FAIL $line $msg"; bad=1
+    elif [ -n "$rnothing" ]; then
+      echo "PROVED NOTHING $line  --$rnothing"; nothing=1
+    else
+      echo "PASS $line  every case ok in every set: values equal -joff's, each reverse pair kept apart where it forms, nothing 32-bit consumes our int64 instruction, no int64 instruction in a snapshot"
+    fi
+  fi
+  if [ "$HAVEPUC" = 1 ]; then
+    # Every case: nothing here means otherwise on PUC (the file's header).
+    run "$D/$t-puc.txt" "$D/$t-puc.err" "$OCLJ_LUA53" "$B/$t.lua"; rc=$?
+    set -- $(ndiff "$D/$t-puc.txt" "$D/$t-joff.txt")
+    if [ "$rc" -ne 0 ] || [ ! -s "$D/$t-joff.txt" ]; then
+      echo "PROVED NOTHING $t on PUC: exited $rc: $(head -c 300 "$D/$t-puc.txt") $(head -c 200 "$D/$t-puc.err")"; nothing=1
+    elif [ "$1" -eq 0 ]; then
+      echo "PASS $t: PUC 5.3.6 equals -joff in all $(grep -c . "$D/$t-puc.txt") cases"
+    else
+      nd=$1; shift; echo "FAIL $t: PUC 5.3.6 differs from -joff in $nd cases, first:$*"; bad=1
+    fi
+  else
+    echo "$t on PUC: SKIPPED ($PUCSKIP)"
+  fi
+  # cseir: the forward pairs read from the compiled loops in every set with
+  # fold and CSE on; the loops compile; their results equal -joff's.
+  run "$D/cseir-joff.txt" "$D/cseir-joff.err" "$LJEXE" -joff "$B/cseir.lua"; rf=$?
+  cut -f1,2 "$D/cseir-joff.txt" > "$D/cseir-joff-res.txt"
+  nres=$(grep -c . "$D/cseir-joff-res.txt")
+  if [ "$rf" -eq 2 ] && grep -q INSTRUMENT "$D/cseir-joff.txt"; then
+    echo "PROVED NOTHING cseir:"; sed -n '/INSTRUMENT/,$p' "$D/cseir-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+  elif [ "$rf" -ne 0 ] || [ "$nres" -eq 0 ]; then
+    echo "FAIL cseir: -joff exited $rf with $nres results: $(head -c 200 "$D/cseir-joff.txt") $(head -c 200 "$D/cseir-joff.err")"; bad=1
+  else
+    line="cseir ($nres cases):"; ibad=; inothing=; idiff=
+    for o in $CSEIROPTS; do
+      n=$(optname "$o")
+      run "$D/cseir-$n.txt" "$D/cseir-$n.err" "$LJEXE" $(optargs "$o") "$B/cseir.lua"; rj=$?
+      grep -v '^cseir:' "$D/cseir-$n.txt" | cut -f1,2 > "$D/cseir-$n-res.txt"
+      nf=$(grep -c 'FAILED' "$D/cseir-$n.txt")
+      line="$line $n=$nf"
+      if [ "$rj" -eq 2 ]; then
+        inothing="$inothing $n: $(grep INSTRUMENT "$D/cseir-$n.txt" | head -c 200) $(head -c 200 "$D/cseir-$n.err");"
+      else
+        cmp -s "$D/cseir-$n-res.txt" "$D/cseir-joff-res.txt" || idiff="$idiff $n"
+        if [ "$rj" -ne 0 ]; then
+          ibad="$ibad $n:$(grep FAILED "$D/cseir-$n.txt" | cut -f1 | head -3 | tr '\n' ',' | sed 's/,$//')"
+        elif ! grep -q '^cseir: [0-9]* of [0-9]* cases ok' "$D/cseir-$n.txt"; then
+          inothing="$inothing $n: no summary line, so no trace was read (the JIT off?);"
+        fi
+      fi
+    done
+    # The default run must judge every pair (the pairs formed).
+    set -- $(sed -n 's/^cseir: .* pairs judged \([0-9]*\) of \([0-9]*\)$/\1 \2/p' "$D/cseir-jon.txt")
+    if [ $# -ne 2 ] || [ "$1" -eq 0 ] || [ "$1" -ne "$2" ]; then
+      inothing="$inothing jon: pairs judged ${1:-?} of ${2:-?}, so a pair never formed;"
+    fi
+    if [ -n "$idiff" ] || [ -n "$ibad" ]; then
+      msg=; [ -n "$idiff" ] && msg=" compiled results differ from -joff's under:$idiff;"
+      [ -n "$ibad" ] && msg="$msg a 32-bit instruction served our operator, a pair was not kept apart, an int64 instruction is in a snapshot, or a loop did not compile (first cases:$ibad)"
+      echo "FAIL $line $msg"; bad=1
+    elif [ -n "$inothing" ]; then
+      echo "PROVED NOTHING $line  --$inothing"; nothing=1
+    else
+      echo "PASS $line  every case ok in every set with fold and CSE on: no operator served by a 32-bit instruction, every pair kept apart where it forms, no int64 instruction in a snapshot, results equal -joff's"
+    fi
+  fi
+else
+  echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
+fi
+
+echo
+sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx sel nc cse" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
 if [ "$bad" = 1 ]; then echo "RUN-BITJIT: FAIL$sel (results: $OUT)"; exit 1; fi
 if [ "$nothing" = 1 ]; then echo "RUN-BITJIT: PROVED NOTHING$sel (results: $OUT)"; exit 2; fi
 echo "RUN-BITJIT: PASS$sel (results: $OUT)"

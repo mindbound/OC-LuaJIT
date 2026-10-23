@@ -1,0 +1,1 @@
+@T@return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */@N@      if (IR(ref)->op12 == op12) { fputs("VCREFUSE ", stderr); fputs(irt_isi64(fins->t) ? "fwd" : "rev", stderr); fputc(10, stderr); }  /* verify-code T4 instrument, never shipped */

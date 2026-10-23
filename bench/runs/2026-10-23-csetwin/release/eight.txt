@@ -1,0 +1,8 @@
+native/luajit/patch-bitop-fold.sh: OK
+native/luajit/oclj_bitop.h: OK
+native/luajit/oclj_bitop_rec.c: OK
+test/native/negctl-bitop.sh: OK
+test/native/run-bitjit.sh: OK
+test/native/bitop/t_csefwd.lua: OK
+test/native/bitop/cseir.lua: OK
+test/native/bitop/t_cserev.lua: OK

@@ -1,0 +1,35 @@
+run-bitjit: ours /mnt/c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/alma/b/luajit-linux-x86_64/src/luajit; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts gen; results /mnt/c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/alma/gen-phi
+
+== 1. the generator: 4 seeds x 2000 loops (phi), five JIT option sets x two closure modes against -joff ==
+seed 201: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6111 raised, 135 after iteration 60; a trace completed in 1259 loops (JIT-on shared run, jit on)
+seed 201: PASS
+seed 202: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5883 raised, 121 after iteration 60; a trace completed in 1291 loops (JIT-on shared run, jit on)
+seed 202: PASS
+seed 203: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 5931 raised, 81 after iteration 60; a trace completed in 1271 loops (JIT-on shared run, jit on)
+seed 203: PASS
+seed 204: shared/jon=0 shared/hl1=0 shared/ms0=0 shared/he1=0 shared/noloop=0 shared/puc=0 fresh/jon=0 fresh/hl1=0 fresh/ms0=0 fresh/he1=0 fresh/noloop=0 fresh/puc=0
+    coverage: 2000 loops, 14000 runs, 6222 raised, 147 after iteration 60; a trace completed in 1267 loops (JIT-on shared run, jit on)
+seed 204: PASS
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 7. the CSE twins: t_csefwd.lua and t_cserev.lua against -joff, t_cserev.lua against PUC 5.3.6; cseir.lua's and t_cserev.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+RUN-BITJIT: PASS (parts run: gen; the others prove nothing here) (results: /mnt/c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/alma/gen-phi)

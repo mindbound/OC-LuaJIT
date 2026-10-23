@@ -1,0 +1,3 @@
+bitop/t_bit.lua
+bitop/t_csefwd.lua
+penalty_test.lua

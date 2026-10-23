@@ -1,0 +1,1 @@
+patch-bitop-record.sh: lj_record.c  the seven bit-operator cases call oclj_rec_bitop, and select's index is bounded in rec_varg (22 lines added, 36 removed, of 2966); verified by content, diff and reversal

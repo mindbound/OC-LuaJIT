@@ -1,0 +1,78 @@
+arm             file               verdict
+canon           -                  PASS (every catcher passes; every object reproduced)
+                                       bitop 0; fuzz 0 [jon K 0 V 0 P 0 H 0 U 0; joff K 0 V 0 P 0 H 0 U 0]; bitjit[gen floor fix1 idx sel nc cse] 0 (gen: 0/4 seeds differ, 0-0 cases a seed); genrg2 0 (0/4 seeds differ, 0-0 cases a seed); security 0; gate 0; stage4 0
+WRAP32-INTERP   vm_x64.dasc        PASS (caught by bitop:t_ops fuzz:V)
+                                       bitop 1 [t_ops,t_fold,BT1a,BT3d,BT3e,BT5]; fuzz 1 [jon K 3315 V 5817 P 5817 H 4309 U 859; joff K 3315 V 5817 P 5817 H 5817 U 1110]
+WRAP32-FOLD     lj_parse.c         PASS (caught by bitop:t_fold fuzz:K)
+                                       bitop 1 [t_fold,t_sar,BT1b,BT3b,BT6]; fuzz 1 [jon K 6637 V 1183 P 1183 H 1183 U 224; joff K 6637 V 1183 P 1183 H 1183 U 224]
+SHIFTMASK       vm_x64.dasc        PASS (caught by bitop:t_ops fuzz)
+                                       bitop 1 [t_ops,t_sar,BT4a]; fuzz 1 [jon K 298 V 2259 P 2259 H 2055 U 240; joff K 298 V 2259 P 2259 H 2259 U 417]
+NEGSHIFT        oclj_bitop.h       PASS (caught by bitop:t_ops)
+                                       bitop 1 [t_ops]
+SARSHR          oclj_bitop.h       PASS (caught by bitop:t_sar)
+                                       bitop 1 [t_sar]
+NOINT-FOLD      lj_parse.c         PASS (caught by bitop:t_fold)
+                                       bitop 1 [t_fold,t_sar]
+NOINT-JIT       oclj_bitop_rec.c   PASS (caught by floor:t_jit2/guard-exit genrg2)
+                                       bitjit[floor] 1 failed: t_jit2; genrg2 1 (4/4 seeds differ, 370-401 cases a seed)
+RANGE-HI        oclj_num53.h       PASS (caught by bitop:t_ops fuzz)
+                                       bitop 1 [t_ops,t_fold,t_sar]; fuzz 1 [jon K 90 V 90 P 90 H 90 U 19; joff K 90 V 90 P 90 H 90 U 19]
+STRCOERCE       oclj_bitop_meta.c  PASS (caught by bitop:t_ops bitop:coerce)
+                                       bitop 1 [t_ops,t_sar,coerce_agree]
+ERROPERAND      oclj_bitop_meta.c  PASS (caught by bitop:t_ops)
+                                       bitop 1 [t_ops]
+NARROW          lj_opt_fold.c      PASS (caught by floor:t_rec floor:t_jit2)
+                                       bitjit[floor] 1 failed: t_rec-s1,t_rec-s2,t_rec-s3c,t_rec-s4c,t_jit2
+KFOLD64         lj_opt_fold.c      PASS (caught by fuzz:U floor:t_rec genrg2)
+                                       fuzz 1 [jon K 0 V 0 P 0 H 71 U 436; joff K 0 V 0 P 0 H 0 U 0]; bitjit[floor] 1 failed: t_rec-s1,t_rec-s2,t_rec-s3c,t_rec-s4c,t_jit2,t_rg2; genrg2 1 (4/4 seeds differ, 520-583 cases a seed)
+SARCONST        oclj_bitop_rec.c   PASS (caught by floor:t_rec-counts bitop:t_sar)
+                                       bitop 1 [t_sar]; bitjit[floor] 1 failed: t_rec-s3c,t_rec-s4c
+BCDUMP          lj_bcdump.h        PASS (caught by security:FF12 gate:dump)
+                                       security 1 [FF9,FF10,FF12]; gate 1
+WORDTOKEN       eris_lj.c          PASS (caught by stage4)
+                                       stage4 1
+INEXACT-INTERP  vm_x64.dasc        PASS (caught by bitop:t_ops fuzz:V)
+                                       bitop 1 [t_ops,t_fold,BT3a,BT3b,BT3d]; fuzz 1 [jon K 3050 V 3050 P 3050 H 3050 U 575; joff K 3050 V 3050 P 3050 H 3050 U 575]
+INEXACT-BNOT    vm_x64.dasc        PASS (caught by bitop:t_ops bitop:t_fold fuzz:V)
+                                       bitop 1 [t_ops,t_fold]; fuzz 1 [jon K 1323 V 1323 P 1323 H 1323 U 246; joff K 1323 V 1323 P 1323 H 1323 U 246]
+INEXACT-SLOW    oclj_bitop_meta.c  PASS (caught by bitop:t_ops-str)
+                                       bitop 1 [t_ops,t_fold,t_sar,BT3a,BT3b,BT3c,BT3d]
+INEXACT-FOLD    lj_parse.c         PASS (caught by bitop:t_fold fuzz:K)
+                                       bitop 1 [t_fold,BT3b]; fuzz 1 [jon K 3052 V 465 P 465 H 465 U 91; joff K 3052 V 465 P 465 H 465 U 91]
+INEXACT-JIT     oclj_bitop_rec.c   PASS (caught by gen genrg2)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 529-571 cases a seed); genrg2 1 (4/4 seeds differ, 599-646 cases a seed)
+SELFGUARD       lj_opt_fold.c      PASS (caught by gen genrg2)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 514-566 cases a seed); genrg2 1 (4/4 seeds differ, 608-643 cases a seed)
+WIDTH55         lj_opt_fold.c      PASS (caught by gen genrg2)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 165-181 cases a seed); genrg2 1 (4/4 seeds differ, 153-159 cases a seed)
+WSHR            oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 70-85 cases a seed)
+WBAND           oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 10-18 cases a seed)
+WADD0           oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 13-21 cases a seed)
+WSHL0           oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 24-30 cases a seed)
+FIX1            lj_opt_fold.c      PASS (caught by fix1)
+                                       bitjit[fix1] 1 failed: fix1
+WIDTHIDX33      lj_opt_fold.c      PASS (caught by idx:t_idx idx:t_cnt33 idx:t_idx2)
+                                       bitjit[idx] 1 failed: t_idx,t_cnt33,t_idx2
+PHIIDX          lj_opt_fold.c      PASS (caught by idx:phiidx)
+                                       bitjit[idx] 1 failed: phiidx
+NOLOOPFOLD      lj_opt_fold.c      PASS (caught by idx:phiidx)
+                                       bitjit[idx] 1 failed: phiidx
+SELGUARD        lj_record.c        PASS (caught by sel:t_select)
+                                       bitjit[sel] 1 failed: t_select
+SELRECK         lj_record.c        PASS (caught by sel:kmax)
+                                       bitjit[sel] 1 failed: t_select-kmax
+NUMCONVOP1      lj_opt_fold.c      PASS (caught by nc:t_numconv nc:ncir)
+                                       bitjit[nc] 1 failed: t_numconv,ncir
+NUMCONVW        oclj_bitop_fold.c  PASS (caught by nc:t_numconv nc:ncir)
+                                       bitjit[nc] 1 failed: t_numconv,ncir
+NUMCONVOFF      lj_opt_fold.c      PASS (caught by nc:ncir)
+                                       bitjit[nc] 1 failed: ncir
+NUMCONVNOOP     oclj_bitop_fold.c  PASS (caught by gen)
+                                       bitjit[gen] 1 (gen: 4/4 seeds differ, 18-25 cases a seed)
+CSEFWD          lj_opt_fold.c      PASS (caught by cse:t_csefwd cse:cseir)
+                                       bitjit[cse] 1 failed: t_csefwd,cseir
+restore         -                  PASS (every file put back; every object byte-identical to the shipped build's)

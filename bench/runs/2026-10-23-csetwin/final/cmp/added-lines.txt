@@ -1,0 +1,1430 @@
+> # THE CHANGE, twelve hunks.
+> #   12. lj_opt_cse never commons an int64 instruction with one of another
+> #      type (the CSE type twin, 2026-10-23): CSE matches the operands alone
+> #      and returns the existing instruction's type, and on x64
+> #      simplify_conv_sext hands our int64 ops the int loop index or a
+> #      string.byte value directly, so a 32-bit instruction on the same
+> #      operands (the bit library's, or upstream's x + x) served our operator
+> #      its zero-extended 32-bit value, and in the other order would hand our
+> #      int64 ref to a 32-bit recorder that stores it in a slot.  The test is
+> #      int64 against the rest, by type alone (irt_isi64, so the guard and PHI
+> #      bits never block a merge): other types merge as upstream's do, and a
+> #      refused match emits what -O-cse would, so no value changes.
+> # narrow_convert's comment and loop check (:1315-1317); on
+> # simplify_conv_int_num whole (:1128-1136); and on lj_opt_cse's match, its
+> # if and return lines together (:2612-2613; lj_opt_cselim's if is indented
+> # less); each exactly once.
+> NH=12       # hunks
+> NADD=76     # lines diff -d reports added on the pristine file ...
+> NDEL=9      # ... and removed
+> # 12. lj_opt_cse: an int64 instruction and one of another type never match.
+> cat > "$D/o12" <<'EOF'
+>       if (IR(ref)->op12 == op12)
+> @T@return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */
+> EOF
+> cat > "$D/n12" <<'EOF'
+>       /* OC-LuaJIT: an int64 instruction never commons with one of another
+>       ** type.  On x64 simplify_conv_sext hands int64 ops int refs, so a 32-bit
+>       ** op can share their op12: its value would stand in for the int64 one,
+>       ** or an int64 ref would reach a 32-bit recorder (JIT guide P63). */
+>       if (IR(ref)->op12 == op12 &&
+> @T@  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))
+> @T@return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */
+> EOF
+> # Hunk 12's CSE type test (2026-10-23): the line that, stripped of leading
+> # blanks, is exactly the test occurs once; irt_isi64(IR(ref)->t) is named on
+> # that line only, so a copy in another form (on lj_opt_cselim's if, say) is
+> # refused too; the line lies between lj_opt_cse's definition line and
+> # lj_opt_cselim's; and it sits directly below lj_opt_cse's if line, ending
+> # in &&, and directly above its return of the common subexpression.  So the
+> # forward-allowing and the reverse-allowing forms (an || in the test), a
+> # whole-type compare, and the test dropped, in lj_opt_cselim, after the
+> # return or under an || are each refused.  Every check was evaluated on
+> # eleven mutations of a patched file and on the file itself, with a fail()
+> # that does not exit (2026-10-23): the irt_isi64(IR(ref)->t) count fails
+> # alone on a one-line copy in lj_opt_cselim, the order alone on the test
+> # moved with its two neighbours into lj_opt_cselim, and the neighbours alone
+> # on the test after the return and on an if line ending in ||.  Implied,
+> # and kept for their messages: the line count (none also fails the missing
+> # check, two the irt_isi64(IR(ref)->t) count) and the missing check (the
+> # order fails with it).  Indentation is not checked here: the hunk's own
+> # text, which verify_patched finds exactly once, holds it.
+> # Those checks read hunk 12's three lines only, so an n12 that adds a second
+> # match beside them passed them all (the code verifier's m1-m4, 2026-10-23:
+> # a forward- or a reverse-allowing match line above the if, an else-if
+> # after the return, one at the same line count, 76/9).  So lj_opt_cse, from
+> # its definition line to lj_opt_cselim's, must name op12 == op12 on one line
+> # and return on two.  Each count was run on its own mutation of a patched
+> # file with a fail() that does not exit (2026-10-23): the match count fails
+> # alone on a stray line naming op12 == op12 with no return, the return count
+> # alone on an extra match spelled without op12; m1-m4 fail both, and fail
+> # none of the checks above.  Not checked: a macro that redefines irt_isi64
+> # inside n12.
+>   # Hunk 12, the CSE type test.
+>   PRED='irt_isi64(IR(ref)->t) == irt_isi64(fins->t))'
+>   NPL=$(P=$PRED awk 'BEGIN { T = sprintf("%c", 9) }
+>     { s = $0; while (substr(s, 1, 1) == " " || substr(s, 1, 1) == T) s = substr(s, 2)
+>       if (s == ENVIRON["P"]) n++ }
+>     END { print n + 0 }' "$1")
+>   [ "$NPL" = 1 ] || fail "$1: the CSE type test '$PRED' is a line of its own $NPL times, expected 1 (hunk 12)"
+>   [ "$(countsub 'irt_isi64(IR(ref)->t)' "$1")" = 1 ] || fail "$1: irt_isi64(IR(ref)->t) is named on $(countsub 'irt_isi64(IR(ref)->t)' "$1") lines, expected 1 (hunk 12's CSE type test)"
+>   LS=$(awk '$0 == "TRef LJ_FASTCALL lj_opt_cse(jit_State *J)" { print NR; exit }' "$1")
+>   LT=$(awk '$0 == "TRef LJ_FASTCALL lj_opt_cselim(jit_State *J, IRRef lim)" { print NR; exit }' "$1")
+>   LQ=$(P=$PRED awk 'BEGIN { T = sprintf("%c", 9) }
+>     { s = $0; while (substr(s, 1, 1) == " " || substr(s, 1, 1) == T) s = substr(s, 2)
+>       if (s == ENVIRON["P"]) { print NR; exit } }' "$1")
+>   [ -n "$LS" ] && [ -n "$LT" ] && [ -n "$LQ" ] || fail "$1: missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)"
+>   if [ -n "$LS" ] && [ -n "$LT" ] && [ -n "$LQ" ] && [ "$LS" -lt "$LQ" ] && [ "$LQ" -lt "$LT" ]; then :; else
+>     fail "$1: the CSE type test (line $LQ) is not inside lj_opt_cse (its definition line $LS; lj_opt_cselim's $LT)"
+>   fi
+>   ADJ=$(W1='      if (IR(ref)->op12 == op12 &&' W2='return TREF(ref, irt_t(IR(ref)->t));  /* Common subexpression found. */' awk -v n="${LQ:-0}" '
+>     BEGIN { T = sprintf("%c", 9); b = "no"; a = "no" }
+>     NR == n - 1 && $0 == ENVIRON["W1"] { b = "yes" }
+>     NR == n + 1 { if ($0 == T ENVIRON["W2"]) a = "yes"; exit }
+>     END { print b "/" a }' "$1")
+>   [ "$ADJ" = yes/yes ] || fail "$1: the CSE type test (line $LQ) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly above its return of the common subexpression (below/above: $ADJ)"
+>   # lj_opt_cse holds no match but hunk 12's: between its definition line and
+>   # lj_opt_cselim's, one line names op12 == op12 (hunk 12's if) and two name
+>   # return (hunk 12's return of the common subexpression and upstream's
+>   # return of the instruction it emits).
+>   NM=$(awk -v s="${LS:-0}" -v t="${LT:-0}" 'NR > s + 0 && NR < t + 0 && index($0, "op12 == op12") { n++ } END { print n + 0 }' "$1")
+>   NRT=$(awk -v s="${LS:-0}" -v t="${LT:-0}" 'NR > s + 0 && NR < t + 0 && index($0, "return") { n++ } END { print n + 0 }' "$1")
+>   [ "$NM" = 1 ] || fail "$1: lj_opt_cse (lines $LS-$LT) names 'op12 == op12' on $NM lines, expected 1 (hunk 12's if): a match other than hunk 12's"
+>   [ "$NRT" = 2 ] || fail "$1: lj_opt_cse (lines $LS-$LT) names 'return' on $NRT lines, expected 2 (hunk 12's return of the common subexpression, and the return of the instruction it emits): a return other than those"
+> echo "$ME: $(basename "$OUT")  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type ($NADD lines added, $NDEL removed, of $NL_OUT); verified by content, diff and reversal"
+> **   after it says so (or the width rule or FIX-NUMCONV's proved it).  (i64)
+> **   of it folds to the int64 (simplify_conv_i64_num, patch-bitop-fold.sh).
+> **   On CONV i64.num: a result guard's own check, which that rule must not
+> **   fold; only the width rule and FIX-NUMCONV's may remove it. */
+>   ** guard converts it back (its own marked conversion: only the width and
+>   ** FIX-NUMCONV rules remove it, proving res exact) and compares with res. */
+> # fix's (2026-10-20), FIX-NUMCONV's (2026-10-21) and the CSE type twin
+> # fix's (2026-10-23) have teeth:
+> #   cse:t_csefwd, :cseir   run-bitjit.sh's cse part (the CSE type twin):
+> #                 t_csefwd against -joff under some option set (a 5.3
+> #                 result unlike the file's plain-arithmetic reference exits
+> #                 1 there too), or cseir's read of the forward pairs'
+> #                 compiled loops under the sets with fold and CSE on (an
+> #                 operator served by a 32-bit instruction, a pair not kept
+> #                 apart, an int64 instruction in a snapshot, a loop that did
+> #                 not compile, or results unlike -joff's); the part's
+> #                 t_cserev (the reverse order, only in its two no-slot
+> #                 shapes) runs with them and no arm names it
+> #   the CSE type twin's (2026-10-23; patch-bitop-fold.sh hunk 12, the type
+> #   test in lj_opt_cse):
+> #     CSEFWD          lj_opt_fold.c      [cse:t_csefwd cse:cseir]
+> #   CSEFWD lets an int64 instruction common with an older narrower one on
+> #   the same operands (the forward order: the 5.3 operator gets the 32-bit
+> #   value, zero-extended, as on every build before hunk 12) and still
+> #   refuses the reverse.  No arm holds the reverse half: its sabotage would
+> #   let an int64 ref reach a 32-bit recorder, crash-class, never run on
+> #   any build.  That half is held by patch-bitop-fold.sh's verify_content,
+> #   which every build runs (the predicate's exact text, once, inside
+> #   lj_opt_cse, between its if and its return, and no other match or return
+> #   in lj_opt_cse), and by the predicate's symmetry.  The predicate dropped
+> #   is the unfixed build, which opens the reverse order too, so it is no
+> #   arm.
+> # saw gen 17-27, genrg2 24-28 and t_rec 0-3 a seed.  CSEFWD, one run on
+> # 2026-10-23 (OCLJ_NEGCTL_ARMS=CSEFWD, the CSE round's integrator, scratch
+> # claude-tmp/oclj/csetwin/round/integrate/runs/negctl-cse-1), every count
+> # equal to the test implementer's on a prototype of the same sabotage
+> # (csetwin/round/impl-tests/runs/cse-fwdsab-1): t_csefwd 11 cases in 10 of
+> # its 15 sets, 1 under -O1 and -O-narrow, 0 under -O0, -O-fold and -O-cse
+> # (no pair forms there, or none merges); cseir 18 in 10 of its 12 sets, 1
+> # under -O1 and -O-narrow; t_cserev passes (the reverse stays refused).
+> # With t_csefwd's copy and side cases, two runs (the round's fixer,
+> # csetwin/round/fix/runs/negctl-cse-1 and -2): t_csefwd 13 cases in 7 sets
+> # (in 6 in one run: under -Ohotexit=1 side read right there, as it did on
+> # build/native once under -Ohotloop=1 -Ohotexit=1), 12 under
+> # -O-loop and the two -Omaxside=0 sets, 2 under -O1 and -O-narrow; cseir
+> # 20 in 7 sets, 19 in those three, 2 under -O1 and -O-narrow.
+> # directories); NUMCONVNOOP, the 36th arm, 37 s (its gen run; three runs);
+> # with the cse part canon took 108 s and CSEFWD, the 37th arm, 12 s (one
+> # run, 2026-10-23, which left 157 MB in its work directory; with the copy
+> # and side cases canon 110-112 s, CSEFWD 12 s, the fixer's two runs).
+> # CSEFWD only lets one of our int64 instructions take an older 32-bit
+> # instruction's ref on the same operands, as every build before hunk 12
+> # did: our consumers read the whole register, which holds the 32-bit
+> # result zero-extended, so a 5.3 result is a wrong number, and the reverse
+> # match stays refused, so no int64 ref reaches a 32-bit recorder, a slot
+> # or a snapshot.
+>     bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel|nc|cse) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
+>       gen|floor|fix1|idx|sel|nc|cse) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+>     cse:t_csefwd) grep -q '^FAIL t_csefwd (' "$1/bitjit.log" ;;
+>     cse:cseir) grep -q '^FAIL cseir (' "$1/bitjit.log" ;;
+>       /^FAIL t_csefwd/ { out = out sep "t_csefwd"; sep = "," }
+>       /^FAIL t_cserev [(]/ { out = out sep "t_cserev"; sep = "," }
+>       /^FAIL t_cserev: PUC/ { out = out sep "t_cserev-PUC"; sep = "," }
+>       /^FAIL t_cserev: -joff/ { out = out sep "t_cserev-joff"; sep = "," }
+>       /^FAIL cseir/ { out = out sep "cseir"; sep = "," }
+> arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc cse security gate stage4' '' ''
+> arm CSEFWD lj_opt_fold.c 'cse:t_csefwd cse:cseir' \
+>   '@T@  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' \
+>   '@T@  (irt_isi64(IR(ref)->t) == irt_isi64(fins->t) || irt_isi64(fins->t)))  /* SABOTAGE CSEFWD: an int64 instruction may common with an older narrower one, the forward order, as before hunk 12; the reverse stays refused */'
+> # Seven parts (the fifth, sel, is not about the bit operators: it is the
+> #   7. THE CSE TWINS (cse; JIT guide P63, 3.9: patch-bitop-fold.sh's hunk
+> #      12 makes lj_opt_cse refuse a match when exactly one of the two
+> #      instructions is IRT_I64; before it, on x64, where simplify_conv_sext
+> #      hands our int64 operators the int loop index or a string.byte value
+> #      directly, a 32-bit instruction on the same operands served our
+> #      operator, and the 5.3 operator got the 32-bit value, zero-extended).
+> #      bitop/t_csefwd.lua runs 32 loops, the forward order only (the
+> #      32-bit producer first: the bit library, select beyond its varargs, a
+> #      narrowed string.byte or string.sub argument, an inner for loop's
+> #      step), 13 whose served value is wrong (bit.lshift(i, 3) then i << 3,
+> #      the bnot and bxor forms, a masked count, a u8 operand, the nested
+> #      (i & m) << k, reassoc_shift, a chain, variable counts of 32-63, a
+> #      pair that forms only in the loop copy and one only in a side trace),
+> #      7 whose served value is right (the in-game families among them) and
+> #      12 controls, each checked against a plain-arithmetic reference (the
+> #      file exits 1 otherwise, -joff included) and compared whole with
+> #      -joff under the sel part's fifteen option sets; no PUC twin, by
+> #      design (the bit library).  Its default run's #cov line must say jit
+> #      on, a trace in OCLJ_BITJIT_HOTMIN of the cases, and at least one
+> #      pair formed.  bitop/t_cserev.lua runs the reverse order (our
+> #      operator first) ONLY in the two shapes whose 32-bit consumer stores
+> #      nothing in a Lua slot (its header argues it from the source, and the
+> #      user's decision of 2026-10-23 allows no other): select(j, ...)
+> #      beyond the varargs, and string.byte or string.sub of i + i or i * 2,
+> #      each after i << 1 or j << 3; its fields 1-2 must equal -joff's under
+> #      the fifteen sets, PUC 5.3.6's whole output must equal -joff's, every
+> #      JIT run must print its summary line, and its own IR read (the
+> #      pair kept apart, split, and no 32-bit instruction consuming our
+> #      int64 one, rserved, where fold, CSE and narrowing are on; never an
+> #      int64 instruction in a snapshot) must pass, judging all four reverse
+> #      cases in the default run.  bitop/cseir.lua reads t_csefwd's loops'
+> #      IR under the twelve of those sets with fold and CSE on (no pair
+> #      forms under -O0 and -O-fold, none merges under -O-cse, and it
+> #      refuses them, P61): our operator never served by a 32-bit
+> #      instruction, every pair kept apart where it forms, no int64
+> #      instruction in a snapshot, every loop compiled, results equal to
+> #      -joff's, a summary line in every run and every pair judged in the
+> #      default one.
+> # The cse part (2026-10-23, the round's test implementer, and its fixer
+> # after adding the copy and side cases): on build/native at 1a13bed
+> # (luajit.exe f4038cd6, no fix) it FAILs, in six runs on Windows (cseir's
+> # judge as now in the last five) and one in AlmaLinux 8: t_csefwd in 13
+> # cases in 7 of the 10 sets with fold, CSE and narrowing on, 12 under
+> # -O-loop and the two -Omaxside=0 sets, 2 under -O1 and -O-narrow, 0 under
+> # -O0, -O-fold and -O-cse, except that the side case's value depends on
+> # whether a trace compiles its branch, which varied: 12 once under
+> # -Ohotloop=1 -Ohotexit=1, 13 once in 14 readings of the -Omaxside=0 sets;
+> # cseir in 20 (19 under -O-loop and the two -Omaxside=0 sets, 2 under -O1
+> # and -O-narrow) in every run; t_cserev in its 4 reverse cases wherever it
+> # judges them.  With the fix (impl-tests' prototype, lj_opt_fold.o
+> # a6c5fcc2, five runs before copy and side, and the fixer's build of the
+> # same object) every check passes; with CSEFWD's sabotage
+> # text (forward merges only) t_csefwd and cseir fail as on build/native
+> # and t_cserev passes.
+> #   OCLJ_BITJIT_PARTS     the parts to run, of "gen floor fix1 idx sel nc cse"  (default all seven)
+> #                         sel, nc and cse parts, a fraction             (default 0.25)
+> # Default: about 70 s (61 s for all six parts on FIX-NUMCONV's prototype,
+> # 2026-10-21; 68 s for all seven on the CSE round's prototype, 2026-10-23;
+> # 4 seeds x 2000 loops, about 7 s a seed with PUC; the idx part about 10
+> # s; the sel part about 6 s, 2026-10-20; the nc part 6-8 s; the cse part
+> # 9-12 s).
+> : "${OCLJ_BITJIT_PARTS:=gen floor fix1 idx sel nc cse}"
+> for f in gen.lua drv.lua t_rec.lua t_jit2.lua p4v.lua t_rg2.lua twin.lua t_idx.lua t_cnt33.lua t_idx2.lua phiidx.lua t_select.lua t_numconv.lua ncir.lua t_csefwd.lua cseir.lua t_cserev.lua; do
+>   case $p in gen|floor|fix1|idx|sel|nc|cse) ;; *) fail "OCLJ_BITJIT_PARTS: '$p' is not one of gen, floor, fix1, idx, sel, nc, cse" ;; esac
+> md5sum "$LJEXE" "$B/gen.lua" "$B/drv.lua" "$B/t_rec.lua" "$B/t_jit2.lua" "$B/p4v.lua" "$B/t_rg2.lua" "$B/twin.lua" "$B/t_idx.lua" "$B/t_cnt33.lua" "$B/t_idx2.lua" "$B/phiidx.lua" "$B/t_select.lua" "$B/t_numconv.lua" "$B/ncir.lua" "$B/t_csefwd.lua" "$B/cseir.lua" "$B/t_cserev.lua" > "$OUT/inputs.md5"
+> # ---------------------------------------------------------------- 7
+> echo "== 7. the CSE twins: t_csefwd.lua and t_cserev.lua against -joff, t_cserev.lua against PUC 5.3.6; cseir.lua's and t_cserev.lua's traces =="
+> # t_csefwd and t_cserev run under the sel part's fifteen sets; cseir under
+> # the twelve of them with fold and CSE on (under -O0 and -O-fold no pair
+> # forms, under -O-cse none merges, and cseir refuses all three: P61).
+> CSEIROPTS="jon O1:-O1 hl1:-O3_-Ohotloop=1 ms0:-Omaxside=0 he1:-Ohotloop=1_-Ohotexit=1 noloop:-O3_-O-loop hx1:-Ohotexit=1 ts1:-Otryside=1_-Ohotexit=2 mx1:-Omaxside=1 hl1ms0:-Ohotloop=1_-Omaxside=0 noabc:-O3_-O-abc nonarrow:-O3_-O-narrow"
+> if wanted cse; then
+>   D=$OUT/cse; mkdir -p "$D"
+>   cv() { echo "$cov" | sed -n "s/.* $1 \([0-9]*\).*/\1/p"; }
+>   # t_csefwd: the forward pairs' values, against -joff and the file's own
+>   # plain-arithmetic reference (a mismatch exits 1, under -joff too).
+>   t=t_csefwd
+>   run "$D/$t-joff.txt" "$D/$t-joff.err" "$LJEXE" -joff "$B/$t.lua"; rc=$?
+>   nc=$(grep -c . "$D/$t-joff.txt")
+>   if [ "$rc" -eq 2 ] && grep -q INSTRUMENT "$D/$t-joff.txt"; then
+>     echo "PROVED NOTHING $t:"; sed -n '/INSTRUMENT/,$p' "$D/$t-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+>   elif [ "$rc" -ne 0 ] || [ "$nc" -eq 0 ]; then
+>     echo "FAIL $t: -joff exited $rc with $nc lines, $(grep -c 'bad=[1-9]' "$D/$t-joff.txt") of them with a result unlike the file's reference: $(head -c 200 "$D/$t-joff.err")"; bad=1
+>   else
+>     line="$t ($nc cases):"; tbad=0
+>     for o in $SELOPTS; do
+>       n=$(optname "$o")
+>       run "$D/$t-$n.txt" "$D/$t-$n.err" "$LJEXE" $(optargs "$o") "$B/$t.lua"; rc=$?
+>       set -- $(ndiff "$D/$t-$n.txt" "$D/$t-joff.txt")
+>       line="$line $n=$1"
+>       [ "$rc" -ne 0 ] && { line="$line(exit $rc)"; tbad=1; }
+>       [ "$1" -ne 0 ] && { shift; line="$line[$*]"; tbad=1; }
+>     done
+>     # Coverage, from the default run: traces, and the pairs that formed.
+>     cov=$(grep '^#cov' "$D/$t-jon.err" 2>/dev/null)
+>     traced=$(cv traced); pairs=$(cv pairs); served=$(cv served); split=$(cv split)
+>     pcases=$(echo "$cov" | sed -n 's/.* pairs [0-9]* of \([0-9]*\).*/\1/p')
+>     case "$cov" in *"jit on"*) jit=on ;; *) jit=off ;; esac
+>     covtxt="coverage: a trace completed in ${traced:-?} of $nc cases; ${pairs:-?} of ${pcases:-?} pairs formed, served ${served:-?}, split ${split:-?} (default options, jit $jit)"
+>     if [ "$tbad" = 1 ]; then
+>       echo "FAIL $line  ($covtxt)"; bad=1
+>     elif [ "$jit" != on ] || [ -z "$traced" ] || [ -z "$pairs" ] || [ "$pairs" -eq 0 ] ||
+>          ! awk -v t="$traced" -v n="$nc" -v h="$OCLJ_BITJIT_HOTMIN" 'BEGIN { exit !(t >= h * n) }'; then
+>       echo "PROVED NOTHING $line  ($covtxt; too few traces for OCLJ_BITJIT_HOTMIN $OCLJ_BITJIT_HOTMIN, or no pair formed)"; nothing=1
+>     else
+>       echo "PASS $line  ($covtxt)"
+>     fi
+>   fi
+>   echo "$t on PUC: not run, by design (its 32-bit halves are LuaJIT's bit library, which PUC 5.3.6 lacks; the file checks every 5.3 result against a plain-arithmetic reference under every VM, -joff included)"
+>   # t_cserev: the reverse order in its two no-slot shapes; fields 1-2 (the
+>   # values) against -joff in every set, its own IR read in every JIT run.
+>   t=t_cserev
+>   run "$D/$t-joff.txt" "$D/$t-joff.err" "$LJEXE" -joff "$B/$t.lua"; rf=$?
+>   nres=$(grep -c . "$D/$t-joff.txt")
+>   if [ "$rf" -eq 2 ] && grep -q INSTRUMENT "$D/$t-joff.txt"; then
+>     echo "PROVED NOTHING $t:"; sed -n '/INSTRUMENT/,$p' "$D/$t-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+>   elif [ "$rf" -ne 0 ] || [ "$nres" -eq 0 ]; then
+>     echo "FAIL $t: -joff exited $rf with $nres lines, $(grep -c 'bad=[1-9]' "$D/$t-joff.txt") of them with a value unlike the file's reference: $(head -c 200 "$D/$t-joff.err")"; bad=1
+>   else
+>     cut -f1,2 "$D/$t-joff.txt" > "$D/$t-joff-res.txt"
+>     line="$t ($nres cases):"; rbad=; rnothing=; rdiff=
+>     for o in $SELOPTS; do
+>       n=$(optname "$o")
+>       run "$D/$t-$n.txt" "$D/$t-$n.err" "$LJEXE" $(optargs "$o") "$B/$t.lua"; rj=$?
+>       grep -v '^t_cserev:' "$D/$t-$n.txt" | cut -f1,2 > "$D/$t-$n-res.txt"
+>       nf=$(grep -c 'FAILED' "$D/$t-$n.txt")
+>       line="$line $n=$nf"
+>       if [ "$rj" -eq 2 ]; then
+>         rnothing="$rnothing $n: $(grep INSTRUMENT "$D/$t-$n.txt" | head -c 200) $(head -c 200 "$D/$t-$n.err");"
+>       else
+>         cmp -s "$D/$t-$n-res.txt" "$D/$t-joff-res.txt" || rdiff="$rdiff $n"
+>         if [ "$rj" -ne 0 ]; then
+>           rbad="$rbad $n:$(grep FAILED "$D/$t-$n.txt" | cut -f1 | head -4 | tr '\n' ',' | sed 's/,$//')"
+>         elif ! grep -q '^t_cserev: [0-9]* of [0-9]* cases ok' "$D/$t-$n.txt"; then
+>           rnothing="$rnothing $n: no summary line, so no trace was read (the JIT off?);"
+>         fi
+>       fi
+>     done
+>     # The default run must judge every reverse case (the pairs formed).
+>     set -- $(sed -n 's/^t_cserev: .* reverse cases judged \([0-9]*\) of \([0-9]*\)$/\1 \2/p' "$D/$t-jon.txt")
+>     if [ $# -ne 2 ] || [ "$1" -eq 0 ] || [ "$1" -ne "$2" ]; then
+>       rnothing="$rnothing jon: reverse cases judged ${1:-?} of ${2:-?}, so a reverse pair never formed;"
+>     fi
+>     if [ -n "$rdiff" ] || [ -n "$rbad" ]; then
+>       msg=; [ -n "$rdiff" ] && msg=" compiled values differ from -joff's under:$rdiff;"
+>       [ -n "$rbad" ] && msg="$msg a 32-bit instruction consumes our int64 one, a pair is not kept apart, an int64 instruction is in a snapshot, a value is unlike the file's reference, or a loop did not compile (first cases:$rbad)"
+>       echo "FAIL $line $msg"; bad=1
+>     elif [ -n "$rnothing" ]; then
+>       echo "PROVED NOTHING $line  --$rnothing"; nothing=1
+>     else
+>       echo "PASS $line  every case ok in every set: values equal -joff's, each reverse pair kept apart where it forms, nothing 32-bit consumes our int64 instruction, no int64 instruction in a snapshot"
+>     fi
+>   fi
+>   if [ "$HAVEPUC" = 1 ]; then
+>     # Every case: nothing here means otherwise on PUC (the file's header).
+>     run "$D/$t-puc.txt" "$D/$t-puc.err" "$OCLJ_LUA53" "$B/$t.lua"; rc=$?
+>     set -- $(ndiff "$D/$t-puc.txt" "$D/$t-joff.txt")
+>     if [ "$rc" -ne 0 ] || [ ! -s "$D/$t-joff.txt" ]; then
+>       echo "PROVED NOTHING $t on PUC: exited $rc: $(head -c 300 "$D/$t-puc.txt") $(head -c 200 "$D/$t-puc.err")"; nothing=1
+>     elif [ "$1" -eq 0 ]; then
+>       echo "PASS $t: PUC 5.3.6 equals -joff in all $(grep -c . "$D/$t-puc.txt") cases"
+>     else
+>       nd=$1; shift; echo "FAIL $t: PUC 5.3.6 differs from -joff in $nd cases, first:$*"; bad=1
+>     fi
+>   else
+>     echo "$t on PUC: SKIPPED ($PUCSKIP)"
+>   fi
+>   # cseir: the forward pairs read from the compiled loops in every set with
+>   # fold and CSE on; the loops compile; their results equal -joff's.
+>   run "$D/cseir-joff.txt" "$D/cseir-joff.err" "$LJEXE" -joff "$B/cseir.lua"; rf=$?
+>   cut -f1,2 "$D/cseir-joff.txt" > "$D/cseir-joff-res.txt"
+>   nres=$(grep -c . "$D/cseir-joff-res.txt")
+>   if [ "$rf" -eq 2 ] && grep -q INSTRUMENT "$D/cseir-joff.txt"; then
+>     echo "PROVED NOTHING cseir:"; sed -n '/INSTRUMENT/,$p' "$D/cseir-joff.txt" | head -6 | sed 's/^/    /'; nothing=1
+>   elif [ "$rf" -ne 0 ] || [ "$nres" -eq 0 ]; then
+>     echo "FAIL cseir: -joff exited $rf with $nres results: $(head -c 200 "$D/cseir-joff.txt") $(head -c 200 "$D/cseir-joff.err")"; bad=1
+>   else
+>     line="cseir ($nres cases):"; ibad=; inothing=; idiff=
+>     for o in $CSEIROPTS; do
+>       n=$(optname "$o")
+>       run "$D/cseir-$n.txt" "$D/cseir-$n.err" "$LJEXE" $(optargs "$o") "$B/cseir.lua"; rj=$?
+>       grep -v '^cseir:' "$D/cseir-$n.txt" | cut -f1,2 > "$D/cseir-$n-res.txt"
+>       nf=$(grep -c 'FAILED' "$D/cseir-$n.txt")
+>       line="$line $n=$nf"
+>       if [ "$rj" -eq 2 ]; then
+>         inothing="$inothing $n: $(grep INSTRUMENT "$D/cseir-$n.txt" | head -c 200) $(head -c 200 "$D/cseir-$n.err");"
+>       else
+>         cmp -s "$D/cseir-$n-res.txt" "$D/cseir-joff-res.txt" || idiff="$idiff $n"
+>         if [ "$rj" -ne 0 ]; then
+>           ibad="$ibad $n:$(grep FAILED "$D/cseir-$n.txt" | cut -f1 | head -3 | tr '\n' ',' | sed 's/,$//')"
+>         elif ! grep -q '^cseir: [0-9]* of [0-9]* cases ok' "$D/cseir-$n.txt"; then
+>           inothing="$inothing $n: no summary line, so no trace was read (the JIT off?);"
+>         fi
+>       fi
+>     done
+>     # The default run must judge every pair (the pairs formed).
+>     set -- $(sed -n 's/^cseir: .* pairs judged \([0-9]*\) of \([0-9]*\)$/\1 \2/p' "$D/cseir-jon.txt")
+>     if [ $# -ne 2 ] || [ "$1" -eq 0 ] || [ "$1" -ne "$2" ]; then
+>       inothing="$inothing jon: pairs judged ${1:-?} of ${2:-?}, so a pair never formed;"
+>     fi
+>     if [ -n "$idiff" ] || [ -n "$ibad" ]; then
+>       msg=; [ -n "$idiff" ] && msg=" compiled results differ from -joff's under:$idiff;"
+>       [ -n "$ibad" ] && msg="$msg a 32-bit instruction served our operator, a pair was not kept apart, an int64 instruction is in a snapshot, or a loop did not compile (first cases:$ibad)"
+>       echo "FAIL $line $msg"; bad=1
+>     elif [ -n "$inothing" ]; then
+>       echo "PROVED NOTHING $line  --$inothing"; nothing=1
+>     else
+>       echo "PASS $line  every case ok in every set with fold and CSE on: no operator served by a 32-bit instruction, every pair kept apart where it forms, no int64 instruction in a snapshot, results equal -joff's"
+>     fi
+>   fi
+> else
+>   echo "SKIPPED (not in OCLJ_BITJIT_PARTS)"
+> fi
+> 
+> echo
+> sel=; [ "$OCLJ_BITJIT_PARTS" != "gen floor fix1 idx sel nc cse" ] && sel=" (parts run: $OCLJ_BITJIT_PARTS; the others prove nothing here)"
+-- test/native/bitop/t_csefwd.lua -- the CSE twins, forward order: values.
+-- lj_opt_cse matched an instruction by its opcode and operands only (op12)
+-- and returned the existing one with its own type; on x64
+-- simplify_conv_sext hands our int64 operators (oclj_bitop_rec.c) the int
+-- loop index or a string.byte value directly, so a 32-bit instruction on the
+-- same operands, recorded first, served our operator: the 5.3 operator got
+-- the 32-bit result, zero-extended (the CSE twins; JIT guide P63, 3.9; the
+-- round's design, scratch claude-tmp/oclj/csetwin/design.md).  The fix,
+-- patch-bitop-fold.sh hunk 12, refuses a match when exactly one of the two
+-- instructions is IRT_I64.  test/native/run-bitjit.sh runs this file (part
+-- cse) against -joff under 15 option sets, and bitop/cseir.lua reads the IR
+-- of the same loops.  Written 2026-10-23.
+--
+--   luajit [options] t_csefwd.lua
+--
+-- FORWARD ORDER ONLY.  In every loop here the 32-bit producer (LuaJIT's bit
+-- library, select beyond its varargs, a narrowed string.byte or string.sub
+-- argument, an inner for loop's step) comes before our operator in program
+-- order, so on a build without the fix our operator's request finds the
+-- 32-bit instruction and gets its ref back; no int64 instruction with that
+-- op12 is ever created, so no 32-bit recorder can be handed an int64 ref,
+-- and loop_unroll re-emits the body in the pre-roll's order, so the same
+-- holds in the loop copy (lj_opt_fold.c lj_opt_cse; lj_opt_loop.c
+-- loop_unroll), also for a pair that forms only there (copy); a side trace
+-- records its branch in program order and stops at its root's loop, so the
+-- same holds there (side).  Value-only: this file reads and writes Lua
+-- tables of numbers and strings, nothing through a pointer (FFI is off).
+-- The reverse order (our operator first) is bitop/t_cserev.lua's, and only
+-- in shapes that cannot put an int64 ref into a Lua slot (its header).
+--
+-- THE CASES, each its own loop prototype (load), called three times; one
+-- pair per loop, the 32-bit producer first:
+--   pairs whose served value is wrong (the defect's values):
+--     lsh3    bit.lshift(i, 3), then i << 3, i from 2^29
+--     bnot    bit.bnot(i), then ~i
+--     bnotx   bit.bnot(i), then i ~ -1 (simplify_bxor_k makes it BNOT)
+--     bxorm1  bit.bxor(i, -1) (an int BNOT, simplify_bxor_k), then ~i
+--     lsh35   bit.lshift(i, 35) (its count masked to 3), then i << 3
+--     u8sh30  b = string.byte(S, i), a u8 XLOAD: bit.lshift(b, 30), then
+--             b << 30 (needs no narrowing: the XLOAD is the operand)
+--     nested  bit.lshift(i, 8), then (i & 0x1FFFFFFFFFFFFF) << 8, i from
+--             2^24: simplify_shiftk_andk's inner BSHL i, 8 is served
+--     reassoc bit.lshift(i, 3), then (i << 2) << 1 (reassoc_shift)
+--     chain   bit.bnot(i), then (~i) ~>> 40: a served value fed on
+--     vlsh    in a loop over n = 32..63, b a byte: bit.lshift(b, n), then
+--             b << n (a 32-bit shift masks its count to n & 31)
+--     vrsh    the same with bit.rshift(b, n), then b >> n
+--     copy    a pair that forms only in loop_unroll's copy: j carries
+--             string.byte(S, i + 2) into the next iteration, and each
+--             iteration does bit.lshift(j, 30), then string.byte(S, i + 1)
+--             << 30; at record time their operands differ (j's TOBIT, an
+--             XLOAD), and in the copy both are the pre-roll's one XLOAD
+--             (the code verifier's body-v2, 2026-10-23)
+--     side    a pair that forms only in a side trace: past i = 300, a
+--             branch the root trace never recorded, b = string.byte(S, i),
+--             then bit.lshift(b, 30) and b << 30 (the verifier's side-pair)
+--   pairs whose served value is right (only the IR shows them; the in-game
+--   families G1, G2 and G3 among them):
+--     lsh1    bit.lshift(i, 1), then i << 1, i from 2^30 (both ADD i, i)
+--     band    bit.band(i, b), then i & b, b a byte
+--     rsh5    bit.rshift(i, 5), then i >> 5
+--     select  select(j, ...) with j beyond the varargs (rec_varg's path
+--             beyond them, BSHL j, 3), then j << 3 (G1)
+--     byte2   string.byte(S, i + i), then i << 1 (narrow_stripov's
+--             ADD i, i; G2)
+--     sub2    string.sub(S, 2 * i, 2 * i), then i << 1 (2 * i is i + i of
+--             doubles, narrowed by narrow_conv_emit to ADD i, i; G2)
+--     forin   an inner for j = i, i + i - 1, i, which runs once, so the
+--             loop's trace records its FORL, ADD i, i (rec_for_loop); then
+--             i << 1 (G3, in this order only)
+--   controls, run first (P59): each 5.3 operator alone (ctl-shl3, ctl-bnot,
+--   ctl-shl1, ctl-shr5, ctl-band, ctl-vshl, and ctl-copy and ctl-side, the
+--   copy and side shapes with plain arithmetic for the bit library's call,
+--   x * 2^30 % 2^32, which leaves our operator alone); the bit library alone
+--   (bit-lsh3); a same-type pair, which CSE merges on every build (same-bit,
+--   same-53); and c1, our operator on the bit library's result,
+--   bit.lshift(i, 3) | 0, whose operand stays a sign-extending CONV, so no
+--   pair forms.
+-- Every result is exact (at most 53 significant bits), so nothing raises.
+--
+-- THE REFERENCE.  Each 5.3 result is checked against a reference computed
+-- with plain arithmetic, no bit operator and no bit library (shl, shr, band,
+-- wrap32 below), and so is each bit library result where the case has one;
+-- -joff must agree with it (this file exits 1 otherwise, under any VM), and
+-- run-bitjit.sh compares each JIT option set's whole output with -joff's.
+-- No PUC twin: the 32-bit halves are LuaJIT's bit library, which PUC 5.3.6
+-- lacks, and the reference here checks the 5.3 halves under every VM.
+--
+-- MEASURED (2026-10-23; the round's test implementer, scratch
+-- claude-tmp/oclj/csetwin/round/impl-tests/runs/, and its fixer,
+-- round/fix/runs/ and fix/alma1/): on build/native at 1a13bed (luajit.exe
+-- f4038cd6, no fix) the first list's first eleven cases differ from their
+-- reference in each of the 10 option sets with fold, CSE and narrowing on
+-- (lsh3 327-328 of its first call's 400 results, the first ~56 being
+-- interpreted, and all 400 of each later call; vrsh 66 and 78 of 416,
+-- since b >> (n & 31) is 0 too for most bytes), u8sh30 alone of them under
+-- -O1 and -O-narrow, none under -O0, -O-fold and -O-cse; copy (336, 393
+-- and 393 of 400) in the 9 of those 10 sets with the loop optimisation on,
+-- and side (285, 295 and 295 of 600) wherever a trace compiles its branch,
+-- which varies from run to run in a few sets: a side trace in every run
+-- under the 7 of those 10 sets other than the two -Omaxside=0 ones and
+-- -Ohotloop=1 -Ohotexit=1, and under -O1 and -O-narrow, and in 6 of 7 runs
+-- under -Ohotloop=1 -Ohotexit=1;
+-- under the two -Omaxside=0 sets, where a side trace is a stub, a trace
+-- compiled it in 1 of 14 readings (-Ohotloop=1 -Omaxside=0, the fixer's
+-- runs/cse-base-5, from the first call's 594th result on).  So 13 cases in
+-- 6 sets in every run and in a 7th in 6 of 7, 12 under -O-loop and (but
+-- that once) the two -Omaxside=0 sets, 2 under -O1 and -O-narrow; the
+-- second list and the controls in none (the fixer's runs cse-base-1 to -6
+-- on Windows and alma1 in AlmaLinux 8).  With the fix (round/fix/b1,
+-- lj_opt_fold.o a6c5fcc2) every result equals its reference in all 15
+-- sets, on Windows and in AlmaLinux 8.
+--
+-- Prints one line per case, "<case><TAB><call 1>;<call 2>;<call 3>", each
+-- call "n=<results> bad=<5.3 results unlike the reference> bbad=<bit
+-- library results unlike theirs> dig=<digest> bdig=<digest>[ x=<extra>]
+-- [ first=<k>:<got>/<want>]".  On stderr, LuaJIT with the JIT on, one line:
+--   #cov cases <n> traced <n> pairs <n> of <n> served <n> split <n> i64slot <n> jit <on|off>
+-- traced: the cases in which a trace completed in the case's loop; pairs,
+-- of the pair cases (the two lists above), those whose trace shows the pair
+-- (our operator on the producer's own operand: served or split, read by
+-- bitop/cseir.lua's reader); served, split and i64slot summed over every
+-- case (cseir.lua's header defines them).  run-bitjit.sh requires, in the
+-- default run, jit on, a trace in OCLJ_BITJIT_HOTMIN of the cases and pairs
+-- at least 1.  Exit 0 every result equal to its reference, 1 one is not, 2
+-- (INSTRUMENT) the case list is not what it says or the IR reader is
+-- missing.  Loaded by cseir.lua as loadfile(...)("cases"), it returns its
+-- case list and runs nothing.  This file holds no backslash: a newline is
+-- NL, a tab TAB.
+local NL, TAB, BS = string.char(10), string.char(9), string.char(92)
+local fmt, floor = string.format, math.floor
+local MODE = ...
+
+-- THE REFERENCE: plain arithmetic on integral doubles, exact throughout.
+local P2 = {}
+for e = 0, 64 do P2[e] = 2 ^ e end
+local function bits(x)  -- the set bits of an integer 0 <= x < 2^53, low first
+  local r, p = {}, 0
+  while x > 0 do
+    if x % 2 == 1 then r[#r + 1] = p end
+    x = floor(x / 2); p = p + 1
+  end
+  return r
+end
+-- x << k as 5.3.6 computes it (int64, wrapping), for 0 <= x < 2^31 and
+-- 0 <= k <= 63: each set bit p moves to p + k, bit 63 is the sign, higher
+-- bits drop; the terms are distinct powers of two within a 31-bit window.
+local function shl(x, k)
+  local r = 0
+  for _, p in ipairs(bits(x)) do
+    local q = p + k
+    if q < 63 then r = r + P2[q] elseif q == 63 then r = r - P2[63] end
+  end
+  return r
+end
+local function shr(x, k) return floor(x / P2[k]) end  -- x >= 0; also x ~>> k for any x
+local function band(x, y)  -- x, y >= 0
+  local r, p = 0, 0
+  while x > 0 and y > 0 do
+    if x % 2 == 1 and y % 2 == 1 then r = r + P2[p] end
+    x, y, p = floor(x / 2), floor(y / 2), p + 1
+  end
+  return r
+end
+local function wrap32(v)  -- the bit library's int32 of an integer v >= 0
+  v = v % 4294967296
+  if v >= 2147483648 then v = v - 4294967296 end
+  return v
+end
+-- A digest of n results, exact for any integral double (a string counts as
+-- its first byte): power-of-two divisions, floor and % are exact here.
+local function dig(t, n)
+  local s = 0
+  for k = 1, n do
+    local v = t[k]
+    if type(v) == "string" then v = v:byte() end
+    local lo = v % 1048576
+    local mid = floor(v / 1048576) % 1048576
+    local hi = floor(v / 1099511627776) % 16777216
+    s = (s + lo + 3 * mid + 7 * hi) % 4294967296
+  end
+  return s
+end
+
+-- THE INPUTS.  S6: 32 bytes for the n loops; S4: 400 for the byte cases;
+-- S8: 800 for string.byte(S, i + i) and string.sub(S, 2 * i, 2 * i).
+local function mkstr(n, a, b)
+  local t = {}
+  for j = 1, n do t[j] = string.char((j * a + b) % 256) end
+  return table.concat(t)
+end
+local S6, S4, S8 = mkstr(32, 37, 11), mkstr(400, 97, 13), mkstr(800, 61, 7)
+local N = 400
+local A24, A29, A30 = 16777216, 536870912, 1073741824
+
+-- The loops.  iloop: i from i0, N iterations; nloop: 13 times n = 32..63.
+-- Each stores its 5.3 result in O[k] and the 32-bit producer's in BO[k].
+local function iloop(i0, body)
+  return "local O, BO, S = ..." .. NL .. "local k = 0" .. NL ..
+    fmt("for i = %d, %d do", i0, i0 + N - 1) .. NL .. body .. NL .. "end" .. NL .. "return k"
+end
+local function nloop(body)
+  return "local O, BO, S = ..." .. NL .. "local k = 0" .. NL .. "for rep = 1, 13 do" .. NL ..
+    "  for n = 32, 63 do" .. NL .. "    local b = string.byte(S, n - 31)" .. NL .. body .. NL ..
+    "  end" .. NL .. "end" .. NL .. "return k"
+end
+local function nb(k) local n = 32 + (k - 1) % 32; return S6:byte(n - 31), n end
+-- body(a, c): the producer a first, then our operator c.
+local function ac(a, c)
+  return "  local a = " .. a .. "; local c = " .. c .. NL .. "  k = k + 1; BO[k] = a; O[k] = c"
+end
+local function c0(c) return "  local c = " .. c .. NL .. "  k = k + 1; O[k] = c" end
+-- The copy shape: j carries string.byte(S, i + 2) into the next iteration,
+-- so in the loop copy j and the copy's string.byte(S, i + 1) are the
+-- pre-roll's one XLOAD; a is the producer, first.
+local function cloop(a)
+  return "local O, BO, S = ..." .. NL .. "local k = 0" .. NL .. "local j = string.byte(S, 2)" .. NL ..
+    fmt("for i = 1, %d do", N) .. NL ..
+    "  local a = " .. a .. "; local c = string.byte(S, i + 1) << 30" .. NL ..
+    "  k = k + 1; BO[k] = a; O[k] = c" .. NL ..
+    "  j = string.byte(S, i + 2)" .. NL .. "end" .. NL .. "return k"
+end
+-- The side shape: past i = 300, a branch the root trace never recorded, so
+-- the pair is compiled only in the side trace from that exit.
+local function sloop(a)
+  return "local O, BO, S = ..." .. NL .. "local k = 0" .. NL .. "for i = 1, 600 do" .. NL ..
+    "  if i > 300 then" .. NL ..
+    "    local b = string.byte(S, i)" .. NL ..
+    "    local a = " .. a .. "; local c = b << 30" .. NL ..
+    "    k = k + 1; BO[k] = a; O[k] = c" .. NL ..
+    "  else" .. NL ..
+    "    k = k + 1; BO[k] = 0; O[k] = string.byte(S, i) * 1073741824" .. NL ..
+    "  end" .. NL .. "end" .. NL .. "return k"
+end
+
+-- kind: ctl (our operator alone), bit (the bit library alone), same (a
+-- same-type pair), c1, pair (wrong when served), eq (right when served).
+-- narrow: the pair needs the loop index narrowed to int (an index operand,
+-- or copy's string.byte addresses; not u8sh30's operands).
+-- need: "loop", the pair forms only in loop_unroll's copy (judged where
+-- the loop optimisation is on); "side", only in a side trace (judged where
+-- a side trace compiled our operator: cseir.lua).
+local CASES = {
+  { name = "ctl-shl3", kind = "ctl", narrow = true, n = N, src = iloop(A29, c0("i << 3")),
+    ref = function(k) return (A29 + k - 1) * 8 end },
+  { name = "ctl-bnot", kind = "ctl", narrow = true, n = N, src = iloop(1, c0("~i")),
+    ref = function(k) return -k - 1 end },
+  { name = "ctl-shl1", kind = "ctl", narrow = true, n = N, src = iloop(A30, c0("i << 1")),
+    ref = function(k) return (A30 + k - 1) * 2 end },
+  { name = "ctl-shr5", kind = "ctl", narrow = true, n = N, src = iloop(A29, c0("i >> 5")),
+    ref = function(k) return shr(A29 + k - 1, 5) end },
+  { name = "ctl-band", kind = "ctl", narrow = true, n = N, S = S4,
+    src = iloop(1, "  local b = string.byte(S, i)" .. NL .. c0("i & b")),
+    ref = function(k) return band(k, S4:byte(k)) end },
+  { name = "ctl-vshl", kind = "ctl", narrow = true, n = 416, S = S6, src = nloop(c0("b << n")),
+    ref = function(k) local b, n = nb(k); return shl(b, n) end },
+  { name = "ctl-copy", kind = "ctl", narrow = false, n = N, S = S8, src = cloop("j * 1073741824 % 4294967296"),
+    ref = function(k) return S8:byte(k + 1) * P2[30] end,
+    bref = function(k) return S8:byte(k + 1) * P2[30] % 4294967296 end },
+  { name = "ctl-side", kind = "ctl", narrow = false, need = "side", n = 600, S = S8, src = sloop("b * 1073741824 % 4294967296"),
+    ref = function(k) return S8:byte(k) * P2[30] end,
+    bref = function(k) return k > 300 and S8:byte(k) * P2[30] % 4294967296 or 0 end },
+  { name = "bit-lsh3", kind = "bit", narrow = true, n = N, src = iloop(A29, ac("bit.bnot(i)", "bit.lshift(i, 3)")),
+    ref = function(k) return wrap32((A29 + k - 1) * 8) end,
+    bref = function(k) return -(A29 + k - 1) - 1 end },
+  { name = "same-bit", kind = "same", narrow = true, n = N, src = iloop(A29, ac("bit.lshift(i, 3)", "bit.lshift(i, 3)")),
+    ref = function(k) return wrap32((A29 + k - 1) * 8) end,
+    bref = function(k) return wrap32((A29 + k - 1) * 8) end },
+  { name = "same-53", kind = "same", narrow = true, n = N, src = iloop(A29, ac("i << 3", "i << 3")),
+    ref = function(k) return (A29 + k - 1) * 8 end,
+    bref = function(k) return (A29 + k - 1) * 8 end },
+  { name = "c1", kind = "c1", narrow = true, n = N, src = iloop(A29, ac("bit.lshift(i, 3)", "a | 0")),
+    ref = function(k) return wrap32((A29 + k - 1) * 8) end,
+    bref = function(k) return wrap32((A29 + k - 1) * 8) end },
+  { name = "lsh1", kind = "eq", narrow = true, n = N, src = iloop(A30, ac("bit.lshift(i, 1)", "i << 1")),
+    ref = function(k) return (A30 + k - 1) * 2 end,
+    bref = function(k) return wrap32((A30 + k - 1) * 2) end },
+  { name = "band", kind = "eq", narrow = true, n = N, S = S4,
+    src = iloop(1, "  local b = string.byte(S, i)" .. NL .. ac("bit.band(i, b)", "i & b")),
+    ref = function(k) return band(k, S4:byte(k)) end,
+    bref = function(k) return band(k, S4:byte(k)) end },
+  { name = "rsh5", kind = "eq", narrow = true, n = N, src = iloop(A29, ac("bit.rshift(i, 5)", "i >> 5")),
+    ref = function(k) return shr(A29 + k - 1, 5) end,
+    bref = function(k) return shr(A29 + k - 1, 5) end },
+  { name = "byte2", kind = "eq", narrow = true, n = N, S = S8, src = iloop(1, ac("string.byte(S, i + i)", "i << 1")),
+    ref = function(k) return 2 * k end,
+    bref = function(k) return S8:byte(2 * k) end },
+  { name = "sub2", kind = "eq", narrow = true, n = N, S = S8, src = iloop(1, ac("string.sub(S, 2 * i, 2 * i)", "i << 1")),
+    ref = function(k) return 2 * k end,
+    bref = function(k) return S8:byte(2 * k) end },
+  { name = "lsh3", kind = "pair", narrow = true, n = N, src = iloop(A29, ac("bit.lshift(i, 3)", "i << 3")),
+    ref = function(k) return (A29 + k - 1) * 8 end,
+    bref = function(k) return wrap32((A29 + k - 1) * 8) end },
+  { name = "bnot", kind = "pair", narrow = true, n = N, src = iloop(1, ac("bit.bnot(i)", "~i")),
+    ref = function(k) return -k - 1 end, bref = function(k) return -k - 1 end },
+  { name = "bnotx", kind = "pair", narrow = true, n = N, src = iloop(1, ac("bit.bnot(i)", "i ~ -1")),
+    ref = function(k) return -k - 1 end, bref = function(k) return -k - 1 end },
+  { name = "bxorm1", kind = "pair", narrow = true, n = N, src = iloop(1, ac("bit.bxor(i, -1)", "~i")),
+    ref = function(k) return -k - 1 end, bref = function(k) return -k - 1 end },
+  { name = "lsh35", kind = "pair", narrow = true, n = N, src = iloop(A29, ac("bit.lshift(i, 35)", "i << 3")),
+    ref = function(k) return (A29 + k - 1) * 8 end,
+    bref = function(k) return wrap32((A29 + k - 1) * 8) end },
+  { name = "u8sh30", kind = "pair", narrow = false, n = N, S = S4,
+    src = iloop(1, "  local b = string.byte(S, i)" .. NL .. ac("bit.lshift(b, 30)", "b << 30")),
+    ref = function(k) return S4:byte(k) * P2[30] end,
+    bref = function(k) return wrap32(S4:byte(k) * P2[30]) end },
+  { name = "nested", kind = "pair", narrow = true, n = N, src = iloop(A24, ac("bit.lshift(i, 8)", "(i & 0x1FFFFFFFFFFFFF) << 8")),
+    ref = function(k) return (A24 + k - 1) * 256 end,
+    bref = function(k) return wrap32((A24 + k - 1) * 256) end },
+  { name = "reassoc", kind = "pair", narrow = true, n = N, src = iloop(A29, ac("bit.lshift(i, 3)", "(i << 2) << 1")),
+    ref = function(k) return (A29 + k - 1) * 8 end,
+    bref = function(k) return wrap32((A29 + k - 1) * 8) end },
+  { name = "chain", kind = "pair", narrow = true, n = N, src = iloop(1, ac("bit.bnot(i)", "(~i) ~>> 40")),
+    ref = function(k) return shr(-k - 1, 40) end, bref = function(k) return -k - 1 end },
+  { name = "vlsh", kind = "pair", narrow = true, n = 416, S = S6, src = nloop(ac("bit.lshift(b, n)", "b << n")),
+    ref = function(k) local b, n = nb(k); return shl(b, n) end,
+    bref = function(k) local b, n = nb(k); return wrap32(b * P2[n - 32]) end },
+  { name = "vrsh", kind = "pair", narrow = true, n = 416, S = S6, src = nloop(ac("bit.rshift(b, n)", "b >> n")),
+    ref = function(k) local b, n = nb(k); return shr(b, n) end,
+    bref = function(k) local b, n = nb(k); return shr(b, n - 32) end },
+  { name = "copy", kind = "pair", narrow = true, need = "loop", n = N, S = S8, src = cloop("bit.lshift(j, 30)"),
+    ref = function(k) return S8:byte(k + 1) * P2[30] end,
+    bref = function(k) return wrap32(S8:byte(k + 1) * P2[30]) end },
+  { name = "side", kind = "pair", narrow = false, need = "side", n = 600, S = S8, src = sloop("bit.lshift(b, 30)"),
+    ref = function(k) return S8:byte(k) * P2[30] end,
+    bref = function(k) return k > 300 and wrap32(S8:byte(k) * P2[30]) or 0 end },
+  { name = "select", kind = "eq", narrow = true, n = N, args = { 7, 8 },
+    src = "local O, BO, S = ..." .. NL .. "local k, x = 0, 0" .. NL .. "for j = 6, 405 do" .. NL ..
+      "  local v = select(j, ...); local c = j << 3" .. NL .. "  if v ~= nil then x = x + 1 end" .. NL ..
+      "  k = k + 1; O[k] = c" .. NL .. "end" .. NL .. "return k, x",
+    ref = function(k) return (k + 5) * 8 end },
+  { name = "forin", kind = "eq", narrow = true, n = N,
+    src = iloop(1, "  local m = 0" .. NL .. "  for j = i, i + i - 1, i do m = m + 1 end" .. NL ..
+      "  local c = i << 1" .. NL .. "  k = k + 1; BO[k] = m; O[k] = c"),
+    ref = function(k) return 2 * k end, bref = function(k) return 1 end },
+}
+
+-- The case list's own check: every pair's producer comes first in its text.
+-- The copy and side shapes, whose pair forms only in the loop copy or in a
+-- side trace, also hold their statements in this order, with one bit
+-- library call and one shift: loop_unroll re-emits the pre-roll in order,
+-- and a side trace records its branch in program order.
+local function inorder(src, list)
+  local at = 1
+  for _, s in ipairs(list) do
+    local p = src:find(s, at, true)
+    if not p then return false end
+    at = p + #s
+  end
+  return true
+end
+local function count(src, s)
+  local n, at = 0, 1
+  while true do
+    local p = src:find(s, at, true)
+    if not p then return n end
+    n, at = n + 1, p + #s
+  end
+end
+do
+  local bad = {}
+  for _, C in ipairs(CASES) do
+    if C.kind == "pair" or C.kind == "eq" then
+      local pa, pc = C.src:find("local a = ", 1, true), C.src:find("local c = ", 1, true)
+      local ok = pa and pc and pa < pc
+      if C.name == "select" then ok = C.src:find("select%(j, %.%.%.%); local c = j << 3") ~= nil end
+      if C.name == "forin" then
+        local pf, pl = C.src:find("for j = i, i + i - 1, i do", 1, true), C.src:find("local c = i << 1", 1, true)
+        ok = pf and pl and pf < pl
+      end
+      if C.need == "loop" then
+        ok = ok and inorder(C.src, { "local j = string.byte(S, 2)", "local a = bit.lshift(j, 30)",
+          "local c = string.byte(S, i + 1) << 30", "j = string.byte(S, i + 2)" })
+      elseif C.need == "side" then
+        ok = ok and inorder(C.src, { "if i > 300 then", "local b = string.byte(S, i)", "local a = bit.lshift(b, 30)",
+          "local c = b << 30", "else" })
+      end
+      if C.need then ok = ok and count(C.src, "bit.") == 1 and count(C.src, "<<") == 1 end
+      if not ok then bad[#bad + 1] = C.name end
+    end
+  end
+  if #bad > 0 then
+    print("INSTRUMENT: t_csefwd's producer-first check fails for " .. table.concat(bad, ", "))
+    os.exit(2)
+  end
+end
+
+if MODE == "cases" then return { CASES = CASES, dig = dig } end
+
+-- THE INSTRUMENT (LuaJIT with the JIT on): bitop/cseir.lua's reader.
+local dir = (arg and arg[0] or ""):match("^(.*[/" .. BS .. "])") or ""
+local hasjit = type(jit) == "table" and jit.status and jit.status() and jit.attach
+local LIB
+if hasjit then
+  local chunk, lib = loadfile(dir .. "cseir.lua")
+  local okl = false
+  if chunk then okl, lib = pcall(chunk, "lib") end
+  if not (okl and type(lib) == "table") then
+    print("INSTRUMENT: no IR reader (bitop/cseir.lua as a library): " .. tostring(lib))
+    os.exit(2)
+  end
+  LIB = lib
+end
+local unpack = unpack or table.unpack
+
+-- One case: three calls, each compared with the reference.
+local function runcase(C)
+  local f = assert(load(C.src, "=csefwd-" .. C.name))
+  local calls, bad = {}, 0
+  if LIB then LIB.watch(f) end
+  for call = 1, 3 do
+    local O, BO = {}, {}
+    for k = 1, C.n do O[k] = 0; BO[k] = 0 end  -- pre-sized: no growth exits
+    local n, x = f(O, BO, C.S or S8, unpack(C.args or {}))
+    if n ~= C.n then
+      print(fmt("INSTRUMENT: case %s ran %s iterations, not %d", C.name, tostring(n), C.n))
+      os.exit(2)
+    end
+    local cb, cbb, first = 0, 0, nil
+    for k = 1, n do
+      local want = C.ref(k)
+      if O[k] ~= want then
+        cb = cb + 1
+        if not first then first = fmt("%d:%.17g/%.17g", k, O[k], want) end
+      end
+      if C.bref then
+        local b = BO[k]
+        if type(b) == "string" then b = b:byte() end
+        if b ~= C.bref(k) then cbb = cbb + 1 end
+      end
+    end
+    calls[call] = fmt("n=%d bad=%d bbad=%d dig=%.17g bdig=%.17g", n, cb, cbb, dig(O, n), dig(BO, n)) ..
+      (x and fmt(" x=%.17g", x) or "") .. (first and (" first=" .. first) or "")
+    bad = bad + cb + cbb
+  end
+  return C.name .. TAB .. table.concat(calls, ";"), bad, LIB and LIB.take()
+end
+
+local lines, nbad = {}, 0
+local cov = { cases = 0, traced = 0, pairs = 0, pcases = 0, served = 0, split = 0, i64slot = 0 }
+for _, C in ipairs(CASES) do
+  local line, bad, c = runcase(C)
+  lines[#lines + 1] = line
+  nbad = nbad + bad
+  cov.cases = cov.cases + 1
+  if c then
+    if c.traces > 0 then cov.traced = cov.traced + 1 end
+    if C.kind == "pair" or C.kind == "eq" then
+      cov.pcases = cov.pcases + 1
+      if c.served + c.split > 0 then cov.pairs = cov.pairs + 1 end
+    end
+    cov.served, cov.split, cov.i64slot = cov.served + c.served, cov.split + c.split, cov.i64slot + c.i64slot
+  end
+end
+io.write(table.concat(lines, NL), NL)
+io.stderr:write(fmt("#cov cases %d traced %d pairs %d of %d served %d split %d i64slot %d jit %s",
+  cov.cases, cov.traced, cov.pairs, cov.pcases, cov.served, cov.split, cov.i64slot, hasjit and "on" or "off") .. NL)
+os.exit(nbad == 0 and 0 or 1)
+-- test/native/bitop/cseir.lua -- the CSE twins read from the compiled traces.
+-- lj_opt_cse matched an instruction by its opcode and operands only and
+-- returned the existing one with its own type, so on x64, where
+-- simplify_conv_sext hands our int64 operators the int loop index or a
+-- string.byte value directly, a 32-bit instruction on the same operands
+-- served our operator (the CSE twins; JIT guide P63, 3.9).  The fix,
+-- patch-bitop-fold.sh hunk 12, refuses a match when exactly one of the two
+-- instructions is IRT_I64; a refused match emits what -O-cse emits.  Where
+-- the served value happens to be right (the in-game families) only the IR
+-- shows the merge, so this file counts it, keyed on operands (JIT guide
+-- P56), in the loops of bitop/t_csefwd.lua (it loads their list from that
+-- file), the forward order only: the 32-bit producer first.
+-- test/native/run-bitjit.sh runs it (part cse).  Written 2026-10-23.
+--
+--   luajit [options] cseir.lua      (LUA_PATH must reach the build's src/jit/vmdef.lua)
+--
+-- THE COUNTS, per case, summed over the traces that complete in its loop,
+-- each instruction read through jit.util.traceir and each snapshot through
+-- jit.util.tracesnap.  "Our opcodes" are BNOT, BAND, BOR, BXOR, BSHL, BSHR,
+-- BSAR and ADD (simplify_shift_ik's x << 1 ==> x + x); a "32-bit bit
+-- instruction" is one of them not typed i64, an ADD only when its op2 is
+-- an instruction (ADD idx, k is a valid stand-in, simplify_conv_sext's).
+--   served   our operator served by a 32-bit instruction, the defect's
+--            signature: a marked CONV num.i64 (op2 & 0x7ff = 0x5d5, a
+--            result's d) whose operand is a 32-bit bit instruction, or an
+--            i64 instruction of our opcodes with one as an operand (op1;
+--            op2 too for BAND, BOR, BXOR and ADD, never a shift's count):
+--            the nested case (i & m) << k and a served value fed on.  The
+--            valid int operands of our operators are SLOAD, XLOAD and
+--            ADD idx, k, none of which counts.
+--   split    an i64 and a non-i64 instruction with the same opcode, op1 and
+--            op2: the pair, kept apart (the fix's signature)
+--   rserved  a non-i64 instruction other than a CONV with an i64 operand of
+--            our opcodes: a 32-bit consumer handed our int64 instruction
+--            (the reverse merge; bitop/t_cserev.lua's, 0 here)
+--   direct   i64 instructions of our opcodes with a non-i64 instruction as
+--            a value operand: our operator took an int directly (the
+--            LEFTFOLD, or a served value fed on)
+--   i64slot  snapshot entries that name a non-constant i64 instruction:
+--            slots and snapshots hold only d or ints (JIT guide 9.6, S6),
+--            measured here on these shapes
+-- pre = direct + served: our operator met an int operand directly, which
+-- every pair case needs before it can merge or split.
+--
+-- THE JUDGEMENT, per case (every reason is listed, none stops the others):
+--   every case     a trace; served 0; rserved 0; i64slot 0
+--   pair, eq       where fold, CSE and (for an index operand) narrowing are
+--                  on: pre at least 1 (the pair formed) and split at least 1
+--   ctl            where the same holds: direct at least 1 (the instrument
+--                  sees our operator on a direct int)
+--   bit, same, c1, ctl   split 0 (no twin; same-type pairs merge)
+-- Two cases' pairs form in one place only, so they are judged there: copy
+-- only where the loop optimisation is on (the loop copy), side and its
+-- control ctl-side only where a trace compiled our operator, pre at least
+-- 1 (a side trace, past a branch the root trace never records; under
+-- -Omaxside=0 that side trace is a stub that links to the interpreter).
+-- On a build without the fix (build/native at 1a13bed, luajit.exe f4038cd6)
+-- every pair and eq case where the pair forms reads served at least 1 and
+-- split 0, so this file FAILs there in every set it runs; with the fix
+-- served is 0 and split at least 1.  Under -O0 and -O-fold no pair forms
+-- (no LEFTFOLD), and under -O-cse none merges, so split reads at least 1 on
+-- every build: the file refuses those sets (INSTRUMENT, exit 2; P61).
+-- Under -O1 and -O-narrow the loop index stays a double, so only u8sh30's
+-- and side's pairs form (byte operands; copy's needs the index narrowed
+-- too) and the others are not judged for pre and split.
+-- MEASURED (2026-10-23; scratch claude-tmp/oclj/csetwin/round/impl-tests/
+-- runs/, ff/, and the fixer's round/fix/runs/, fix/alma1/): on build/native
+-- every pair and eq case reads served 2 (the pre-roll's and the loop
+-- copy's; copy and side 1, the copy's and the side trace's) and split 0,
+-- rserved and i64slot 0: 20 FAILED a set, 19 under -O-loop and the two
+-- -Omaxside=0 sets, 2 under -O1 and -O-narrow, on Windows and in
+-- AlmaLinux 8; with the fix (lj_opt_fold.o a6c5fcc2: impl-tests' prototype,
+-- five runs before copy and side were added, and the fixer's build b1)
+-- served 0 and split 2 (copy 1, side 1 or 2), 32 of 32 ok in all 12 sets.
+-- WHICH CHECKS FAIL ALONE: split, on the prototype with split never
+-- counted (18 a set, before copy and side); i64slot, with the reader
+-- counting NUM refs (every case); the summary line and the default run's
+-- "pairs judged", in the runner (PROVED NOTHING).  The copy and side gates
+-- above, each removed, FAIL that case on split on the fixed build under
+-- -O-loop and -Omaxside=0, where its pair does not form (the fixer's
+-- runs/fftests-1).  served never failed alone on a measured build (before
+-- copy and side were added): with it never counted, build/native still
+-- FAILed 16 cases on pre and split and 2 (nested, chain, whose int64 BAND
+-- or BSAR takes the served int directly) on split; it is kept for its
+-- message, which names the defect, and side's gate reads it.  rserved
+-- fails on t_cserev's reverse cases on build/native, with split.
+--
+-- Prints one line per case,
+--   <case><TAB>r=<d1>,<d2>,<d3><TAB>traces=<n> pre=<n> direct=<n> served=<n> split=<n> rserved=<n> i64slot=<n> <ok|FAILED (why)>
+-- (r: the digest of the 5.3 results of each of the three calls), and with
+-- -joff "<case><TAB>r=<d1>,<d2>,<d3><TAB>-"; with the JIT on, the summary
+--   cseir: <k> of <n> cases ok (fold on, cse on, narrow <on|off>, loop <on|off>); pairs judged <j> of <p>
+-- which run-bitjit.sh requires (a JIT-off run prints none and reads
+-- nothing; JIT guide 11.5c).  Exit 0 every case ok (or the JIT off), 1 a
+-- case FAILED, 2 the instrument cannot test (INSTRUMENT).  Loaded as
+-- loadfile(...)("lib"), it returns the reader (a table: flags, scan, watch,
+-- take) or a string saying why there is none, and runs nothing; t_csefwd.lua
+-- and t_cserev.lua use it so.  Value-level only: the loops read and write
+-- Lua tables, nothing through a pointer (FFI is off).  This file holds no
+-- backslash: a newline is NL, a tab TAB.
+local NL, TAB, BS = string.char(10), string.char(9), string.char(92)
+local fmt, floor = string.format, math.floor
+local MODE = ...
+
+-- THE READER.
+local function mklib()
+  local hasjit = type(jit) == "table" and jit.status and jit.status() and jit.attach
+  if not hasjit then return "the JIT is off" end
+  local okv, vmdef = pcall(require, "jit.vmdef")
+  local oku, jutil = pcall(require, "jit.util")
+  if not (okv and oku) then return "no jit.vmdef or jit.util (set LUA_PATH to the build's src/?.lua)" end
+  local OPS = {}
+  for o = 0, #vmdef.irnames / 6 - 1 do
+    OPS[(vmdef.irnames:sub(o * 6 + 1, o * 6 + 6):gsub(" +$", ""))] = o
+  end
+  for _, nm in ipairs({ "BNOT", "BAND", "BOR", "BXOR", "BSHL", "BSHR", "BSAR", "ADD", "CONV" }) do
+    if not OPS[nm] then return "jit.vmdef names no " .. nm .. " IR op" end
+  end
+  -- 1: one value operand; 2: two; 3: a shift (op2 is the count)
+  local KIND = { [OPS.BNOT] = 1, [OPS.BAND] = 2, [OPS.BOR] = 2, [OPS.BXOR] = 2, [OPS.ADD] = 2,
+    [OPS.BSHL] = 3, [OPS.BSHR] = 3, [OPS.BSAR] = 3 }
+  local I64 = 21                -- IRT_I64
+  local M_D = 1493              -- 0x5d5: CONV num.i64, marked exact (a result's d)
+  local SNAPEND = 4278190080    -- SNAP(255, 0, 0), tracesnap's end marker
+  local L = { flags = {} }
+  local st = { jit.status() }
+  for k = 2, #st do L.flags[st[k]] = true end
+
+  function L.scan(tr)
+    local info = jutil.traceinfo(tr)
+    local I = {}
+    for ref = 1, info.nins do
+      local m, ot, op1, op2 = jutil.traceir(tr, ref)
+      if not m then break end
+      I[ref] = { o = floor(ot / 256), t = ot % 32, op1 = op1, op2 = op2,
+        r1 = (m % 4 == 0 and op1 > 0) and op1 or nil,             -- an instruction ref
+        r2 = (floor(m / 4) % 4 == 0 and op2 > 0) and op2 or nil }
+    end
+    local c = { served = 0, split = 0, rserved = 0, direct = 0, i64slot = 0 }
+    local function intbit(r)  -- a 32-bit bit instruction
+      local x = r and I[r]
+      return (x and x.t ~= I64 and KIND[x.o] and (x.o ~= OPS.ADD or x.r2 ~= nil)) and true or false
+    end
+    local function nonwide(r) local x = r and I[r]; return (x and x.t ~= I64) and true or false end
+    local twins = {}
+    for ref = 1, #I do
+      local x = I[ref]
+      local kd = KIND[x.o]
+      if x.o == OPS.CONV and x.op2 % 2048 == M_D then
+        if intbit(x.r1) then c.served = c.served + 1 end
+      elseif kd and x.t == I64 then
+        if intbit(x.r1) then c.served = c.served + 1 end
+        if kd == 2 and intbit(x.r2) then c.served = c.served + 1 end
+        if nonwide(x.r1) or (kd == 2 and nonwide(x.r2)) then c.direct = c.direct + 1 end
+      elseif x.t ~= I64 and x.o ~= OPS.CONV then
+        for _, r in ipairs({ x.r1 or 0, x.r2 or 0 }) do
+          local y = I[r]
+          if y and y.t == I64 and KIND[y.o] then c.rserved = c.rserved + 1 end
+        end
+      end
+      if kd then
+        local key = x.o .. ":" .. x.op1 .. ":" .. x.op2
+        local e = twins[key]
+        if not e then e = { 0, 0 }; twins[key] = e end
+        if x.t == I64 then e[1] = e[1] + 1 else e[2] = e[2] + 1 end
+      end
+    end
+    for _, e in pairs(twins) do
+      if e[1] > 0 and e[2] > 0 then c.split = c.split + 1 end
+    end
+    for sn = 0, info.nexit - 1 do
+      local s = jutil.tracesnap(tr, sn)
+      if not s then break end
+      local n = 2
+      while s[n] and s[n] ~= SNAPEND do
+        local r = s[n] % 65536 - 32768   -- the entry's ref, unbiased: > 0 an instruction
+        if r > 0 and I[r] and I[r].t == I64 then c.i64slot = c.i64slot + 1 end
+        n = n + 1
+      end
+    end
+    return c
+  end
+
+  -- watch(f): sum the counts of the traces that complete in f until take().
+  local cur, acc = nil, nil
+  jit.attach(function(what, tr, func)
+    if what == "stop" and cur and func == cur then
+      local c = L.scan(tr)
+      acc.traces = acc.traces + 1
+      for k, v in pairs(c) do acc[k] = acc[k] + v end
+    end
+  end, "trace")
+  function L.watch(f)
+    cur, acc = f, { traces = 0, served = 0, split = 0, rserved = 0, direct = 0, i64slot = 0 }
+  end
+  function L.take() local a = acc; cur, acc = nil, nil; return a end
+  return L
+end
+
+if MODE == "lib" then return mklib() end
+
+-- THE SCRIPT: the forward cases.
+local function instrument(msg) print("cseir: INSTRUMENT: " .. msg); os.exit(2) end
+local hasjit = type(jit) == "table" and jit.status and jit.status() and jit.attach
+local LIB, FLAG = nil, {}
+if hasjit then
+  LIB = mklib()
+  if type(LIB) ~= "table" then instrument(tostring(LIB)) end
+  FLAG = LIB.flags
+  if not FLAG.fold then instrument("fold is off (-O0 or -O-fold): no pair forms on any build (P61)") end
+  if not FLAG.cse then instrument("cse is off (-O-cse): nothing merges, and split reads at least 1 on every build (P61)") end
+end
+local dir = (arg and arg[0] or ""):match("^(.*[/" .. BS .. "])") or ""
+local chunk, M = loadfile(dir .. "t_csefwd.lua")
+local okc = false
+if chunk then okc, M = pcall(chunk, "cases") end
+if not (okc and type(M) == "table" and M.CASES) then instrument("no case list from bitop/t_csefwd.lua: " .. tostring(M)) end
+local unpack = unpack or table.unpack
+local S8 = string.rep("x", 800)
+
+local function judge(C, c)
+  local why = {}
+  local needs = FLAG.fold and FLAG.cse and (FLAG.narrow or not C.narrow)
+  -- The pair forms in the loop copy only, or in a side trace only: our
+  -- operator is compiled only past i = 300, a branch the root trace never
+  -- records, so pre at least 1 says that a side trace compiled it (with
+  -- -Omaxside=0 the side trace is a stub that links to the interpreter).
+  if C.need == "loop" then needs = needs and FLAG.loop end
+  if C.need == "side" then needs = needs and c.direct + c.served > 0 end
+  local pairkind = C.kind == "pair" or C.kind == "eq"
+  if c.traces == 0 then why[#why + 1] = "no trace" end
+  if c.served > 0 then why[#why + 1] = "served " .. c.served .. ": a 32-bit instruction stands in for our int64 operator" end
+  if c.rserved > 0 then why[#why + 1] = "rserved " .. c.rserved .. ": a 32-bit instruction consumes our int64 one" end
+  if c.i64slot > 0 then why[#why + 1] = "i64slot " .. c.i64slot .. ": a snapshot names an int64 instruction" end
+  local pre = c.direct + c.served
+  if pairkind and needs then
+    if pre == 0 then why[#why + 1] = "pre 0: our operator never met the producer's operand (no pair formed)" end
+    if c.split == 0 then why[#why + 1] = "split 0: no int64 instruction beside the 32-bit one" end
+  end
+  if C.kind == "ctl" and needs and c.direct == 0 then
+    why[#why + 1] = "direct 0: our operator never took an int directly (the instrument sees no operand)"
+  end
+  if not pairkind and c.split > 0 then why[#why + 1] = "split " .. c.split .. " in a case with no twin" end
+  return why, pre, pairkind and needs
+end
+
+local nbad, ncase, njudged, npair = 0, 0, 0, 0
+for _, C in ipairs(M.CASES) do
+  local f = assert(load(C.src, "=cseir-" .. C.name))
+  if LIB then LIB.watch(f) end
+  local d = {}
+  for call = 1, 3 do
+    local O, BO = {}, {}
+    for k = 1, C.n do O[k] = 0; BO[k] = 0 end
+    local n = f(O, BO, C.S or S8, unpack(C.args or {}))
+    d[call] = fmt("%.17g", M.dig(O, n))
+  end
+  local line = C.name .. TAB .. "r=" .. table.concat(d, ",")
+  ncase = ncase + 1
+  if LIB then
+    local c = LIB.take()
+    local why, pre, judged = judge(C, c)
+    if C.kind == "pair" or C.kind == "eq" then npair = npair + 1 end
+    if judged then njudged = njudged + 1 end
+    line = line .. TAB .. fmt("traces=%d pre=%d direct=%d served=%d split=%d rserved=%d i64slot=%d %s",
+      c.traces, pre, c.direct, c.served, c.split, c.rserved, c.i64slot,
+      #why == 0 and "ok" or ("FAILED (" .. table.concat(why, "; ") .. ")"))
+    if #why > 0 then nbad = nbad + 1 end
+  else
+    line = line .. TAB .. "-"
+  end
+  print(line)
+end
+if hasjit then
+  print(fmt("cseir: %d of %d cases ok (fold %s, cse %s, narrow %s, loop %s); pairs judged %d of %d",
+    ncase - nbad, ncase, FLAG.fold and "on" or "off", FLAG.cse and "on" or "off",
+    FLAG.narrow and "on" or "off", FLAG.loop and "on" or "off", njudged, npair))
+end
+os.exit(nbad == 0 and 0 or 1)
+-- test/native/bitop/t_cserev.lua -- the CSE twins, reverse order, in the
+-- two shapes that cannot put an int64 ref into a Lua slot: values and IR.
+-- lj_opt_cse matched an instruction by its opcode and operands only and
+-- returned the existing one with its own type (lj_opt_fold.c:2675 in the
+-- build copy at 1a13bed; "build copy" below means build/native's
+-- luajit-windows-x86_64/src, luajit.exe f4038cd6, the unfixed base), so when
+-- our int64 operator comes first (oclj_bitop_rec.c; on x64 it takes the int
+-- loop index directly, simplify_conv_sext's LEFTFOLD) a 32-bit recorder that
+-- emits the same opcode on the same operands later gets our int64
+-- instruction back, typed IRT_I64.  The fix, patch-bitop-fold.sh hunk 12,
+-- refuses a match when exactly one of the two instructions is IRT_I64 (JIT
+-- guide P63, 3.9).  test/native/run-bitjit.sh runs this file (part cse)
+-- against -joff under 15 option sets, and against PUC 5.3.6.  Written
+-- 2026-10-23.
+--
+--   <vm> t_cserev.lua      (LuaJIT: LUA_PATH must reach the build's src/jit/vmdef.lua)
+--
+-- ONLY SHAPES WITH NO SLOT (the user's decision D2, 2026-10-23).  Where a
+-- 32-bit recorder stores its result in a slot (the bit library's
+-- J->base[0], an inner for loop's index slots), a snapshot would carry an
+-- int64 ref that snap_restoreval has no case for: crash-class on a build
+-- without the fix, and never written or run here, on any build.  The two
+-- shapes below hand our int64 instruction only to 32-bit consumers that are
+-- C locals of their recorder, never to J->base, so on a build without the
+-- fix the pair merges and nothing reaches a slot.  The argument, read in the
+-- build copy before this file first ran on build/native:
+--
+-- R5, select(j, ...) with j beyond the varargs, after j << 3 (the design's
+-- G1r).  The loop is in the vararg chunk itself, so its root trace has
+-- framedepth 0 and rec_varg takes its "unknown number of varargs" branch.
+-- select_detect (lj_record.c:2052): tridx is the slot's TRef, the int loop
+-- index (:2053), not converted since it is an int; tr starts as TREF_NIL
+-- (:2054).  j > the vararg count at record time, so the path beyond the
+-- varargs: tmp2 = ADD tridx, -1 and its ULT guard (:2080), then
+-- tmp2 = BSHL tridx, +3 (:2081) -- the merge, which hands back our int64
+-- BSHL -- then tmp = ADD tmp2, frofs (:2082), an int ADD of two refs that
+-- no fold rule rewrites (ADD any KINT: simplify_intadd_k, k = frofs is not
+-- 0; reassoc_intarith_k needs an ADD as fleft), and the guard LT fr, tmp
+-- (:2086).  tr is never set on this path, so J->base[dst-2-LJ_FR2] = tr is
+-- nil (:2097) and maxslot drops to dst-1-LJ_FR2 (:2098).  tmp2 and tmp are
+-- C locals: our int64 BSHL reaches one int ADD, which reaches one guard.
+-- Neither enters J->base, so no snapshot names either.  On x64 the int ADD
+-- reads the register's low 32 bits, the 32-bit BSHL's own value, so the
+-- guard compares what it compares on a fixed build.
+--
+-- R6, string.byte(S, i + i), string.sub(S, i + i, i + i) and
+-- string.byte(S, i * 2), after i << 1 (the design's G2r; i << 1 is our
+-- int64 ADD i, i, simplify_shift_ik).  recff_string_range (lj_ffrecord.c:
+-- 863) narrows its start argument: trstart = lj_opt_narrow_toint(J,
+-- J->base[1]) (:888 for byte, :873 for sub).  For i + i, an int ADDOV i, i,
+-- narrow_stripov emits ADD i, i (lj_opt_narrow.c:440) -- the merge -- and
+-- caches the ADDOV's narrowing as our instruction (:442); for i * 2, a num
+-- ADD of two CONV num.int i (simplify_nummuldiv_k), the CONV int.num that
+-- lj_opt_narrow_toint emits (:471) reaches narrow_convert, whose
+-- narrow_conv_emit emits ADD i, i (:394) -- the merge -- caches it (:397)
+-- and returns it as the CONV's fold result (:401, :419).  Either way
+-- trstart is our int64 ADD, a C local, and J->base[1] keeps the ADDOV or the
+-- num ADD.  string.byte with one index has trend = trstart (:894);
+-- string.sub's end, the same ADDOV, hits the cache (lj_opt_narrow.c:435)
+-- and is the same TRef (:879).  So the one-character case (:904): tr = ADD
+-- trstart, -1 (:905; reassoc_intarith_k reads fleft's op2, i, no KINT;
+-- simplify_intadd_k, -1 is not 0), ULT tr, trlen (:906), STRREF (:907), and
+-- J->base[0] = an SNEW, a string (:909), or an XLOAD u8 (:911).  Our int64
+-- ADD reaches one int ADD, which reaches a guard and a STRREF; the slot
+-- gets a string or a byte.  The cache entry is read only by a later
+-- narrowing of the same ADDOV or num ADD in the same trace, and these loops
+-- have none (the counter k's narrowing has its own keys).  On x64 the int
+-- ADD reads the low 32 bits, i + i's own value (2i < 2^31 here).
+--
+-- Both: the merge happens at record time, in the pre-roll.  loop_unroll
+-- re-emits the pre-roll in order with the body's operands (lj_opt_loop.c:
+-- 330); the pre-roll holds no 32-bit BSHL or ADD on these operands (it was
+-- merged), so in these loops, whose pairs' operands are the loop index
+-- itself, the copy emits no new pair: the copied int ADD takes the body's
+-- int64 instruction as its op1, again into no slot, and a body instruction
+-- that matched a pre-roll one of another type would raise TYPEINS (the
+-- loop-carried branch, :334, raising it at :352), an abort, not a store.
+-- (In general the copy can form a pair that record time did not, from
+-- operands that differ there and coincide in the copy, such as a slot
+-- carried across iterations; nothing type-checks a match between two body
+-- instructions, and the fix covers it, since every copied instruction goes
+-- through lj_opt_cse.  bitop/t_csefwd.lua's case copy is one, forward.)
+-- Snapshots record J->base's TRefs, and none of these slots holds the int64
+-- instruction, so no exit restores one; the IR read below counts it anyway
+-- (i64slot, 0 on every build).
+-- What this file can show on a build without the fix: the merge (rserved,
+-- and split 0), so it FAILs there; on a fixed build the two instructions
+-- stand apart (split at least 1).
+-- MEASURED (2026-10-23, run only after the argument above was written;
+-- scratch claude-tmp/oclj/csetwin/round/impl-tests/runs/): on build/native
+-- at 1a13bed (luajit.exe f4038cd6) each reverse case reads rserved 2 (the
+-- pre-roll's int ADD and the loop copy's), split 0 and i64slot 0, and its
+-- values equal -joff's and the reference in all 15 sets, on Windows and in
+-- AlmaLinux 8 (luajit cb68e454, whose cited sources are the Windows build
+-- copy's byte for byte): the pairs merge and nothing reaches a slot, as
+-- read.  On a prototype with the fix (lj_opt_fold.o a6c5fcc2, not the
+-- shipped object) split 2 and rserved 0 in every set that judges them, and
+-- on one with CSEFWD's text (forward merges only) the same.
+--
+-- THE CASES, each its own loop prototype (load), called three times, our
+-- operator first in program order (checked below):
+--   rc-sel, rc-shl1   controls: our operator alone, in R5's and R6's shapes
+--   rp-sel, rp-byte   controls: the 32-bit producer alone
+--   r5-sel            j << 3, then select(j, ...), j from 6, 5 varargs
+--   r6-byte           i << 1, then string.byte(S, i + i)
+--   r6-sub            i << 1, then string.sub(S, i + i, i + i)
+--   r6-mul            i << 1, then string.byte(S, i * 2)
+-- Each value is checked against a plain-arithmetic reference (this file
+-- exits 1 otherwise, under any VM), and run-bitjit.sh compares each JIT
+-- option set's fields 1-2 with -joff's, and PUC 5.3.6's whole output with
+-- -joff's: nothing here means otherwise on PUC (select beyond the varargs
+-- returns nothing on both, and every index is small).
+--
+-- THE IR (LuaJIT with the JIT on), read by bitop/cseir.lua's reader (its
+-- header defines served, split, rserved, direct and i64slot), summed over
+-- the traces that complete in the case's loop:
+--   every case   a trace; served 0; rserved 0; i64slot 0
+--   r5, r6       where fold, CSE and narrowing are on: direct at least 1
+--                (our operator took the index directly), split + rserved at
+--                least 1 (the producer met our operand), and split at least
+--                1 (with rserved 0 above: the two kept apart)
+--   rc           where the same holds: direct at least 1; split 0
+--   rp           split 0
+-- Under -O0, -O-fold, -O-cse, -O1 and -O-narrow no pair forms or merges
+-- (no LEFTFOLD, no CSE, or the index stays a double), and only the
+-- every-case checks apply.
+--
+-- Prints one line per case, "<case><TAB><call 1>;<call 2>;<call 3><TAB><IR>",
+-- each call as bitop/t_csefwd.lua prints one, the IR
+--   traces=<n> direct=<n> served=<n> split=<n> rserved=<n> i64slot=<n> <ok|FAILED (why)>
+-- or "-" without the JIT (-joff, PUC); with the JIT, the summary
+--   t_cserev: <k> of <n> cases ok (fold <on|off>, cse <on|off>, narrow <on|off>, loop <on|off>); reverse cases judged <j> of <r>
+-- which run-bitjit.sh requires.  Exit 0 all ok, 1 a value unlike its
+-- reference or a case FAILED, 2 (INSTRUMENT) a text is not what it says or
+-- the reader is missing.  Value-level only: tables of numbers and strings,
+-- nothing through a pointer (FFI is off).  This file holds no backslash: a
+-- newline is NL, a tab TAB.
+local NL, TAB, BS = string.char(10), string.char(9), string.char(92)
+local fmt, floor = string.format, math.floor
+local unpack = unpack or table.unpack
+
+local function dig(t, n)  -- bitop/t_csefwd.lua's digest
+  local s = 0
+  for k = 1, n do
+    local v = t[k]
+    if type(v) == "string" then v = v:byte() end
+    local lo = v % 1048576
+    local mid = floor(v / 1048576) % 1048576
+    local hi = floor(v / 1099511627776) % 16777216
+    s = (s + lo + 3 * mid + 7 * hi) % 4294967296
+  end
+  return s
+end
+local function mkstr(n, a, b)
+  local t = {}
+  for j = 1, n do t[j] = string.char((j * a + b) % 256) end
+  return table.concat(t)
+end
+local S8 = mkstr(800, 61, 7)
+local N = 400
+
+local function jloop(body)  -- in the vararg chunk: j from 6, beyond its 5 varargs
+  return "local O, BO, S = ..." .. NL .. "local k, x = 0, 0" .. NL .. "for j = 6, 405 do" .. NL ..
+    body .. NL .. "end" .. NL .. "return k, x"
+end
+local function iloop(body)
+  return "local O, BO, S = ..." .. NL .. "local k = 0" .. NL .. fmt("for i = 1, %d do", N) .. NL ..
+    body .. NL .. "end" .. NL .. "return k"
+end
+
+-- kind: ctl (ours alone), prod (the producer alone), rev (ours, then the producer).
+local CASES = {
+  { name = "rc-sel", kind = "ctl", src = jloop("  local c = j << 3" .. NL .. "  k = k + 1; O[k] = c"),
+    ref = function(k) return (k + 5) * 8 end },
+  { name = "rc-shl1", kind = "ctl", src = iloop("  local c = i << 1" .. NL .. "  k = k + 1; O[k] = c"),
+    ref = function(k) return 2 * k end },
+  { name = "rp-sel", kind = "prod",
+    src = jloop("  local v = select(j, ...)" .. NL .. "  if v ~= nil then x = x + 1 end" .. NL .. "  k = k + 1; O[k] = j"),
+    ref = function(k) return k + 5 end },
+  { name = "rp-byte", kind = "prod", src = iloop("  local a = string.byte(S, i + i)" .. NL .. "  k = k + 1; O[k] = a"),
+    ref = function(k) return S8:byte(2 * k) end },
+  { name = "r5-sel", kind = "rev",
+    src = jloop("  local c = j << 3; local v = select(j, ...)" .. NL .. "  if v ~= nil then x = x + 1 end" .. NL ..
+      "  k = k + 1; O[k] = c"),
+    ref = function(k) return (k + 5) * 8 end },
+  { name = "r6-byte", kind = "rev", src = iloop("  local c = i << 1; local a = string.byte(S, i + i)" .. NL ..
+      "  k = k + 1; BO[k] = a; O[k] = c"),
+    ref = function(k) return 2 * k end, bref = function(k) return S8:byte(2 * k) end },
+  { name = "r6-sub", kind = "rev", src = iloop("  local c = i << 1; local a = string.sub(S, i + i, i + i)" .. NL ..
+      "  k = k + 1; BO[k] = a; O[k] = c"),
+    ref = function(k) return 2 * k end, bref = function(k) return S8:byte(2 * k) end },
+  { name = "r6-mul", kind = "rev", src = iloop("  local c = i << 1; local a = string.byte(S, i * 2)" .. NL ..
+      "  k = k + 1; BO[k] = a; O[k] = c"),
+    ref = function(k) return 2 * k end, bref = function(k) return S8:byte(2 * k) end },
+}
+
+-- The texts' own check: in each reverse case our operator comes first, and
+-- the producer is select or string.byte/sub on the index, nothing that
+-- stores to a slot of its own: no text names "bit" at all (the bit library,
+-- an alias of it), and each holds exactly one "for " (the loop jloop or
+-- iloop writes, never an inner one, however spelled).  It runs before any
+-- case is loaded, so a refused text never runs.
+local function count(src, s)
+  local n, at = 0, 1
+  while true do
+    local p = src:find(s, at, true)
+    if not p then return n end
+    n, at = n + 1, p + #s
+  end
+end
+do
+  local bad = {}
+  for _, C in ipairs(CASES) do
+    local src = C.src
+    if count(src, "bit") > 0 or count(src, "for ") ~= 1 then bad[#bad + 1] = C.name .. " (a slot shape)" end
+    if C.kind == "rev" then
+      local pc = src:find("local c = ", 1, true)
+      local pp = src:find("select(", 1, true) or src:find("string.", 1, true)
+      if not (pc and pp and pc < pp) then bad[#bad + 1] = C.name .. " (producer first)" end
+    end
+  end
+  if #bad > 0 then
+    print("INSTRUMENT: t_cserev's texts: " .. table.concat(bad, ", "))
+    os.exit(2)
+  end
+end
+
+-- THE INSTRUMENT (LuaJIT with the JIT on).
+local hasjit = type(jit) == "table" and jit.status and jit.status() and jit.attach
+local LIB, FLAG = nil, {}
+if hasjit then
+  local dir = (arg and arg[0] or ""):match("^(.*[/" .. BS .. "])") or ""
+  local chunk, lib = loadfile(dir .. "cseir.lua")
+  local okl = false
+  if chunk then okl, lib = pcall(chunk, "lib") end
+  if not (okl and type(lib) == "table") then
+    print("INSTRUMENT: no IR reader (bitop/cseir.lua as a library): " .. tostring(lib))
+    os.exit(2)
+  end
+  LIB, FLAG = lib, lib.flags
+end
+
+local function judge(C, c)
+  local why = {}
+  local needs = FLAG.fold and FLAG.cse and FLAG.narrow
+  if c.traces == 0 then why[#why + 1] = "no trace" end
+  if c.served > 0 then why[#why + 1] = "served " .. c.served .. ": a 32-bit instruction stands in for our int64 operator" end
+  if c.rserved > 0 then why[#why + 1] = "rserved " .. c.rserved .. ": a 32-bit instruction consumes our int64 one (the reverse merge)" end
+  if c.i64slot > 0 then why[#why + 1] = "i64slot " .. c.i64slot .. ": a snapshot names an int64 instruction" end
+  if C.kind == "rev" and needs then
+    if c.direct == 0 then why[#why + 1] = "direct 0: our operator never took the index directly" end
+    if c.split + c.rserved == 0 then why[#why + 1] = "split and rserved 0: the producer never met our operand" end
+    if c.split == 0 then why[#why + 1] = "split 0: no 32-bit instruction beside our int64 one" end
+  end
+  if C.kind == "ctl" and needs and c.direct == 0 then why[#why + 1] = "direct 0: the instrument sees no direct operand" end
+  if C.kind ~= "rev" and c.split > 0 then why[#why + 1] = "split " .. c.split .. " in a case with no twin" end
+  return why, C.kind == "rev" and needs
+end
+
+local lines, nbad, nfail, njudged, nrev = {}, 0, 0, 0, 0
+for _, C in ipairs(CASES) do
+  local f = assert(load(C.src, "=cserev-" .. C.name))
+  if LIB then LIB.watch(f) end
+  local calls, cbad = {}, 0
+  for call = 1, 3 do
+    local O, BO = {}, {}
+    for k = 1, N do O[k] = 0; BO[k] = 0 end  -- pre-sized: no growth exits
+    local n, x = f(O, BO, S8, 1, 2)          -- 5 varargs for the select loops
+    if n ~= N then
+      print(fmt("INSTRUMENT: case %s ran %s iterations, not %d", C.name, tostring(n), N))
+      os.exit(2)
+    end
+    local cb, cbb, first = 0, 0, nil
+    for k = 1, n do
+      local want = C.ref(k)
+      if O[k] ~= want then
+        cb = cb + 1
+        if not first then first = fmt("%d:%.17g/%.17g", k, O[k], want) end
+      end
+      if C.bref then
+        local b = BO[k]
+        if type(b) == "string" then b = b:byte() end
+        if b ~= C.bref(k) then cbb = cbb + 1 end
+      end
+    end
+    calls[call] = fmt("n=%d bad=%d bbad=%d dig=%.17g bdig=%.17g", n, cb, cbb, dig(O, n), dig(BO, n)) ..
+      (x and fmt(" x=%.17g", x) or "") .. (first and (" first=" .. first) or "")
+    nbad = nbad + cb + cbb
+    cbad = cbad + cb + cbb
+  end
+  local line = C.name .. TAB .. table.concat(calls, ";")
+  if LIB then
+    local c = LIB.take()
+    local why, judged = judge(C, c)
+    if cbad > 0 then why[#why + 1] = cbad .. " values unlike the reference" end
+    if C.kind == "rev" then nrev = nrev + 1 end
+    if judged then njudged = njudged + 1 end
+    if #why > 0 then nfail = nfail + 1 end
+    line = line .. TAB .. fmt("traces=%d direct=%d served=%d split=%d rserved=%d i64slot=%d %s",
+      c.traces, c.direct, c.served, c.split, c.rserved, c.i64slot,
+      #why == 0 and "ok" or ("FAILED (" .. table.concat(why, "; ") .. ")"))
+  else
+    line = line .. TAB .. "-"
+  end
+  lines[#lines + 1] = line
+end
+io.write(table.concat(lines, NL), NL)
+if LIB then
+  print(fmt("t_cserev: %d of %d cases ok (fold %s, cse %s, narrow %s, loop %s); reverse cases judged %d of %d",
+    #CASES - nfail, #CASES, FLAG.fold and "on" or "off", FLAG.cse and "on" or "off",
+    FLAG.narrow and "on" or "off", FLAG.loop and "on" or "off", njudged, nrev))
+end
+os.exit((nbad == 0 and nfail == 0) and 0 or 1)

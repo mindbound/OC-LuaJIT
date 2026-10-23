@@ -1,0 +1,9 @@
+2674c2674,2679
+<       if (IR(ref)->op12 == op12)
+---
+>       /* OC-LuaJIT: never common an int64 instruction with a narrower one.
+>       ** On x64 simplify_conv_sext hands int64 ops int refs, so a 32-bit op
+>       ** can share their op12: its value would stand in for the int64 one, or
+>       ** an int64 ref would reach a 32-bit recorder (JIT guide P63). */
+>       if (IR(ref)->op12 == op12 &&
+> 	  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))

@@ -1,0 +1,1 @@
+patch-bitop-jitlib.sh: lib_jit.c  jit.util.funcbc's word and tracesnap's entries unsigned (7 lines added, 3 removed, of 779); verified by content, diff and reversal

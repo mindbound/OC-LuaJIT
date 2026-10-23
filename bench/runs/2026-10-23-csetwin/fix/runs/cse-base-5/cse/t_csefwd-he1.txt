@@ -1,0 +1,32 @@
+ctl-shl3	n=400 bad=0 bbad=0 dig=5553600 bdig=0;n=400 bad=0 bbad=0 dig=5553600 bdig=0;n=400 bad=0 bbad=0 dig=5553600 bdig=0
+ctl-bnot	n=400 bad=0 bbad=0 dig=1409201544 bdig=0;n=400 bad=0 bbad=0 dig=1409201544 bdig=0;n=400 bad=0 bbad=0 dig=1409201544 bdig=0
+ctl-shl1	n=400 bad=0 bbad=0 dig=2617200 bdig=0;n=400 bad=0 bbad=0 dig=2617200 bdig=0;n=400 bad=0 bbad=0 dig=2617200 bdig=0
+ctl-shr5	n=400 bad=0 bbad=0 dig=21504 bdig=0;n=400 bad=0 bbad=0 dig=21504 bdig=0;n=400 bad=0 bbad=0 dig=21504 bdig=0
+ctl-band	n=400 bad=0 bbad=0 dig=20680 bdig=0;n=400 bad=0 bbad=0 dig=20680 bdig=0;n=400 bad=0 bbad=0 dig=20680 bdig=0
+ctl-vshl	n=416 bad=0 bbad=0 dig=3602568532 bdig=0;n=416 bad=0 bbad=0 dig=3602568532 bdig=0;n=416 bad=0 bbad=0 dig=3602568532 bdig=0
+ctl-copy	n=400 bad=0 bbad=0 dig=157605888 bdig=1843200;n=400 bad=0 bbad=0 dig=157605888 bdig=1843200;n=400 bad=0 bbad=0 dig=157605888 bdig=1843200
+ctl-side	n=600 bad=0 bbad=0 dig=236335104 bdig=1382400;n=600 bad=0 bbad=0 dig=236335104 bdig=1382400;n=600 bad=0 bbad=0 dig=236335104 bdig=1382400
+bit-lsh3	n=400 bad=0 bbad=0 dig=638400 bdig=1408587544;n=400 bad=0 bbad=0 dig=638400 bdig=1408587544;n=400 bad=0 bbad=0 dig=638400 bdig=1408587544
+same-bit	n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400
+same-53	n=400 bad=0 bbad=0 dig=5553600 bdig=5553600;n=400 bad=0 bbad=0 dig=5553600 bdig=5553600;n=400 bad=0 bbad=0 dig=5553600 bdig=5553600
+c1	n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400;n=400 bad=0 bbad=0 dig=638400 bdig=638400
+lsh1	n=400 bad=0 bbad=0 dig=2617200 bdig=987554944;n=400 bad=0 bbad=0 dig=2617200 bdig=987554944;n=400 bad=0 bbad=0 dig=2617200 bdig=987554944
+band	n=400 bad=0 bbad=0 dig=20680 bdig=20680;n=400 bad=0 bbad=0 dig=20680 bdig=20680;n=400 bad=0 bbad=0 dig=20680 bdig=20680
+rsh5	n=400 bad=0 bbad=0 dig=21504 bdig=21504;n=400 bad=0 bbad=0 dig=21504 bdig=21504;n=400 bad=0 bbad=0 dig=21504 bdig=21504
+byte2	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520
+sub2	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520
+lsh3	n=400 bad=383 bbad=0 dig=847296 bdig=638400 first=18:136/4294967432;n=400 bad=400 bbad=0 dig=638400 bdig=638400 first=1:0/4294967296;n=400 bad=400 bbad=0 dig=638400 bdig=638400 first=1:0/4294967296
+bnot	n=400 bad=383 bbad=0 dig=2474020865 bdig=1409201544 first=18:4294967277/-19;n=400 bad=400 bbad=0 dig=424263800 bdig=1409201544 first=1:4294967294/-2;n=400 bad=400 bbad=0 dig=424263800 bdig=1409201544 first=1:4294967294/-2
+bnotx	n=400 bad=348 bbad=0 dig=2399141644 bdig=1409201544 first=53:4294967242/-54;n=400 bad=400 bbad=0 dig=424263800 bdig=1409201544 first=1:4294967294/-2;n=400 bad=400 bbad=0 dig=424263800 bdig=1409201544 first=1:4294967294/-2
+bxorm1	n=400 bad=382 bbad=0 dig=2594594810 bdig=1409201544 first=19:4294967276/-20;n=400 bad=400 bbad=0 dig=424263800 bdig=1409201544 first=1:4294967294/-2;n=400 bad=400 bbad=0 dig=424263800 bdig=1409201544 first=1:4294967294/-2
+lsh35	n=400 bad=383 bbad=0 dig=847296 bdig=638400 first=18:136/4294967432;n=400 bad=400 bbad=0 dig=638400 bdig=638400 first=1:0/4294967296;n=400 bad=400 bbad=0 dig=638400 bdig=638400 first=1:0/4294967296
+u8sh30	n=400 bad=376 bbad=0 dig=9388032 bdig=2641795720 first=19:0/68719476736;n=400 bad=394 bbad=0 dig=1843200 bdig=2641795720 first=1:2147483648/118111600640;n=400 bad=394 bbad=0 dig=1843200 bdig=2641795720 first=1:2147483648/118111600640
+nested	n=400 bad=383 bbad=0 dig=20637696 bdig=20428800 first=18:4352/4294971648;n=400 bad=400 bbad=0 dig=20428800 bdig=20428800 first=1:0/4294967296;n=400 bad=400 bbad=0 dig=20428800 bdig=20428800 first=1:0/4294967296
+reassoc	n=400 bad=383 bbad=0 dig=847296 bdig=638400 first=18:136/4294967432;n=400 bad=400 bbad=0 dig=638400 bdig=638400 first=1:0/4294967296;n=400 bad=400 bbad=0 dig=638400 bdig=638400 first=1:0/4294967296
+chain	n=400 bad=383 bbad=0 dig=2067791685 bdig=1409201544 first=18:0/-1;n=400 bad=400 bbad=0 dig=0 bdig=1409201544 first=1:0/-1;n=400 bad=400 bbad=0 dig=0 bdig=1409201544 first=1:0/-1
+vlsh	n=416 bad=399 bbad=0 dig=78910281 bdig=2451473760 first=18:21626880/92886742314516480;n=416 bad=416 bbad=0 dig=69179357 bdig=2451473760 first=1:48/206158430208;n=416 bad=416 bbad=0 dig=69179357 bdig=2451473760 first=1:48/206158430208
+vrsh	n=416 bad=72 bbad=0 dig=1896 bdig=2054 first=33:48/0;n=416 bad=78 bbad=0 dig=2054 bdig=2054 first=1:48/0;n=416 bad=78 bbad=0 dig=2054 bdig=2054 first=1:48/0
+copy	n=400 bad=376 bbad=0 dig=9252864 bdig=2641795720 first=19:3221225472/217969590272;n=400 bad=393 bbad=0 dig=2236416 bdig=2641795720 first=2:2147483648/204010946560;n=400 bad=393 bbad=0 dig=2236416 bdig=2641795720 first=2:2147483648/204010946560
+side	n=600 bad=0 bbad=0 dig=236335104 bdig=907604966;n=600 bad=294 bbad=0 dig=120397824 bdig=907604966 first=303:2147483648/62277025792;n=600 bad=296 bbad=0 dig=119033856 bdig=907604966 first=301:0/206158430208
+select	n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0
+forin	n=400 bad=0 bbad=0 dig=160400 bdig=400;n=400 bad=0 bbad=0 dig=160400 bdig=400;n=400 bad=0 bbad=0 dig=160400 bdig=400

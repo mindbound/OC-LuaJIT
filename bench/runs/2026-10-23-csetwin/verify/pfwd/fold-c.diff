@@ -1,0 +1,4 @@
+2679c2679
+< 	  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))
+---
+> 	  (irt_isi64(IR(ref)->t) == irt_isi64(fins->t) || irt_isi64(fins->t)))  /* SABOTAGE CSEFWD: an int64 instruction may common with an older narrower one, the forward order, as before hunk 12; the reverse stays refused */

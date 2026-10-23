@@ -1,0 +1,4 @@
+60a24ec91d7aa73d33c0d05b7058568998c494af
+ M bench/runs/2026-10-23-shiftexact/README.md
+ M docs/jit-guide.md
+ M docs/roadmap.md

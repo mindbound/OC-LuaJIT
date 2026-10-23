@@ -1,0 +1,18 @@
+[negctl-bitop] pristine files from /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/b1/luajit-export-windows-x86_64/src (the pin's export, which the last build (pinned) compiled)
+[negctl-bitop] work dir /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/b1/negctl-bitop/20261023T113715Z-1926
+[negctl-bitop] the copy is the repo's: native/luajit's five files, the seven patch scripts' output on /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/b1/luajit-export-windows-x86_64/src, eris_lj.o from /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/serializer (serializer hash 412be694)
+[negctl-bitop] from /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/build-native.sh: the bitops gate (50 lines) and stage 4's word check (24 lines)
+[negctl-bitop] OCLJ_NEGCTL_ARMS: CSEFWD, and canon, which always runs -- not the full sweep
+[negctl-bitop] canon (-, 108s; objects changed: none): PASS (every catcher passes; every object reproduced)
+    bitop 0; fuzz 0 [jon K 0 V 0 P 0 H 0 U 0; joff K 0 V 0 P 0 H 0 U 0]; bitjit[gen floor fix1 idx sel nc cse] 0 (gen: 0/4 seeds differ, 0-0 cases a seed); genrg2 0 (0/4 seeds differ, 0-0 cases a seed); security 0; gate 0; stage4 0
+[negctl-bitop] CSEFWD (lj_opt_fold.c, 12s; objects changed: lj_opt_fold.o): PASS (caught by cse:t_csefwd cse:cseir)
+    bitjit[cse] 1 failed: t_csefwd,cseir
+[negctl-bitop] restore: PASS (every file put back; every object byte-identical to the shipped build's)
+
+arm             file               verdict
+canon           -                  PASS (every catcher passes; every object reproduced)
+                                       bitop 0; fuzz 0 [jon K 0 V 0 P 0 H 0 U 0; joff K 0 V 0 P 0 H 0 U 0]; bitjit[gen floor fix1 idx sel nc cse] 0 (gen: 0/4 seeds differ, 0-0 cases a seed); genrg2 0 (0/4 seeds differ, 0-0 cases a seed); security 0; gate 0; stage4 0
+CSEFWD          lj_opt_fold.c      PASS (caught by cse:t_csefwd cse:cseir)
+                                       bitjit[cse] 1 failed: t_csefwd,cseir
+restore         -                  PASS (every file put back; every object byte-identical to the shipped build's)
+NEGCTL-BITOP: PASS FOR THE SELECTED ARMS ONLY (selected: CSEFWD; canon passes; each selected sabotage is caught; results: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/b1/negctl-bitop/20261023T113715Z-1926)

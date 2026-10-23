@@ -1,0 +1,29 @@
+ctl-shl3	r=5553600,5553600,5553600	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+ctl-bnot	r=1409201544,1409201544,1409201544	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+ctl-shl1	r=2617200,2617200,2617200	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+ctl-shr5	r=21504,21504,21504	traces=2 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+ctl-band	r=20680,20680,20680	traces=1 pre=2 direct=2 served=0 split=0 rserved=0 i64slot=0 ok
+ctl-vshl	r=3602568532,3602568532,3602568532	traces=2 pre=2 direct=2 served=0 split=0 rserved=0 i64slot=0 ok
+bit-lsh3	r=638400,638400,638400	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+same-bit	r=638400,638400,638400	traces=2 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+same-53	r=5553600,5553600,5553600	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+c1	r=638400,638400,638400	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+lsh1	r=2617200,2617200,2617200	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+band	r=20680,20680,20680	traces=2 pre=2 direct=2 served=0 split=0 rserved=0 i64slot=0 ok
+rsh5	r=21504,21504,21504	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+byte2	r=160400,160400,160400	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+sub2	r=160400,160400,160400	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+lsh3	r=5553600,5553600,5553600	traces=2 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+bnot	r=1409201544,1409201544,1409201544	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+bnotx	r=1409201544,1409201544,1409201544	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+bxorm1	r=1409201544,1409201544,1409201544	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+lsh35	r=5553600,5553600,5553600	traces=2 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+u8sh30	r=24563712,1843200,1843200	traces=1 pre=2 direct=0 served=2 split=0 rserved=0 i64slot=0 FAILED (served 2: a 32-bit instruction stands in for our int64 operator; split 0: no int64 instruction beside the 32-bit one)
+nested	r=25344000,25344000,25344000	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+reassoc	r=5553600,5553600,5553600	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+chain	r=1409281744,1409281744,1409281744	traces=2 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+vlsh	r=3602568532,3602568532,3602568532	traces=2 pre=2 direct=2 served=0 split=0 rserved=0 i64slot=0 ok
+vrsh	r=0,0,0	traces=2 pre=2 direct=2 served=0 split=0 rserved=0 i64slot=0 ok
+select	r=657600,657600,657600	traces=1 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+forin	r=160400,160400,160400	traces=2 pre=0 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+cseir: 27 of 28 cases ok (fold on, cse on, narrow off, loop on); pairs judged 1 of 18

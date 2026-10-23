@@ -1,0 +1,26 @@
+round=1 pos=1 vm=base bench=bench_bit: bit 0.40 ns/it (r=9005056)  ref 3.70 ns/it (r=6861824)  ratio 0.11  crc 70.50 ns/byte (r=3386490367)
+round=1 pos=1 vm=base bench=bench_bit2: rgb 3.80 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.75 | crc-table 3.70 ns/byte (r=1136067215)
+round=1 pos=1 vm=base bench=ident: or0-big	25000000	1.00 ns/it
+round=1 pos=1 vm=base bench=ident: or0-small	30029299	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: andm1-big	25000000	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: andm1-small	30029299	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: xor0-big	25000000	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: xor0-small	30029299	1.00 ns/it
+round=1 pos=1 vm=base bench=ident: shl0-big	25000000	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: shl0-small	30029299	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: shr0-big	25000000	0.90 ns/it
+round=1 pos=1 vm=base bench=ident: shr0-small	30029299	0.90 ns/it
+round=1 pos=1 vm=base bench=bench_numconv: ref 0.35 (r=1.1322322729364896e+19) | arith 0.60 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.30 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18)
+round=1 pos=2 vm=new bench=bench_bit: bit 0.35 ns/it (r=9005056)  ref 3.65 ns/it (r=6861824)  ratio 0.10  crc 70.00 ns/byte (r=3386490367)
+round=1 pos=2 vm=new bench=bench_bit2: rgb 3.70 ns (r=1748186903) ref 5.10 ns (r=1748186903) ratio 0.73 | crc-table 3.60 ns/byte (r=1136067216)
+round=1 pos=2 vm=new bench=ident: or0-big	25000000	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: or0-small	30029299	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: andm1-big	25000000	0.80 ns/it
+round=1 pos=2 vm=new bench=ident: andm1-small	30029299	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: xor0-big	25000000	0.80 ns/it
+round=1 pos=2 vm=new bench=ident: xor0-small	30029299	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: shl0-big	25000000	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: shl0-small	30029299	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: shr0-big	25000000	0.90 ns/it
+round=1 pos=2 vm=new bench=ident: shr0-small	30029299	0.90 ns/it
+round=1 pos=2 vm=new bench=bench_numconv: ref 0.40 (r=1.1322322729364896e+19) | arith 0.55 (r=1.1322322729364896e+19) | key 1.15 (r=30764296896) | bits 1.20 (r=5107149359) | floor 1.70 (r=5.661161364681516e+18)

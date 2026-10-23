@@ -1,0 +1,15 @@
+== census before
+== tree
+PASS CHANGED-SET: the scratch repo is HEAD's tree outside docs/ and bench/runs/ (228 files) but for the round's eight files (cmp/changed.txt)
+== timing
+PASS TIMING-inputs: the benches are integrate/timing/bench's (fc-bench, md5s pinned); base is build/native's luajit.exe (f4038cd62af3a12985868cea77cc1518, lj_opt_fold.o f6d916e29cf8e05cd951d220ba8abcd9), new's lj_opt_fold.o the round's (a6c5fcc2a56698ed1313f25c0a298719)
+PASS TIMING-complete: all 2 rounds ran (no Java process appeared)
+PASS TIMING-results-equal: every result of the new build equals base's, in every round, all 21 rows (timing/summary.txt)
+SKIP TIMING-no-gross-change: FC_NDIV=10: a smoke reading, too short to time
+== census after
+SKIP CENSUS-build: FC_CENSUS=none: the real repo's build/ was not listed
+PASS CENSUS-pristine: the pristine checkout's stat list (mtimes included), its .git md5 list and HEAD are unchanged
+PASS CENSUS-real-repo: the real repo's HEAD, git status and its changed files' md5s are unchanged (nothing here writes there)
+SKIP CENSUS-scratch-repo: FC_CENSUS=none: the scratch repo was not listed
+PASS FILES-unchanged: the eight files, this script and its helpers are unchanged since the start; the real repo's HEAD too
+PASS 7 FAIL 0 SKIP 3 VERDICT: INCOMPLETE secs 20 FC_PARTS=timing FC_USE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/s5/b/win FC_BASE_BUILD=unset FC_RP=unset FC_TASKLIST=unset FC_ROUNDS=2 FC_NDIV=10 FC_NEGCTL_ARMS=unset FC_CENSUS=none final-check.sh 74382554fb201c95b232f624964bd532

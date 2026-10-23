@@ -1,0 +1,33 @@
+run-bitjit: ours /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/build/native/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts fix1; results /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/FIX1/bitjit
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+    or0	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    xor0	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    andm1	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    shl0	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    shr0	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    sar0	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    notnot	x=100000 y=35184372088832	traces=0 typeins=11 loop=IFORL FAILED
+    mask	x=100000 y=35184372088832	traces=1 typeins=0 loop=JFORL ok
+    p4v: 1 of 8 variants compiled without type instability or blacklisting
+FAIL fix1: 7 of 8 p4 loops aborted with type instability, were blacklisted, or never compiled (exit 1)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 7. the CSE twins: t_csefwd.lua and t_cserev.lua against -joff, t_cserev.lua against PUC 5.3.6; cseir.lua's and t_cserev.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+RUN-BITJIT: FAIL (parts run: fix1; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/FIX1/bitjit)

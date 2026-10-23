@@ -1,0 +1,91 @@
+run-bitop: build /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/build/native (windows-x86_64); results /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/SARCONST/bitop
+
+== 1. matrix on /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/build/native/luajit-windows-x86_64/src/luajit.exe, JIT on and -joff ==
+PASS t_ops (jit): 7467 cases, every line as t_ops.expect says (550 of them raise the inexact error)
+PASS t_ops (joff): 7467 cases, every line as t_ops.expect says (550 of them raise the inexact error)
+PASS t_fold (jit): 63 cases, every line as t_fold.expect says (11 of them raise the inexact error)
+PASS t_fold (joff): 63 cases, every line as t_fold.expect says (11 of them raise the inexact error)
+FAIL t_sar (jit): 21 of 437 lines differ from t_sar.expect (want, then got):
+    < -1 ~>> -64	0
+    < -1 ~>> -65	0
+    < -1 ~>> -0x1p63	0
+    > -1 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+    > -1 ~>> -65	SPLIT K=0 V=0 H=0/Hk=-1
+    > -1 ~>> -0x1p63	SPLIT K=0 V=0 H=0/Hk=-1
+    < -5 ~>> -64	0
+    < -5 ~>> -65	0
+    < -5 ~>> -0x1p63	0
+    > -5 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+    > -5 ~>> -65	SPLIT K=0 V=0 H=0/Hk=-1
+    > -5 ~>> -0x1p63	SPLIT K=0 V=0 H=0/Hk=-1
+    < -2^31 ~>> -64	0
+    < -2^31 ~>> -65	0
+    < -2^31 ~>> -0x1p63	0
+    > -2^31 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^31 ~>> -65	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^31 ~>> -0x1p63	SPLIT K=0 V=0 H=0/Hk=-1
+    < -2^53 ~>> -64	0
+    < -2^53 ~>> -65	0
+    < -2^53 ~>> -0x1p63	0
+    > -2^53 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^53 ~>> -65	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^53 ~>> -0x1p63	SPLIT K=0 V=0 H=0/Hk=-1
+    < -2^62 ~>> -64	0
+    < -2^62 ~>> -65	0
+    < -2^62 ~>> -0x1p63	0
+    > -2^62 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^62 ~>> -65	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^62 ~>> -0x1p63	SPLIT K=0 V=0 H=0/Hk=-1
+    < -2^63 ~>> -64	0
+    < -2^63 ~>> -65	0
+    < -2^63 ~>> -0x1p63	0
+    > -2^63 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^63 ~>> -65	SPLIT K=0 V=0 H=0/Hk=-1
+    > -2^63 ~>> -0x1p63	SPLIT K=0 V=0 H=0/Hk=-1
+    < -0x7ffffffffffffc00 ~>> -64	0
+    < -0x7ffffffffffffc00 ~>> -65	0
+    < -0x7ffffffffffffc00 ~>> -0x1p63	0
+    > -0x7ffffffffffffc00 ~>> -64	SPLIT K=0 V=0 H=0/Hk=-1
+PASS t_sar (joff): 437 cases, every line as t_sar.expect says (5 of them raise the inexact error)
+PASS t_bit (jit): 2109 cases, every line as t_bit.expect says (0 of them raise the inexact error)
+PASS t_bit (joff): 2109 cases, every line as t_bit.expect says (0 of them raise the inexact error)
+PASS coerce_agree: string.pack and the operators read all 51 strings alike
+
+== 2. provenance: the .expect files against PUC Lua 5.3.6 ==
+PASS t_ops (1): PUC 5.3.6 with X (reword.lua: 1356 messages reworded) differs from t_ops.expect in exactly the 2 lines deviations.txt lists for windows
+PASS t_ops (2): xrule: 7467 lines agree: 550 raise (an operator's integer has more than 53 significant bits), 2574 exact, 4343 errors as PUC's, 0 without an operator (0 of them an integer with more than 53 significant bits)
+PASS t_fold (1): PUC 5.3.6 with X (reword.lua: 0 messages reworded) differs from t_fold.expect in exactly the 10 lines deviations.txt lists for windows
+PASS t_fold (2): xrule: 63 lines agree: 12 raise (an operator's integer has more than 53 significant bits), 37 exact, 7 errors as PUC's, 7 without an operator (3 of them an integer with more than 53 significant bits)
+PASS t_sar (1): PUC 5.3.6 with X (reword.lua: 0 messages reworded) differs from t_sar.expect in exactly the 0 lines deviations.txt lists for windows
+PASS t_sar (2): xrule: 437 lines agree: 5 raise (an operator's integer has more than 53 significant bits), 369 exact, 63 errors as PUC's, 0 without an operator (0 of them an integer with more than 53 significant bits)
+PASS coerce_agree on PUC 5.3.6: its own two readers agree on the same 51 strings
+
+== 3. the shim path: bitop_test.c ==
+
+== BT1  results through lua_tonumber: 5.3.6's integer, exactly ==
+PASS BT1a  runtime operands: six results equal C's int64, exactly         1099511627776 4503599627370497 -9.2233720368547758e+18 -4503599627370497 9007199254740991 2
+PASS BT1b  literal operands (folded): the same six                        1099511627776 4503599627370497 -9.2233720368547758e+18 -4503599627370497 9007199254740991 2
+
+== BT2  lua_tointeger / lua_tointegerx: 64-bit integers, not a 32-bit wrap ==
+PASS BT2   1 << 40, -1 >> 11, 1 << 63 read back as integers               status 0: 1099511627776, 9007199254740991 (isnum 1), -9223372036854775808 (isnum 1)
+
+== BT3  the new error through lua_pcall: LUA_ERRRUN, positioned ==
+PASS BT3a  a runtime operand: -1 >> 1 raises                              status 2 (LUA_ERRRUN 2) '[string "local a = tonumber('-1') return a >> 1"]:1: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)'
+PASS BT3b  literals: not folded, raised at run time                       status 2 (LUA_ERRRUN 2) '[string "return -1 >> 1"]:1: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)'
+PASS BT3c  a string operand (the C path)                                  status 2 (LUA_ERRRUN 2) '[string "return '-1' >> 1"]:1: result of '>>' has more than 53 significant bits (mask each operand to 32 bits first)'
+PASS BT3d  a compiled loop: the inexact result at iteration 150 raises    status 0 'true/2400|false/[string "local stops = 0 local function cb(what) if wh..."]:1: result of '|' has more than 53 significant bits (mask each operand to 32 bits first)|1'
+PASS BT3e  after the errors the state computes on                         4503599627370497
+
+== BT4  the RAM cap: the C path charges nothing ==
+PASS BT4a  100000 iterations of C-path operations: +0 bytes               status 0, result 498720 (C: 498720), charged +0 bytes
+PASS BT4b  control: 2000 tostring() calls ARE charged (the instrument sees) status 0, result 6893, charged +88676 bytes
+
+== BT5  the count hook fires inside a compiled 64-bit bit loop ==
+PASS BT5   20M iterations, hook every 500: ticks > 100, compiled, 5.3's s status 0, 320000 ticks, 102 traces, s = 4206410837014599 (PUC 5.3.6: 4206410837014599)
+
+== BT6  bit32 beside the operators: untouched ==
+PASS BT6   bit32's 5.2 results, and 1 << 32 == 2^32 between them          '0 4294967296 1073741823 5 4294967295 -1 4294967292 2 15 2147483648 2147483649 0 0 1'
+
+BITOP TESTS: 12 checks, 0 failures
+
+RUN-BITOP: FAIL (results: /c/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/b/win/negctl-bitop/20261023T134632Z-8874/SARCONST/bitop)

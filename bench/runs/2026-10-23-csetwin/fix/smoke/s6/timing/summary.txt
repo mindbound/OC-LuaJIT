@@ -1,0 +1,25 @@
+bench_bit:bit            base 0.000 ns  new 0.250 ns  new/base median nan [nan-nan] over 0 rounds  result 16000000
+bench_bit:ref            base 3.500 ns  new 3.000 ns  new/base median 0.857 [0.857-0.857] over 2 rounds  result 13308416
+bench_bit:crc            base 70.000 ns  new 70.000 ns  new/base median 1.000 [1.000-1.000] over 2 rounds  result 1279717523
+bench_bit2:rgb           base 3.500 ns  new 3.000 ns  new/base median 0.875 [0.750-1.000] over 2 rounds  result 540576398
+bench_bit2:ref           base 5.000 ns  new 4.000 ns  new/base median 0.800 [0.800-0.800] over 2 rounds  result 540576398
+bench_bit2:crc-table     base 3.000 ns  new 3.000 ns  new/base median 1.000 [1.000-1.000] over 2 rounds  result 2321084339
+ident:or0-big            base 0.500 ns  new 1.000 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 2500000
+ident:or0-small          base 1.000 ns  new 0.500 ns  new/base median 0.500 [0.000-1.000] over 2 rounds  result 3002930
+ident:andm1-big          base 0.000 ns  new 0.500 ns  new/base median nan [nan-nan] over 0 rounds  result 2500000
+ident:andm1-small        base 1.000 ns  new 0.500 ns  new/base median 0.500 [0.000-1.000] over 2 rounds  result 3002930
+ident:xor0-big           base 1.000 ns  new 0.500 ns  new/base median 0.500 [0.000-1.000] over 2 rounds  result 2500000
+ident:xor0-small         base 0.500 ns  new 1.000 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 3002930
+ident:shl0-big           base 0.500 ns  new 0.500 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 2500000
+ident:shl0-small         base 0.500 ns  new 1.000 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 3002930
+ident:shr0-big           base 0.500 ns  new 1.000 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 2500000
+ident:shr0-small         base 0.500 ns  new 0.500 ns  new/base median 1.000 [1.000-1.000] over 1 rounds  result 3002930
+bench_numconv:ref        base 0.250 ns  new 0.000 ns  new/base median 0.000 [0.000-0.000] over 1 rounds  result 1.1322329526664069e+18
+bench_numconv:arith      base 0.500 ns  new 0.500 ns  new/base median 1.000 [1.000-1.000] over 2 rounds  result 1.1322329526664069e+18
+bench_numconv:key        base 1.000 ns  new 1.000 ns  new/base median 1.000 [1.000-1.000] over 2 rounds  result 3076428366
+bench_numconv:bits       base 1.000 ns  new 1.000 ns  new/base median 1.000 [1.000-1.000] over 2 rounds  result 510715006
+bench_numconv:floor      base 1.500 ns  new 1.500 ns  new/base median 1.000 [1.000-1.000] over 2 rounds  result 5.6611647633278016e+17
+RESULTS: EQUAL
+GROSS: FAIL bench_bit:bit ident:andm1-big bench_numconv:ref
+ALL: the 21 rows' median new/base ratios have median 1.000 [nan-nan] (information only)
+SUMMARY: OK

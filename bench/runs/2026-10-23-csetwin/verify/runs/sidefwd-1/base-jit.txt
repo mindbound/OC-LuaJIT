@@ -1,0 +1,3 @@
+side-pair	bad=289 bbad=0 first=312:0/60129542144;bad=299 bbad=0 first=302:2147483648/49392123904;bad=299 bbad=0 first=302:2147483648/49392123904	traces=2 direct=0 served=1 split=0 rserved=0 i64slot=0
+ctl-side	bad=0 bbad=0;bad=0 bbad=0;bad=0 bbad=0	traces=2 direct=1 served=0 split=0 rserved=0 i64slot=0
+sidefwd: 887 wrong

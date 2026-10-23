@@ -1,0 +1,7 @@
+recount of /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/t4-census-1, text files only (grep -I skips binaries), 2026-10-23
+binary files holding the string: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/t4-census-1/bitop/bitop_test.exe 
+text files with a CSEREFUSE line: 1
+CSEREFUSE lines in text files: 2
+files searched: 570, of them .err: 237, nonempty .err: 142
+the same recount on the instrument's fail-first runs/t4-cse-1: 830 lines in 34 files
+excluding the census's own report files: 0 lines

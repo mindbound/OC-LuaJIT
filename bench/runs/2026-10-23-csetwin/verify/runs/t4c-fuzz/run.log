@@ -1,0 +1,42 @@
+bitfuzz: reference Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; ours /c/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/t4v/luajit-windows-x86_64/src/luajit.exe; seeds 11..15 x 1000 cases x 16 tuples; hotmin 0.25; results /c/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz
+seed 11: 0 -- 16000 tuples, EXACT 11541, INEXACT 4459 (of them 5.3.6 computes a number: 4296); REF results: E:INEXACT 4459, E:NOINT 868, E:TYPE 494, num 10179 (C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/puc-11.txt)
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-jon-11.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 445/1000 hotU 1657/3000 traces 3112 aborts 3140 [NYI: bytecode FNEW=4,NYI: bytecode UCLO=21,NYI: bytecode VARG=30,NYI: return to lower frame=15,bad argument type=2926,call unroll limit reached=19,inner loop in root trace=110,leavin
+      => PASS
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-joff-11.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 4459 of INEXACT 4459; sim-round MISMATCH 4459 of REF E:INEXACT 4459
+seed 12: 0 -- 16000 tuples, EXACT 11032, INEXACT 4968 (of them 5.3.6 computes a number: 4728); REF results: E:INEXACT 4968, E:NOINT 841, E:TYPE 490, num 9701 (C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/puc-12.txt)
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-jon-12.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 429/1000 hotU 1551/3000 traces 3186 aborts 3091 [NYI: bytecode FNEW=8,NYI: bytecode UCLO=21,NYI: bytecode VARG=52,NYI: return to lower frame=21,bad argument type=2761,call unroll limit reached=43,inner loop in root trace=166,leavin
+      => PASS
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-joff-12.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 4968 of INEXACT 4968; sim-round MISMATCH 4968 of REF E:INEXACT 4968
+seed 13: 0 -- 16000 tuples, EXACT 10890, INEXACT 5110 (of them 5.3.6 computes a number: 4876); REF results: E:INEXACT 5110, E:NOINT 896, E:TYPE 389, num 9605 (C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/puc-13.txt)
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-jon-13.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 417/1000 hotU 1541/3000 traces 3105 aborts 3244 [NYI: bytecode FNEW=8,NYI: bytecode UCLO=20,NYI: bytecode VARG=35,NYI: return to lower frame=7,bad argument type=2924,call unroll limit reached=26,inner loop in root trace=194,leaving
+      => PASS
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-joff-13.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 5110 of INEXACT 5110; sim-round MISMATCH 5110 of REF E:INEXACT 5110
+seed 14: 0 -- 16000 tuples, EXACT 11071, INEXACT 4929 (of them 5.3.6 computes a number: 4645); REF results: E:INEXACT 4929, E:NOINT 879, E:TYPE 505, num 9687 (C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/puc-14.txt)
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-jon-14.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 430/1000 hotU 1540/3000 traces 3041 aborts 3205 [NYI: bytecode FNEW=8,NYI: bytecode UCLO=23,NYI: bytecode VARG=41,NYI: return to lower frame=10,bad argument type=2948,call unroll limit reached=16,inner loop in root trace=124,leavin
+      => PASS
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-joff-14.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 4929 of INEXACT 4929; sim-round MISMATCH 4929 of REF E:INEXACT 4929
+seed 15: 0 -- 16000 tuples, EXACT 11028, INEXACT 4972 (of them 5.3.6 computes a number: 4712); REF results: E:INEXACT 4972, E:NOINT 990, E:TYPE 614, num 9424 (C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/puc-15.txt)
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-jon-15.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 418/1000 hotU 1534/3000 traces 2953 aborts 3168 [NYI: bytecode FNEW=5,NYI: bytecode UCLO=8,NYI: bytecode VARG=33,NYI: return to lower frame=9,bad argument type=2956,call unroll limit reached=22,inner loop in root trace=114,leaving 
+      => PASS
+    C:/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz/ours-joff-15.txt: 16000 tuples, MISMATCH 0 (of them INEXACT in the reference: 0); by mode K 0 V 0 P 0 H 0 U 0
+      #cov tuples 16000 hotcases 0/1000 hotU 0/3000 traces 0 aborts 0 [] jit off
+      => PASS
+    controls: sim-wrap PASS; sim-raw MISMATCH 4972 of INEXACT 4972; sim-round MISMATCH 4972 of REF E:INEXACT 4972
+BITFUZZ PASS (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/verify-code/runs/t4c-fuzz/bitfuzz)

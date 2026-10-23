@@ -1,0 +1,7 @@
+patched lj_parse.c equals the build copy
+patched vm_x64.dasc equals the build copy
+patched lj_meta.c equals the build copy
+patched lj_record.c equals the build copy
+patched lj_opt_fold.c equals the build copy
+patched lj_bcdump.h equals the build copy
+patched lib_jit.c equals the build copy

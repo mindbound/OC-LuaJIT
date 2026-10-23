@@ -1,0 +1,74 @@
+5c5,6
+< # fix's (2026-10-20) and FIX-NUMCONV's (2026-10-21) have teeth:
+---
+> # fix's (2026-10-20), FIX-NUMCONV's (2026-10-21) and the CSE type twin
+> # fix's (2026-10-23) have teeth:
+85a87,96
+> #   cse:t_csefwd, :cseir   run-bitjit.sh's cse part (the CSE type twin):
+> #                 t_csefwd against -joff under some option set (a 5.3
+> #                 result unlike the file's plain-arithmetic reference exits
+> #                 1 there too), or cseir's read of the forward pairs'
+> #                 compiled loops under the sets with fold and CSE on (an
+> #                 operator served by a 32-bit instruction, a pair not kept
+> #                 apart, an int64 instruction in a snapshot, a loop that did
+> #                 not compile, or results unlike -joff's); the part's
+> #                 t_cserev (the reverse order, only in its two no-slot
+> #                 shapes) runs with them and no arm names it
+135a147,149
+> #   the CSE type twin's (2026-10-23; patch-bitop-fold.sh hunk 12, the type
+> #   test in lj_opt_cse):
+> #     CSEFWD          lj_opt_fold.c      [cse:t_csefwd cse:cseir]
+148a163,172
+> #   CSEFWD lets an int64 instruction common with an older narrower one on
+> #   the same operands (the forward order: the 5.3 operator gets the 32-bit
+> #   value, zero-extended, as on every build before hunk 12) and still
+> #   refuses the reverse.  No arm holds the reverse half: its sabotage would
+> #   let an int64 ref reach a 32-bit recorder, crash-class, never run on
+> #   any build.  That half is held by patch-bitop-fold.sh's verify_content,
+> #   which every build runs (the predicate's exact text, once, inside
+> #   lj_opt_cse, between its if and its return), and by the predicate's
+> #   symmetry.  The predicate dropped is the unfixed build, which opens the
+> #   reverse order too, so it is no arm.
+229c253,260
+< # saw gen 17-27, genrg2 24-28 and t_rec 0-3 a seed.
+---
+> # saw gen 17-27, genrg2 24-28 and t_rec 0-3 a seed.  CSEFWD, one run on
+> # 2026-10-23 (OCLJ_NEGCTL_ARMS=CSEFWD, the CSE round's integrator, scratch
+> # claude-tmp/oclj/csetwin/round/integrate/runs/negctl-cse-1), every count
+> # equal to the test implementer's on a prototype of the same sabotage
+> # (csetwin/round/impl-tests/runs/cse-fwdsab-1): t_csefwd 11 cases in 10 of
+> # its 15 sets, 1 under -O1 and -O-narrow, 0 under -O0, -O-fold and -O-cse
+> # (no pair forms there, or none merges); cseir 18 in 10 of its 12 sets, 1
+> # under -O1 and -O-narrow; t_cserev passes (the reverse stays refused).
+281a313,318
+> # CSEFWD only lets one of our int64 instructions take an older 32-bit
+> # instruction's ref on the same operands, as every build before hunk 12
+> # did: our consumers read the whole register, which holds the 32-bit
+> # result zero-extended, so a 5.3 result is a wrong number, and the reverse
+> # match stays refused, so no int64 ref reaches a 32-bit recorder, a slot
+> # or a snapshot.
+515c552
+<     bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel|nc) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
+---
+>     bitop) echo "$R_bitop" ;; fuzz) echo "$R_fuzz" ;; gen|floor|fix1|idx|sel|nc|cse) echo "$R_bitjit" ;; genrg2) echo "$R_genrg2" ;;
+532c569
+<       gen|floor|fix1|idx|sel|nc) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+---
+>       gen|floor|fix1|idx|sel|nc|cse) case " $parts " in *" ${tk%%:*} "*) ;; *) parts="$parts ${tk%%:*}" ;; esac ;;
+593a631,632
+>     cse:t_csefwd) grep -q '^FAIL t_csefwd (' "$1/bitjit.log" ;;
+>     cse:cseir) grep -q '^FAIL cseir (' "$1/bitjit.log" ;;
+632a672,676
+>       /^FAIL t_csefwd/ { out = out sep "t_csefwd"; sep = "," }
+>       /^FAIL t_cserev [(]/ { out = out sep "t_cserev"; sep = "," }
+>       /^FAIL t_cserev: PUC/ { out = out sep "t_cserev-PUC"; sep = "," }
+>       /^FAIL t_cserev: -joff/ { out = out sep "t_cserev-joff"; sep = "," }
+>       /^FAIL cseir/ { out = out sep "cseir"; sep = "," }
+732c776
+< arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc security gate stage4' '' ''
+---
+> arm canon - 'bitop fuzz gen genrg2 floor fix1 idx sel nc cse security gate stage4' '' ''
+842a887,889
+> arm CSEFWD lj_opt_fold.c 'cse:t_csefwd cse:cseir' \
+>   '@T@  irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' \
+>   '@T@  (irt_isi64(IR(ref)->t) == irt_isi64(fins->t) || irt_isi64(fins->t)))  /* SABOTAGE CSEFWD: an int64 instruction may common with an older narrower one, the forward order, as before hunk 12; the reverse stays refused */'

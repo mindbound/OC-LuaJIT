@@ -145,8 +145,8 @@ static TRef oclj_rec_bitop(jit_State *J, BCOp op, TRef rb, TRef rc,
     }
   }
   /* The result is a double only if it is exact.  d is marked exact; the
-  ** guard converts it back (its own marked conversion, which only the width
-  ** rule removes, when res provably fits) and compares with res. */
+  ** guard converts it back (its own marked conversion: only the width and
+  ** FIX-NUMCONV rules remove it, proving res exact) and compares with res. */
   d = emitir(IRTN(IR_CONV), res, (IRT_NUM<<5)|IRT_I64|OCLJ_IRCONV_EXACT);
   if (!tref_isk(res)) {
     TRef back = emitir(IRT(IR_CONV, IRT_I64), d,

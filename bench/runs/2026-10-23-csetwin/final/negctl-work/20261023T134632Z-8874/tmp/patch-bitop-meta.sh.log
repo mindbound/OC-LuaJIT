@@ -1,0 +1,1 @@
+patch-bitop-meta.sh: lj_meta.c  lj_meta_bitop's no-FFI path calls oclj_meta_bitop (8 lines added, 26 removed, of 540); verified by content, diff and reversal

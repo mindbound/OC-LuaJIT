@@ -1,0 +1,1 @@
+PASS 8 FAIL 2 SKIP 2 VERDICT: FAIL secs 159 FC_PARTS=negctl FC_USE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/s5/b/win FC_BASE_BUILD=unset FC_RP=unset FC_TASKLIST=unset FC_ROUNDS=8 FC_NDIV=1 FC_NEGCTL_ARMS=CSEFWD FC_CENSUS=none final-check.sh 74382554fb201c95b232f624964bd532

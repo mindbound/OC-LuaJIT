@@ -1,0 +1,7 @@
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build]     export verified: the commit object hashes to the pin, 8 trees to their names, 232 files to the pin's blob ids
+patch-bitop-fold.sh: lj_opt_fold.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal
+[build]     oclj_strpack.c -Wall -Wextra warnings = 0
+[build]     oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = 0
+[build]     -Wall -Wextra warnings = 0
+[build]     shim-attributable warnings = 0  (2 pre-existing jnlua.c warnings allowlisted)

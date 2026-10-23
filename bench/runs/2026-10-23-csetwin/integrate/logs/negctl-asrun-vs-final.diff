@@ -1,0 +1,6 @@
+269c269,271
+< # directories); NUMCONVNOOP, the 36th arm, 37 s (its gen run; three runs).
+---
+> # directories); NUMCONVNOOP, the 36th arm, 37 s (its gen run; three runs);
+> # with the cse part canon took 108 s and CSEFWD, the 37th arm, 12 s (one
+> # run, 2026-10-23, which left 157 MB in its work directory).

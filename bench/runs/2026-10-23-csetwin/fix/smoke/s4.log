@@ -1,0 +1,26 @@
+== census before
+== tree
+PASS CHANGED-SET: the scratch repo is HEAD's tree outside docs/ and bench/runs/ (228 files) but for the round's eight files (cmp/changed.txt)
+== AlmaLinux 8 (WSL)
+PASS ALMA-ran: the AlmaLinux 8 part ran to its end
+PASS ALMA-rc: build-native.sh (additive, OCLJ_GLIBC_MAX=2.28) succeeds
+PASS ALMA-ignored-none: nothing ignored from the environment
+PASS ALMA-patch: patch-bitop-fold.sh: no CSE of int64 with another type, 76 added and 9 removed of 2720, verified
+PASS ALMA-wgate: round 3's C files compile with 0 warnings under -Wall -Wextra
+PASS ALMA-glibc: the library needs GLIBC 2.28 at most (needs 2.17)
+PASS ALMA-objects: 77 LuaJIT objects, only lj_opt_fold.o differs from build/native's Linux tree (lj_opt_fold.o 57970a518831675ec90e3124850e50d7); our 3 objects equal
+PASS ALMA-fold-object: lj_opt_fold.o is the round's AlmaLinux 8 one (1b4a7c131b89917051aaf03af9cf6093)
+PASS ALMA-build-copy: the build copy's lj_opt_fold.c is the Windows one's (59778bb698247b3e3f0392fdf92def70)
+PASS ALMA-bitjit: run-bitjit.sh, all seven parts, the Linux PUC: PASS, every part's lines
+PASS ALMA-cse: the cse part read as the fixed build must read (fc-basecse.py new: BASECSE new C:/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/s4/alma/bitjit-all: PASS (0 findings))
+PASS ALMA-gen-idx: the generator in its idx mode, 4 seeds: PASS
+PASS ALMA-gen-rg2: the generator in its rg2 mode, 4 seeds: PASS
+PASS ALMA-gen-phi: the generator in its phi mode, 4 seeds: PASS
+PASS ALMA-base-cse: fail-first: the cse part on the base build's Linux luajit FAILs as an unfixed build must (fc-basecse.py base: BASECSE base C:/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/s4/alma/base-cse: PASS (0 findings))
+== census after
+SKIP CENSUS-build: FC_CENSUS=none: the real repo's build/ was not listed
+PASS CENSUS-pristine: the pristine checkout's stat list (mtimes included), its .git md5 list and HEAD are unchanged
+PASS CENSUS-real-repo: the real repo's HEAD, git status and its changed files' md5s are unchanged (nothing here writes there)
+SKIP CENSUS-scratch-repo: FC_CENSUS=none: the scratch repo was not listed
+PASS FILES-unchanged: the eight files, this script and its helpers are unchanged since the start; the real repo's HEAD too
+PASS 19 FAIL 0 SKIP 2 VERDICT: INCOMPLETE secs 187 FC_PARTS=alma FC_USE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/b1 FC_BASE_BUILD=unset FC_RP=unset FC_TASKLIST=unset FC_ROUNDS=8 FC_NDIV=1 FC_NEGCTL_ARMS=unset FC_CENSUS=none final-check.sh 5fd82c0335ebc44daa0d34158975db54

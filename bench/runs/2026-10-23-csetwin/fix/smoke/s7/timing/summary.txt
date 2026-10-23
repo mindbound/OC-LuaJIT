@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "C:\Users\astro\claude-tmp\oclj\csetwin\round\fix\fc-timing-summ.py", line 62, in <module>
+    for line in open(raw, "r", encoding="utf-8", errors="replace", newline="").read().split(chr(10)):
+                ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'C:/Users/astro/claude-tmp/oclj/csetwin/round/fix/smoke/s7/timing/raw.txt'

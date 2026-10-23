@@ -1,0 +1,18 @@
+ok A control NEW rc=0 want=0 :: patch-bitop-fold.sh: control.NEW.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal
+ok A m1-extra-fwd-line NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/m1-extra-fwd-line.NEW.out.c.tmp.33182: lj_opt_cse (lines 2663-2700) names 'op12 == op12' on 2 lines, expected 1 (hunk 12's if): a match other than hunk 12's
+ok A m2-extra-rev-line NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/m2-extra-rev-line.NEW.out.c.tmp.33262: lj_opt_cse (lines 2663-2700) names 'op12 == op12' on 2 lines, expected 1 (hunk 12's if): a match other than hunk 12's
+ok A m3-else-any NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/m3-else-any.NEW.out.c.tmp.33342: lj_opt_cse (lines 2663-2699) names 'op12 == op12' on 2 lines, expected 1 (hunk 12's if): a match other than hunk 12's
+ok A m4-samecount-rev NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/m4-samecount-rev.NEW.out.c.tmp.33422: lj_opt_cse (lines 2663-2698) names 'op12 == op12' on 2 lines, expected 1 (hunk 12's if): a match other than hunk 12's
+ok A m5-noop12-rev NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/m5-noop12-rev.NEW.out.c.tmp.33502: lj_opt_cse (lines 2663-2700) names 'return' on 3 lines, expected 2 (hunk 12's return of the common subexpression, and the return of the instruction it emits): a return other than those
+ok A m6-stray-op12 NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/m6-stray-op12.NEW.out.c.tmp.33582: lj_opt_cse (lines 2663-2699) names 'op12 == op12' on 2 lines, expected 1 (hunk 12's if): a match other than hunk 12's
+ok A c5-csefwd-text NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/c5-csefwd-text.NEW.out.c.tmp.33662: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12)
+ok A c6-rev-or NEW rc=1 want=1 :: patch-bitop-fold.sh: C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/ps/ffpatch/c6-rev-or.NEW.out.c.tmp.33734: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12)
+ok B tip-a4c0645 NEW rc=0 :: patch-bitop-fold.sh: B-tip.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2730); verified by content, diff and reversal
+ok B idempotent NEW rc=0 same-bytes=True :: patch-bitop-fold.sh: B-idem.out.c  already folds the 64-bit bit operators without FFI (verified) -- unchanged
+ok C p0-control fired: [] want []
+ok C p1-extra-fwd-line fired: [match-count, return-count] want [match-count, return-count]
+ok C p2-extra-rev-line fired: [match-count, return-count] want [match-count, return-count]
+ok C p3-else-any fired: [match-count, return-count] want [match-count, return-count]
+ok C p5-noop12-rev fired: [return-count] want [return-count]
+ok C p6-stray-op12 fired: [match-count] want [match-count]
+FFPATCH: PASS (0 wrong)

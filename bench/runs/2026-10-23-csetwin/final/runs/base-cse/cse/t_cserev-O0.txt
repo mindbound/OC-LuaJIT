@@ -1,0 +1,9 @@
+rc-sel	n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0	traces=1 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+rc-shl1	n=400 bad=0 bbad=0 dig=160400 bdig=0;n=400 bad=0 bbad=0 dig=160400 bdig=0;n=400 bad=0 bbad=0 dig=160400 bdig=0	traces=1 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+rp-sel	n=400 bad=0 bbad=0 dig=82200 bdig=0 x=0;n=400 bad=0 bbad=0 dig=82200 bdig=0 x=0;n=400 bad=0 bbad=0 dig=82200 bdig=0 x=0	traces=1 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+rp-byte	n=400 bad=0 bbad=0 dig=51520 bdig=0;n=400 bad=0 bbad=0 dig=51520 bdig=0;n=400 bad=0 bbad=0 dig=51520 bdig=0	traces=2 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+r5-sel	n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0;n=400 bad=0 bbad=0 dig=657600 bdig=0 x=0	traces=1 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+r6-byte	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520	traces=1 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+r6-sub	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520	traces=1 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+r6-mul	n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520;n=400 bad=0 bbad=0 dig=160400 bdig=51520	traces=2 direct=0 served=0 split=0 rserved=0 i64slot=0 ok
+t_cserev: 8 of 8 cases ok (fold off, cse off, narrow off, loop off); reverse cases judged 0 of 4

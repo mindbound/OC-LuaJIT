@@ -1,0 +1,2 @@
+t_csefwd side wrong in: jon O1 hl1 he1 noloop hx1 ts1 mx1 noabc nonarrow (reported, not judged but in jon)
+BASECSE base C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/base-cse: PASS (0 findings)

@@ -1,0 +1,3 @@
+lj_opt_fold.o
+luajit.exe
+libluajit.a

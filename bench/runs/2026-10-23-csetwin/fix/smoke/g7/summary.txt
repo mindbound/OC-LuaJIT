@@ -1,0 +1,1 @@
+FAIL CHANGED-SET: the scratch repo differs from HEAD's tree otherwise than by the eight files (cmp/changed.txt): nothing runs

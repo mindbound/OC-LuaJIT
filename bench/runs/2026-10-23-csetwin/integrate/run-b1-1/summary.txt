@@ -1,0 +1,6 @@
+bitop rc=0 :: BITOP TESTS: 12 checks, 0 failures RUN-BITOP: PASS (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/run-b1-1/bitop) 
+bitjit rc=0 :: RUN-BITJIT: PASS (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/run-b1-1/bitjit) 
+bitfuzz rc=0 :: BITFUZZ PASS (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/integrate/run-b1-1/bitfuzz) 
+times: 14:31:42 14:31:46 14:32:57 14:33:00
+java processes at start: 0
+round/repo during the runs: unchanged

@@ -1,0 +1,83 @@
+PASS CHANGED-SET: the scratch repo is HEAD's tree outside docs/ and bench/runs/ (228 files) but for the round's eight files (cmp/changed.txt)
+PASS W-rc: build-native.sh (additive) into a fresh OCLJ_BUILD succeeds
+PASS W-pin: the pin is met and the export verified (8 trees, 232 files)
+PASS W-ignored-none: nothing ignored from the environment
+PASS W-patch: patch-bitop-fold.sh: no CSE of int64 with another type, 76 added and 9 removed of 2720, verified
+PASS W-wgate: round 3's C files compile with 0 warnings under -Wall -Wextra (bitop_wgate.c)
+PASS W-objects: 77 LuaJIT objects, only lj_opt_fold.o differs from build/native's; our 3 objects equal
+PASS W-fold-object: lj_opt_fold.o is the round's (a6c5fcc2a56698ed1313f25c0a298719)
+PASS W-build-copy: the build copy's lj_opt_fold.c is the patched one (59778bb698247b3e3f0392fdf92def70)
+PASS ALMA-ran: the AlmaLinux 8 part ran to its end
+PASS ALMA-rc: build-native.sh (additive, OCLJ_GLIBC_MAX=2.28) succeeds
+PASS ALMA-ignored-none: nothing ignored from the environment
+PASS ALMA-patch: patch-bitop-fold.sh: no CSE of int64 with another type, 76 added and 9 removed of 2720, verified
+PASS ALMA-wgate: round 3's C files compile with 0 warnings under -Wall -Wextra
+PASS ALMA-glibc: the library needs GLIBC 2.28 at most (needs 2.17)
+PASS ALMA-objects: 77 LuaJIT objects, only lj_opt_fold.o differs from build/native's Linux tree (lj_opt_fold.o 57970a518831675ec90e3124850e50d7); our 3 objects equal
+PASS ALMA-fold-object: lj_opt_fold.o is the round's AlmaLinux 8 one (1b4a7c131b89917051aaf03af9cf6093)
+PASS ALMA-build-copy: the build copy's lj_opt_fold.c is the Windows one's (59778bb698247b3e3f0392fdf92def70)
+PASS ALMA-bitjit: run-bitjit.sh, all seven parts, the Linux PUC: PASS, every part's lines
+PASS ALMA-cse: the cse part read as the fixed build must read (fc-basecse.py new: BASECSE new C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/alma/bitjit-all: PASS (0 findings))
+PASS ALMA-gen-idx: the generator in its idx mode, 4 seeds: PASS
+PASS ALMA-gen-rg2: the generator in its rg2 mode, 4 seeds: PASS
+PASS ALMA-gen-phi: the generator in its phi mode, 4 seeds: PASS
+PASS ALMA-base-cse: fail-first: the cse part on the base build's Linux luajit FAILs as an unfixed build must (fc-basecse.py base: BASECSE base C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/alma/base-cse: PASS (0 findings))
+PASS ALMA-base-md5: the base build's Linux tree is build/native's (luajit cb68e4547f36ab5da17f2def2cbcbfd4, lj_opt_fold.o 57970a518831675ec90e3124850e50d7)
+PASS BITJIT-all: run-bitjit.sh, all seven parts (gen, floor, fix1, idx, sel, nc, cse), PUC set: PASS, every part's lines, 20 of 20 pairs formed
+PASS BITJIT-cse: the cse part read as the fixed build must read (fc-basecse.py new: BASECSE new C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/bitjit-all: PASS (0 findings))
+PASS BITJIT-gen-idx: the generator in its idx mode, seeds 1-4, PUC set: PASS
+PASS BITJIT-gen-rg2: the generator in its rg2 mode, seeds 1-4, PUC set: PASS
+PASS BITJIT-gen-phi: the generator in its phi mode, seeds 201-204, PUC set: PASS
+PASS BASE-cse: fail-first: the cse part on the base build FAILs as an unfixed build must: forward pairs served, the reverse pairs merged, no int64 ref in a snapshot (fc-basecse.py base: BASECSE base C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/base-cse: PASS (0 findings))
+PASS BASE-base-md5: the base build is build/native's (luajit.exe f4038cd62af3a12985868cea77cc1518, lj_opt_fold.o f6d916e29cf8e05cd951d220ba8abcd9)
+PASS BASE-reader-ff1: fail-first of the reader: the base build's output read as the fixed build's fails (BASECSE new C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/base-cse: FAIL (281 findings))
+PASS BASE-reader-ff2: fail-first of the reader: the fixed build's output read as the base build's fails (BASECSE base C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/bitjit-all: FAIL (93 findings))
+PASS BITOP: run-bitop.sh: PASS
+PASS BITFUZZ: run-bitfuzz.sh: PASS
+PASS NEGCTL-arm-list: negctl-bitop.sh's arm calls are exactly the 37 arms this check expects
+PASS NEGCTL-canon-list: canon's catcher list holds the cse part
+PASS NEGCTL-rc: negctl-bitop.sh, every arm: exit 0 and the full-sweep PASS line
+PASS NEGCTL-canon: canon passes, every object reproduced, pristine files from the build's export, the cse part among its catchers
+PASS NEGCTL-37-arms: exactly the 37 arms, each caught by its catchers (CSEFWD by cse:t_csefwd cse:cseir)
+PASS NEGCTL-restore: restore: every file put back, every object as shipped
+PASS RUNNER-run.sh: run.sh on the new build: exit 0
+PASS RUNNER-run-mem.sh: run-mem.sh on the new build: exit 0
+PASS RUNNER-run-vgc.sh: run-vgc.sh on the new build: exit 0
+PASS RUNNER-run-wd.sh: run-wd.sh on the new build: exit 0
+PASS RUNNER-run-penalty.sh: run-penalty.sh on the new build: exit 0
+PASS RUNNER-run-race.sh: run-race.sh on the new build: exit 0
+PASS RUNNER-run-security.sh: run-security.sh on the new build: exit 0
+PASS RUNNER-run-pack.sh: run-pack.sh on the new build: exit 0
+PASS RUNNER-run-packfuzz.sh: run-packfuzz.sh on the new build: exit 0
+PASS FILES8-PINNED: the eight files are the md5s this check names (cmp/pinned.txt)
+PASS CR0: 0 CR bytes in each of the eight files (cmp/cr.txt)
+PASS GIT-DIFF-CHECK: git diff --no-index --check finds no whitespace error in the eight files against HEAD's copies (or /dev/null for the three new)
+PASS SHN-gitbash: sh -n of the three changed shell scripts, this one and fc-anchors.sh (Git Bash)
+PASS SHN-alma: sh -n of the same (AlmaLinux 8's sh)
+PASS SHN-ubuntu: sh -n of the same (Ubuntu's dash)
+PASS ENGINE: the hunk engine of all seven patch-bitop-*.sh is unchanged (077d1dbebe056d59691d7f7f93307b2d)
+PASS PATCH-NO-TAB-BS: patch-bitop-fold.sh holds no tab and no backslash
+PASS LUA-NO-BS: t_csefwd.lua, cseir.lua and t_cserev.lua hold no backslash
+PASS PATCH-INPUTS: the pin's pristine blob (15c7420ce76537c52775f439b955564c) and a4c0645's lj_opt_fold.c (blob 9d48aaa2ce616b32f6bd02bdcc0786206864f2c0, md5 0f28177caa5a6749754b514cc0f8462d)
+PASS PATCH-PRISTINE: on the pin's pristine blob: 76 added, 9 removed of 2720, verified by content, diff and reversal
+PASS PATCH-IDEMPOTENT: on its own output: verified, unchanged, the same bytes
+PASS PATCH-IS-BUILD-COPY: its output is the build copy's lj_opt_fold.c, byte for byte (59778bb698247b3e3f0392fdf92def70)
+PASS PATCH-TIP: on a4c0645's lj_opt_fold.c: 76 added, 9 removed of 2730, verified
+PASS HUNK12-ANCHOR: hunk 12's anchor (lj_opt_cse's if and return lines) once in the pin's file and once in a4c0645's
+PASS PATCH-FAILFIRST: verify_content's fail-firsts: m1-m6 refused with their own messages, c5 and c6 refused, each lj_opt_cse count failing alone, the controls passing (FFPATCH: PASS (0 wrong))
+PASS TEXT-FAILFIRST: the test files' fail-firsts: t_cserev's text check refuses a second for and any bit (as comments), t_csefwd's copy and side checks fire, cseir's copy and side gates matter (FFTESTS: PASS (0 wrong))
+PASS NEGCTL-ANCHORS: negctl's 37 arms: each OLD text once in each copy (build, repo or patched), and its sabotage one changed line (verdict: ALL-OK)
+PASS CITES: the round's line cites hold by content, and every cite moved one line down or up fails (cites: rows=46 ok=46 bad=0 shift=0; cites: rows=46 ok=0 bad=46 shift=1; cites: rows=46 ok=0 bad=46 shift=-1)
+PASS NO-PRIVATE: no path of the private scratch directory in the round's added lines
+PASS NO-EMAIL: no email address in the round's added lines
+PASS BITLIB-CALLERS: the bit library is called only by bitop/t_bit.lua, bitop/t_csefwd.lua (forward only, its own check) and penalty_test.lua, and the first and last use no 5.3 operator
+PASS HELPERS: every helper beside this script has the md5 it names (fc-anchors.sh and fc-bench from integrate, fc-timing-summ.py integrate's with a guard for rows with no ratio, fc-a4c0645-lj_opt_fold.c from csetwin/upstream, the rest the fixer's; cmp/helpers.txt)
+PASS TIMING-inputs: the benches are integrate/timing/bench's (fc-bench, md5s pinned); base is build/native's luajit.exe (f4038cd62af3a12985868cea77cc1518, lj_opt_fold.o f6d916e29cf8e05cd951d220ba8abcd9), new's lj_opt_fold.o the round's (a6c5fcc2a56698ed1313f25c0a298719)
+PASS TIMING-complete: all 8 rounds ran (no Java process appeared)
+PASS TIMING-results-equal: every result of the new build equals base's, in every round, all 21 rows (timing/summary.txt)
+PASS TIMING-no-gross-change: each row's median new/base within [0.5, 2.0] (a smoke bound; the ratios are in timing/summary.txt)
+PASS CENSUS-build: every file under the real repo's build/ has its md5 entry of the start, none added or removed (39466 files)
+PASS CENSUS-pristine: the pristine checkout's stat list (mtimes included), its .git md5 list and HEAD are unchanged
+PASS CENSUS-real-repo: the real repo's HEAD, git status and its changed files' md5s are unchanged (nothing here writes there)
+PASS CENSUS-scratch-repo: every file of the scratch repo has its md5 entry of the start, none added or removed (5224 files)
+PASS FILES-unchanged: the eight files, this script and its helpers are unchanged since the start; the real repo's HEAD too

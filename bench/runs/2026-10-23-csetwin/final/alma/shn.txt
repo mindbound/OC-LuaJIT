@@ -1,0 +1,5 @@
+0 /mnt/c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-fold.sh
+0 /mnt/c/Users/astro/claude-tmp/oclj/csetwin/round/repo/test/native/negctl-bitop.sh
+0 /mnt/c/Users/astro/claude-tmp/oclj/csetwin/round/repo/test/native/run-bitjit.sh
+0 /mnt/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/final-check.sh
+0 /mnt/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/fc-anchors.sh

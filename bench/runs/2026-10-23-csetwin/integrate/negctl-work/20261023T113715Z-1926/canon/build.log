@@ -1,0 +1,76 @@
+mingw32-make: Entering directory 'C:/Users/astro/claude-tmp/oclj/csetwin/round/integrate/b1/negctl-bitop/20261023T113715Z-1926/build/native/luajit-windows-x86_64/src'
+DYNASM    host/buildvm_arch.h
+host/minilua.exe ../dynasm/dynasm.lua  -D ENDIAN_LE -D P64 -D JIT -D FPU -D HFABI -D VER= -D WIN -o host/buildvm_arch.h vm_x64.dasc
+CC        lj_meta.o
+CC        lj_parse.o
+CC        lj_bcread.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_meta.o lj_meta.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_bcread.o lj_bcread.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_parse.o lj_parse.c
+CC        lj_bcwrite.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_bcwrite.o lj_bcwrite.c
+CC        lj_load.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_load.o lj_load.c
+CC        lj_lib.o
+HOSTCC    host/buildvm.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_lib.o lj_lib.c
+gcc  -O2 -fomit-frame-pointer -Wall   -I. -DLUAJIT_TARGET=LUAJIT_ARCH_x64 -DLJ_ARCH_HASFPU=1 -DLJ_ABI_SOFTFP=0  -c -o host/buildvm.o host/buildvm.c
+HOSTLINK  host/buildvm.exe
+gcc     -o host/buildvm.exe host/buildvm.o host/buildvm_asm.o host/buildvm_peobj.o host/buildvm_lib.o host/buildvm_fold.o   
+BUILDVM   lj_ffdef.h
+BUILDVM   lj_bcdef.h
+BUILDVM   lj_vm.o
+host/buildvm.exe -m peobj -o lj_vm.o
+BUILDVM   lj_folddef.h
+host/buildvm.exe -m ffdef -o lj_ffdef.h lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
+host/buildvm.exe -m bcdef -o lj_bcdef.h lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
+host/buildvm.exe -m folddef -o lj_folddef.h lj_opt_fold.c
+BUILDVM   lj_recdef.h
+BUILDVM   lj_libdef.h
+BUILDVM   jit/vmdef.lua
+host/buildvm.exe -m recdef -o lj_recdef.h lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
+host/buildvm.exe -m libdef -o lj_libdef.h lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
+host/buildvm.exe -m vmdef -o jit/vmdef.lua lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
+CC        lj_err.o
+CC        lj_dispatch.o
+CC        lj_bc.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_bc.o lj_bc.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_err.o lj_err.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_dispatch.o lj_dispatch.c
+CC        lj_record.o
+CC        lj_crecord.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_record.o lj_record.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_crecord.o lj_crecord.c
+CC        lib_base.o
+CC        lj_ffrecord.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_base.o lib_base.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_ffrecord.o lj_ffrecord.c
+CC        lib_math.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_math.o lib_math.c
+CC        lib_bit.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_bit.o lib_bit.c
+CC        lib_string.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_string.o lib_string.c
+CC        lib_table.o
+CC        lib_io.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_table.o lib_table.c
+CC        lib_os.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_io.o lib_io.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_os.o lib_os.c
+CC        lib_debug.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_debug.o lib_debug.c
+CC        lib_jit.o
+CC        lib_ffi.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_jit.o lib_jit.c
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_ffi.o lib_ffi.c
+CC        lib_buffer.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lib_buffer.o lib_buffer.c
+CC        lj_opt_fold.o
+gcc  -O2 -fomit-frame-pointer -Wall   -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -U_FORTIFY_SOURCE    -c -o lj_opt_fold.o lj_opt_fold.c
+AR        libluajit.a
+ar rcus libluajit.a lj_vm.o lj_assert.o lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o lj_buf.o lj_str.o lj_tab.o lj_func.o lj_udata.o lj_meta.o lj_debug.o lj_prng.o lj_state.o lj_dispatch.o lj_vmevent.o lj_vmmath.o lj_strscan.o lj_strfmt.o lj_strfmt_num.o lj_serialize.o lj_api.o lj_profile.o lj_lex.o lj_parse.o lj_bcread.o lj_bcwrite.o lj_load.o lj_ir.o lj_opt_mem.o lj_opt_fold.o lj_opt_narrow.o lj_opt_dce.o lj_opt_loop.o lj_opt_split.o lj_opt_sink.o lj_mcode.o lj_snap.o lj_record.o lj_crecord.o lj_ffrecord.o lj_asm.o lj_trace.o lj_gdbjit.o lj_ctype.o lj_cdata.o lj_cconv.o lj_ccall.o lj_ccallback.o lj_carith.o lj_clib.o lj_cparse.o lj_lib.o lj_alloc.o lib_aux.o lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o lib_io.o lib_os.o lib_package.o lib_debug.o lib_jit.o lib_ffi.o lib_buffer.o lib_init.o
+LINK      luajit.exe
+gcc      -o luajit.exe luajit.o libluajit.a -lm  
+strip --strip-unneeded luajit.exe
+OK        Successfully built LuaJIT
+mingw32-make: Leaving directory 'C:/Users/astro/claude-tmp/oclj/csetwin/round/integrate/b1/negctl-bitop/20261023T113715Z-1926/build/native/luajit-windows-x86_64/src'

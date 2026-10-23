@@ -1,0 +1,1 @@
+PASS 4 FAIL 3 SKIP 3 VERDICT: FAIL secs 27 FC_PARTS=base FC_USE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/b1 FC_BASE_BUILD=/c/Users/astro/claude-tmp/oclj/csetwin/round/fix/b1 FC_RP=unset FC_TASKLIST=unset FC_ROUNDS=8 FC_NDIV=1 FC_NEGCTL_ARMS=unset FC_CENSUS=none final-check.sh 5fd82c0335ebc44daa0d34158975db54

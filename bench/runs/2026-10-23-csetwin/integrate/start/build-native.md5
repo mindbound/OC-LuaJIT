@@ -1,0 +1,4 @@
+f4038cd62af3a12985868cea77cc1518 *build/native/luajit-windows-x86_64/src/luajit.exe
+f6d916e29cf8e05cd951d220ba8abcd9 *build/native/luajit-windows-x86_64/src/lj_opt_fold.o
+cb68e4547f36ab5da17f2def2cbcbfd4 *build/native/luajit-linux-x86_64/src/luajit
+57970a518831675ec90e3124850e50d7 *build/native/luajit-linux-x86_64/src/lj_opt_fold.o

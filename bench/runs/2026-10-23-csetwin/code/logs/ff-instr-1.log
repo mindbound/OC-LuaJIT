@@ -1,0 +1,72 @@
+== Part A: the script on the pin's file, on mutations of itself and of its input
+ok S0-differs-only-by-the-block
+ok S0-adds-nothing
+info S0 drops 23 lines of S
+ok C0-head rc=0 (want 0) :: patch-bitop-fold.sh: C0-head.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2715); verified by content, diff and reversal 
+WRONG C1-new rc=0 (want 0) :: patch-bitop-fold.sh: C1-new.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok C1b-S0 rc=0 (want 0) :: patch-bitop-fold.sh: C1b-S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok C1-S0-same-output
+info C1-new against HEAD's output: 1 lines out, 6 in (expected 1/6: lj_opt_cse's if, and the comment, if and test)
+ok C1-vs-head-1-6
+ok C3-idem rc=0 (want 0) :: patch-bitop-fold.sh: C3-idem.out.c  already folds the 64-bit bit operators without FFI (verified) -- unchanged 
+ok C3-idem-identical
+ok C4-same-rc
+ok C4-same-identical
+ok C5-same-idem-rc
+ok C5-same-idem-identical
+ok C1-no-CR
+ok C1-marker-once
+ok C1-no-other-round3-marker
+ok C1-LJFOLD-unchanged
+ok engine-identical-to-head
+info engine block: 99 lines, md5 077d1dbebe05
+info hunk 12's anchor (o12) occurs 1 time(s) in the pin's lj_opt_fold.c and 1 in a4c0645's
+ok anchor-once-pin
+ok anchor-once-tip
+ok T1-tip-new rc=0 (want 0) :: patch-bitop-fold.sh: T1-tip-new.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2730); verified by content, diff and reversal 
+ok T2-tip-head rc=0 (want 0) :: patch-bitop-fold.sh: T2-tip-head.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2725); verified by content, diff and reversal 
+ok M1-stray-n12 rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M1-stray-n12.out.c.tmp.2000: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 2 times, expected 1 (hunk 12) 
+ok M1-stray-n12.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M1-stray-n12.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (77 lines added, 9 removed, of 2721); verified by content, diff and reversal 
+ok M2-in-cselim rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M2-in-cselim.out.c.tmp.2189: the CSE type test (line 2703) is not inside lj_opt_cse (its definition line 2663; lj_opt_cselim's 2693) 
+ok M2-in-cselim.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M2-in-cselim.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (77 lines added, 10 removed, of 2720); verified by content, diff and reversal 
+ok M3-csefwd rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M3-csefwd.out.c.tmp.2376: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12) 
+ok M3-csefwd.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M3-csefwd.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok M4-reverse rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M4-reverse.out.c.tmp.2558: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12) 
+ok M4-reverse.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M4-reverse.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok M5-dropped rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M5-dropped.out.c.tmp.2752: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12) 
+ok M5-dropped.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M5-dropped.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (74 lines added, 8 removed, of 2719); verified by content, diff and reversal 
+ok M6-whole-t rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M6-whole-t.out.c.tmp.2934: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12) 
+ok M6-whole-t.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M6-whole-t.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok M7-after-return rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M7-after-return.out.c.tmp.3116: the CSE type test (line 2680) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly above its return of the common subexpression (below/above: no/no) 
+ok M7-after-return.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M7-after-return.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok M8-or rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M8-or.out.c.tmp.3304: the CSE type test (line 2679) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly above its return of the common subexpression (below/above: no/yes) 
+ok M8-or.S0 rc=0 (want 0) :: patch-bitop-fold.sh: M8-or.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok M9-marker rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M9-marker.out.c.tmp.3492: marker present 2 times, expected 1 
+ok M10-old-nadd rc=1 (want 1) :: patch-bitop-fold.sh: line count: 2653 in + 70 - 8 != 2720 out 
+ok M11-nh11 rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/M11-nh11.out.c.tmp.3642: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hunk 12) 
+ok I1-stray-input rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/I1-stray-input.out.c.tmp.3720: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 2 times, expected 1 (hunk 12) 
+ok I1-stray-input.head rc=0 (want 0) :: patch-bitop-fold.sh: I1-stray-input.head.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2716); verified by content, diff and reversal 
+ok I1-stray-input.S0 rc=0 (want 0) :: patch-bitop-fold.sh: I1-stray-input.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2721); verified by content, diff and reversal 
+ok I2-oneline-in-cselim rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/I2-oneline-in-cselim.out.c.tmp.4002: irt_isi64(IR(ref)->t) is named on 2 lines, expected 1 (hunk 12's CSE type test) 
+ok I2-oneline-in-cselim.head rc=0 (want 0) :: patch-bitop-fold.sh: I2-oneline-in-cselim.head.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold (70 lines added, 8 removed, of 2715); verified by content, diff and reversal 
+ok I2-oneline-in-cselim.S0 rc=0 (want 0) :: patch-bitop-fold.sh: I2-oneline-in-cselim.S0.out.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal 
+ok I3-anchor-twice rc=1 (want 1) :: patch-bitop-fold.sh: refusing -- hunk 12's upstream text occurs 2 times in /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/I3.c, expected exactly 1 (has lj_opt_fold.c changed shape?) 
+ok I4-anchor-missing rc=1 (want 1) :: patch-bitop-fold.sh: refusing -- hunk 12's upstream text occurs 0 times in /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/I4.c, expected exactly 1 (has lj_opt_fold.c changed shape?) 
+ok P1-patched-csefwd rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/P1.c: hunk 12's patched text occurs 0 times, expected 1 
+ok P2-patched-reverse rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/P2.c: hunk 12's patched text occurs 0 times, expected 1 
+ok P3-patched-oneline-in-cselim rc=1 (want 1) :: patch-bitop-fold.sh: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-code/ff-instr-1/P3.c: irt_isi64(IR(ref)->t) is named on 2 lines, expected 1 (hunk 12's CSE type test) 
+ok P3-patched-oneline-in-cselim.S0 rc=0 (want 0) :: patch-bitop-fold.sh: P3-patched-oneline-in-cselim.S0.out.c  already folds the 64-bit bit operators without FFI (verified) -- unchanged 
+== Part B: verify_content's checks on mutated patched files, fail() not exiting
+WRONG v0: failed [none] want [C1]; stderr 0 bytes :: 
+ok v1: failed [C1,C2] want [C1,C2]; stderr 0 bytes :: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 2 times, expected 1 (hun|irt_isi64(IR(ref)->t) is named on 2 lines, expected 1 (hunk 12's CSE type test)|
+ok v2: failed [C2] want [C2]; stderr 0 bytes :: irt_isi64(IR(ref)->t) is named on 2 lines, expected 1 (hunk 12's CSE type test)|
+ok v3: failed [ORD] want [ORD]; stderr 0 bytes :: the CSE type test (line 2701) is not inside lj_opt_cse (its definition line 2663; lj_opt_cselim's 2695)|
+ok v4: failed [C1,MISS,ORD,ADJ] want [C1,MISS,ORD,ADJ]; stderr 0 bytes :: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hun|missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)|the CSE type test (line ) is not inside lj_opt_cse (its definition line 2663; lj_opt_cselim's 2698)|the CSE type test (line ) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly|
+ok v5: failed [C1,MISS,ORD,ADJ] want [C1,MISS,ORD,ADJ]; stderr 0 bytes :: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hun|missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)|the CSE type test (line ) is not inside lj_opt_cse (its definition line 2663; lj_opt_cselim's 2698)|the CSE type test (line ) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly|
+ok v6: failed [C1,C2,MISS,ORD,ADJ] want [C1,C2,MISS,ORD,ADJ]; stderr 0 bytes :: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hun|irt_isi64(IR(ref)->t) is named on 0 lines, expected 1 (hunk 12's CSE type test)|missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)|the CSE type test (line ) is not inside lj_opt_cse (its definition line 2663; lj_opt_cselim's 2697)|the CSE type test (line ) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly|
+ok v7: failed [C1,C2,MISS,ORD,ADJ] want [C1,C2,MISS,ORD,ADJ]; stderr 0 bytes :: the CSE type test 'irt_isi64(IR(ref)->t) == irt_isi64(fins->t))' is a line of its own 0 times, expected 1 (hun|irt_isi64(IR(ref)->t) is named on 0 lines, expected 1 (hunk 12's CSE type test)|missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)|the CSE type test (line ) is not inside lj_opt_cse (its definition line 2663; lj_opt_cselim's 2698)|the CSE type test (line ) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and directly|
+ok v8: failed [ADJ] want [ADJ]; stderr 0 bytes :: the CSE type test (line 2680) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and dire|
+ok v9: failed [ADJ] want [ADJ]; stderr 0 bytes :: the CSE type test (line 2679) is not directly below lj_opt_cse's '      if (IR(ref)->op12 == op12 &&' and dire|
+ok v10: failed [MISS,ORD] want [MISS,ORD]; stderr 0 bytes :: missing lj_opt_cse's or lj_opt_cselim's definition line, or the CSE type test (hunk 12)|the CSE type test (line 2679) is not inside lj_opt_cse (its definition line ; lj_opt_cselim's 2698)|
+ok v11: failed [none] want [none]; stderr 0 bytes :: 
+PASS=63 FAIL=2

@@ -1,0 +1,30 @@
+run-bitjit: ours /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-tests/proto-fix/luajit-windows-x86_64/src/luajit.exe; PUC Lua 5.3.6  Copyright (C) 1994-2020 Lua.org, PUC-Rio; parts cse; results /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-tests/runs/ff-fwd-textcheck
+
+== 1. the generator: 4 seeds x 2000 loops, five JIT option sets x two closure modes against -joff ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 2. the floor: t_rec.lua, t_jit2.lua and t_rg2.lua against -joff, t_jit2.lua and t_rg2.lua against PUC 5.3.6 ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 3. fix1: the p4 loops compile (bitop/p4v.lua) ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 4. the table-index fold: t_idx.lua, t_cnt33.lua and t_idx2.lua against -joff and PUC 5.3.6; phiidx.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 5. select(k, ...): t_select.lua against -joff and PUC 5.3.6; the record-time bound ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 6. FIX-NUMCONV: t_numconv.lua against -joff and PUC 5.3.6; ncir.lua's traces ==
+SKIPPED (not in OCLJ_BITJIT_PARTS)
+
+== 7. the CSE twins: t_csefwd.lua and t_cserev.lua against -joff, t_cserev.lua against PUC 5.3.6; cseir.lua's and t_cserev.lua's traces ==
+PROVED NOTHING t_csefwd:
+    INSTRUMENT: t_csefwd's producer-first check fails for lsh1, band, rsh5, byte2, sub2, lsh3, bnot, bnotx, bxorm1, lsh35, u8sh30, nested, reassoc, chain, vlsh, vrsh
+t_csefwd on PUC: not run, by design (its 32-bit halves are LuaJIT's bit library, which PUC 5.3.6 lacks; the file checks every 5.3 result against a plain-arithmetic reference under every VM, -joff included)
+PASS t_cserev (8 cases): jon=0 O0=0 O1=0 hl1=0 ms0=0 he1=0 noloop=0 nofold=0 nocse=0 hx1=0 ts1=0 mx1=0 hl1ms0=0 noabc=0 nonarrow=0  every case ok in every set: values equal -joff's, each reverse pair kept apart where it forms, nothing 32-bit consumes our int64 instruction, no int64 instruction in a snapshot
+PASS t_cserev: PUC 5.3.6 equals -joff in all 8 cases
+PROVED NOTHING cseir:
+    INSTRUMENT: t_csefwd's producer-first check fails for lsh1, band, rsh5, byte2, sub2, lsh3, bnot, bnotx, bxorm1, lsh35, u8sh30, nested, reassoc, chain, vlsh, vrsh
+
+RUN-BITJIT: PROVED NOTHING (parts run: cse; the others prove nothing here) (results: /c/Users/astro/claude-tmp/oclj/csetwin/round/impl-tests/runs/ff-fwd-textcheck)

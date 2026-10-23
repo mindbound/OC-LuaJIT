@@ -1,0 +1,6 @@
+ok         exit 0, has 'SUMMARY: OK': as wanted
+differ     exit 1, has 'RESULTS: DIFFER': as wanted
+missing    exit 1, has 'SUMMARY: FAIL missing': as wanted
+malformed  exit 1, has 'malformed': as wanted
+gross      exit 0, has 'GROSS: FAIL': as wanted
+ffsumm: 5 of 5 as wanted

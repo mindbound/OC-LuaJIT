@@ -1,0 +1,7 @@
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-bcdump.sh
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-fold.sh
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-jitlib.sh
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-meta.sh
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-parse.sh
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-record.sh
+077d1dbebe056d59691d7f7f93307b2d /c/Users/astro/claude-tmp/oclj/csetwin/round/repo/native/luajit/patch-bitop-vm.sh

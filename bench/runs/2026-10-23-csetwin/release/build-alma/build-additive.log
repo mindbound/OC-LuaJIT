@@ -1,0 +1,92 @@
+[build] =============== 0. preflight ===============
+[build] host    = linux-x86_64   (lib*.so, jni_md in linux/)
+[build] ignored from the environment: none (THE BUILD ENVIRONMENT)
+[build] glibc   = the library may need at most GLIBC_2.28 (OCLJ_GLIBC_MAX; checked in step 6)
+[build] pin     = 1ee778a4e37122d8ca7d5733c590a47dafd6b15c (/mnt/c/Users/astro/Downloads/OC-LuaJIT/native/luajit/upstream.commit)
+[build] cc      = gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-29)
+[build]     jnlua lua_setallocf: 2 checked(ud==L)  3 unchecked(ud==NULL)  5 total
+[build] pin     = met: the checkout's HEAD is the pin, whose commit object hashes to it and names the tree 7a0348e88695de3c55b575836ad7ce99e7d2645a; step 1 compiles that tree (git archive, checked), not the working tree
+[build] luajit  = /mnt/c/Users/astro/Downloads/OC-LuaJIT/prototype/watchdog/luajit @ 1ee778a4 (feature set: native/luajit/oclj_features.h)
+[build] jnlua   = /mnt/c/Users/astro/Downloads/OC-JNLua @ da3d4d45
+[build] shim    = /mnt/c/Users/astro/Downloads/OC-LuaJIT/native
+[build] out     = /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so
+[build] =============== 1. LuaJIT 2.1 (static) ===============
+[build]     XCFLAGS=-fPIC   BUILDMODE=static
+[build]     features (native/luajit/oclj_features.h): LUAJIT_ENABLE_LUA52COMPAT LUAJIT_ENABLE_CHECKHOOK LUAJIT_DISABLE_FFI 
+[build]     export verified: the commit object hashes to the pin, 8 trees to their names, 232 files to the pin's blob ids
+[build] copying the pin's tree (232 files, git archive 7a0348e88695de3c55b575836ad7ce99e7d2645a) -> /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-export-linux-x86_64 -> /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-linux-x86_64
+[build]     working tree: no tracked file differs from the pin's tree (diff -rq --strip-trailing-cr)
+[build]     lj_func.c: pristine copy re-taken from /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-export-linux-x86_64/src (the build copy is never the patch's input)
+patch-penalty-scrub.sh: lj_func.c  22 lines inserted into lj_func_freeproto (of 213), 0 removed; scrub verified by content
+[build]     lj_func.c: penalty scrub present in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_err.c: pristine copy re-taken from /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-export-linux-x86_64/src
+patch-fastfunc-errmem-top.sh: lj_err.c  4 lines into lj_err_err and 11 into lj_err_mem (of 1179), 0 removed; clamps verified by content
+[build]     lj_err.c: ERRMEM top clamp present twice in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_ffrecord.c: pristine copy re-taken from /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/luajit-export-linux-x86_64/src
+patch-strfmt-xint-noffi.sh: lj_ffrecord.c  2 lines (recff_nyiu + return, line 1110) replaced by 7 (of 1674); no-FFI integer-format fallback verified by content and diff
+[build]     lj_ffrecord.c: no-FFI integer-format fallback present in the freshly re-derived build copy (asserted by content before make)
+[build]     lj_arch.h: pristine copy re-taken; oclj_features.h copied from native/luajit
+patch-features-include.sh: lj_arch.h  includes oclj_features.h right after lua.h (1 line inserted, of 779); verified by content and diff
+[build]     lj_arch.h: includes oclj_features.h once, right after lua.h (asserted by content before make)
+[build]     lib_string.c: pristine copy re-taken; oclj_strpack.c copied from native/luajit
+patch-strpack-register.sh: lib_string.c  registers string.pack/packsize/unpack (22 lines above the lj_libdef.h include, of 712); verified by content and diff
+[build]     lib_string.c: registers string.pack/packsize/unpack once (asserted by content before make)
+[build]     oclj_bitop.h oclj_bitop_meta.c oclj_bitop_rec.c oclj_bitop_fold.c oclj_num53.h: copied from native/luajit and compared
+patch-bitop-parse.sh: lj_parse.c  foldbitop and the ~ fold use oclj_bitop.h (24 lines added, 18 removed, of 3120); verified by content, diff and reversal
+patch-bitop-vm.sh: vm_x64.dasc  BC_BNOT and ins_bitop compute on int64, exact results only (40 lines added, 15 removed, of 5221); verified by content, diff and reversal
+patch-bitop-meta.sh: lj_meta.c  lj_meta_bitop's no-FFI path calls oclj_meta_bitop (8 lines added, 26 removed, of 540); verified by content, diff and reversal
+patch-bitop-record.sh: lj_record.c  the seven bit-operator cases call oclj_rec_bitop, and select's index is bounded in rec_varg (22 lines added, 36 removed, of 2966); verified by content, diff and reversal
+patch-bitop-fold.sh: lj_opt_fold.c  int64 bit folds without FFI, no int64 narrowing, the exact-mark, width and FIX-NUMCONV rules, the table-index fold, no CSE of int64 with another type (76 lines added, 9 removed, of 2720); verified by content, diff and reversal
+patch-bitop-bcdump.sh: lj_bcdump.h  BCDUMP_VERSION 2 -> 0x80 (6 lines for 1, of 76); verified by content, diff and reversal
+patch-bitop-jitlib.sh: lib_jit.c  jit.util.funcbc's word and tracesnap's entries unsigned (7 lines added, 3 removed, of 779); verified by content, diff and reversal
+[build]     lj_parse.c vm_x64.dasc lj_meta.c lj_record.c lj_opt_fold.c lj_bcdump.h lib_jit.c: pristine copies re-taken and patched (round 3; markers and includes asserted by content before make)
+[build] +9s  libluajit.a built (824902 bytes)
+[build]     lj_func.o recompiled from the patched lj_func.c (17:51:12 > 17:51:09)
+[build]     lj_err.o recompiled from the patched lj_err.c (17:51:13 > 17:51:09)
+[build]     lj_ffrecord.o recompiled from the patched lj_ffrecord.c (17:51:14 > 17:51:10)
+[build]     lib_string.o recompiled with string.pack/packsize/unpack (FFDEF x3 in lj_ffdef.h, no warnings)
+[build]     round 3: lj_parse.o lj_meta.o lj_record.o lj_opt_fold.o lj_bcwrite.o lj_bcread.o lib_jit.o recompiled; buildvm_arch.h regenerated from the patched vm_x64.dasc (3 OC-LuaJIT lines echoed); no warnings
+[build]     feature set through -I$LJ (lj_arch.h -dM): OCLJ_LUAJIT_FEATURES 1, LJ_52 1, LJ_HASFFI 0, LJ_HASJIT 1, LJ_GC64 1, OCLJ_LIB_STRPACK 1, OCLJ_OPS_BIT64 1
+[build]     lj_bcdump.h -dM: BCDUMP_VERSION 0x80
+[build]     oclj_strpack.c -Wall -Wextra warnings = 0
+[build]     oclj_bitop.h, oclj_bitop_meta.c, oclj_bitop_rec.c, oclj_bitop_fold.c, oclj_num53.h -Wall -Wextra warnings = 0
+[build]     luajit says: true|Lua 5.1|LuaJIT 2.1.ROLLING|x64
+[build]     count-hook ticks over a hot loop: 80000|ok
+[build]     FFI / integer-format gate: lit=refused preload=nil loaded=nil s=0/1/0 x=1/0/0 same=true
+[build]     libluajit.a: lua_newstate defined; luaopen_ffi and lj_ccallback_new not (FFI compiled out)
+[build]     string.pack gate: fn=function/function/function i4=feffffff method=true u=-2/5 I8max=true l=8/8 short=true int=true hot=14000 jit=0/1/0
+[build]     bitwise-operator gate: fold=4294967296/-1/0 kx=X>> rt=4294967296/X>>/X>>/9007199254740991/X>>/0/X~/X| err=noint/1/17/type/noint/X>> sar=-2/-1/8 dump=128 bit=1 hot=X>>@151 acc=43800 jit=1/0/0 same=true
+[build]     jit tools gate (luajit -bl, -jdump): jitlib f=1 hot=206208 snapend=4278190080 bc=118 bl=118 blerr=0 bldec=3 jd=1/1/0/0 jdb=12/1 jdim=1/1 jdline=1
+[build] =============== 1b. GC64 / foreign-allocator / layout gate ===============
+[build]     FOREIGN-ALLOC-OK GG=6376
+[build]     negative arm (FFI toggled back on in a header copy): GG-LAYOUT-MISMATCH lib=6376 tu=6384 -- the gate can fail
+[build] =============== 2. lj52shim.c ===============
+[build]     -Wall -Wextra warnings = 0
+[build]     lj_alloc arena symbols referenced: lj_alloc_create, lj_alloc_f, lj_alloc_destroy, lj_alloc_setprng, lj_prng_seed_secure
+[build]     Java boundary: lj52_mem_used, lj52_mem_settotal, lj52_vgc_install, lj52_vgc_counters defined; LuaStateLuaJIT oclj* natives = 4 (variant=additive)
+[build] =============== 3. OC-JNLua jnlua.c (checkout unmodified; one diagnostic line patched on a copy; shim force-included) ===============
+repack.sh: jnlua-luajit.repack.c  suffix=LuaJIT  class=li/cil/repack/com/naef/jnlua/LuaStateLuaJIT
+repack.sh: exports will be Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_*
+repack.sh: 2 lines changed, jnlua.c logic untouched
+[build]     LuaStateLuaJIT.java == the generator's output (python3)
+patch-resume-error.sh: jnlua-luajit.c  1 line changed (of 2420), 4 throw(L, status) sites as before
+[build]     errors=0  warnings=2   (-Wall; the checkout's jnlua.c is byte-identical to upstream, the copy differs by the lines named above)
+[build]     shim-attributable warnings = 0  (2 pre-existing jnlua.c warnings allowlisted)
+[build] =============== 4. eris_lj.c ===============
+[build]     serializer hash = 412be694  (blobs are pinned to this)
+[build]     VM-features word ffi0.lua52.gc64.fr2.dn0.le.p64.pack1.bit64 (luajit.exe agrees: ffi0 lua52 fr2 le pack1 bit64)
+[build] =============== 5. link ===============
+[build] =============== 6. postflight ===============
+[build]     reader = linux   total exports = 264   Java_* = 91   JNI_OnLoad = 1
+[build]     e.g. Java_li_cil_repack_com_naef_jnlua_LuaStateLuaJIT_00024LuaDebug_lua_1debugfree
+[build]     symbol family: LuaStateLuaJIT_*=91  LuaState_*=0   (variant=additive)
+[build]     ABI surface: Java_* = 91 (want 91), oclj natives = 4, total = 264
+[build]     ELF imports: 110 undefined, every non-weak one versioned (weak and unversioned: _ITM_deregisterTMCloneTable _ITM_registerTMCloneTable __gmon_start__)
+[build]     NEEDED: libm.so.6 libpthread.so.0 libc.so.6 ld-linux-x86-64.so.2
+[build]     glibc: highest version needed GLIBC_2.17, within OCLJ_GLIBC_MAX=2.28
+[build] +14s  OK  /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive/libjnluajit52-linux-x86_64.so  681392 bytes  sha256:6d3c2b677fa73a83...
+[build] collected for packaging: /mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/dist/libjnluajit52-linux-x86_64.so
+[build]     dist now holds: libjnluajit52-linux-x86_64.so libjnluajit52-windows-x86_64.dll 
+
+NEXT: point ocelot-brain at it and boot OpenOS:
+  OCLJ_LIBDIR=/mnt/c/Users/astro/Downloads/OC-LuaJIT/build/native/libdir-additive sh /mnt/c/Users/astro/Downloads/OC-LuaJIT/test/native/smoke-test.sh

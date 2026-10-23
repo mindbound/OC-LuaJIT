@@ -1,0 +1,95 @@
+t_csefwd side wrong in:  (reported, not judged but in jon)
+BAD t_csefwd-jon: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-jon: copy right, the loop copy's pair not served
+BAD t_csefwd-O1: wrong set , want u8sh30 (and side)
+BAD t_csefwd-hl1: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-hl1: copy right, the loop copy's pair not served
+BAD t_csefwd-ms0: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-ms0: copy right, the loop copy's pair not served
+BAD t_csefwd-he1: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-he1: copy right, the loop copy's pair not served
+BAD t_csefwd-noloop: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-hx1: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-hx1: copy right, the loop copy's pair not served
+BAD t_csefwd-ts1: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-ts1: copy right, the loop copy's pair not served
+BAD t_csefwd-mx1: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-mx1: copy right, the loop copy's pair not served
+BAD t_csefwd-hl1ms0: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-hl1ms0: copy right, the loop copy's pair not served
+BAD t_csefwd-noabc: FIRST11 not all wrong (missing bnot bnotx bxorm1 chain lsh3 lsh35 nested reassoc u8sh30 vlsh vrsh)
+BAD t_csefwd-noabc: copy right, the loop copy's pair not served
+BAD t_csefwd-nonarrow: wrong set , want u8sh30 (and side)
+BAD t_csefwd-jon: side right in the default set
+BAD cseir-jon: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-jon: copy not FAILED
+BAD cseir-hl1: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-hl1: copy not FAILED
+BAD cseir-ms0: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-ms0: copy not FAILED
+BAD cseir-he1: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-he1: copy not FAILED
+BAD cseir-noloop: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-hx1: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-hx1: copy not FAILED
+BAD cseir-ts1: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-ts1: copy not FAILED
+BAD cseir-mx1: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-mx1: copy not FAILED
+BAD cseir-hl1ms0: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-hl1ms0: copy not FAILED
+BAD cseir-noabc: not FAILED: band bnot bnotx bxorm1 byte2 chain forin lsh1 lsh3 lsh35 nested reassoc rsh5 select sub2 u8sh30 vlsh vrsh
+BAD cseir-noabc: copy not FAILED
+BAD cseir-O1: u8sh30 not FAILED
+BAD cseir-nonarrow: u8sh30 not FAILED
+BAD t_cserev-jon: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-jon r5-sel: not rserved with split 0
+BAD t_cserev-jon r6-byte: not rserved with split 0
+BAD t_cserev-jon r6-sub: not rserved with split 0
+BAD t_cserev-jon r6-mul: not rserved with split 0
+BAD t_cserev-hl1: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-hl1 r5-sel: not rserved with split 0
+BAD t_cserev-hl1 r6-byte: not rserved with split 0
+BAD t_cserev-hl1 r6-sub: not rserved with split 0
+BAD t_cserev-hl1 r6-mul: not rserved with split 0
+BAD t_cserev-ms0: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-ms0 r5-sel: not rserved with split 0
+BAD t_cserev-ms0 r6-byte: not rserved with split 0
+BAD t_cserev-ms0 r6-sub: not rserved with split 0
+BAD t_cserev-ms0 r6-mul: not rserved with split 0
+BAD t_cserev-he1: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-he1 r5-sel: not rserved with split 0
+BAD t_cserev-he1 r6-byte: not rserved with split 0
+BAD t_cserev-he1 r6-sub: not rserved with split 0
+BAD t_cserev-he1 r6-mul: not rserved with split 0
+BAD t_cserev-noloop: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-noloop r5-sel: not rserved with split 0
+BAD t_cserev-noloop r6-byte: not rserved with split 0
+BAD t_cserev-noloop r6-sub: not rserved with split 0
+BAD t_cserev-noloop r6-mul: not rserved with split 0
+BAD t_cserev-hx1: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-hx1 r5-sel: not rserved with split 0
+BAD t_cserev-hx1 r6-byte: not rserved with split 0
+BAD t_cserev-hx1 r6-sub: not rserved with split 0
+BAD t_cserev-hx1 r6-mul: not rserved with split 0
+BAD t_cserev-ts1: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-ts1 r5-sel: not rserved with split 0
+BAD t_cserev-ts1 r6-byte: not rserved with split 0
+BAD t_cserev-ts1 r6-sub: not rserved with split 0
+BAD t_cserev-ts1 r6-mul: not rserved with split 0
+BAD t_cserev-mx1: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-mx1 r5-sel: not rserved with split 0
+BAD t_cserev-mx1 r6-byte: not rserved with split 0
+BAD t_cserev-mx1 r6-sub: not rserved with split 0
+BAD t_cserev-mx1 r6-mul: not rserved with split 0
+BAD t_cserev-hl1ms0: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-hl1ms0 r5-sel: not rserved with split 0
+BAD t_cserev-hl1ms0 r6-byte: not rserved with split 0
+BAD t_cserev-hl1ms0 r6-sub: not rserved with split 0
+BAD t_cserev-hl1ms0 r6-mul: not rserved with split 0
+BAD t_cserev-noabc: reverse cases not FAILED: r5-sel r6-byte r6-mul r6-sub
+BAD t_cserev-noabc r5-sel: not rserved with split 0
+BAD t_cserev-noabc r6-byte: not rserved with split 0
+BAD t_cserev-noabc r6-sub: not rserved with split 0
+BAD t_cserev-noabc r6-mul: not rserved with split 0
+BASECSE base C:/Users/astro/claude-tmp/oclj/csetwin/final/fc-1/runs/bitjit-all: FAIL (93 findings)
