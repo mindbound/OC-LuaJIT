@@ -1,0 +1,35 @@
+crc32 table
+  game: LuaJIT 3.76/3.74 (reps 3.762, spread 0.7%) | Lua 5.3 32.90/32.87 (reps 32.869, spread 5.7%) | Lua 5.4 30.59/30.42 (reps 30.568, spread 8.6%)
+  Lua 5.3 / LuaJIT 8.75x (reps 8.74x) | Lua 5.4 / LuaJIT 8.14x (reps 8.13x) | Lua 5.4 vs Lua 5.3 -7.0% (reps -7.0%)
+  LuaJIT vs the earlier game session -1.6% (reps -1.5%) | vs harness +9.3% (reps +9.2%) | vs standalone +0.0% (reps +0.2%) | -joff / game 6.1x
+  Lua 5.3 vs harness Lua 5.3 -12.5% (reps -12.6%) | vs PUC 5.3.6 standalone +44.2% (reps +44.0%) | harness Lua 5.3 / LuaJIT 10.93x (reps 10.92x)
+xorshift32
+  game: LuaJIT 2.00/1.99 (reps 1.998, spread 1.7%) | Lua 5.3 20.76/20.64 (reps 20.780, spread 6.8%) | Lua 5.4 17.21/17.19 (reps 17.227, spread 5.3%)
+  Lua 5.3 / LuaJIT 10.38x (reps 10.40x) | Lua 5.4 / LuaJIT 8.61x (reps 8.62x) | Lua 5.4 vs Lua 5.3 -17.1% (reps -17.1%)
+  LuaJIT vs the earlier game session -2.4% (reps -2.3%) | vs harness -15.6% (reps -15.9%) | vs standalone -13.0% (reps -13.2%) | -joff / game 22.3x
+  Lua 5.3 vs harness Lua 5.3 -32.8% (reps -32.8%) | vs PUC 5.3.6 standalone +27.1% (reps +27.3%) | harness Lua 5.3 / LuaJIT 13.03x (reps 13.01x)
+pack+unpack
+  game: LuaJIT 4.94/4.88 (reps 4.943, spread 1.7%) | Lua 5.3 68.86/67.58 (reps 68.905, spread 7.3%) | Lua 5.4 56.93/56.35 (reps 56.894, spread 7.0%)
+  Lua 5.3 / LuaJIT 13.94x (reps 13.94x) | Lua 5.4 / LuaJIT 11.52x (reps 11.51x) | Lua 5.4 vs Lua 5.3 -17.3% (reps -17.4%)
+  LuaJIT vs the earlier game session +0.0% (reps +0.0%) | vs harness -8.9% (reps -8.9%) | vs standalone -8.3% (reps -8.3%) | -joff / game 13.5x
+  Lua 5.3 vs harness Lua 5.3 -23.7% (reps -23.5%) | vs PUC 5.3.6 standalone -0.4% (reps -0.4%) | harness Lua 5.3 / LuaJIT 16.65x (reps 16.61x)
+x | 0
+  game: LuaJIT 0.61/0.61 (reps 0.614, spread 1.3%) | Lua 5.3 11.45/11.43 (reps 11.469, spread 1.2%) | Lua 5.4 9.54/9.48 (reps 9.527, spread 6.0%)
+  Lua 5.3 / LuaJIT 18.77x (reps 18.68x) | Lua 5.4 / LuaJIT 15.64x (reps 15.52x) | Lua 5.4 vs Lua 5.3 -16.7% (reps -16.9%)
+  LuaJIT vs the earlier game session -1.6% (reps -0.2%) | vs harness +8.9% (reps +9.3%) | vs standalone +8.9% (reps +9.9%) | -joff / game 10.1x
+  Lua 5.3 vs harness Lua 5.3 -13.7% (reps -13.5%) | vs PUC 5.3.6 standalone +32.8% (reps +33.1%) | harness Lua 5.3 / LuaJIT 23.70x (reps 23.60x)
+select(i,...)
+  game: LuaJIT 2.36/2.35 (reps 2.358, spread 0.3%) | Lua 5.3 42.53/42.09 (reps 42.488, spread 5.4%) | Lua 5.4 43.92/43.83 (reps 43.860, spread 6.0%)
+  Lua 5.3 / LuaJIT 18.02x (reps 18.02x) | Lua 5.4 / LuaJIT 18.61x (reps 18.60x) | Lua 5.4 vs Lua 5.3 +3.3% (reps +3.2%)
+  LuaJIT vs the earlier game session +0.0% (reps -0.1%) | vs harness +22.3% (reps +22.4%) | vs standalone +46.6% (reps +46.0%) | -joff / game 5.3x
+  Lua 5.3 vs harness Lua 5.3 -0.5% (reps -0.5%) | vs PUC 5.3.6 standalone +73.0% (reps +72.9%) | harness Lua 5.3 / LuaJIT 22.15x (reps 22.16x)
+ranges (printed medians): game Lua 5.3 / LuaJIT 8.8-18.8x, game Lua 5.4 / LuaJIT 8.1-18.6x, harness Lua 5.3 / LuaJIT 10.9-23.7x
+crc32/pack game LuaJIT         0.761 (reps 0.761)
+crc32/pack earlier game LuaJIT 0.773 (reps 0.772)
+crc32/pack standalone          0.698 (reps 0.697)
+crc32/pack harness LuaJIT      0.635 (reps 0.634)
+crc32/pack game Lua 5.3        0.478 (reps 0.477)
+crc32/pack game Lua 5.4        0.537 (reps 0.537)
+game LuaJIT  warm-ups + reps 9.03 s
+game Lua 5.3 warm-ups + reps 8.80 s
+game Lua 5.4 warm-ups + reps 9.16 s

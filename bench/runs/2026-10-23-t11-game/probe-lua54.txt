@@ -1,0 +1,9 @@
+# The check T11 skips on a Lua 5.4 CPU, run standalone on the vendored interpreters:
+#   <lua.exe> -e "print(_VERSION, pcall(function() return ('0x10') | 0 end))"
+
+cb2830d24e3d954151ec7ee82e498bd1  bench/vendor/lua-5.4.8/src/lua.exe (the front end)
+35459fc6655ed675f2e32f65be4cd1fb  bench/vendor/lua-5.4.8/src/lua54.dll (the VM it loads)
+  Lua 5.4 | false | (command line):1: attempt to perform bitwise operation on a string value (constant '0x10')
+7bd7faf24ac393d6212eff04f5ba0411  bench/vendor/lua-5.3.6/src/lua.exe (the front end)
+c252ee1b207e25728136f12ada0f5359  bench/vendor/lua-5.3.6/src/lua53.dll (the VM it loads)
+  Lua 5.3 | true | 16

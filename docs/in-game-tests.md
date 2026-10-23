@@ -42,8 +42,8 @@ fix; each is run once after the fix ships and recorded here with its result.
      stopped. Check that the blob's value is the old jar's (the
      `fml.ModTracker` line names the version the world was saved with) and
      the other the new jar's. A refusal on a reload under the same jar, or
-     any other `eris-lj:` text, is still a failure. T11's session met the
-     exception (its Result).
+     any other `eris-lj:` text, is still a failure. T11's 2026-10-22 session
+     met the exception (its Result, 2026-10-22).
 
 ## T1 — a `__persist` value with host-side state survives (shell-fill)
 
@@ -639,6 +639,21 @@ header lines, `needs Lua 5.3 or LuaJIT: ...`, the load error and
 `verdict: not run`, and writes them to `/home/ingame-bitops-lua52.txt` (checked
 on PUC Lua 5.2.4 standalone, 2026-10-22).
 
+A **Lua 5.4** CPU is not part of the test either, but the file runs on one,
+and the 2026-10-23 session ran it (its Result, 2026-10-23). Lua 5.4 converts
+bitwise operands without string coercion, and its string library gives
+strings arithmetic metamethods only (`lvm.c`:136-139, `ltm.c`:150-157 and
+`lstrlib.c`:330-339 in `bench/vendor/lua-5.4.8/src/` [S]): standalone, 5.4.8
+raises `attempt to perform bitwise operation on a string value` on
+`'0x10' | 0`, where 5.3.6 returns 16 [M: that Result's archive,
+`probe-lua54.txt`]. So on a CPU whose name contains `5.4` the file skips that
+check, and its verdict accepts any `SKIP` there (`ingame-bitops.lua`:413-415,
+:533 [S]). Part 1 reads `37 PASS, 0 FAIL, 5 deviation as documented, 1 SKIP`,
+with Lua 5.3's `DEV` lines, worded for 5.3. The results file is
+`/home/ingame-bitops-lua54.txt`. OC 1.12.64-GTNH's Lua 5.4 CPU runs
+`Lua+Eris 5.4.4` [M: its native's version string, the same archive's
+`md5s.txt`].
+
 **Expected.** Part 1, on both CPUs: `Part 1: 38 PASS, 0 FAIL, 5 deviation as
 documented, 0 SKIP`. The checks' lines are identical on the two CPUs. The five
 `DEV` lines differ as documented:
@@ -795,10 +810,11 @@ standalone on the jar's native (`luajit.exe` of the same build) and on PUC Lua
   happen. Keep the log and the results file, which is flushed after every
   section.
 
-**Result: the LuaJIT arm PASS, 2026-10-22, jar `ocluajit-19a7806.jar`; the
-Lua 5.3 arm not yet run.** [M: `bench/runs/2026-10-22-t11-game/`, unless
-marked] One game session, started 13:35:56 local time, world joined 13:39:30,
-saved and exited 13:42:50. The jar was the only `ocluajit-*.jar` in `mods/`:
+**Result, 2026-10-22: the LuaJIT arm PASS, jar `ocluajit-19a7806.jar`; the
+Lua 5.3 arm not run that day (2026-10-23, below).** [M:
+`bench/runs/2026-10-22-t11-game/`, unless marked] One game session, started
+13:35:56 local time, world joined 13:39:30, saved and exited 13:42:50. The
+jar was the only `ocluajit-*.jar` in `mods/`:
 681 124 bytes, md5 `1e02e032`, DLL `9ac03aeb`, kernel `1d12c322`. The copy on
 the computer's disk was byte-identical to the repo's (`661c51bd`), and the
 machine had 16384 KB of RAM. An earlier session that day, 13:17 to 13:32, had
@@ -841,7 +857,84 @@ the game reads +22% over the harness. By Reading Part 2 that is a finding to
 follow up standalone, not a FAIL; it has not been followed up.
 
 The comparison T11 exists for needs both arms from one game session (Reading
-Part 2). A later session on the same jar follows Running it on both CPUs,
-LuaJIT then Lua 5.3, and copies both results files into a new directory, never into
-`2026-10-22-t11-game/`. On this computer's disk the LuaJIT file will be
-`ingame-bitops-luajit-2.txt`; the last screen line names it.
+Part 2); the 2026-10-23 session ran them.
+
+**Result, 2026-10-23: PASS on both CPUs, jar `ocluajit-19a7806.jar`, in one
+game session, with Lua 5.4 as a third arm.** [M:
+`bench/runs/2026-10-23-t11-game/`, unless marked] The game started at
+09:31:37 local time, the world was joined at 09:35:28, and the game saved and
+exited at 09:40:31. The jar was the same file as on 2026-10-22 and the only
+`ocluajit-*.jar` in `mods/`; the pack differed from that day's in one mod,
+Hodgepodge 2.7.218 to 2.7.219. The copy on the computer's disk was
+byte-identical to the repo's (`661c51bd`), and the machine had 16384 KB of RAM
+on every CPU.
+
+The world had last been saved under this same jar (2026-10-22, 13:42), and the
+computer was running when the user reached it [M: the user's report]. A
+computer whose state fails to load is left stopped, as on 2026-10-22 [S: OC
+`Machine.scala`:808-813 in 1.12.58-GTNH], so our native restored the state its
+own build had saved [I]. The session logged no `eris-lj` text and no
+`Unexpected error loading a state`, and the computer came back running, so
+none of Before every test, step 6's three failure signs appeared. The LuaJIT
+arm ran first, on the restored computer, with no power cycle before it [M:
+the user's report]. That departs from Setup, step 4, and Running it, step 2:
+the arm began from a restored state, not a fresh boot. It kept Before every
+test, step 3's purpose, the jar's kernel in effect: the restored machine was
+the one that booted fresh on 2026-10-22 on this jar's kernel `1d12c322` [I:
+the 2026-10-22 Result]. For each switch the user
+turned the computer off and cycled the CPU's architecture with right-clicks
+until it named the next one [M: the user's report], so the Lua 5.3 and Lua
+5.4 arms each began from a fresh boot [I]. `latest.log` has OC's chat line for
+each click, which OC sends only for a sneaking right-click with the CPU in
+hand: Running it, step 1, the first way [S: `CPULike.scala`:28-40 in
+1.12.58-GTNH]. The results files were written in the order LuaJIT (09:36:24,
+`ingame-bitops-luajit-2.txt`), Lua 5.3 (09:37:12) and Lua 5.4 (09:37:44), and
+three more clicks then set the CPU back to LuaJIT. No screenshot was taken.
+
+| bench (per) | LuaJIT median / min | Lua 5.3 median / min | Lua 5.3 / LuaJIT (medians) | Lua 5.4 median / min | Lua 5.4 / LuaJIT (medians) |
+|---|---:|---:|---:|---:|---:|
+| crc32 table (byte) | 3.76 / 3.74 | 32.90 / 32.87 | 8.8x | 30.59 / 30.42 | 8.1x |
+| xorshift32 (step) | 2.00 / 1.99 | 20.76 / 20.64 | 10.4x | 17.21 / 17.19 | 8.6x |
+| pack+unpack (word) | 4.94 / 4.88 | 68.86 / 67.58 | 13.9x | 56.93 / 56.35 | 11.5x |
+| x \| 0 (op) | 0.61 / 0.61 | 11.45 / 11.43 | 18.8x | 9.54 / 9.48 | 15.6x |
+| select(i,...) (call) | 2.36 / 2.35 | 42.53 / 42.09 | 18.0x | 43.92 / 43.83 | 18.6x |
+| Part 1 (PASS / FAIL / DEV / SKIP) | 38 / 0 / 5 / 0 | 38 / 0 / 5 / 0 | — | 37 / 0 / 5 / 1 | — |
+| verdict | PASS | PASS | — | PASS | — |
+
+No CPU printed a `FAIL` line. LuaJIT's Part 1 lines are identical to
+2026-10-22's game run and to the harness LuaJIT arm's (run 3 of
+`bench/runs/2026-10-22-t11/`), and Lua 5.3's to the harness Lua 5.3 arm's. The
+two CPUs' `PASS` lines are identical, and their `DEV` lines differ as the
+Expected table says: LuaJIT's hot loop raised at i = 1000, and Lua 5.3's ran to
+i = 2000. Lua 5.4's one `SKIP` is the `'0x10' | 0` check, by design (above).
+
+In game, Lua 5.3 reads 8.8 to 18.8 times our CPU (medians), against 10.9 to
+23.7 in the harness: from the medians of the reps, as in the 2026-10-22
+Result, the game's ratio is 0.79 to 0.84 of the harness's on every row. Our
+CPU reads +9.2%, -15.9%, -8.9%, +9.3% and +22.4% against the harness's LuaJIT
+arm, and OC's Lua 5.3 -12.6%, -32.8%, -23.5%, -13.5% and -0.5% against its
+Lua 5.3 arm, so the two CPUs moved together from row to row, both gaining
+most on xorshift32 and least on `select`. Split by arm, the change is mostly
+Lua 5.3's on xorshift32, pack+unpack and `x | 0`, and all ours on `select`. A
+uniform shift of about a fifth between the CPUs, on top of a per-row factor
+both share, fits the same numbers; the two readings are not separated [I].
+The harness's Lua 5.3 crc32 median is in doubt besides: it came from four
+slow reps, and its min, 32.73, is at the game's median, 32.90. The two Lua
+5.3s are the same native (`e06224de`, Lua+Eris 5.3.6) under the same stock
+kernel but for one sandbox line [M: the archive's `md5s.txt`]. What differs
+between the runs, not separated [I], includes the machine (1 MB in the
+harness against 16 MB in game, and the harness's copy of ocelot-brain's
+OpenOS), Minecraft and OC 1.12.64's Java side against ocelot-brain's, the
+core each ran on, and the box's load.
+
+Our CPU's rows are within 2.4% of 2026-10-22's game run (printed medians; 2.3%
+from the reps), with a game restart, the Hodgepodge update, and a restored
+machine against a fresh boot between them. All five rows are 5.3 to 22.3
+times faster than `-joff`, so all five ran compiled [I]. The crc32 /
+pack+unpack ratio reads 0.76 (0.77 on 2026-10-22), consistent with the
+table-index fold in effect [I]. `select` again reads +22% over the harness and
++46% over standalone (from the reps). Seen in two sessions, it is not one busy
+session [I]. It is still a finding to follow up standalone, not a FAIL. Lua
+5.3's and Lua 5.4's reps spread more than ours (up to 8.6%, against 1.7%),
+with one or two slow reps in most rows, which the median sets aside. Lua 5.4
+reads 7-17% faster than Lua 5.3 on four rows and 3% slower on `select`.
