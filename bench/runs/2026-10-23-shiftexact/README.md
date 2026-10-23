@@ -3,7 +3,7 @@
 The record behind [docs/jit-guide.md](../../../docs/jit-guide.md) 3.11's "Shifts of an exact operand" and the
 roadmap's notes of 2026-10-23 on round 3's follow-ups (item 6) and on the int/i64 CSE twins. Until this round the
 guide said of the shifts "Measured, not proved, and not prototyped: no rule reads it". The round proved the
-claim, found two stronger facts, checked all four by machine, and on the way found and confirmed a separate JIT
+claim, found two further facts, checked all four by machine, and on the way found and confirmed a separate JIT
 bug, the CSE twins. No rule was built; nothing in the repo's code changed.
 
 ## What is here
@@ -14,8 +14,9 @@ bug, the CSE twins. No rule was built; nothing in the repo's code changed.
   build; which IR operands are exact by construction; the rule a later round could build on it, with its tests
   and negctl arms; platform scope; and section 8, the CSE twins.
 - `refute/notes.md`: the adversarial review of revision 1, read against the source. It found no break in the
-  lemmas or the sketched rule; its findings (the CSE twins, gaps in the checks, two wordings, a cyclic induction
-  step) are applied in revisions 2 and 3 (the argument's section 9 lists them).
+  lemmas or the sketched rule. Its findings on the argument (the CSE twins, two wordings, a cyclic induction
+  step) are applied in revision 2 (the argument's section 9 lists them), and those on the checks in the checks as
+  archived; revision 3 answers a later review of the revised checks.
 - `checks/`: `model.py`, `jitcheck.lua` and `run.sh`, after two rounds of review and fixes, and
   `checks/runs/run-1/`, their one run (`summary.txt`, `run.log`, each part's output; `inputs.md5`, `env.txt`).
 - `cse/`: the CSE-twin probes: `cse-fwd.lua` (runtime loop bounds; no twin forms), `cse-fwd2.lua` (constant
@@ -35,16 +36,17 @@ Write D for the int64 values a double holds exactly: 0 and every m * 2^e with |m
 4. **L4, `&`:** x & y is in D whenever x and y are.
 
 The logical right shift (`>>`, IR `BSHR`) has no such lemma: -1 >> 1 = 2^63 - 1. Nor do `|`, `~` (binary or
-unary) or an add of two exact values; the argument gives a counterexample for each.
+unary) or an add of two different exact values (z + z is z << 1, and exact); the argument gives a counterexample
+for each.
 
 ## The checks [M: `checks/runs/run-1/`, 2026-10-23 10:36:11-10:36:16Z, on `build/native`]
 
 `run.sh` ran `model.py` and then `jitcheck.lua` under seven option sets on `build/native`'s `luajit.exe`
-(`f4038cd6`; `lj_opt_fold.o` `f6d916e2`, FIX-NUMCONV's release), with no game running. Verdict: PASS.
+(`f4038cd6`; `lj_opt_fold.o` `f6d916e2`, FIX-NUMCONV's release). Verdict: PASS.
 
-- **`model.py`** checks the lemmas in a scaled model, every word width W from 4 to 16 bits and every precision P
-  in place of 53, over every operand, and in two 64-bit sweeps at P = 53. Every lemma held in every case: L1 and
-  L2 in 7,860,708 model cases each and 438,400 64-bit pairs each; L3 in 17,694,640 model cases and 43,956 64-bit
+- **`model.py`** checks the lemmas in a scaled model, every word width W from 4 to 16 bits (4 to 10 for L4) and
+  every precision P in place of 53, over every operand, and in two 64-bit sweeps at P = 53. Every lemma held in
+  every case: L1 and L2 in 7,860,708 model cases each and 438,400 64-bit pairs each; L3 in 17,694,640 model cases and 43,956 64-bit
   pairs (802 of whose operands lie outside D); L4 in 4,141,580 model pairs and 112,400 64-bit pairs. Every
   control found counterexamples where it must: the logical right shift and `x | (1 << k)` (218,473 and 456,109 in
   the model), `x | y` beside L4 (206,876), and L3's tightness at k = W - 2 - P and at k = 9 in the 64-bit sweep
@@ -63,10 +65,10 @@ unary) or an add of two exact values; the argument gives a counterexample for ea
   parts are watched through; so the instrument sees a failing result guard when there is one. A `jit.off`'d
   probe read untraced, as it must.
 
-An earlier `model.py` (`bbb2f4d7`, without L3's and L4's instruments) passed a smoke run the same day, kept in
-scratch (`precheck-1/`).
+An earlier `model.py` (`bbb2f4d7`, without L3's and L4's closed-form count instruments) passed a smoke run the
+same day, kept in scratch (`precheck-1/`).
 
-## The CSE twins, a separate bug [M: `cse/run-3/`; S; I]
+## The CSE twins, a separate bug [M: `cse/run-3/`][S][I]
 
 `lj_opt_cse` matches an instruction on its opcode and operands and returns the existing one with its own type
 (jit-guide 3.9). After x64's `simplify_conv_sext` lets our i64 op take an int loop index directly, our op and an
@@ -77,9 +79,10 @@ and the same loops without `bit` were right, and the IR shows `int BSHL 0001 +3`
 5.3 operators (`cse/run-3/jdump.txt`, traces 1 and 4). With runtime loop bounds the index keeps its conversion
 and no twin forms (`cse/run-1/`). The reverse order, our op first, was not run: the `bit` library would get an
 I64-typed result into a Lua slot, which a snapshot restores with no I64 case (argument 8.6) [S]. The game opens
-OpenComputers' `bit32`, not LuaJIT's `bit`, and FFI is off [S], so the measured pairs cannot form there. The argument's
-8.3 stopped at that; the fix round's design, written after it, took a census of every producer (scratch
-`claude-tmp/oclj/csetwin/design.md` 1.4-1.5): in game no wrong value is known, since the pairs the game can form
+lj52shim's C `bit32` (OC's `Library.BIT32`), not LuaJIT's `bit`, and FFI is off [S], so the measured pairs cannot
+form there. The argument's 8.3 also checked `select`'s int shift and narrowing and found the game unaffected; it
+missed `rec_for_loop`'s inner-loop ADD. The fix round's design, written after it, took a census of every
+producer (scratch `claude-tmp/oclj/csetwin/design.md` 1.4-1.5): in game no wrong value is known, since the pairs the game can form
 (`select` beyond its varargs, a library argument narrowed from `x + x`, an inner `for j = x, n, x`) give equal
 values in the forward order; but in the reverse order `x << 1` before such an inner loop, recorded in the same
 trace, would put an I64 into the inner loop's index slots, a crash candidate by reading, never run [S][I]. Fixing
